@@ -4,9 +4,9 @@ ComponentName: aws.greengrass.shadowmanager
 ComponentDescription: AWS Greengrass Shadow Manager
 ComponentPublisher: AWS
 ComponentVersion: '0.0.0'
-ComponentType: plugin
+ComponentType: aws.greengrass.plugin
 Manifests:
   - Platform:
       os: all
     Artifacts:
-    - URI: s3://gg-dev-artifacts/$componentName/$platform.os/$version/aws.greengrass.shadowmanager.jar
+      - URI: s3://gg-dev-artifacts/$componentName/$platform.os/$version/aws.greengrass.shadowmanager.jar
