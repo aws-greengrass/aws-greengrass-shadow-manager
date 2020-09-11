@@ -1,11 +1,13 @@
 ---
-templateVersion: '2020-01-25'
-componentName: aws.greengrass.shadowmanager
-description: AWS Greengrass Shadow Manager
-publisher: AWS
-version: '0.0.0'
-componentType: plugin
-manifests:
-  - lifecycle:
-    artifacts:
-      - uri: s3://gg-dev-artifacts/$componentName/$platform/$version/aws.greengrass.shadowmanager.jar
+TemplateVersion: '2020-01-25'
+ComponentName: aws.greengrass.shadowmanager
+Description: AWS Greengrass Shadow Manager
+Publisher: AWS
+Version: '0.0.0'
+ComponentType: plugin
+Manifests:
+  - Platform:
+    os: all
+  - Lifecycle:
+    Artifacts:
+    - Uri: s3://gg-dev-artifacts/$componentName/$platform/$version/aws.greengrass.shadowmanager.jar

@@ -3,12 +3,12 @@ package com.aws.iot.greengrass.shadowmanager;
 import com.aws.iot.evergreen.config.Topics;
 import com.aws.iot.evergreen.dependency.ImplementsService;
 import com.aws.iot.evergreen.dependency.State;
-import com.aws.iot.evergreen.kernel.EvergreenService;
+import com.aws.iot.evergreen.kernel.PluginService;
 
 import javax.inject.Inject;
 
 @ImplementsService(name = ShadowManager.SERVICE_NAME)
-public class ShadowManager extends EvergreenService {
+public class ShadowManager extends PluginService {
     public static final String SERVICE_NAME = "aws.greengrass.shadowmanager";
 
     /**
