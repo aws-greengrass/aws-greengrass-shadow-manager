@@ -1,11 +1,8 @@
-## My Project
+## AWS Greengrass Shadow Manager
 
-TODO: Fill this README out!
+This is an AWS GreengrassV2 Component that handles offline device shadow
+document storage and synchronization to the IoT Device Shadow Service.
 
-Be sure to:
-
-* Change the title in this README
-* Edit your repository description on GitHub
 
 ## Security
 
