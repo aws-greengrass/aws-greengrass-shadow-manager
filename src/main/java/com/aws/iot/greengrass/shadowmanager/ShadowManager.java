@@ -3,29 +3,171 @@ package com.aws.iot.greengrass.shadowmanager;
 import com.aws.iot.evergreen.config.Topics;
 import com.aws.iot.evergreen.dependency.ImplementsService;
 import com.aws.iot.evergreen.dependency.State;
+import com.aws.iot.evergreen.ipc.ConnectionContext;
+import com.aws.iot.evergreen.ipc.IPCRouter;
+import com.aws.iot.evergreen.ipc.common.BuiltInServiceDestinationCode;
+import com.aws.iot.evergreen.ipc.common.FrameReader;
+import com.aws.iot.evergreen.ipc.exceptions.IPCException;
+import com.aws.iot.evergreen.ipc.services.common.ApplicationMessage;
+import com.aws.iot.evergreen.ipc.services.shadow.ShadowClientOpCodes;
+import com.aws.iot.evergreen.ipc.services.shadow.models.ShadowGenericResponse;
+import com.aws.iot.evergreen.ipc.services.shadow.models.ShadowResponseStatus;
 import com.aws.iot.evergreen.kernel.PluginService;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.cbor.databind.CBORMapper;
+import org.flywaydb.core.api.FlywayException;
+import software.amazon.awssdk.iot.iotshadow.model.GetShadowRequest;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.sql.SQLException;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Future;
 import javax.inject.Inject;
 
 @ImplementsService(name = ShadowManager.SERVICE_NAME)
 public class ShadowManager extends PluginService {
+    enum LogEvents {
+        IPC_REGISTRATION("shadow-ipc-registration"),
+        IPC_ERROR("shadow-ipc-error"),
+        DATABASE_CLOSE_ERROR("shadow-database-close-error");
+
+        String code;
+        LogEvents(String code) {
+            this.code = code;
+        }
+
+        public String code() {
+            return code;
+        }
+    }
+
+
     public static final String SERVICE_NAME = "aws.greengrass.shadowmanager";
+    // Should make this injected?
+    private static final ObjectMapper CBOR_MAPPER = new CBORMapper();
+    private final IPCRouter ipcRouter;
+    private final ShadowManagerDAO dao;
+    private final ShadowManagerDatabase database;
 
     /**
      * Ctr for ShadowManager.
      * @param topics topics passed by by the kernel
+     * @param ipcRouter IPC router for handling local shadow Request / Reply
+     * @param dao Local shadow repository for managing documents
+     * @param database Local shadow database management
      */
     @Inject
-    public ShadowManager(Topics topics) {
+    public ShadowManager(
+            Topics topics,
+            IPCRouter ipcRouter,
+            ShadowManagerDAOImpl dao,
+            ShadowManagerDatabase database) {
         super(topics);
+        this.ipcRouter = ipcRouter;
+        this.database = database;
+        this.dao = dao;
+    }
+
+    private void registerHandler() throws IPCException {
+        BuiltInServiceDestinationCode destinationCode = BuiltInServiceDestinationCode.SHADOW;
+        ipcRouter.registerServiceCallback(destinationCode.getValue(), this::handleMessage);
+        logger.atInfo()
+                .setEventType(LogEvents.IPC_REGISTRATION.code())
+                .addKeyValue("destination", destinationCode.name())
+                .log();
+    }
+
+    @Override
+    protected void install() throws InterruptedException {
+        try {
+            database.install();
+        } catch (SQLException | FlywayException e) {
+            serviceErrored(e);
+        }
     }
 
     @Override
     public void startup() {
-        reportState(State.RUNNING);
+        try {
+            // Register IPC
+            registerHandler();
+            reportState(State.RUNNING);
+        } catch (IPCException e) {
+            serviceErrored(e);
+        }
     }
 
     @Override
-    public void shutdown() {
+    protected void shutdown() throws InterruptedException {
+        super.shutdown();
+        try {
+            database.close();
+        } catch (IOException e) {
+            logger.atError()
+                    .setEventType(LogEvents.DATABASE_CLOSE_ERROR.name())
+                    .setCause(e)
+                    .log("Failed to close out shadow database");
+        }
     }
+
+    /**
+     * Handles local shadow service IPC calls.
+     * @param message API message received from a client.
+     * @param context connection context received from a client.
+     * @return
+     */
+    private Future<FrameReader.Message> handleMessage(FrameReader.Message message, ConnectionContext context) {
+        CompletableFuture<FrameReader.Message> future = new CompletableFuture<>();
+        ShadowGenericResponse response = new ShadowGenericResponse();
+        ApplicationMessage applicationMessage = ApplicationMessage.fromBytes(message.getPayload());
+        try {
+            ShadowClientOpCodes opCode = ShadowClientOpCodes.values()[applicationMessage.getOpCode()];
+            switch (opCode) {
+                // Let's break this up into a map->router
+                case GET_THING_SHADOW:
+                    GetShadowRequest request = CBOR_MAPPER.readValue(
+                            applicationMessage.getPayload(),
+                            GetShadowRequest.class);
+                    Optional<ByteBuffer> result = dao.getShadowThing(request.thingName);
+                    if (result.isPresent()) {
+                        response.setPayload(result.get());
+                    } else {
+                        response.setStatus(ShadowResponseStatus.ResourceNotFoundError);
+                        response.setErrorMessage("Shadow for " + request.thingName + " could not be found.");
+                    }
+                    break;
+                case DELETE_THING_SHADOW:
+                case UPDATE_THING_SHADOW:
+                default:
+                    response.setStatus(ShadowResponseStatus.InvalidArgumentError);
+                    response.setErrorMessage("Unknown request type " + opCode);
+                    break;
+            }
+        } catch (IOException e) {
+            response.setStatus(ShadowResponseStatus.ServiceError);
+            response.setErrorMessage(e.getMessage());
+            logger.atError()
+                    .setEventType(LogEvents.IPC_ERROR.code()).setCause(e)
+                    .log("Failed to parse IPC message from {}", context.getClientId());
+        } finally {
+            try {
+                ApplicationMessage responseMessage = ApplicationMessage.builder()
+                        .version(applicationMessage.getVersion())
+                        .payload(CBOR_MAPPER.writeValueAsBytes(response))
+                        .build();
+                future.complete(new FrameReader.Message(responseMessage.toByteArray()));
+            } catch (IOException e) {
+                logger.atError()
+                        .setEventType(LogEvents.IPC_ERROR.code()).setCause(e)
+                        .log("Failed to send application message response");
+            }
+        }
+        if (!future.isDone()) {
+            future.completeExceptionally(new IPCException("Unable to serialize any response"));
+        }
+        return future;
+    }
+
 }
