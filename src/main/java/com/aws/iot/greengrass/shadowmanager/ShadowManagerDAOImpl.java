@@ -3,7 +3,6 @@ package com.aws.iot.greengrass.shadowmanager;
 
 import com.aws.iot.greengrass.shadowmanager.exception.ShadowManagerDataException;
 
-import java.nio.ByteBuffer;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -32,12 +31,48 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      * @return
      */
     @Override
-    public Optional<ByteBuffer> getShadowThing(String thingName) {
+    public Optional<byte[]> getShadowThing(String thingName) {
         return execute("SELECT arn, state FROM documents WHERE name = ?", preparedStatement -> {
             preparedStatement.setString(1, thingName);
             ResultSet resultSet = preparedStatement.executeQuery();
             if (resultSet.next()) {
-                return Optional.ofNullable(ByteBuffer.wrap(resultSet.getBytes("state")));
+                return Optional.ofNullable(resultSet.getBytes("state"));
+            }
+            return Optional.empty();
+        });
+    }
+
+    /**
+     * No-op ... will never delete a shadow document.
+     * @param thingName The thing namespace of the shadow document.
+     * @return
+     */
+    @Override
+    public Optional<byte[]> deleteShadowThing(String thingName) {
+        return execute("DELETE FROM documents OUTPUT DELETED.state WHERE name = ?", preparedStatement -> {
+            preparedStatement.setString(1, thingName);
+            ResultSet resultSet = preparedStatement.executeQuery();
+            if (resultSet.next()) {
+                return Optional.ofNullable(resultSet.getBytes("state"));
+            }
+            return Optional.empty();
+        });
+    }
+
+    /**
+     * No-op ... will never update a shadow document.
+     * @param thingName The thing namespace of the shadow document.
+     * @param newDocument The new shadow document.
+     * @return
+     */
+    @Override
+    public Optional<byte[]> updateShadowThing(String thingName, byte[] newDocument) {
+        return execute("UPDATE documents SET state = ? OUTPUT INSERTED.state WHERE name = ?", preparedStatement -> {
+            preparedStatement.setBytes(1, newDocument);
+            preparedStatement.setString(2, thingName);
+            ResultSet resultSet = preparedStatement.executeQuery();
+            if (resultSet.next()) {
+                return Optional.ofNullable(resultSet.getBytes("state"));
             }
             return Optional.empty();
         });

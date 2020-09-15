@@ -10,16 +10,20 @@ import com.aws.iot.evergreen.ipc.common.FrameReader;
 import com.aws.iot.evergreen.ipc.exceptions.IPCException;
 import com.aws.iot.evergreen.ipc.services.common.ApplicationMessage;
 import com.aws.iot.evergreen.ipc.services.shadow.ShadowClientOpCodes;
+import com.aws.iot.evergreen.ipc.services.shadow.models.DeleteThingShadowRequest;
+import com.aws.iot.evergreen.ipc.services.shadow.models.DeleteThingShadowResult;
+import com.aws.iot.evergreen.ipc.services.shadow.models.GetThingShadowRequest;
+import com.aws.iot.evergreen.ipc.services.shadow.models.GetThingShadowResult;
 import com.aws.iot.evergreen.ipc.services.shadow.models.ShadowGenericResponse;
 import com.aws.iot.evergreen.ipc.services.shadow.models.ShadowResponseStatus;
+import com.aws.iot.evergreen.ipc.services.shadow.models.UpdateThingShadowRequest;
+import com.aws.iot.evergreen.ipc.services.shadow.models.UpdateThingShadowResult;
 import com.aws.iot.evergreen.kernel.PluginService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.cbor.databind.CBORMapper;
 import org.flywaydb.core.api.FlywayException;
-import software.amazon.awssdk.iot.iotshadow.model.GetShadowRequest;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.sql.SQLException;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -121,32 +125,62 @@ public class ShadowManager extends PluginService {
     private Future<FrameReader.Message> handleMessage(FrameReader.Message message, ConnectionContext context) {
         CompletableFuture<FrameReader.Message> future = new CompletableFuture<>();
         ShadowGenericResponse response = new ShadowGenericResponse();
+        Optional<byte[]> result;
+        final String thingName;
         ApplicationMessage applicationMessage = ApplicationMessage.fromBytes(message.getPayload());
         try {
             ShadowClientOpCodes opCode = ShadowClientOpCodes.values()[applicationMessage.getOpCode()];
             switch (opCode) {
                 // Let's break this up into a map->router
                 case GET_THING_SHADOW:
-                    GetShadowRequest request = CBOR_MAPPER.readValue(
+                    GetThingShadowRequest getThingShadowRequest = CBOR_MAPPER.readValue(
                             applicationMessage.getPayload(),
-                            GetShadowRequest.class);
-                    Optional<ByteBuffer> result = dao.getShadowThing(request.thingName);
+                            GetThingShadowRequest.class);
+                    thingName = getThingShadowRequest.getThingName();
+                    result = dao.getShadowThing(thingName);
+                    response = new GetThingShadowResult();
                     if (result.isPresent()) {
-                        response.setPayload(result.get());
+                        ((GetThingShadowResult) response).setPayload(result.get());
                     } else {
                         response.setStatus(ShadowResponseStatus.ResourceNotFoundError);
-                        response.setErrorMessage("Shadow for " + request.thingName + " could not be found.");
+                        response.setErrorMessage("Shadow for " + thingName + " could not be found.");
                     }
                     break;
                 case DELETE_THING_SHADOW:
+                    DeleteThingShadowRequest deleteThingShadowRequest = CBOR_MAPPER.readValue(
+                            applicationMessage.getPayload(),
+                            DeleteThingShadowRequest.class);
+                    thingName = deleteThingShadowRequest.getThingName();
+                    result = dao.deleteShadowThing(thingName);
+                    response = new DeleteThingShadowResult();
+                    if (result.isPresent()) {
+                        ((DeleteThingShadowResult) response).setPayload(result.get());
+                    } else {
+                        response.setStatus(ShadowResponseStatus.ResourceNotFoundError);
+                        response.setErrorMessage("Shadow for " + thingName + " could not be found.");
+                    }
+                    break;
                 case UPDATE_THING_SHADOW:
+                    UpdateThingShadowRequest updateThingShadowRequest = CBOR_MAPPER.readValue(
+                            applicationMessage.getPayload(),
+                            UpdateThingShadowRequest.class);
+                    thingName = updateThingShadowRequest.getThingName();
+                    result = dao.updateShadowThing(thingName, updateThingShadowRequest.getPayload());
+                    response = new UpdateThingShadowResult();
+                    if (result.isPresent()) {
+                        ((UpdateThingShadowResult) response).setPayload(result.get());
+                    } else {
+                        response.setStatus(ShadowResponseStatus.ResourceNotFoundError);
+                        response.setErrorMessage("Shadow for " + thingName + " could not be found.");
+                    }
+                    break;
                 default:
-                    response.setStatus(ShadowResponseStatus.InvalidArgumentError);
+                    response.setStatus(ShadowResponseStatus.InvalidRequest);
                     response.setErrorMessage("Unknown request type " + opCode);
                     break;
             }
         } catch (IOException e) {
-            response.setStatus(ShadowResponseStatus.ServiceError);
+            response.setStatus(ShadowResponseStatus.InternalError);
             response.setErrorMessage(e.getMessage());
             logger.atError()
                     .setEventType(LogEvents.IPC_ERROR.code()).setCause(e)
@@ -169,5 +203,7 @@ public class ShadowManager extends PluginService {
         }
         return future;
     }
+
+
 
 }

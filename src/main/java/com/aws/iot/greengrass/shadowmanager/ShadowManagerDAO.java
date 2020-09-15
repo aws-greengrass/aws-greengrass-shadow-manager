@@ -1,6 +1,5 @@
 package com.aws.iot.greengrass.shadowmanager;
 
-import java.nio.ByteBuffer;
 import java.util.Optional;
 
 public interface ShadowManagerDAO {
@@ -9,5 +8,20 @@ public interface ShadowManagerDAO {
      * @param thingName The thing namespace of the shadow document.
      * @return Optional
      */
-    Optional<ByteBuffer> getShadowThing(String thingName);
+    Optional<byte[]> getShadowThing(String thingName);
+
+    /**
+     * Attempts to delete a shadow document from the local shadow storage.
+     * @param thingName The thing namespace of the shadow document.
+     * @return Optional
+     */
+    Optional<byte[]> deleteShadowThing(String thingName);
+
+    /**
+     * Attempts to update a shadow document from the local shadow storage.
+     * @param thingName The thing namespace of the shadow document.
+     * @param newDocument The new shadow document.
+     * @return Optional
+     */
+    Optional<byte[]> updateShadowThing(String thingName, byte[] newDocument);
 }
