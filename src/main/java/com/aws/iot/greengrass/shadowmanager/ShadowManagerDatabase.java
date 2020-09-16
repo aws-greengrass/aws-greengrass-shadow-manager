@@ -46,7 +46,7 @@ public class ShadowManagerDatabase implements Closeable {
         if (Objects.isNull(connection)) {
             connection = dataSource.getConnection();
         }
-        Flyway flyway = Flyway.configure()
+        Flyway flyway = Flyway.configure(getClass().getClassLoader())
                 .locations("db/migration")
                 .dataSource(dataSource)
                 .load();

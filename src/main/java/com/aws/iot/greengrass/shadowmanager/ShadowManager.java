@@ -19,6 +19,7 @@ import com.aws.iot.evergreen.ipc.services.shadow.models.ShadowResponseStatus;
 import com.aws.iot.evergreen.ipc.services.shadow.models.UpdateThingShadowRequest;
 import com.aws.iot.evergreen.ipc.services.shadow.models.UpdateThingShadowResult;
 import com.aws.iot.evergreen.kernel.PluginService;
+import com.aws.iot.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.cbor.databind.CBORMapper;
 import org.flywaydb.core.api.FlywayException;
@@ -35,6 +36,7 @@ public class ShadowManager extends PluginService {
     enum LogEvents {
         IPC_REGISTRATION("shadow-ipc-registration"),
         IPC_ERROR("shadow-ipc-error"),
+        DATABASE_OPERATION_ERROR("shadow-database-operation-error"),
         DATABASE_CLOSE_ERROR("shadow-database-close-error");
 
         String code;
@@ -130,6 +132,7 @@ public class ShadowManager extends PluginService {
         ApplicationMessage applicationMessage = ApplicationMessage.fromBytes(message.getPayload());
         try {
             ShadowClientOpCodes opCode = ShadowClientOpCodes.values()[applicationMessage.getOpCode()];
+            logger.atInfo().log("Received message with OpCode: {}", opCode);
             switch (opCode) {
                 // Let's break this up into a map->router
                 case GET_THING_SHADOW:
@@ -137,10 +140,12 @@ public class ShadowManager extends PluginService {
                             applicationMessage.getPayload(),
                             GetThingShadowRequest.class);
                     thingName = getThingShadowRequest.getThingName();
+                    logger.atInfo().log("Getting Thing Shadow for Thing Name: {}", thingName);
                     result = dao.getShadowThing(thingName);
                     response = new GetThingShadowResult();
                     if (result.isPresent()) {
                         ((GetThingShadowResult) response).setPayload(result.get());
+                        response.setStatus(ShadowResponseStatus.Success);
                     } else {
                         response.setStatus(ShadowResponseStatus.ResourceNotFoundError);
                         response.setErrorMessage("Shadow for " + thingName + " could not be found.");
@@ -151,10 +156,12 @@ public class ShadowManager extends PluginService {
                             applicationMessage.getPayload(),
                             DeleteThingShadowRequest.class);
                     thingName = deleteThingShadowRequest.getThingName();
+                    logger.atInfo().log("Deleting Thing Shadow for Thing Name: {}", thingName);
                     result = dao.deleteShadowThing(thingName);
                     response = new DeleteThingShadowResult();
                     if (result.isPresent()) {
                         ((DeleteThingShadowResult) response).setPayload(result.get());
+                        response.setStatus(ShadowResponseStatus.Success);
                     } else {
                         response.setStatus(ShadowResponseStatus.ResourceNotFoundError);
                         response.setErrorMessage("Shadow for " + thingName + " could not be found.");
@@ -165,10 +172,12 @@ public class ShadowManager extends PluginService {
                             applicationMessage.getPayload(),
                             UpdateThingShadowRequest.class);
                     thingName = updateThingShadowRequest.getThingName();
+                    logger.atInfo().log("Updating Thing Shadow for Thing Name: {}", thingName);
                     result = dao.updateShadowThing(thingName, updateThingShadowRequest.getPayload());
                     response = new UpdateThingShadowResult();
                     if (result.isPresent()) {
                         ((UpdateThingShadowResult) response).setPayload(result.get());
+                        response.setStatus(ShadowResponseStatus.Success);
                     } else {
                         response.setStatus(ShadowResponseStatus.ResourceNotFoundError);
                         response.setErrorMessage("Shadow for " + thingName + " could not be found.");
@@ -185,6 +194,12 @@ public class ShadowManager extends PluginService {
             logger.atError()
                     .setEventType(LogEvents.IPC_ERROR.code()).setCause(e)
                     .log("Failed to parse IPC message from {}", context.getClientId());
+        }  catch (ShadowManagerDataException e) {
+            response.setStatus(ShadowResponseStatus.InternalError);
+            response.setErrorMessage(e.getMessage());
+            logger.atError()
+                    .setEventType(LogEvents.DATABASE_OPERATION_ERROR.code()).setCause(e)
+                    .log("A database error occurred");
         } finally {
             try {
                 ApplicationMessage responseMessage = ApplicationMessage.builder()
@@ -203,7 +218,5 @@ public class ShadowManager extends PluginService {
         }
         return future;
     }
-
-
 
 }
