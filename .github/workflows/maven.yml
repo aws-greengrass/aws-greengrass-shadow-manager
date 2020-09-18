@@ -81,7 +81,7 @@ jobs:
       - name: Build with maven
         run: mvn package -DskipTests
       - run: sudo apt-get install -y awscli
-      - run: mkdir -p target/artifacts && cp target/ShadowManager.jar target/artifacts/aws.greengrass.shadowmanager.jar
+      - run: mkdir -p target/artifacts && cp target/ShadowManager.jar target/artifacts/aws.greengrass.ShadowManager.jar
       - uses: ./.github/actions/aws-greengrass-component-upload-action
         name: Upload to GCS
         env:
