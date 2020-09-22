@@ -1,4 +1,4 @@
-package com.aws.iot.greengrass.shadowmanager;
+package com.aws.greengrass.shadowmanager;
 
 import java.util.Optional;
 

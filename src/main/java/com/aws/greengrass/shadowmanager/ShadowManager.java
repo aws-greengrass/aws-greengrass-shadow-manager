@@ -8,23 +8,23 @@ package com.aws.greengrass.shadowmanager;
 import com.aws.greengrass.config.Topics;
 import com.aws.greengrass.dependency.ImplementsService;
 import com.aws.greengrass.dependency.State;
-import com.aws.iot.evergreen.ipc.ConnectionContext;
-import com.aws.iot.evergreen.ipc.IPCRouter;
-import com.aws.iot.evergreen.ipc.common.BuiltInServiceDestinationCode;
-import com.aws.iot.evergreen.ipc.common.FrameReader;
-import com.aws.iot.evergreen.ipc.exceptions.IPCException;
-import com.aws.iot.evergreen.ipc.services.common.ApplicationMessage;
-import com.aws.iot.evergreen.ipc.services.shadow.ShadowClientOpCodes;
-import com.aws.iot.evergreen.ipc.services.shadow.models.DeleteThingShadowRequest;
-import com.aws.iot.evergreen.ipc.services.shadow.models.DeleteThingShadowResult;
-import com.aws.iot.evergreen.ipc.services.shadow.models.GetThingShadowRequest;
-import com.aws.iot.evergreen.ipc.services.shadow.models.GetThingShadowResult;
-import com.aws.iot.evergreen.ipc.services.shadow.models.ShadowGenericResponse;
-import com.aws.iot.evergreen.ipc.services.shadow.models.ShadowResponseStatus;
-import com.aws.iot.evergreen.ipc.services.shadow.models.UpdateThingShadowRequest;
-import com.aws.iot.evergreen.ipc.services.shadow.models.UpdateThingShadowResult;
+import com.aws.greengrass.ipc.ConnectionContext;
+import com.aws.greengrass.ipc.IPCRouter;
+import com.aws.greengrass.ipc.common.BuiltInServiceDestinationCode;
+import com.aws.greengrass.ipc.common.FrameReader;
+import com.aws.greengrass.ipc.exceptions.IPCException;
+import com.aws.greengrass.ipc.services.common.ApplicationMessage;
+import com.aws.greengrass.ipc.services.shadow.ShadowClientOpCodes;
+import com.aws.greengrass.ipc.services.shadow.models.DeleteThingShadowRequest;
+import com.aws.greengrass.ipc.services.shadow.models.DeleteThingShadowResult;
+import com.aws.greengrass.ipc.services.shadow.models.GetThingShadowRequest;
+import com.aws.greengrass.ipc.services.shadow.models.GetThingShadowResult;
+import com.aws.greengrass.ipc.services.shadow.models.ShadowGenericResponse;
+import com.aws.greengrass.ipc.services.shadow.models.ShadowResponseStatus;
+import com.aws.greengrass.ipc.services.shadow.models.UpdateThingShadowRequest;
+import com.aws.greengrass.ipc.services.shadow.models.UpdateThingShadowResult;
 import com.aws.greengrass.lifecyclemanager.PluginService;
-import com.aws.iot.greengrass.shadowmanager.exception.ShadowManagerDataException;
+import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.cbor.databind.CBORMapper;
 import org.flywaydb.core.api.FlywayException;
@@ -137,7 +137,7 @@ public class ShadowManager extends PluginService {
         ApplicationMessage applicationMessage = ApplicationMessage.fromBytes(message.getPayload());
         try {
             ShadowClientOpCodes opCode = ShadowClientOpCodes.values()[applicationMessage.getOpCode()];
-            logger.atInfo().log("Received message with OpCode: {}", opCode);
+            logger.atTrace().log("Received message with OpCode: {}", opCode);
             switch (opCode) {
                 // Let's break this up into a map->router
                 case GET_THING_SHADOW:
