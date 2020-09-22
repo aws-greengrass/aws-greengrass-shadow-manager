@@ -1,8 +1,13 @@
-package com.aws.iot.greengrass.shadowmanager;
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
-import com.aws.iot.evergreen.config.Topics;
-import com.aws.iot.evergreen.dependency.ImplementsService;
-import com.aws.iot.evergreen.dependency.State;
+package com.aws.greengrass.shadowmanager;
+
+import com.aws.greengrass.config.Topics;
+import com.aws.greengrass.dependency.ImplementsService;
+import com.aws.greengrass.dependency.State;
 import com.aws.iot.evergreen.ipc.ConnectionContext;
 import com.aws.iot.evergreen.ipc.IPCRouter;
 import com.aws.iot.evergreen.ipc.common.BuiltInServiceDestinationCode;
@@ -18,7 +23,7 @@ import com.aws.iot.evergreen.ipc.services.shadow.models.ShadowGenericResponse;
 import com.aws.iot.evergreen.ipc.services.shadow.models.ShadowResponseStatus;
 import com.aws.iot.evergreen.ipc.services.shadow.models.UpdateThingShadowRequest;
 import com.aws.iot.evergreen.ipc.services.shadow.models.UpdateThingShadowResult;
-import com.aws.iot.evergreen.kernel.PluginService;
+import com.aws.greengrass.lifecyclemanager.PluginService;
 import com.aws.iot.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.cbor.databind.CBORMapper;
@@ -50,7 +55,7 @@ public class ShadowManager extends PluginService {
     }
 
 
-    public static final String SERVICE_NAME = "aws.greengrass.shadowmanager";
+    public static final String SERVICE_NAME = "aws.greengrass.ShadowManager";
     // Should make this injected?
     private static final ObjectMapper CBOR_MAPPER = new CBORMapper();
     private final IPCRouter ipcRouter;
