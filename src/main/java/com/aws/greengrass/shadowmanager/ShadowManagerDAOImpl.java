@@ -1,7 +1,7 @@
-package com.aws.iot.greengrass.shadowmanager;
+package com.aws.greengrass.shadowmanager;
 
 
-import com.aws.iot.greengrass.shadowmanager.exception.ShadowManagerDataException;
+import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;

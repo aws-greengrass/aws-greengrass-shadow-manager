@@ -1,6 +1,6 @@
-package com.aws.iot.greengrass.shadowmanager;
+package com.aws.greengrass.shadowmanager;
 
-import com.aws.iot.evergreen.kernel.Kernel;
+import com.aws.greengrass.lifecyclemanager.Kernel;
 import org.flywaydb.core.Flyway;
 import org.h2.jdbcx.JdbcDataSource;
 
@@ -12,7 +12,7 @@ import java.util.Objects;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
-import static com.aws.iot.greengrass.shadowmanager.ShadowManager.SERVICE_NAME;
+import static com.aws.greengrass.shadowmanager.ShadowManager.SERVICE_NAME;
 
 /**
  * Connection manager for the local shadow documents.
