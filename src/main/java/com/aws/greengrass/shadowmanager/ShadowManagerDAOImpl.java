@@ -14,6 +14,7 @@ import javax.inject.Inject;
  */
 public class ShadowManagerDAOImpl implements ShadowManagerDAO {
     private final ShadowManagerDatabase database;
+    private static final String STATE = "state";
 
     @FunctionalInterface
     private interface SQLExecution<T> {
@@ -23,6 +24,26 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
     @Inject
     public ShadowManagerDAOImpl(final ShadowManagerDatabase database) {
         this.database = database;
+    }
+
+    /**
+     * Adds an entry for the specified thingName with the newDocument.
+     * @param thingName The thing namespace of the shadow document.
+     * @param initialDocument The initial shadow document.
+     * @return
+     */
+    @Override
+    public Optional<byte[]> createShadowThing(String thingName, byte[] initialDocument) {
+        return execute("INSERT INTO documents VALUES (?, ?, ?)", preparedStatement -> {
+            preparedStatement.setString(1, thingName);
+            preparedStatement.setBytes(2, initialDocument);
+            preparedStatement.setString(3, thingName);
+            int result = preparedStatement.executeUpdate();
+            if (result == 1) {
+                return Optional.ofNullable(initialDocument);
+            }
+            return Optional.empty();
+        });
     }
 
     /**
@@ -36,7 +57,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
             preparedStatement.setString(1, thingName);
             ResultSet resultSet = preparedStatement.executeQuery();
             if (resultSet.next()) {
-                return Optional.ofNullable(resultSet.getBytes("state"));
+                return Optional.ofNullable(resultSet.getBytes(STATE));
             }
             return Optional.empty();
         });
@@ -49,14 +70,19 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      */
     @Override
     public Optional<byte[]> deleteShadowThing(String thingName) {
-        return execute("DELETE FROM documents OUTPUT DELETED.state WHERE name = ?", preparedStatement -> {
-            preparedStatement.setString(1, thingName);
-            ResultSet resultSet = preparedStatement.executeQuery();
-            if (resultSet.next()) {
-                return Optional.ofNullable(resultSet.getBytes("state"));
-            }
+        Optional<byte[]> existingThing = getShadowThing(thingName);
+        if (existingThing.isPresent()) {
+            return execute("DELETE FROM documents WHERE name = ?", preparedStatement -> {
+                preparedStatement.setString(1, thingName);
+                int result = preparedStatement.executeUpdate();
+                if (result == 1) {
+                    return existingThing;
+                }
+                return Optional.empty();
+            });
+        } else {
             return Optional.empty();
-        });
+        }
     }
 
     /**
@@ -67,12 +93,12 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      */
     @Override
     public Optional<byte[]> updateShadowThing(String thingName, byte[] newDocument) {
-        return execute("UPDATE documents SET state = ? OUTPUT INSERTED.state WHERE name = ?", preparedStatement -> {
+        return execute("UPDATE documents SET state = ? WHERE name = ?", preparedStatement -> {
             preparedStatement.setBytes(1, newDocument);
             preparedStatement.setString(2, thingName);
-            ResultSet resultSet = preparedStatement.executeQuery();
-            if (resultSet.next()) {
-                return Optional.ofNullable(resultSet.getBytes("state"));
+            int result = preparedStatement.executeUpdate();
+            if (result == 1) {
+                return Optional.ofNullable(newDocument);
             }
             return Optional.empty();
         });

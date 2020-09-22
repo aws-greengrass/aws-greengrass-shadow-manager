@@ -6,6 +6,7 @@ import org.h2.jdbcx.JdbcDataSource;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Objects;
@@ -32,6 +33,15 @@ public class ShadowManagerDatabase implements Closeable {
     public ShadowManagerDatabase(final Kernel kernel) {
         this.dataSource = new JdbcDataSource();
         this.dataSource.setURL(String.format(DATABASE_FORMAT, kernel.getWorkPath().resolve(SERVICE_NAME)));
+    }
+
+    /**
+     *  Creates a database with a {@link javax.sql.DataSource} using the specified workpath.
+     * @param workpath The location for the database
+     */
+    public ShadowManagerDatabase(final Path workpath) {
+        this.dataSource = new JdbcDataSource();
+        this.dataSource.setURL(String.format(DATABASE_FORMAT, workpath.resolve(SERVICE_NAME)));
     }
 
     public Connection connection() {
