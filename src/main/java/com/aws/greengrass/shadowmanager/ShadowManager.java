@@ -5,6 +5,9 @@
 
 package com.aws.greengrass.shadowmanager;
 
+import com.aws.greengrass.authorization.AuthorizationHandler;
+import com.aws.greengrass.authorization.Permission;
+import com.aws.greengrass.authorization.exceptions.AuthorizationException;
 import com.aws.greengrass.config.Topics;
 import com.aws.greengrass.dependency.ImplementsService;
 import com.aws.greengrass.dependency.State;
@@ -31,6 +34,9 @@ import org.flywaydb.core.api.FlywayException;
 
 import java.io.IOException;
 import java.sql.SQLException;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
@@ -39,6 +45,7 @@ import javax.inject.Inject;
 @ImplementsService(name = ShadowManager.SERVICE_NAME)
 public class ShadowManager extends PluginService {
     enum LogEvents {
+        AUTHORIZATION_ERROR("shadow-authorization-error"),
         IPC_REGISTRATION("shadow-ipc-registration"),
         IPC_ERROR("shadow-ipc-error"),
         DATABASE_OPERATION_ERROR("shadow-database-operation-error"),
@@ -56,33 +63,50 @@ public class ShadowManager extends PluginService {
 
 
     public static final String SERVICE_NAME = "aws.greengrass.ShadowManager";
+    public static final List<String> SHADOW_AUTHORIZATION_OPCODES = Arrays.asList("getShadow",
+             "updateShadow", "deleteShadow");
     // Should make this injected?
     private static final ObjectMapper CBOR_MAPPER = new CBORMapper();
     private final IPCRouter ipcRouter;
     private final ShadowManagerDAO dao;
     private final ShadowManagerDatabase database;
+    private final AuthorizationHandler authorizationHandler;
 
     /**
      * Ctr for ShadowManager.
-     * @param topics topics passed by by the kernel
+     * @param topics topics passed by the kernel
      * @param ipcRouter IPC router for handling local shadow Request / Reply
      * @param dao Local shadow repository for managing documents
      * @param database Local shadow database management
+     * @param authorizationHandler The authorization handler
      */
     @Inject
     public ShadowManager(
             Topics topics,
             IPCRouter ipcRouter,
             ShadowManagerDAOImpl dao,
-            ShadowManagerDatabase database) {
+            ShadowManagerDatabase database,
+            AuthorizationHandler authorizationHandler) {
         super(topics);
         this.ipcRouter = ipcRouter;
         this.database = database;
         this.dao = dao;
+        this.authorizationHandler = authorizationHandler;
     }
 
-    private void registerHandler() throws IPCException {
+    private void registerHandlers() throws IPCException {
         BuiltInServiceDestinationCode destinationCode = BuiltInServiceDestinationCode.SHADOW;
+
+        try {
+            authorizationHandler.registerComponent(this.getName(), new HashSet<>(SHADOW_AUTHORIZATION_OPCODES));
+        } catch (AuthorizationException e) {
+            logger.atError()
+                    .setEventType(LogEvents.AUTHORIZATION_ERROR.name())
+                    .setCause(e)
+                    .kv(IPCRouter.DESTINATION_STRING, destinationCode.name())
+                    .log("Failed to initialize the ShadowManager service with the Authorization module.");
+        }
+
         ipcRouter.registerServiceCallback(destinationCode.getValue(), this::handleMessage);
         logger.atInfo()
                 .setEventType(LogEvents.IPC_REGISTRATION.code())
@@ -102,8 +126,8 @@ public class ShadowManager extends PluginService {
     @Override
     public void startup() {
         try {
-            // Register IPC
-            registerHandler();
+            // Register IPC and Authorization
+            registerHandlers();
             reportState(State.RUNNING);
         } catch (IPCException e) {
             serviceErrored(e);
@@ -138,12 +162,13 @@ public class ShadowManager extends PluginService {
         try {
             ShadowClientOpCodes opCode = ShadowClientOpCodes.values()[applicationMessage.getOpCode()];
             logger.atTrace().log("Received message with OpCode: {}", opCode);
-            switch (opCode) {
+            switch (opCode) { //NOPMD
                 // Let's break this up into a map->router
                 case GET_THING_SHADOW:
                     GetThingShadowRequest getThingShadowRequest = CBOR_MAPPER.readValue(
                             applicationMessage.getPayload(),
                             GetThingShadowRequest.class);
+                    doAuthorization(opCode.toString(), context.getServiceName(), getThingShadowRequest.getThingName());
                     thingName = getThingShadowRequest.getThingName();
                     logger.atInfo().log("Getting Thing Shadow for Thing Name: {}", thingName);
                     result = dao.getShadowThing(thingName);
@@ -160,6 +185,8 @@ public class ShadowManager extends PluginService {
                     DeleteThingShadowRequest deleteThingShadowRequest = CBOR_MAPPER.readValue(
                             applicationMessage.getPayload(),
                             DeleteThingShadowRequest.class);
+                    doAuthorization(opCode.toString(), context.getServiceName(),
+                            deleteThingShadowRequest.getThingName());
                     thingName = deleteThingShadowRequest.getThingName();
                     logger.atInfo().log("Deleting Thing Shadow for Thing Name: {}", thingName);
                     result = dao.deleteShadowThing(thingName);
@@ -176,6 +203,8 @@ public class ShadowManager extends PluginService {
                     UpdateThingShadowRequest updateThingShadowRequest = CBOR_MAPPER.readValue(
                             applicationMessage.getPayload(),
                             UpdateThingShadowRequest.class);
+                    doAuthorization(opCode.toString(), context.getServiceName(),
+                            updateThingShadowRequest.getThingName());
                     thingName = updateThingShadowRequest.getThingName();
                     logger.atInfo().log("Updating Thing Shadow for Thing Name: {}", thingName);
                     result = dao.updateShadowThing(thingName, updateThingShadowRequest.getPayload());
@@ -199,6 +228,12 @@ public class ShadowManager extends PluginService {
             logger.atError()
                     .setEventType(LogEvents.IPC_ERROR.code()).setCause(e)
                     .log("Failed to parse IPC message from {}", context.getClientId());
+        }  catch (AuthorizationException e) {
+            response.setStatus(ShadowResponseStatus.Unauthorized);
+            response.setErrorMessage(e.getMessage());
+            logger.atError()
+                    .setEventType(LogEvents.AUTHORIZATION_ERROR.code()).setCause(e)
+                    .log("An authorization error occurred");
         }  catch (ShadowManagerDataException e) {
             response.setStatus(ShadowResponseStatus.InternalError);
             response.setErrorMessage(e.getMessage());
@@ -224,4 +259,13 @@ public class ShadowManager extends PluginService {
         return future;
     }
 
+    private void doAuthorization(String opCode, String serviceName, String thingName) throws AuthorizationException {
+        authorizationHandler.isAuthorized(
+                this.getName(),
+                Permission.builder()
+                        .principal(serviceName)
+                        .operation(opCode.toLowerCase())
+                        .resource(thingName)
+                        .build());
+    }
 }
