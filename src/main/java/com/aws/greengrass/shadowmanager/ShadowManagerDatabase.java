@@ -35,15 +35,6 @@ public class ShadowManagerDatabase implements Closeable {
         this.dataSource.setURL(String.format(DATABASE_FORMAT, kernel.getWorkPath().resolve(SERVICE_NAME)));
     }
 
-    /**
-     *  Creates a database with a {@link javax.sql.DataSource} using the specified workpath.
-     * @param workpath The location for the database
-     */
-    public ShadowManagerDatabase(final Path workpath) {
-        this.dataSource = new JdbcDataSource();
-        this.dataSource.setURL(String.format(DATABASE_FORMAT, workpath.resolve(SERVICE_NAME)));
-    }
-
     public Connection connection() {
         return connection;
     }

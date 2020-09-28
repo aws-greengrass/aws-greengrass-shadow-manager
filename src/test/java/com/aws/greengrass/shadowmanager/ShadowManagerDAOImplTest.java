@@ -42,7 +42,9 @@ public class ShadowManagerDAOImplTest {
     public void before() throws SQLException {
         kernel = new Kernel();
         // Might need to start the kernel here
-        database = new ShadowManagerDatabase(rootDir);
+        kernel.parseArgs("-r", rootDir.toAbsolutePath().toString());
+
+        database = new ShadowManagerDatabase(kernel);
         database.install();
         dao = new ShadowManagerDAOImpl(database);
     }

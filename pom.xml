@@ -23,6 +23,7 @@
 
         <h2.version>1.4.200</h2.version>
         <kernel.version>1.0-SNAPSHOT</kernel.version>
+        <certificate-manager.version>1.0-SNAPSHOT</certificate-manager.version>
         <junit.version>5.6.2</junit.version>
         <mockito.version>3.2.4</mockito.version>
         <lombok.version>1.18.10</lombok.version>
@@ -56,6 +57,12 @@
 	    <artifactId>h2</artifactId>
             <version>${h2.version}</version>
 	</dependency>
+        <dependency>
+            <groupId>com.aws.iot</groupId>
+            <artifactId>certificate-manager</artifactId>
+            <version>${certificate-manager.version}</version>
+            <scope>provided</scope>
+        </dependency>
         <dependency>
             <groupId>com.aws.iot</groupId>
             <artifactId>evergreen-kernel</artifactId>

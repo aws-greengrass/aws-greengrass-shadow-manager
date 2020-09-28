@@ -8,6 +8,7 @@ package com.aws.greengrass.shadowmanager;
 import com.aws.greengrass.authorization.AuthorizationHandler;
 import com.aws.greengrass.authorization.Permission;
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
+import com.aws.greengrass.certificatemanager.DCMService;
 import com.aws.greengrass.config.Topics;
 import com.aws.greengrass.dependency.ImplementsService;
 import com.aws.greengrass.dependency.State;
@@ -26,8 +27,11 @@ import com.aws.greengrass.ipc.services.shadow.models.ShadowGenericResponse;
 import com.aws.greengrass.ipc.services.shadow.models.ShadowResponseStatus;
 import com.aws.greengrass.ipc.services.shadow.models.UpdateThingShadowRequest;
 import com.aws.greengrass.ipc.services.shadow.models.UpdateThingShadowResult;
+import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.lifecyclemanager.PluginService;
+import com.aws.greengrass.lifecyclemanager.exceptions.ServiceLoadException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
+import com.aws.greengrass.util.Coerce;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.cbor.databind.CBORMapper;
 import org.flywaydb.core.api.FlywayException;
@@ -37,8 +41,10 @@ import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Future;
 import javax.inject.Inject;
 
@@ -48,6 +54,7 @@ public class ShadowManager extends PluginService {
         AUTHORIZATION_ERROR("shadow-authorization-error"),
         IPC_REGISTRATION("shadow-ipc-registration"),
         IPC_ERROR("shadow-ipc-error"),
+        DCM_ERROR("shadow-dcm-error"),
         DATABASE_OPERATION_ERROR("shadow-database-operation-error"),
         DATABASE_CLOSE_ERROR("shadow-database-close-error");
 
@@ -63,14 +70,16 @@ public class ShadowManager extends PluginService {
 
 
     public static final String SERVICE_NAME = "aws.greengrass.ShadowManager";
-    public static final List<String> SHADOW_AUTHORIZATION_OPCODES = Arrays.asList("getShadow",
-             "updateShadow", "deleteShadow");
+    public static final List<String> SHADOW_AUTHORIZATION_OPCODES = Arrays.asList("GetThingShadow",
+             "UpdateThingShadow", "DeleteThingShadow", "*");
     // Should make this injected?
     private static final ObjectMapper CBOR_MAPPER = new CBORMapper();
     private final IPCRouter ipcRouter;
     private final ShadowManagerDAO dao;
     private final ShadowManagerDatabase database;
     private final AuthorizationHandler authorizationHandler;
+    private final Kernel kernel;
+    private ConcurrentHashMap<String, String> connectedDevices;
 
     /**
      * Ctr for ShadowManager.
@@ -79,6 +88,7 @@ public class ShadowManager extends PluginService {
      * @param dao Local shadow repository for managing documents
      * @param database Local shadow database management
      * @param authorizationHandler The authorization handler
+     * @param kernel greengrass kernel
      */
     @Inject
     public ShadowManager(
@@ -86,12 +96,15 @@ public class ShadowManager extends PluginService {
             IPCRouter ipcRouter,
             ShadowManagerDAOImpl dao,
             ShadowManagerDatabase database,
-            AuthorizationHandler authorizationHandler) {
+            AuthorizationHandler authorizationHandler,
+            Kernel kernel) {
         super(topics);
         this.ipcRouter = ipcRouter;
         this.database = database;
         this.dao = dao;
         this.authorizationHandler = authorizationHandler;
+        this.kernel = kernel;
+        connectedDevices = new ConcurrentHashMap<>();
     }
 
     private void registerHandlers() throws IPCException {
@@ -101,7 +114,7 @@ public class ShadowManager extends PluginService {
             authorizationHandler.registerComponent(this.getName(), new HashSet<>(SHADOW_AUTHORIZATION_OPCODES));
         } catch (AuthorizationException e) {
             logger.atError()
-                    .setEventType(LogEvents.AUTHORIZATION_ERROR.name())
+                    .setEventType(LogEvents.AUTHORIZATION_ERROR.code)
                     .setCause(e)
                     .kv(IPCRouter.DESTINATION_STRING, destinationCode.name())
                     .log("Failed to initialize the ShadowManager service with the Authorization module.");
@@ -112,6 +125,34 @@ public class ShadowManager extends PluginService {
                 .setEventType(LogEvents.IPC_REGISTRATION.code())
                 .addKeyValue("destination", destinationCode.name())
                 .log();
+    }
+
+    private void setupDCMService() throws ServiceLoadException {
+        kernel.locate(DCMService.DCM_SERVICE_NAME).getConfig()
+                .lookup(RUNTIME_STORE_NAMESPACE_TOPIC, DCMService.CERTIFICATES_KEY, DCMService.DEVICES_TOPIC)
+                .subscribe((why, newv) -> {
+                    try {
+                        Map<String, String> clientCerts = (Map<String, String>) newv.toPOJO();
+                        if (clientCerts.isEmpty()) {
+                            logger.atDebug()
+                                    .setEventType(LogEvents.DCM_ERROR.code())
+                                    .log("Client Certificates map is null or empty");
+                            return;
+                        }
+                        updateConnectedDevices(clientCerts);
+                    } catch (ClassCastException e) {
+                        logger.atError()
+                                .setEventType(LogEvents.DCM_ERROR.code())
+                                .addKeyValue("clientCerts", Coerce.toString(newv))
+                                .log();
+                        serviceErrored(String.format("Invalid Client Certificates map. %s", e.getMessage()));
+                    }
+                });
+    }
+
+    private void updateConnectedDevices(Map<String, String> clientCerts) {
+        connectedDevices.clear(); // Clear out existing devices?
+        connectedDevices.putAll(clientCerts);
     }
 
     @Override
@@ -128,8 +169,11 @@ public class ShadowManager extends PluginService {
         try {
             // Register IPC and Authorization
             registerHandlers();
+            // Listen for connected devices
+            setupDCMService();
+
             reportState(State.RUNNING);
-        } catch (IPCException e) {
+        } catch (IPCException | ServiceLoadException e) {
             serviceErrored(e);
         }
     }
@@ -141,7 +185,7 @@ public class ShadowManager extends PluginService {
             database.close();
         } catch (IOException e) {
             logger.atError()
-                    .setEventType(LogEvents.DATABASE_CLOSE_ERROR.name())
+                    .setEventType(LogEvents.DATABASE_CLOSE_ERROR.code())
                     .setCause(e)
                     .log("Failed to close out shadow database");
         }
