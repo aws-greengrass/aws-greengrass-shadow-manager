@@ -8,10 +8,11 @@
          xmlns="http://maven.apache.org/POM/4.0.0"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-    <groupId>com.aws.iot</groupId>
-    <artifactId>greengrass-shadowmanager</artifactId>
+    <groupId>com.aws.greengrass</groupId>
+    <artifactId>shadow-manager</artifactId>
     <packaging>jar</packaging>
     <version>1.0-SNAPSHOT</version>
+    <name>greengrass-shadow-manager</name>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -22,7 +23,7 @@
         <shadowmanagerjar.name>ShadowManager</shadowmanagerjar.name>
 
         <h2.version>1.4.200</h2.version>
-        <kernel.version>1.0-SNAPSHOT</kernel.version>
+        <nucleus.version>1.0-SNAPSHOT</nucleus.version>
         <junit.version>5.6.2</junit.version>
         <mockito.version>3.2.4</mockito.version>
         <lombok.version>1.18.10</lombok.version>
@@ -33,39 +34,34 @@
 
     <repositories>
         <repository>
-            <id>evergreen-dev-snapshot</id>
-            <name>Kernel Snapshot</name>
+            <id>greengrass-dev-snapshot</id>
+            <name>Nucleus Snapshot</name>
             <url>https://d10d248laylpoq.cloudfront.net</url>
         </repository>
     </repositories>
     <dependencies>
+        <!-- https://mvnrepository.com/artifact/org.flywaydb/flyway-core -->
         <dependency>
-            <groupId>com.aws.iot</groupId>
-            <artifactId>evergreen-java-sdk</artifactId>
-            <version>0.0.0-SNAPSHOT</version>
-        </dependency>
-	<!-- https://mvnrepository.com/artifact/org.flywaydb/flyway-core -->
-	<dependency>
-	    <groupId>org.flywaydb</groupId>
-	    <artifactId>flyway-core</artifactId>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
             <version>${flyway.version}</version>
-	</dependency>
-	<!-- https://mvnrepository.com/artifact/com.h2database/h2 -->
-	<dependency>
-	    <groupId>com.h2database</groupId>
-	    <artifactId>h2</artifactId>
-            <version>${h2.version}</version>
-	</dependency>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/com.h2database/h2 -->
         <dependency>
-            <groupId>com.aws.iot</groupId>
-            <artifactId>evergreen-kernel</artifactId>
-            <version>${kernel.version}</version>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <version>${h2.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.aws.greengrass</groupId>
+            <artifactId>nucleus</artifactId>
+            <version>${nucleus.version}</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
-            <groupId>com.aws.iot</groupId>
-            <artifactId>evergreen-kernel</artifactId>
-            <version>${kernel.version}</version>
+            <groupId>com.aws.greengrass</groupId>
+            <artifactId>nucleus</artifactId>
+            <version>${nucleus.version}</version>
             <type>test-jar</type>
             <scope>test</scope>
         </dependency>
