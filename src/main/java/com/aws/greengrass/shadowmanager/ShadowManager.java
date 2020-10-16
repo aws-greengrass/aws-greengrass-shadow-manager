@@ -18,7 +18,7 @@ public class ShadowManager extends PluginService {
 
     /**
      * Ctr for ShadowManager.
-     * @param topics topics passed by by the kernel
+     * @param topics topics passed by by the Nucleus
      */
     @Inject
     public ShadowManager(Topics topics) {
