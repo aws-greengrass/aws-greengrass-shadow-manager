@@ -48,7 +48,7 @@ public class ShadowManagerTest extends GGServiceTestUtil {
         kernel.shutdown();
     }
 
-    private void startKernelWithConfig(String configFile, State expectedState) throws InterruptedException {
+    private void startNucleusWithConfig(String configFile, State expectedState) throws InterruptedException {
         CountDownLatch shadowManagerRunning = new CountDownLatch(1);
         kernel.parseArgs("-r", rootDir.toAbsolutePath().toString(), "-i",
                 getClass().getResource(configFile).toString());
@@ -65,8 +65,8 @@ public class ShadowManagerTest extends GGServiceTestUtil {
     }
 
     @Test
-    void GIVEN_greengrass_with_shadow_manager_WHEN_start_kernel_THEN_shadow_manager_starts_successfully() throws Exception {
-        startKernelWithConfig("config.yaml", State.RUNNING);
+    void GIVEN_Greengrass_with_shadow_manager_WHEN_start_kernel_THEN_shadow_manager_starts_successfully() throws Exception {
+        startNucleusWithConfig("config.yaml", State.RUNNING);
     }
 
 }

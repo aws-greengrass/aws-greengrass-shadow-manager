@@ -69,7 +69,7 @@ public class ShadowManager extends PluginService {
 
     /**
      * Ctr for ShadowManager.
-     * @param topics topics passed by the kernel
+     * @param topics topics passed by the Nucleus
      * @param dao Local shadow repository for managing documents
      * @param database Local shadow database management
      * @param authorizationHandler The authorization handler
