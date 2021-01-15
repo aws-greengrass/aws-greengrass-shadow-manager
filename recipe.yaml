@@ -9,4 +9,4 @@ Manifests:
   - Platform:
       os: all
     Artifacts:
-      - URI: s3://gg-dev-artifacts/$componentName/$platform.os/$version/aws.greengrass.ShadowManager.jar
+      - URI: s3://gg-dev-artifacts-$stage/$componentName/$platform.os/$version/aws.greengrass.ShadowManager.jar
