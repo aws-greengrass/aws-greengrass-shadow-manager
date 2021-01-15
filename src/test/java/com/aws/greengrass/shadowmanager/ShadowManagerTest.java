@@ -5,6 +5,7 @@
 
 package com.aws.greengrass.shadowmanager;
 
+import com.aws.greengrass.authorization.AuthorizationHandler;
 import com.aws.greengrass.dependency.State;
 import com.aws.greengrass.lifecyclemanager.GreengrassService;
 import com.aws.greengrass.lifecyclemanager.GlobalStateChangeListener;
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.nio.file.Path;
@@ -33,6 +35,9 @@ public class ShadowManagerTest extends GGServiceTestUtil {
     @TempDir
     Path rootDir;
 
+    @Mock
+    AuthorizationHandler mockAuthorizationHandler;
+
     @BeforeEach
     void setup() {
         kernel = new Kernel();
@@ -43,24 +48,25 @@ public class ShadowManagerTest extends GGServiceTestUtil {
         kernel.shutdown();
     }
 
-    private void startKernelWithConfig(String configFileName) throws InterruptedException {
+    private void startKernelWithConfig(String configFile, State expectedState) throws InterruptedException {
         CountDownLatch shadowManagerRunning = new CountDownLatch(1);
         kernel.parseArgs("-r", rootDir.toAbsolutePath().toString(), "-i",
-                getClass().getResource(configFileName).toString());
+                getClass().getResource(configFile).toString());
         listener = (GreengrassService service, State was, State newState) -> {
-            if (service.getName().equals(ShadowManager.SERVICE_NAME) && service.getState().equals(State.RUNNING)) {
+            if (service.getName().equals(ShadowManager.SERVICE_NAME) && service.getState().equals(expectedState)) {
                 shadowManagerRunning.countDown();
             }
         };
         kernel.getContext().addGlobalStateChangeListener(listener);
+        kernel.getContext().put(AuthorizationHandler.class, mockAuthorizationHandler);
         kernel.launch();
 
         Assertions.assertTrue(shadowManagerRunning.await(TEST_TIME_OUT_SEC, TimeUnit.SECONDS));
     }
 
     @Test
-    void GIVEN_Evergreen_with_shadow_manager_WHEN_start_kernel_THEN_shadow_manager_starts_successfully() throws Exception {
-        startKernelWithConfig("config.yaml");
+    void GIVEN_greengrass_with_shadow_manager_WHEN_start_kernel_THEN_shadow_manager_starts_successfully() throws Exception {
+        startKernelWithConfig("config.yaml", State.RUNNING);
     }
 
 }

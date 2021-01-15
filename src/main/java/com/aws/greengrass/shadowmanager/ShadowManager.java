@@ -12,29 +12,14 @@ import com.aws.greengrass.certificatemanager.DCMService;
 import com.aws.greengrass.config.Topics;
 import com.aws.greengrass.dependency.ImplementsService;
 import com.aws.greengrass.dependency.State;
-import com.aws.greengrass.ipc.ConnectionContext;
-import com.aws.greengrass.ipc.IPCRouter;
-import com.aws.greengrass.ipc.common.BuiltInServiceDestinationCode;
-import com.aws.greengrass.ipc.common.FrameReader;
-import com.aws.greengrass.ipc.exceptions.IPCException;
-import com.aws.greengrass.ipc.services.common.ApplicationMessage;
-import com.aws.greengrass.ipc.services.shadow.ShadowClientOpCodes;
-import com.aws.greengrass.ipc.services.shadow.models.DeleteThingShadowRequest;
-import com.aws.greengrass.ipc.services.shadow.models.DeleteThingShadowResult;
-import com.aws.greengrass.ipc.services.shadow.models.GetThingShadowRequest;
-import com.aws.greengrass.ipc.services.shadow.models.GetThingShadowResult;
-import com.aws.greengrass.ipc.services.shadow.models.ShadowGenericResponse;
-import com.aws.greengrass.ipc.services.shadow.models.ShadowResponseStatus;
-import com.aws.greengrass.ipc.services.shadow.models.UpdateThingShadowRequest;
-import com.aws.greengrass.ipc.services.shadow.models.UpdateThingShadowResult;
 import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.lifecyclemanager.PluginService;
 import com.aws.greengrass.lifecyclemanager.exceptions.ServiceLoadException;
-import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.util.Coerce;
+import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.cbor.databind.CBORMapper;
 import org.flywaydb.core.api.FlywayException;
+import software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService;
 
 import java.io.IOException;
 import java.sql.SQLException;
@@ -42,11 +27,10 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Future;
 import javax.inject.Inject;
+
+//import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.GET_THING_SHADOW;
 
 @ImplementsService(name = ShadowManager.SERVICE_NAME)
 public class ShadowManager extends PluginService {
@@ -68,23 +52,24 @@ public class ShadowManager extends PluginService {
         }
     }
 
-
     public static final String SERVICE_NAME = "aws.greengrass.ShadowManager";
     public static final List<String> SHADOW_AUTHORIZATION_OPCODES = Arrays.asList("GetThingShadow",
              "UpdateThingShadow", "DeleteThingShadow", "*");
     // Should make this injected?
-    private static final ObjectMapper CBOR_MAPPER = new CBORMapper();
-    private final IPCRouter ipcRouter;
+    private static final ObjectMapper OBJECT_MAPPER =
+            new ObjectMapper().configure(MapperFeature.ACCEPT_CASE_INSENSITIVE_PROPERTIES, true);
     private final ShadowManagerDAO dao;
     private final ShadowManagerDatabase database;
     private final AuthorizationHandler authorizationHandler;
     private final Kernel kernel;
     private ConcurrentHashMap<String, String> connectedDevices;
 
+    @Inject
+    private GreengrassCoreIPCService greengrassCoreIPCService;
+
     /**
      * Ctr for ShadowManager.
      * @param topics topics passed by the kernel
-     * @param ipcRouter IPC router for handling local shadow Request / Reply
      * @param dao Local shadow repository for managing documents
      * @param database Local shadow database management
      * @param authorizationHandler The authorization handler
@@ -93,13 +78,11 @@ public class ShadowManager extends PluginService {
     @Inject
     public ShadowManager(
             Topics topics,
-            IPCRouter ipcRouter,
             ShadowManagerDAOImpl dao,
             ShadowManagerDatabase database,
             AuthorizationHandler authorizationHandler,
             Kernel kernel) {
         super(topics);
-        this.ipcRouter = ipcRouter;
         this.database = database;
         this.dao = dao;
         this.authorizationHandler = authorizationHandler;
@@ -107,24 +90,20 @@ public class ShadowManager extends PluginService {
         connectedDevices = new ConcurrentHashMap<>();
     }
 
-    private void registerHandlers() throws IPCException {
-        BuiltInServiceDestinationCode destinationCode = BuiltInServiceDestinationCode.SHADOW;
-
+    private void registerHandlers() {
         try {
             authorizationHandler.registerComponent(this.getName(), new HashSet<>(SHADOW_AUTHORIZATION_OPCODES));
         } catch (AuthorizationException e) {
             logger.atError()
                     .setEventType(LogEvents.AUTHORIZATION_ERROR.code)
                     .setCause(e)
-                    .kv(IPCRouter.DESTINATION_STRING, destinationCode.name())
                     .log("Failed to initialize the ShadowManager service with the Authorization module.");
         }
 
-        ipcRouter.registerServiceCallback(destinationCode.getValue(), this::handleMessage);
-        logger.atInfo()
-                .setEventType(LogEvents.IPC_REGISTRATION.code())
-                .addKeyValue("destination", destinationCode.name())
-                .log();
+        /*greengrassCoreIPCService.setGetThingShadowHandler(
+                context -> shadowManagerIPCAgent.getThingShadowOperationHandler(context));
+        logger.atInfo().setEventType(LogEvents.IPC_REGISTRATION.code())
+                                        .addKeyValue("handler", "getThingShadowOperationHandler").log();*/
     }
 
     private void setupDCMService() throws ServiceLoadException {
@@ -170,10 +149,10 @@ public class ShadowManager extends PluginService {
             // Register IPC and Authorization
             registerHandlers();
             // Listen for connected devices
-            setupDCMService();
+            //setupDCMService();
 
             reportState(State.RUNNING);
-        } catch (IPCException | ServiceLoadException e) {
+        } catch (Exception e) { //ServiceLoadException e) {
             serviceErrored(e);
         }
     }
@@ -193,78 +172,26 @@ public class ShadowManager extends PluginService {
 
     /**
      * Handles local shadow service IPC calls.
-     * @param message API message received from a client.
-     * @param context connection context received from a client.
-     * @return
+     * /@param request GetThingShadow request received from a client.
+     * /@param serviceName component name of the request.
+     * /@return GetThingShadowResponse
      */
-    private Future<FrameReader.Message> handleMessage(FrameReader.Message message, ConnectionContext context) {
-        CompletableFuture<FrameReader.Message> future = new CompletableFuture<>();
-        ShadowGenericResponse response = new ShadowGenericResponse();
-        Optional<byte[]> result;
-        final String thingName;
-        ApplicationMessage applicationMessage = ApplicationMessage.fromBytes(message.getPayload());
+    private void handleGetThingShadow() {
+        /*
         try {
-            ShadowClientOpCodes opCode = ShadowClientOpCodes.values()[applicationMessage.getOpCode()];
-            logger.atTrace().log("Received message with OpCode: {}", opCode);
-            switch (opCode) { //NOPMD
-                // Let's break this up into a map->router
-                case GET_THING_SHADOW:
-                    GetThingShadowRequest getThingShadowRequest = CBOR_MAPPER.readValue(
-                            applicationMessage.getPayload(),
-                            GetThingShadowRequest.class);
-                    doAuthorization(opCode.toString(), context.getServiceName(), getThingShadowRequest.getThingName());
-                    thingName = getThingShadowRequest.getThingName();
-                    logger.atInfo().log("Getting Thing Shadow for Thing Name: {}", thingName);
-                    result = dao.getShadowThing(thingName);
-                    response = new GetThingShadowResult();
-                    if (result.isPresent()) {
-                        ((GetThingShadowResult) response).setPayload(result.get());
-                        response.setStatus(ShadowResponseStatus.Success);
-                    } else {
-                        response.setStatus(ShadowResponseStatus.ResourceNotFoundError);
-                        response.setErrorMessage("Shadow for " + thingName + " could not be found.");
-                    }
-                    break;
-                case DELETE_THING_SHADOW:
-                    DeleteThingShadowRequest deleteThingShadowRequest = CBOR_MAPPER.readValue(
-                            applicationMessage.getPayload(),
-                            DeleteThingShadowRequest.class);
-                    doAuthorization(opCode.toString(), context.getServiceName(),
-                            deleteThingShadowRequest.getThingName());
-                    thingName = deleteThingShadowRequest.getThingName();
-                    logger.atInfo().log("Deleting Thing Shadow for Thing Name: {}", thingName);
-                    result = dao.deleteShadowThing(thingName);
-                    response = new DeleteThingShadowResult();
-                    if (result.isPresent()) {
-                        ((DeleteThingShadowResult) response).setPayload(result.get());
-                        response.setStatus(ShadowResponseStatus.Success);
-                    } else {
-                        response.setStatus(ShadowResponseStatus.ResourceNotFoundError);
-                        response.setErrorMessage("Shadow for " + thingName + " could not be found.");
-                    }
-                    break;
-                case UPDATE_THING_SHADOW:
-                    UpdateThingShadowRequest updateThingShadowRequest = CBOR_MAPPER.readValue(
-                            applicationMessage.getPayload(),
-                            UpdateThingShadowRequest.class);
-                    doAuthorization(opCode.toString(), context.getServiceName(),
-                            updateThingShadowRequest.getThingName());
-                    thingName = updateThingShadowRequest.getThingName();
-                    logger.atInfo().log("Updating Thing Shadow for Thing Name: {}", thingName);
-                    result = dao.updateShadowThing(thingName, updateThingShadowRequest.getPayload());
-                    response = new UpdateThingShadowResult();
-                    if (result.isPresent()) {
-                        ((UpdateThingShadowResult) response).setPayload(result.get());
-                        response.setStatus(ShadowResponseStatus.Success);
-                    } else {
-                        response.setStatus(ShadowResponseStatus.ResourceNotFoundError);
-                        response.setErrorMessage("Shadow for " + thingName + " could not be found.");
-                    }
-                    break;
-                default:
-                    response.setStatus(ShadowResponseStatus.InvalidRequest);
-                    response.setErrorMessage("Unknown request type " + opCode);
-                    break;
+            doAuthorization(opCode.toString(), context.getServiceName(), getThingShadowRequest.getThingName());
+            GetThingShadowResponse response = new GetThingShadowResponse();
+
+            thingName = getThingShadowRequest.getThingName();
+            logger.atInfo().log("Getting Thing Shadow for Thing Name: {}", thingName);
+            result = dao.getShadowThing(thingName);
+            response = new GetThingShadowResult();
+            if (result.isPresent()) {
+                ((GetThingShadowResult) response).setPayload(result.get());
+                response.setStatus(ShadowResponseStatus.Success);
+            } else {
+                response.setStatus(ShadowResponseStatus.ResourceNotFoundError);
+                response.setErrorMessage("Shadow for " + thingName + " could not be found.");
             }
         } catch (IOException e) {
             response.setStatus(ShadowResponseStatus.InternalError);
@@ -284,23 +211,16 @@ public class ShadowManager extends PluginService {
             logger.atError()
                     .setEventType(LogEvents.DATABASE_OPERATION_ERROR.code()).setCause(e)
                     .log("A database error occurred");
-        } finally {
-            try {
-                ApplicationMessage responseMessage = ApplicationMessage.builder()
-                        .version(applicationMessage.getVersion())
-                        .payload(CBOR_MAPPER.writeValueAsBytes(response))
-                        .build();
-                future.complete(new FrameReader.Message(responseMessage.toByteArray()));
-            } catch (IOException e) {
-                logger.atError()
-                        .setEventType(LogEvents.IPC_ERROR.code()).setCause(e)
-                        .log("Failed to send application message response");
-            }
         }
-        if (!future.isDone()) {
-            future.completeExceptionally(new IPCException("Unable to serialize any response"));
-        }
-        return future;
+        return response;
+
+         */
+    }
+
+    private void handleDeleteThingShadow() {
+    }
+
+    private void handleUpdateThingShadow() {
     }
 
     private void doAuthorization(String opCode, String serviceName, String thingName) throws AuthorizationException {

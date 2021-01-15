@@ -6,7 +6,6 @@ import org.h2.jdbcx.JdbcDataSource;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Objects;
@@ -32,7 +31,8 @@ public class ShadowManagerDatabase implements Closeable {
     @Inject
     public ShadowManagerDatabase(final Kernel kernel) {
         this.dataSource = new JdbcDataSource();
-        this.dataSource.setURL(String.format(DATABASE_FORMAT, kernel.getWorkPath().resolve(SERVICE_NAME)));
+        this.dataSource.setURL(
+                String.format(DATABASE_FORMAT, kernel.getNucleusPaths().workPath().resolve(SERVICE_NAME)));
     }
 
     public Connection connection() {
