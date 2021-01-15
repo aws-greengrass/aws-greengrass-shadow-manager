@@ -65,7 +65,7 @@ public class ShadowManagerTest extends GGServiceTestUtil {
     }
 
     @Test
-    void GIVEN_Greengrass_with_shadow_manager_WHEN_start_kernel_THEN_shadow_manager_starts_successfully() throws Exception {
+    void GIVEN_Greengrass_with_shadow_manager_WHEN_start_nucleus_THEN_shadow_manager_starts_successfully() throws Exception {
         startNucleusWithConfig("config.yaml", State.RUNNING);
     }
 
