@@ -46,6 +46,11 @@
             <!-- CloudFront url fronting the device sdk,logging library and component common in S3-->
             <url>https://d2jrmugq4soldf.cloudfront.net/snapshots</url>
         </repository>
+        <repository>
+            <id>greengrass-dev-snapshot</id>
+            <name>Greengrass Dev Snapshot</name>
+            <url>https://d10d248laylpoq.cloudfront.net</url>
+        </repository>
     </repositories>
     <pluginRepositories>
         <pluginRepository>
