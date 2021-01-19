@@ -1,14 +1,8 @@
-/*
- * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0
- */
-
 package com.aws.greengrass.shadowmanager;
 
-import com.aws.greengrass.authorization.AuthorizationHandler;
 import com.aws.greengrass.dependency.State;
-import com.aws.greengrass.lifecyclemanager.GreengrassService;
 import com.aws.greengrass.lifecyclemanager.GlobalStateChangeListener;
+import com.aws.greengrass.lifecyclemanager.GreengrassService;
 import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.testcommons.testutilities.GGServiceTestUtil;
@@ -16,25 +10,21 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.io.TempDir;
-import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.nio.file.Path;
+import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.atLeastOnce;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.verify;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
-public class ShadowManagerTest extends GGServiceTestUtil {
+public class ShadowManagerDatabaseTest extends GGServiceTestUtil {
     private static final long TEST_TIME_OUT_SEC = 30L;
 
     private Kernel kernel;
@@ -42,12 +32,6 @@ public class ShadowManagerTest extends GGServiceTestUtil {
 
     @TempDir
     Path rootDir;
-
-    @Mock
-    AuthorizationHandler mockAuthorizationHandler;
-
-    @Mock
-    ShadowManagerDatabase mockShadowManagerDatabase;
 
     @BeforeEach
     void setup() {
@@ -69,38 +53,38 @@ public class ShadowManagerTest extends GGServiceTestUtil {
             }
         };
         kernel.getContext().addGlobalStateChangeListener(listener);
-        kernel.getContext().put(ShadowManagerDatabase.class, mockShadowManagerDatabase);
-        kernel.getContext().put(AuthorizationHandler.class, mockAuthorizationHandler);
         kernel.launch();
 
         assertTrue(shadowManagerRunning.await(TEST_TIME_OUT_SEC, TimeUnit.SECONDS));
     }
 
-    @Test
-    void GIVEN_Greengrass_with_shadow_manager_WHEN_start_nucleus_THEN_shadow_manager_starts_successfully() throws Exception {
+    private ShadowManagerDatabase initializeShadowManagerDatabase() throws InterruptedException, SQLException {
         startNucleusWithConfig("config.yaml", State.RUNNING);
+        ShadowManagerDatabase shadowManagerDatabase = new ShadowManagerDatabase(kernel);
+        shadowManagerDatabase.install();
+        return shadowManagerDatabase;
     }
 
     @Test
-    void GIVEN_Greengrass_with_shadow_manager_WHEN_database_install_fails_THEN_service_errors(ExtensionContext context) throws Exception {
-        ignoreExceptionOfType(context, SQLException.class);
-
-        doThrow(SQLException.class).when(mockShadowManagerDatabase).install();
-        startNucleusWithConfig("config.yaml", State.ERRORED);
+    void GIVEN_nucleus_WHEN_install_THEN_shadow_manager_database_starts_successfully() throws Exception {
+        ShadowManagerDatabase shadowManagerDatabase = initializeShadowManagerDatabase();
+        assertNotNull(shadowManagerDatabase.connection());
     }
 
     @Test
-    void GIVEN_Greengrass_with_shadow_manager_WHEN_nucleus_shutdown_THEN_shadow_manager_database_closes() throws Exception {
-        startNucleusWithConfig("config.yaml", State.RUNNING);
-        kernel.shutdown();
-        verify(mockShadowManagerDatabase, atLeastOnce()).close();
+    void GIVEN_shadow_manager_database_connected_WHEN_install_again_THEN_shadow_manager_database_connection_does_not_change() throws Exception {
+        ShadowManagerDatabase shadowManagerDatabase = initializeShadowManagerDatabase();
+        Connection connection = shadowManagerDatabase.connection();
+        assertNotNull(connection);
+        shadowManagerDatabase.install();
+        assertEquals(shadowManagerDatabase.connection(), connection);
     }
 
     @Test
-    void GIVEN_shadow_manager_When_log_event_occurs_THEN_code_returned() {
-        for(ShadowManager.LogEvents logEvent : ShadowManager.LogEvents.values()) {
-            assertFalse(logEvent.code.isEmpty());
-        }
+    void GIVEN_shadow_manager_database_connected_WHEN_close_THEN_shadow_manager_database_connection_closes_successfully() throws Exception {
+        ShadowManagerDatabase shadowManagerDatabase = initializeShadowManagerDatabase();
+        shadowManagerDatabase.close();
+        assertTrue(shadowManagerDatabase.connection().isClosed());
     }
 
 }
