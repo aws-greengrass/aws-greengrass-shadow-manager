@@ -21,6 +21,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
@@ -85,6 +86,15 @@ public class ShadowManagerDatabaseTest extends GGServiceTestUtil {
         ShadowManagerDatabase shadowManagerDatabase = initializeShadowManagerDatabase();
         shadowManagerDatabase.close();
         assertTrue(shadowManagerDatabase.connection().isClosed());
+    }
+
+    @Test
+    void GIVEN_shadow_manager_database_not_connected_WHEN_close_THEN_shadow_manager_database_connection_does_nothing() throws Exception {
+        startNucleusWithConfig("config.yaml", State.RUNNING);
+        ShadowManagerDatabase shadowManagerDatabase = new ShadowManagerDatabase(kernel);
+        assertNull(shadowManagerDatabase.connection());
+        shadowManagerDatabase.close();
+        assertNull(shadowManagerDatabase.connection());
     }
 
 }
