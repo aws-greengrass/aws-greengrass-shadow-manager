@@ -4,7 +4,7 @@ ComponentName: aws.greengrass.ShadowManager
 ComponentDescription: AWS Greengrass Shadow Manager
 ComponentPublisher: AWS
 ComponentVersion: '0.0.0'
-ComponentType: aws.greengrass.plugin
+ComponentType: 'aws.greengrass.plugin'
 Manifests:
   - Platform:
       os: all

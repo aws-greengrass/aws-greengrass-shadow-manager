@@ -8,12 +8,19 @@
          xmlns="http://maven.apache.org/POM/4.0.0"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+        </license>
+    </licenses>
+
     <groupId>com.aws.greengrass</groupId>
     <artifactId>shadow-manager</artifactId>
     <packaging>jar</packaging>
-    <version>1.0-SNAPSHOT</version>
+    <version>2.0.0-SNAPSHOT</version>
     <name>greengrass-shadow-manager</name>
-
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>1.8</maven.compiler.source>
@@ -23,7 +30,7 @@
         <shadowmanagerjar.name>ShadowManager</shadowmanagerjar.name>
 
         <h2.version>1.4.200</h2.version>
-        <nucleus.version>1.0-SNAPSHOT</nucleus.version>
+        <nucleus.version>2.0.0-SNAPSHOT</nucleus.version>
         <junit.version>5.6.2</junit.version>
         <mockito.version>3.2.4</mockito.version>
         <lombok.version>1.18.10</lombok.version>
@@ -31,214 +38,61 @@
         <hamcrest.eventually.version>0.0.3</hamcrest.eventually.version>
         <flyway.version>6.5.5</flyway.version>
     </properties>
-
     <repositories>
         <repository>
-            <id>greengrass-dev-snapshot</id>
-            <name>Nucleus Snapshot</name>
-            <url>https://d10d248laylpoq.cloudfront.net</url>
+            <id>greengrass-common</id>
+            <name>greengrass common</name>
+            <!-- CloudFront url fronting the device sdk,logging library and component common in S3-->
+            <url>https://d2jrmugq4soldf.cloudfront.net/snapshots</url>
         </repository>
     </repositories>
-    <dependencies>
-        <!-- https://mvnrepository.com/artifact/org.flywaydb/flyway-core -->
-        <dependency>
-            <groupId>org.flywaydb</groupId>
-            <artifactId>flyway-core</artifactId>
-            <version>${flyway.version}</version>
-        </dependency>
-        <!-- https://mvnrepository.com/artifact/com.h2database/h2 -->
-        <dependency>
-            <groupId>com.h2database</groupId>
-            <artifactId>h2</artifactId>
-            <version>${h2.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.aws.greengrass</groupId>
-            <artifactId>nucleus</artifactId>
-            <version>${nucleus.version}</version>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.aws.greengrass</groupId>
-            <artifactId>nucleus</artifactId>
-            <version>${nucleus.version}</version>
-            <type>test-jar</type>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.projectlombok</groupId>
-            <artifactId>lombok</artifactId>
-            <version>${lombok.version}</version>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-api</artifactId>
-            <version>${junit.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.mockito</groupId>
-            <artifactId>mockito-junit-jupiter</artifactId>
-            <version>${mockito.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-engine</artifactId>
-            <version>${junit.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-params</artifactId>
-            <version>${junit.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.hamcrest</groupId>
-            <artifactId>hamcrest-core</artifactId>
-            <version>${hamcrest.core.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.github.grantwest.eventually</groupId>
-            <artifactId>hamcrest-eventually-matchers</artifactId>
-            <version>${hamcrest.eventually.version}</version>
-            <scope>test</scope>
-        </dependency>
+    <pluginRepositories>
+        <pluginRepository>
+            <id>maven-snapshots</id>
+            <name>Maven snapshots</name>
+            <layout>default</layout>
+            <url>https://repository.apache.org/content/repositories/snapshots/</url>
+        </pluginRepository>
+        <pluginRepository>
+            <id>yle-public</id>
+            <name>Yle public repository</name>
+            <url>https://d2x444wtt5plvm.cloudfront.net/release</url>
+            <layout>default</layout>
+        </pluginRepository>
+    </pluginRepositories>
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>software.amazon.awssdk</groupId>
+                <artifactId>bom</artifactId>
+                <version>2.15.17</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
     </dependencies>
+</dependencyManagement>
     <build>
+        <extensions>
+            <extension>
+                <groupId>fi.yle.tools</groupId>
+                <artifactId>aws-maven</artifactId>
+                <version>1.4.2</version>
+            </extension>
+        </extensions>
+        <resources>
+            <resource>
+                <directory>${project.basedir}</directory>
+                <includes>
+                    <include>LICENSE</include>
+                    <include>NOTICE</include>
+                    <include>THIRD-PARTY-LICENSES</include>
+                </includes>
+            </resource>
+            <resource>
+                <directory>${project.basedir}/src/main/resources</directory>
+            </resource>
+        </resources>
         <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.8.1</version>
-                <configuration>
-                    <source>8</source>
-                    <target>8</target>
-                </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-pmd-plugin</artifactId>
-                <version>3.13.0</version>
-                <configuration>
-                    <!-- Current violations should not be exceeded. Try to decrease these over time -->
-                    <maxAllowedViolations>0</maxAllowedViolations>
-                    <printFailingErrors>true</printFailingErrors>
-                    <rulesets>
-                        <ruleset>codestyle/pmd-eg-ruleset.xml</ruleset>
-                        <ruleset>codestyle/pmd-eg-tests-ruleset.xml</ruleset>
-                    </rulesets>
-                    <includeTests>true</includeTests>
-                    <skip>${skipTests}</skip>
-                </configuration>
-                <executions>
-                    <execution>
-                        <phase>test</phase>
-                        <goals>
-                            <goal>check</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>com.github.spotbugs</groupId>
-                <artifactId>spotbugs-maven-plugin</artifactId>
-                <version>4.0.0</version>
-                <configuration>
-                    <skip>${skipTests}</skip>
-                    <effort>Max</effort>
-                    <!-- Reports all bugs (other values are medium and max) -->
-                    <threshold>Low</threshold>
-                    <xmlOutput>true</xmlOutput>
-                    <excludeFilterFile>codestyle/findbugs-exclude.xml</excludeFilterFile>
-                </configuration>
-                <executions>
-                    <execution>
-                        <id>analyze-compile</id>
-                        <phase>test</phase>
-                        <goals>
-                            <goal>check</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <artifactId>maven-checkstyle-plugin</artifactId>
-                <version>3.1.0</version>
-                <dependencies>
-                    <dependency>
-                        <groupId>com.puppycrawl.tools</groupId>
-                        <artifactId>checkstyle</artifactId>
-                        <version>8.29</version>
-                    </dependency>
-                </dependencies>
-                <configuration>
-                    <logViolationsToConsole>true</logViolationsToConsole>
-                    <configLocation>codestyle/checkstyle.xml</configLocation>
-                    <violationSeverity>warning</violationSeverity>
-                    <maxAllowedViolations>0</maxAllowedViolations>
-                    <skip>${skipTests}</skip>
-                </configuration>
-                <executions>
-                    <execution>
-                        <id>validate</id>
-                        <phase>validate</phase>
-                        <goals>
-                            <goal>check</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <version>3.0.0-M5</version>
-                <configuration>
-                    <skipTests>true</skipTests>
-                    <trimStackTrace>false</trimStackTrace>
-                    <argLine>${surefire.argLine} -Xms1m</argLine>
-                    <properties>
-                        <configurationParameters>
-                            junit.jupiter.execution.timeout.default = 5m
-                        </configurationParameters>
-                    </properties>
-                </configuration>
-                <executions>
-                    <execution>
-                        <id>unit-tests</id>
-                        <phase>test</phase>
-                        <goals>
-                            <goal>test</goal>
-                        </goals>
-                        <configuration>
-                            <skipTests>${skipTests}</skipTests>
-                            <excludes>
-                                <exclude>**/integrationtests/**</exclude>
-                            </excludes>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>integration-tests</id>
-                        <phase>integration-test</phase>
-                        <goals>
-                            <goal>test</goal>
-                        </goals>
-                        <configuration>
-                            <skipTests>${skipTests}</skipTests>
-                            <includes>
-                                <include>**/integrationtests/**</include>
-                            </includes>
-                            <groups>${groups}</groups>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <artifactId>maven-failsafe-plugin</artifactId>
-                <version>3.0.0-M4</version>
-            </plugin>
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
@@ -305,6 +159,55 @@
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.3</version>
+                <configuration>
+                    <source>1.8</source>
+                    <target>1.8</target>
+                </configuration>
+            </plugin>
+            <plugin>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.0.0-M5</version>
+                <configuration>
+                    <trimStackTrace>false</trimStackTrace>
+                    <argLine>${surefire.argLine} -Xms1m</argLine>
+                    <properties>
+                        <configurationParameters>
+                            junit.jupiter.execution.timeout.default = 5m
+                        </configurationParameters>
+                    </properties>
+                </configuration>
+            </plugin>
+            <plugin>
+                <artifactId>maven-checkstyle-plugin</artifactId>
+                <version>3.1.0</version>
+                <dependencies>
+                    <dependency>
+                        <groupId>com.puppycrawl.tools</groupId>
+                        <artifactId>checkstyle</artifactId>
+                        <version>8.29</version>
+                    </dependency>
+                </dependencies>
+                <configuration>
+                    <logViolationsToConsole>true</logViolationsToConsole>
+                    <configLocation>codestyle/checkstyle.xml</configLocation>
+                    <violationSeverity>warning</violationSeverity>
+                    <maxAllowedViolations>0</maxAllowedViolations>
+                    <skip>${skipTests}</skip>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>validate</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
                 <version>3.2.2</version>
                 <executions>
@@ -316,6 +219,13 @@
                         <configuration>
                             <finalName>${shadowmanagerjar.name}</finalName>
                             <transformers>
+                                <transformer
+                                        implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                </transformer>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheLicenseResourceTransformer"/>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheNoticeResourceTransformer">
+                                    <addHeader>false</addHeader>
+                                </transformer>
                                 <transformer
                                         implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                             </transformers>
@@ -339,4 +249,68 @@
             </plugin>
         </plugins>
     </build>
+    <dependencies>
+        <dependency>
+            <groupId>com.aws.greengrass</groupId>
+            <artifactId>nucleus</artifactId>
+            <version>2.0.0-SNAPSHOT</version>
+            <scope>provided</scope>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/org.flywaydb/flyway-core -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+            <version>${flyway.version}</version>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/com.h2database/h2 -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <version>${h2.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>1.18.10</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-junit-jupiter</artifactId>
+            <version>3.2.4</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.aws.greengrass</groupId>
+            <artifactId>nucleus</artifactId>
+            <version>2.0.0-SNAPSHOT</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-engine</artifactId>
+            <version>5.6.2</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/org.junit.jupiter/junit-jupiter-params -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-api</artifactId>
+            <version>5.6.2</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-params</artifactId>
+            <version>5.6.2</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.hamcrest</groupId>
+            <artifactId>hamcrest-core</artifactId>
+            <version>2.2</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 </project>

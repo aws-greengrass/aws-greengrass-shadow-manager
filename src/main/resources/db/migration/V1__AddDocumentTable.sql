@@ -1,0 +1,1 @@
+CREATE TABLE documents (arn TEXT NOT NULL, name TEXT, state TEXT);
