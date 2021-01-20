@@ -10,7 +10,7 @@ public interface ShadowManagerDAO {
      * @param initialDocument The initial shadow document.
      * @return Optional
      */
-    Optional<byte[]> createShadowThing(String thingName, String shadowName ,byte[] initialDocument);
+    Optional<byte[]> createShadowThing(String thingName, String shadowName, byte[] initialDocument);
 
     /**
      * Attempts to obtain a shadow document from the local shadow storage.

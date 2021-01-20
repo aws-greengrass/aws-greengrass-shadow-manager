@@ -28,8 +28,9 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
 
     /**
      * Adds an entry for the specified thingName,shadowName with the newDocument.
-     * @param thingName The thing namespace of the shadow document.
-     * @param shadowName Name of shadow topic prefix for thing.
+     *
+     * @param thingName       The thing namespace of the shadow document.
+     * @param shadowName      Name of shadow topic prefix for thing.
      * @param initialDocument The initial shadow document.
      * @return Optional
      */
@@ -49,26 +50,29 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
 
     /**
      * Attempts to obtain a shadow document from the local shadow storage.
-     * @param thingName Name of the Thing for the shadow topic prefix.
+     *
+     * @param thingName  Name of the Thing for the shadow topic prefix.
      * @param shadowName Name of shadow topic prefix for thing.
      * @return Optional
      */
     @Override
     public Optional<byte[]> getShadowThing(String thingName, String shadowName) {
-        return execute("SELECT thingName, shadowName, document FROM documents WHERE thingName = ? AND shadowName = ?", preparedStatement -> {
+        return execute("SELECT thingName, shadowName, document FROM documents WHERE thingName = ? AND shadowName = ?",
+                preparedStatement -> {
                     preparedStatement.setString(1, thingName);
                     preparedStatement.setString(2, shadowName);
-            ResultSet resultSet = preparedStatement.executeQuery();
-            if (resultSet.next()) {
-                return Optional.ofNullable(resultSet.getBytes(DOCUMENT));
-            }
-            return Optional.empty();
-        });
+                    ResultSet resultSet = preparedStatement.executeQuery();
+                    if (resultSet.next()) {
+                        return Optional.ofNullable(resultSet.getBytes(DOCUMENT));
+                    }
+                    return Optional.empty();
+                });
     }
 
     /**
      * Attempts to delete the shadow document from the local shadow storage.
-     * @param thingName Name of the Thing for the shadow topic prefix.
+     *
+     * @param thingName  Name of the Thing for the shadow topic prefix.
      * @param shadowName Name of shadow topic prefix for thing.
      * @return Optional
      */
@@ -92,23 +96,25 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
 
     /**
      * Attempts to update a shadow document from the local shadow storage.
-     * @param thingName Name of the Thing for the shadow topic prefix.
-     * @param shadowName Name of shadow topic prefix for thing.
+     *
+     * @param thingName   Name of the Thing for the shadow topic prefix.
+     * @param shadowName  Name of shadow topic prefix for thing.
      * @param newDocument The new shadow document.
      * @return Optional
      */
     @Override
     public Optional<byte[]> updateShadowThing(String thingName, String shadowName, byte[] newDocument) {
-        return execute("UPDATE documents SET document = ? WHERE thingName = ? AND shadowName = ?", preparedStatement -> {
-            preparedStatement.setBytes(1, newDocument);
-            preparedStatement.setString(2, thingName);
-            preparedStatement.setString(3, shadowName);
-            int result = preparedStatement.executeUpdate();
-            if (result == 1) {
-                return Optional.ofNullable(newDocument);
-            }
-            return Optional.empty();
-        });
+        return execute("UPDATE documents SET document = ? WHERE thingName = ? AND shadowName = ?",
+                preparedStatement -> {
+                    preparedStatement.setBytes(1, newDocument);
+                    preparedStatement.setString(2, thingName);
+                    preparedStatement.setString(3, shadowName);
+                    int result = preparedStatement.executeUpdate();
+                    if (result == 1) {
+                        return Optional.ofNullable(newDocument);
+                    }
+                    return Optional.empty();
+                });
     }
 
     private <T> T execute(String sql, SQLExecution<T> thunk) {
