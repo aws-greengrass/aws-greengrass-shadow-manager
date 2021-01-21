@@ -9,9 +9,6 @@ import java.sql.SQLException;
 import java.util.Optional;
 import javax.inject.Inject;
 
-/**
- * This is a no-op DAO for now, while we wire in the data layer in a little bit.
- */
 public class ShadowManagerDAOImpl implements ShadowManagerDAO {
     private final ShadowManagerDatabase database;
     private static final String DOCUMENT = "document";
