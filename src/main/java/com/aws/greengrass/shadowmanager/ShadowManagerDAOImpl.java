@@ -75,20 +75,18 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      */
     @Override
     public Optional<byte[]> deleteShadowThing(String thingName, String shadowName) {
-        Optional<byte[]> existingThing = getShadowThing(thingName, shadowName);
-        if (existingThing.isPresent()) {
-            return execute("DELETE FROM documents WHERE thingName = ? AND shadowName = ?", preparedStatement -> {
-                preparedStatement.setString(1, thingName);
-                preparedStatement.setString(2, shadowName);
-                int result = preparedStatement.executeUpdate();
-                if (result == 1) {
-                    return existingThing;
-                }
-                return Optional.empty();
-            });
-        } else {
-            return Optional.empty();
-        }
+        return getShadowThing(thingName, shadowName)
+                .flatMap(shadowDocument ->
+                        execute("DELETE FROM documents WHERE thingName = ? AND shadowName = ?",
+                                preparedStatement -> {
+                                    preparedStatement.setString(1, thingName);
+                                    preparedStatement.setString(2, shadowName);
+                                    int result = preparedStatement.executeUpdate();
+                                    if (result == 1) {
+                                        return Optional.of(shadowDocument);
+                                    }
+                                    return Optional.empty();
+                                }));
     }
 
     /**

@@ -7,11 +7,3 @@ CREATE TABLE IF NOT EXISTS documents (
     document TEXT,
     PRIMARY KEY (thingName, shadowName)
 );
-CREATE TABLE IF NOT EXISTS sync (
-    thingName VARCHAR(255) NOT NULL,
-    shadowName VARCHAR(255) NOT NULL,
-    localDocument TEXT,
-    cloudDocument TEXT,
-    PRIMARY KEY (thingName, shadowName)
-);
-
