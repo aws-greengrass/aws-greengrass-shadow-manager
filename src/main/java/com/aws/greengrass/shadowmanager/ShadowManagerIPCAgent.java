@@ -24,7 +24,7 @@ import software.amazon.awssdk.eventstreamrpc.model.EventStreamJsonMessage;
 import javax.inject.Inject;
 
 /**
- * Class to handle business logic for all SecretManager requests over IPC.
+ * Class to handle business logic for all ShadowManager requests over IPC.
  */
 public class ShadowManagerIPCAgent {
     private static final Logger logger = LogManager.getLogger(ShadowManagerIPCAgent.class);
@@ -33,7 +33,7 @@ public class ShadowManagerIPCAgent {
     @Setter(AccessLevel.PACKAGE)
     ShadowManager shadowManager;
 
-    public GetThingShadowOperationHandler getThingShadowOperationHandler(
+    public GetThingShadowOperationHandler getGetThingShadowOperationHandler(
             OperationContinuationHandlerContext context) {
         return new GetThingShadowOperationHandler(context);
     }
