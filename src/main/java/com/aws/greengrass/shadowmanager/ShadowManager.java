@@ -14,6 +14,8 @@ import com.aws.greengrass.dependency.State;
 import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.lifecyclemanager.PluginService;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
+import com.aws.greengrass.shadowmanager.exception.ShadowManagerException;
+import com.aws.greengrass.util.Utils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -23,7 +25,10 @@ import software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowRequest;
 import software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowResponse;
 import software.amazon.awssdk.aws.greengrass.model.GetThingShadowRequest;
 import software.amazon.awssdk.aws.greengrass.model.GetThingShadowResponse;
+import software.amazon.awssdk.aws.greengrass.model.InvalidArgumentsError;
 import software.amazon.awssdk.aws.greengrass.model.ResourceNotFoundError;
+import software.amazon.awssdk.aws.greengrass.model.ServiceError;
+import software.amazon.awssdk.aws.greengrass.model.UnauthorizedError;
 import software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest;
 import software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowResponse;
 
@@ -36,6 +41,10 @@ import java.util.Map;
 import java.util.Optional;
 import javax.inject.Inject;
 
+import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.DELETE_THING_SHADOW;
+import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.GET_THING_SHADOW;
+import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.UPDATE_THING_SHADOW;
+
 @ImplementsService(name = ShadowManager.SERVICE_NAME)
 public class ShadowManager extends PluginService {
     enum LogEvents {
@@ -44,7 +53,10 @@ public class ShadowManager extends PluginService {
         IPC_ERROR("shadow-ipc-error"),
         DCM_ERROR("shadow-dcm-error"),
         DATABASE_OPERATION_ERROR("shadow-database-operation-error"),
-        DATABASE_CLOSE_ERROR("shadow-database-close-error");
+        DATABASE_CLOSE_ERROR("shadow-database-close-error"),
+        INVALID_THING_NAME("shadow-invalid-thing-name-error"),
+        DOCUMENT_NOT_FOUND("shadow-document-not-found"),
+        MISSING_THING_ERROR("shadow-missing-thing-name-error");
 
         String code;
         LogEvents(String code) {
@@ -57,8 +69,8 @@ public class ShadowManager extends PluginService {
     }
 
     public static final String SERVICE_NAME = "aws.greengrass.ShadowManager";
-    public static final List<String> SHADOW_AUTHORIZATION_OPCODES = Arrays.asList("GetThingShadow",
-            "UpdateThingShadow", "DeleteThingShadow", "*");
+    public static final List<String> SHADOW_AUTHORIZATION_OPCODES = Arrays.asList(GET_THING_SHADOW,
+            UPDATE_THING_SHADOW, DELETE_THING_SHADOW);
     private static final ObjectMapper OBJECT_MAPPER =
             new ObjectMapper().configure(MapperFeature.ACCEPT_CASE_INSENSITIVE_PROPERTIES, true);
 
@@ -121,17 +133,47 @@ public class ShadowManager extends PluginService {
      * @param serviceName component name of the request
      * @return GetThingShadow response
      * @throws ResourceNotFoundError if requested document is not found locally
+     * @throws UnauthorizedError if GetThingShadow call not authorized
+     * @throws InvalidArgumentsError if validation error occured with supplied request fields
+     * @throws ServiceError if database error occurs
      */
     public GetThingShadowResponse handleGetThingShadowIPCRequest(GetThingShadowRequest request, String serviceName) {
-        String thingName = request.getThingName();
-        String shadowName = request.getShadowName();
-        Optional<byte[]> result = dao.getShadowThing(thingName, shadowName);
-        Map<String, Object> payload = result.map(this::convertBytesToPayload)
-                .orElseThrow(() -> new ResourceNotFoundError("No document for thing and shadow"));
+        try {
+            String thingName = request.getThingName();
+            String shadowName = request.getShadowName();
+            validateThingNameAndDoAuthorization(GET_THING_SHADOW, serviceName, thingName, shadowName);
 
-        GetThingShadowResponse response = new GetThingShadowResponse();
-        response.setPayload(payload);
-        return response;
+            Optional<byte[]> result = dao.getShadowThing(thingName, shadowName);
+            Map<String, Object> payload = result.map(this::convertBytesToPayload)
+                    .orElseThrow(() -> {
+                        ResourceNotFoundError rnf = new ResourceNotFoundError("No document for thing and shadow");
+                        rnf.setResourceType("shadow");
+                        logger.atError()
+                                .setEventType(LogEvents.DOCUMENT_NOT_FOUND.code()).setCause(rnf)
+                                .log("An authorization error occurred");
+                        return rnf;
+                    });
+
+            GetThingShadowResponse response = new GetThingShadowResponse();
+            response.setPayload(payload);
+            return response;
+
+        } catch (AuthorizationException e) {
+            logger.atError()
+                    .setEventType(LogEvents.AUTHORIZATION_ERROR.code()).setCause(e)
+                    .log("An authorization error occurred");
+            throw new UnauthorizedError(e.getMessage());
+        } catch (ShadowManagerException e) {
+            logger.atError()
+                    .setEventType(LogEvents.INVALID_THING_NAME.code()).setCause(e)
+                    .log("Validation error occurred");
+            throw new InvalidArgumentsError(e.getMessage());
+        } catch (ShadowManagerDataException e) {
+            logger.atError()
+                    .setEventType(LogEvents.DATABASE_OPERATION_ERROR.code()).setCause(e)
+                    .log("A database error occurred");
+            throw new ServiceError(e.getMessage());
+        }
     }
 
     /**
@@ -193,13 +235,21 @@ public class ShadowManager extends PluginService {
         }
     }
 
-    private void doAuthorization(String opCode, String serviceName, String thingName) throws AuthorizationException {
+    private void validateThingNameAndDoAuthorization(String opCode, String serviceName, String thingName,
+                                                     String shadowName)
+            throws AuthorizationException, ShadowManagerException {
+
+        if (Utils.isEmpty(thingName)) {
+            throw new ShadowManagerException("SecretId absent in the request");
+        }
+
+        String combinedThingName = thingName + shadowName;
         authorizationHandler.isAuthorized(
                 this.getName(),
                 Permission.builder()
                         .principal(serviceName)
                         .operation(opCode.toLowerCase())
-                        .resource(thingName)
+                        .resource(combinedThingName)
                         .build());
     }
 
