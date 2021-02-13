@@ -63,7 +63,7 @@ public class ShadowManagerIPCAgent {
 
         @Override
         public GetThingShadowResponse handleRequest(GetThingShadowRequest request) {
-            logger.atDebug("ipc-get-secret-request").log();
+            logger.atDebug("ipc-get-thing-shadow-request").log();
             return shadowManager.handleGetThingShadowIPCRequest(request, serviceName);
         }
 
@@ -89,7 +89,7 @@ public class ShadowManagerIPCAgent {
 
         @Override
         public UpdateThingShadowResponse handleRequest(UpdateThingShadowRequest request) {
-            logger.atDebug("ipc-get-secret-request").log();
+            logger.atDebug("ipc-update-thing-shadow-request").log();
             return shadowManager.handleUpdateThingShadowIPCRequest(request, serviceName);
         }
 
@@ -115,7 +115,7 @@ public class ShadowManagerIPCAgent {
 
         @Override
         public DeleteThingShadowResponse handleRequest(DeleteThingShadowRequest request) {
-            logger.atDebug("ipc-get-secret-request").log();
+            logger.atDebug("ipc-delete-thing-shadow-request").log();
             return shadowManager.handleDeleteThingShadowIPCRequest(request, serviceName);
         }
 

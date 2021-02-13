@@ -1,10 +1,6 @@
 package com.aws.greengrass.shadowmanager;
 
-import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.MapperFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,12 +15,13 @@ import software.amazon.awssdk.crt.eventstream.ServerConnectionContinuation;
 import software.amazon.awssdk.eventstreamrpc.AuthenticationData;
 import software.amazon.awssdk.eventstreamrpc.OperationContinuationHandlerContext;
 
-import java.io.IOException;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 public class ShadowManagerIPCAgentTest {
@@ -32,9 +29,7 @@ public class ShadowManagerIPCAgentTest {
     private static final String THING_NAME = "testThingName";
     private static final String SHADOW_NAME = "testShadowName";
     private static final byte[] BASE_DOCUMENT =  "{\"id\": 1, \"name\": \"The Beatles\"}".getBytes();
-
-    private static final ObjectMapper OBJECT_MAPPER =
-            new ObjectMapper().configure(MapperFeature.ACCEPT_CASE_INSENSITIVE_PROPERTIES, true);
+    private static final Map<String, Object> BASE_DOCUMENT_PAYLOAD = ShadowManager.convertBytesToPayload(BASE_DOCUMENT);
 
     @Mock
     OperationContinuationHandlerContext mockContext;
@@ -72,7 +67,7 @@ public class ShadowManagerIPCAgentTest {
         request.setShadowName(SHADOW_NAME);
 
         GetThingShadowResponse expectedResponse = new GetThingShadowResponse();
-        expectedResponse.setPayload(convertBytesToPayload(BASE_DOCUMENT));
+        expectedResponse.setPayload(BASE_DOCUMENT_PAYLOAD);
 
         when(mockShadowManager.handleGetThingShadowIPCRequest(any(), any())).thenReturn(expectedResponse);
         GetThingShadowResponse actualResponse =
@@ -81,34 +76,5 @@ public class ShadowManagerIPCAgentTest {
                 stringArgumentCaptor.capture());
         assertEquals(request, getThingShadowRequestArgumentCaptor.getValue());
         assertEquals(expectedResponse, actualResponse);
-    }
-
-    /*
-    @Test
-    void GIVEN_ShadowManagerIPCAgent_WHEN_handle_request_THEN_update_thing_shadow() {
-        UpdateThingShadowRequest request = new UpdateThingShadowRequest();
-        request.setThingName(THING_NAME);
-        request.setShadowName(SHADOW_NAME);
-        request.setPayload(convertBytesToPayload(BASE_DOCUMENT));
-
-        UpdateThingShadowResponse expectedResponse = new UpdateThingShadowResponse();
-        expectedResponse.setPayload(convertBytesToPayload(BASE_DOCUMENT));
-
-        when(mockShadowManager.handleUpdateThingShadowIPCRequest(any(), any())).thenReturn(expectedResponse);
-        UpdateThingShadowResponse actualResponse =
-                shadowManagerIPCAgent.getUpdateThingShadowOperationHandler(mockContext).handleRequest(request);
-        verify(mockShadowManager).handleUpdateThingShadowIPCRequest(updateThingShadowRequestArgumentCaptor.capture(),
-                stringArgumentCaptor.capture());
-        assertEquals(request, updateThingShadowRequestArgumentCaptor.getValue());
-        assertEquals(expectedResponse, actualResponse);
-    }
-    */
-
-    private Map<String, Object> convertBytesToPayload(byte[] doc) {
-        try{
-            return OBJECT_MAPPER.readValue(doc, new TypeReference<Map<String, Object>>() {});
-        } catch (IOException e) {
-            throw new ShadowManagerDataException(e);
-        }
     }
 }

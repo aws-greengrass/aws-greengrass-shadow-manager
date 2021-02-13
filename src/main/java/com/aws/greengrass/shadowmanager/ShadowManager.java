@@ -134,7 +134,7 @@ public class ShadowManager extends PluginService {
      * @return GetThingShadow response
      * @throws ResourceNotFoundError if requested document is not found locally
      * @throws UnauthorizedError if GetThingShadow call not authorized
-     * @throws InvalidArgumentsError if validation error occured with supplied request fields
+     * @throws InvalidArgumentsError if validation error occurred with supplied request fields
      * @throws ServiceError if database error occurs
      */
     public GetThingShadowResponse handleGetThingShadowIPCRequest(GetThingShadowRequest request, String serviceName) {
@@ -144,13 +144,15 @@ public class ShadowManager extends PluginService {
             validateThingNameAndDoAuthorization(GET_THING_SHADOW, serviceName, thingName, shadowName);
 
             Optional<byte[]> result = dao.getShadowThing(thingName, shadowName);
-            Map<String, Object> payload = result.map(this::convertBytesToPayload)
+            Map<String, Object> payload = result.map(ShadowManager::convertBytesToPayload)
                     .orElseThrow(() -> {
-                        ResourceNotFoundError rnf = new ResourceNotFoundError("No document for thing and shadow");
+                        ResourceNotFoundError rnf = new ResourceNotFoundError(
+                                String.format("no shadow found for thingName: %s, shadowName: %s",
+                                        thingName, shadowName));
                         rnf.setResourceType("shadow");
-                        logger.atError()
+                        logger.atWarn()
                                 .setEventType(LogEvents.DOCUMENT_NOT_FOUND.code()).setCause(rnf)
-                                .log("An authorization error occurred");
+                                .log(String.format("Could not process GetThingShadow Request: %s", rnf.getMessage()));
                         return rnf;
                     });
 
@@ -160,18 +162,18 @@ public class ShadowManager extends PluginService {
 
         } catch (AuthorizationException e) {
             logger.atError()
-                    .setEventType(LogEvents.AUTHORIZATION_ERROR.code()).setCause(e)
-                    .log("An authorization error occurred");
+                    .setEventType(LogEvents.AUTHORIZATION_ERROR.code())
+                    .log("Could not process GetThingShadow Request: %s", e.getMessage());
             throw new UnauthorizedError(e.getMessage());
         } catch (ShadowManagerException e) {
-            logger.atError()
+            logger.atWarn()
                     .setEventType(LogEvents.INVALID_THING_NAME.code()).setCause(e)
-                    .log("Validation error occurred");
+                    .log("Could not process GetThingShadow Request: %s", e.getMessage());
             throw new InvalidArgumentsError(e.getMessage());
         } catch (ShadowManagerDataException e) {
             logger.atError()
                     .setEventType(LogEvents.DATABASE_OPERATION_ERROR.code()).setCause(e)
-                    .log("A database error occurred");
+                    .log("Could not process GetThingShadow Request: %s", e.getMessage());
             throw new ServiceError(e.getMessage());
         }
     }
@@ -240,7 +242,7 @@ public class ShadowManager extends PluginService {
             throws AuthorizationException, ShadowManagerException {
 
         if (Utils.isEmpty(thingName)) {
-            throw new ShadowManagerException("SecretId absent in the request");
+            throw new ShadowManagerException("thingName absent in request");
         }
 
         String combinedThingName = thingName + shadowName;
@@ -253,12 +255,19 @@ public class ShadowManager extends PluginService {
                         .build());
     }
 
-    private Map<String, Object> convertBytesToPayload(byte[] doc) {
+    /**
+     * Helper Function to convert bytes to payload format.
+     *
+     * @param bytes     Bytes to be converted
+     * @return payload
+     * @throws ShadowManagerException if an error occurs in converting to payload format
+     */
+    public static Map<String, Object> convertBytesToPayload(byte[] bytes) throws ShadowManagerException {
         try {
-            return OBJECT_MAPPER.readValue(doc, new TypeReference<Map<String, Object>>() {
+            return OBJECT_MAPPER.readValue(bytes, new TypeReference<Map<String, Object>>() {
             });
         } catch (IOException e) {
-            throw new ShadowManagerDataException(e);
+            throw new ShadowManagerException(e);
         }
     }
 }

@@ -5,9 +5,13 @@
 
 package com.aws.greengrass.shadowmanager.exception;
 
-public class ShadowManagerException extends Exception {
+public class ShadowManagerException extends RuntimeException {
 
     public ShadowManagerException(String err) {
+        super(err);
+    }
+
+    public ShadowManagerException(Exception err) {
         super(err);
     }
 }
