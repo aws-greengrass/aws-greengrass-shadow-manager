@@ -12,6 +12,7 @@ public class IPCUtil {
 
     static final String SHADOW_RESOURCE_TYPE = "shadow";
     static final String SHADOW_RESOURCE_JOINER = "shadow";
+    static final String SHADOW_MANAGER_NAME = "aws.greengrass.ShadowManager";
 
     enum LogEvents {
         AUTHORIZATION_ERROR("shadow-authorization-error"),
@@ -47,7 +48,7 @@ public class IPCUtil {
         }
 
         authorizationHandler.isAuthorized(
-                "ShadowManager",
+                SHADOW_MANAGER_NAME,
                 Permission.builder()
                         .principal(serviceName)
                         .operation(opCode.toLowerCase())
