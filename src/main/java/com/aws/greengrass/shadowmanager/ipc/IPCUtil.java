@@ -15,10 +15,7 @@ public final class IPCUtil {
     static final String SHADOW_MANAGER_NAME = "aws.greengrass.ShadowManager";
 
     enum LogEvents {
-        AUTHORIZATION_ERROR("shadow-authorization-error"),
-        DATABASE_OPERATION_ERROR("shadow-database-operation-error"),
-        INVALID_THING_NAME("shadow-invalid-thing-name-error"),
-        DOCUMENT_NOT_FOUND("shadow-document-not-found");
+        GET_THING_SHADOW("handle-get-thing-shadow");
 
         String code;
 
