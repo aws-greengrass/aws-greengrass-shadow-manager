@@ -82,7 +82,7 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
                                 String.format("No shadow found for thingName: %s, shadowName: %s",
                                         thingName, shadowName));
                         rnf.setResourceType(IPCUtil.SHADOW_RESOURCE_TYPE);
-                        logger.atWarn()
+                        logger.atInfo()
                                 .setEventType(IPCUtil.LogEvents.DOCUMENT_NOT_FOUND.code())
                                 .setCause(rnf)
                                 .log(String.format("Could not process GetThingShadow Request: %s", rnf.getMessage()));
