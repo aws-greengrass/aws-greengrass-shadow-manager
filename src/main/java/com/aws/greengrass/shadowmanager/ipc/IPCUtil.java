@@ -8,7 +8,7 @@ import software.amazon.awssdk.aws.greengrass.model.InvalidArgumentsError;
 
 import java.util.StringJoiner;
 
-public class IPCUtil {
+public final class IPCUtil {
 
     static final String SHADOW_RESOURCE_TYPE = "shadow";
     static final String SHADOW_RESOURCE_JOINER = "shadow";
@@ -29,6 +29,10 @@ public class IPCUtil {
         public String code() {
             return code;
         }
+    }
+
+    private IPCUtil() {
+
     }
 
     static void validateThingNameAndDoAuthorization(AuthorizationHandler authorizationHandler, String opCode,

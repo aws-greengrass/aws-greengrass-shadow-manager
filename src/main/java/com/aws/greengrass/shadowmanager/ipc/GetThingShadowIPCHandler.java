@@ -34,10 +34,10 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
     private final AuthorizationHandler authorizationHandler;
 
     /**
-     * Handles IPC Requests for GetThingShadow.
+     * IPC Handler class for responding to GetThingShadow requests.
      *
-     * @param context               topics passed by the Nucleus
-     * @param dao             Local shadow database management
+     * @param context              topics passed by the Nucleus
+     * @param dao                  Local shadow database management
      * @param authorizationHandler The authorization handler
      */
     public GetThingShadowIPCHandler(
@@ -55,24 +55,21 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
 
     }
 
-    @Override
-    public GetThingShadowResponse handleRequest(GetThingShadowRequest request) {
-        logger.atDebug("ipc-get-thing-shadow-request").log();
-        return handleGetThingShadowIPCRequest(request);
-    }
-
     /**
      * Handles GetThingShadow Requests from IPC.
      *
-     * @param request     GetThingShadow request from IPC API
+     * @param request GetThingShadow request from IPC API
      * @return GetThingShadow response
      * @throws ResourceNotFoundError if requested document is not found locally
-     * @throws UnauthorizedError if GetThingShadow call not authorized
+     * @throws UnauthorizedError     if GetThingShadow call not authorized
      * @throws InvalidArgumentsError if validation error occurred with supplied request fields
-     * @throws ServiceError if database error occurs
+     * @throws ServiceError          if database error occurs
      */
-    public GetThingShadowResponse handleGetThingShadowIPCRequest(GetThingShadowRequest request) {
+    @Override
+    public GetThingShadowResponse handleRequest(GetThingShadowRequest request) {
         try {
+            logger.atDebug("ipc-get-thing-shadow-request").log();
+
             GetThingShadowResponse response = new GetThingShadowResponse();
             String thingName = request.getThingName();
             String shadowName = request.getShadowName();
@@ -96,12 +93,12 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
             return response;
 
         } catch (AuthorizationException e) {
-            logger.atError()
+            logger.atInfo()
                     .setEventType(IPCUtil.LogEvents.AUTHORIZATION_ERROR.code())
                     .log("Could not process GetThingShadow Request: %s", e.getMessage());
             throw new UnauthorizedError(e.getMessage());
         } catch (InvalidArgumentsError e) {
-            logger.atWarn()
+            logger.atInfo()
                     .setEventType(IPCUtil.LogEvents.INVALID_THING_NAME.code()).setCause(e)
                     .log("Could not process GetThingShadow Request: %s", e.getMessage());
             throw e;

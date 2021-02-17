@@ -63,7 +63,7 @@ public class GetThingShadowIPCHandlerTest {
 
         GetThingShadowIPCHandler getThingShadowIPCHandler = new GetThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandler);
         when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(BASE_DOCUMENT));
-        GetThingShadowResponse actualResponse = getThingShadowIPCHandler.handleGetThingShadowIPCRequest(request);
+        GetThingShadowResponse actualResponse = getThingShadowIPCHandler.handleRequest(request);
         assertEquals(expectedResponse, actualResponse);
     }
 
@@ -76,7 +76,7 @@ public class GetThingShadowIPCHandlerTest {
 
         when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.empty());
         GetThingShadowIPCHandler getThingShadowIPCHandler = new GetThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandler);
-        assertThrows(ResourceNotFoundError.class, () -> getThingShadowIPCHandler.handleGetThingShadowIPCRequest(request));
+        assertThrows(ResourceNotFoundError.class, () -> getThingShadowIPCHandler.handleRequest(request));
     }
 
     @Test
@@ -89,7 +89,7 @@ public class GetThingShadowIPCHandlerTest {
                 .thenThrow(AuthorizationException.class);
 
         GetThingShadowIPCHandler getThingShadowIPCHandler = new GetThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandler);
-        assertThrows(UnauthorizedError.class, () -> getThingShadowIPCHandler.handleGetThingShadowIPCRequest(request));
+        assertThrows(UnauthorizedError.class, () -> getThingShadowIPCHandler.handleRequest(request));
     }
 
     @Test
@@ -100,6 +100,6 @@ public class GetThingShadowIPCHandlerTest {
         request.setShadowName(SHADOW_NAME);
 
         GetThingShadowIPCHandler getThingShadowIPCHandler = new GetThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandler);
-        assertThrows(InvalidArgumentsError.class, () -> getThingShadowIPCHandler.handleGetThingShadowIPCRequest(request));
+        assertThrows(InvalidArgumentsError.class, () -> getThingShadowIPCHandler.handleRequest(request));
     }
 }
