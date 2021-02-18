@@ -36,6 +36,7 @@ import static org.mockito.Mockito.verify;
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 public class ShadowManagerTest extends GGServiceTestUtil {
     private static final long TEST_TIME_OUT_SEC = 30L;
+    private static final String DEFAULT_CONFIG = "config.yaml";
 
     private Kernel kernel;
     private GlobalStateChangeListener listener;
@@ -48,6 +49,9 @@ public class ShadowManagerTest extends GGServiceTestUtil {
 
     @Mock
     ShadowManagerDatabase mockShadowManagerDatabase;
+
+    @Mock
+    ShadowManagerDAOImpl mockShadowManagerDAOImpl;
 
     @BeforeEach
     void setup() {
@@ -70,6 +74,7 @@ public class ShadowManagerTest extends GGServiceTestUtil {
         };
         kernel.getContext().addGlobalStateChangeListener(listener);
         kernel.getContext().put(ShadowManagerDatabase.class, mockShadowManagerDatabase);
+        kernel.getContext().put(ShadowManagerDAOImpl.class, mockShadowManagerDAOImpl);
         kernel.getContext().put(AuthorizationHandler.class, mockAuthorizationHandler);
         kernel.launch();
 
@@ -78,7 +83,7 @@ public class ShadowManagerTest extends GGServiceTestUtil {
 
     @Test
     void GIVEN_Greengrass_with_shadow_manager_WHEN_start_nucleus_THEN_shadow_manager_starts_successfully() throws Exception {
-        startNucleusWithConfig("config.yaml", State.RUNNING);
+        startNucleusWithConfig(DEFAULT_CONFIG, State.RUNNING);
     }
 
     @Test
@@ -86,12 +91,12 @@ public class ShadowManagerTest extends GGServiceTestUtil {
         ignoreExceptionOfType(context, SQLException.class);
 
         doThrow(SQLException.class).when(mockShadowManagerDatabase).install();
-        startNucleusWithConfig("config.yaml", State.ERRORED);
+        startNucleusWithConfig(DEFAULT_CONFIG, State.ERRORED);
     }
 
     @Test
     void GIVEN_Greengrass_with_shadow_manager_WHEN_nucleus_shutdown_THEN_shadow_manager_database_closes() throws Exception {
-        startNucleusWithConfig("config.yaml", State.RUNNING);
+        startNucleusWithConfig(DEFAULT_CONFIG, State.RUNNING);
         kernel.shutdown();
         verify(mockShadowManagerDatabase, atLeastOnce()).close();
     }
@@ -102,5 +107,4 @@ public class ShadowManagerTest extends GGServiceTestUtil {
             assertFalse(logEvent.code.isEmpty());
         }
     }
-
 }

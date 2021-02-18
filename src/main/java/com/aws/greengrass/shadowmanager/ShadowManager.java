@@ -12,7 +12,9 @@ import com.aws.greengrass.dependency.ImplementsService;
 import com.aws.greengrass.dependency.State;
 import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.lifecyclemanager.PluginService;
+import com.aws.greengrass.shadowmanager.ipc.GetThingShadowIPCHandler;
 import org.flywaydb.core.api.FlywayException;
+import software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService;
 
 import java.io.IOException;
 import java.sql.SQLException;
@@ -20,6 +22,10 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import javax.inject.Inject;
+
+import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.DELETE_THING_SHADOW;
+import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.GET_THING_SHADOW;
+import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.UPDATE_THING_SHADOW;
 
 @ImplementsService(name = ShadowManager.SERVICE_NAME)
 public class ShadowManager extends PluginService {
@@ -42,29 +48,38 @@ public class ShadowManager extends PluginService {
     }
 
     public static final String SERVICE_NAME = "aws.greengrass.ShadowManager";
-    public static final List<String> SHADOW_AUTHORIZATION_OPCODES = Arrays.asList("GetThingShadow",
-             "UpdateThingShadow", "DeleteThingShadow", "*");
+    public static final List<String> SHADOW_AUTHORIZATION_OPCODES = Arrays.asList(GET_THING_SHADOW,
+            UPDATE_THING_SHADOW, DELETE_THING_SHADOW, "*");
+
+    private final ShadowManagerDAO dao;
     private final ShadowManagerDatabase database;
     private final AuthorizationHandler authorizationHandler;
     private final Kernel kernel;
 
+    @Inject
+    private GreengrassCoreIPCService greengrassCoreIPCService;
+
     /**
      * Ctr for ShadowManager.
-     * @param topics topics passed by the Nucleus
-     * @param database Local shadow database management
+     *
+     * @param topics               topics passed by the Nucleus
+     * @param database             Local shadow database management
+     * @param dao                  Local shadow database management
      * @param authorizationHandler The authorization handler
-     * @param kernel greengrass kernel
+     * @param kernel               greengrass kernel
      */
     @Inject
     public ShadowManager(
             Topics topics,
             ShadowManagerDatabase database,
+            ShadowManagerDAOImpl dao,
             AuthorizationHandler authorizationHandler,
             Kernel kernel) {
         super(topics);
         this.database = database;
         this.authorizationHandler = authorizationHandler;
         this.kernel = kernel;
+        this.dao = dao;
     }
 
     private void registerHandlers() {
@@ -76,6 +91,9 @@ public class ShadowManager extends PluginService {
                     .setCause(e)
                     .log("Failed to initialize the ShadowManager service with the Authorization module.");
         }
+
+        greengrassCoreIPCService.setGetThingShadowHandler(context -> new GetThingShadowIPCHandler(context,
+                dao, authorizationHandler));
     }
 
     @Override
