@@ -16,6 +16,7 @@ public final class IPCUtil {
 
     enum LogEvents {
         GET_THING_SHADOW("handle-get-thing-shadow"),
+        UPDATE_THING_SHADOW("handle-update-thing-shadow"),
         DELETE_THING_SHADOW("handle-delete-thing-shadow");
 
         String code;
