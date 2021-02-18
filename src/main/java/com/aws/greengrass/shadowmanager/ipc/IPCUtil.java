@@ -15,7 +15,8 @@ public final class IPCUtil {
     static final String SHADOW_MANAGER_NAME = "aws.greengrass.ShadowManager";
 
     enum LogEvents {
-        GET_THING_SHADOW("handle-get-thing-shadow");
+        GET_THING_SHADOW("handle-get-thing-shadow"),
+        DELETE_THING_SHADOW("handle-delete-thing-shadow");
 
         String code;
 
