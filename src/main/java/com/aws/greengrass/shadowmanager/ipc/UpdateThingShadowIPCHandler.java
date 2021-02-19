@@ -11,37 +11,37 @@ import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
-import software.amazon.awssdk.aws.greengrass.GeneratedAbstractGetThingShadowOperationHandler;
-import software.amazon.awssdk.aws.greengrass.model.GetThingShadowRequest;
-import software.amazon.awssdk.aws.greengrass.model.GetThingShadowResponse;
+import software.amazon.awssdk.aws.greengrass.GeneratedAbstractUpdateThingShadowOperationHandler;
+import software.amazon.awssdk.aws.greengrass.model.ConflictError;
 import software.amazon.awssdk.aws.greengrass.model.InvalidArgumentsError;
-import software.amazon.awssdk.aws.greengrass.model.ResourceNotFoundError;
 import software.amazon.awssdk.aws.greengrass.model.ServiceError;
 import software.amazon.awssdk.aws.greengrass.model.UnauthorizedError;
+import software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest;
+import software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowResponse;
 import software.amazon.awssdk.eventstreamrpc.OperationContinuationHandlerContext;
 import software.amazon.awssdk.eventstreamrpc.model.EventStreamJsonMessage;
 
 import static com.aws.greengrass.ipc.common.ExceptionUtil.translateExceptions;
-import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.GET_THING_SHADOW;
+import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.UPDATE_THING_SHADOW;
 
 /**
- * Handler class with business logic for all GetThingShadow requests over IPC.
+ * Handler class with business logic for all UpdateThingShadow requests over IPC.
  */
-public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOperationHandler {
-    private static final Logger logger = LogManager.getLogger(GetThingShadowIPCHandler.class);
+public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingShadowOperationHandler {
+    private static final Logger logger = LogManager.getLogger(UpdateThingShadowIPCHandler.class);
     private final String serviceName;
 
     private final ShadowManagerDAO dao;
     private final AuthorizationHandler authorizationHandler;
 
     /**
-     * IPC Handler class for responding to GetThingShadow requests.
+     * IPC Handler class for responding to UpdateThingShadow requests.
      *
      * @param context              topics passed by the Nucleus
      * @param dao                  Local shadow database management
      * @param authorizationHandler The authorization handler
      */
-    public GetThingShadowIPCHandler(
+    public UpdateThingShadowIPCHandler(
             OperationContinuationHandlerContext context,
             ShadowManagerDAO dao,
             AuthorizationHandler authorizationHandler) {
@@ -57,66 +57,71 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
     }
 
     /**
-     * Handles GetThingShadow Requests from IPC.
+     * Handles UpdateThingShadow Requests from IPC.
+     * TODO: Need to implement conflict resolution after pending discussions
      *
-     * @param request GetThingShadow request from IPC API
-     * @return GetThingShadow response
-     * @throws ResourceNotFoundError if requested document is not found locally
-     * @throws UnauthorizedError     if GetThingShadow call not authorized
+     * @param request UpdateThingShadow request from IPC API
+     * @return UpdateThingShadow response
+     * @throws ConflictError         if version conflict found when updating shadow document
+     * @throws UnauthorizedError     if UpdateThingShadow call not authorized
      * @throws InvalidArgumentsError if validation error occurred with supplied request fields
      * @throws ServiceError          if database error occurs
      */
     @Override
-    public GetThingShadowResponse handleRequest(GetThingShadowRequest request) {
+    public UpdateThingShadowResponse handleRequest(UpdateThingShadowRequest request) {
         return translateExceptions(() -> {
             String thingName = request.getThingName();
             String shadowName = request.getShadowName();
+            byte[] payload = request.getPayload();
 
             try {
-                logger.atTrace("ipc-get-thing-shadow-request").log();
+                logger.atTrace("ipc-update-thing-shadow-request").log();
 
-                GetThingShadowResponse response = new GetThingShadowResponse();
-                IPCUtil.validateThingNameAndDoAuthorization(authorizationHandler, GET_THING_SHADOW,
+                IPCUtil.validateThingNameAndDoAuthorization(authorizationHandler, UPDATE_THING_SHADOW,
                         serviceName, thingName, shadowName);
+                if (payload == null || payload.length == 0) {
+                    throw new InvalidArgumentsError("Missing update payload");
+                }
+                validatePayloadVersion(thingName, shadowName, payload);
 
-                byte[] result = dao.getShadowThing(thingName, shadowName)
-                        .orElseThrow(() -> {
-                            ResourceNotFoundError rnf = new ResourceNotFoundError("No shadow found");
-                            rnf.setResourceType(IPCUtil.SHADOW_RESOURCE_TYPE);
-                            logger.atInfo()
-                                    .setEventType(IPCUtil.LogEvents.GET_THING_SHADOW.code())
-                                    .setCause(rnf)
-                                    .log("Could not process GetThingShadow Request for thingName: {}, shadowName: {}",
-                                            thingName, shadowName);
-                            return rnf;
+                byte[] result = dao.updateShadowThing(thingName, shadowName, payload)
+                        .orElseGet(() -> {
+                            logger.atInfo().log("Update payload identical to stored shadow");
+                            return payload;
                         });
 
+                UpdateThingShadowResponse response = new UpdateThingShadowResponse();
                 response.setPayload(result);
                 return response;
 
             } catch (AuthorizationException e) {
                 logger.atWarn()
-                        .setEventType(IPCUtil.LogEvents.GET_THING_SHADOW.code())
+                        .setEventType(IPCUtil.LogEvents.UPDATE_THING_SHADOW.code())
                         .setCause(e)
-                        .log("Could not process GetThingShadow Request for thingName: {}, shadowName: {}",
+                        .log("Could not process UpdateThingShadow Request for thingName: {}, shadowName: {}",
                                 thingName, shadowName);
                 throw new UnauthorizedError(e.getMessage());
-            } catch (InvalidArgumentsError e) {
+            } catch (ConflictError | InvalidArgumentsError e) {
                 logger.atInfo()
-                        .setEventType(IPCUtil.LogEvents.GET_THING_SHADOW.code())
+                        .setEventType(IPCUtil.LogEvents.UPDATE_THING_SHADOW.code())
                         .setCause(e)
-                        .log("Could not process GetThingShadow Request for thingName: {}, shadowName: {}",
+                        .log("Could not process UpdateThingShadow Request for thingName: {}, shadowName: {}",
                                 thingName, shadowName);
                 throw e;
             } catch (ShadowManagerDataException e) {
                 logger.atError()
-                        .setEventType(IPCUtil.LogEvents.GET_THING_SHADOW.code())
+                        .setEventType(IPCUtil.LogEvents.UPDATE_THING_SHADOW.code())
                         .setCause(e)
-                        .log("Could not process GetThingShadow Request for thingName: {}, shadowName: {}",
+                        .log("Could not process UpdateThingShadow Request for thingName: {}, shadowName: {}",
                                 thingName, shadowName);
                 throw new ServiceError(e.getMessage());
             }
         });
+    }
+
+    // TODO: Implement version conflict validation
+    private void validatePayloadVersion(String thingName, String shadowName, byte[] updatePayload) throws ConflictError{
+
     }
 
     @Override
