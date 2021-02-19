@@ -21,6 +21,7 @@ import software.amazon.awssdk.aws.greengrass.model.UnauthorizedError;
 import software.amazon.awssdk.eventstreamrpc.OperationContinuationHandlerContext;
 import software.amazon.awssdk.eventstreamrpc.model.EventStreamJsonMessage;
 
+import static com.aws.greengrass.ipc.common.ExceptionUtil.translateExceptions;
 import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.GET_THING_SHADOW;
 
 /**
@@ -67,53 +68,55 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
      */
     @Override
     public GetThingShadowResponse handleRequest(GetThingShadowRequest request) {
-        String thingName = request.getThingName();
-        String shadowName = request.getShadowName();
+        return translateExceptions(() -> {
+            String thingName = request.getThingName();
+            String shadowName = request.getShadowName();
 
-        try {
-            logger.atTrace("ipc-get-thing-shadow-request").log();
+            try {
+                logger.atTrace("ipc-get-thing-shadow-request").log();
 
-            GetThingShadowResponse response = new GetThingShadowResponse();
-            IPCUtil.validateThingNameAndDoAuthorization(authorizationHandler, GET_THING_SHADOW,
-                    serviceName, thingName, shadowName);
+                GetThingShadowResponse response = new GetThingShadowResponse();
+                IPCUtil.validateThingNameAndDoAuthorization(authorizationHandler, GET_THING_SHADOW,
+                        serviceName, thingName, shadowName);
 
-            byte[] result = dao.getShadowThing(thingName, shadowName)
-                    .orElseThrow(() -> {
-                        ResourceNotFoundError rnf = new ResourceNotFoundError("No shadow found");
-                        rnf.setResourceType(IPCUtil.SHADOW_RESOURCE_TYPE);
-                        logger.atInfo()
-                                .setEventType(IPCUtil.LogEvents.GET_THING_SHADOW.code())
-                                .setCause(rnf)
-                                .log("Could not process GetThingShadow Request for thingName: {}, shadowName: {}",
-                                        thingName, shadowName);
-                        return rnf;
-                    });
+                byte[] result = dao.getShadowThing(thingName, shadowName)
+                        .orElseThrow(() -> {
+                            ResourceNotFoundError rnf = new ResourceNotFoundError("No shadow found");
+                            rnf.setResourceType(IPCUtil.SHADOW_RESOURCE_TYPE);
+                            logger.atInfo()
+                                    .setEventType(IPCUtil.LogEvents.GET_THING_SHADOW.code())
+                                    .setCause(rnf)
+                                    .log("Could not process GetThingShadow Request for thingName: {}, shadowName: {}",
+                                            thingName, shadowName);
+                            return rnf;
+                        });
 
-            response.setPayload(result);
-            return response;
+                response.setPayload(result);
+                return response;
 
-        } catch (AuthorizationException e) {
-            logger.atWarn()
-                    .setEventType(IPCUtil.LogEvents.GET_THING_SHADOW.code())
-                    .setCause(e)
-                    .log("Could not process GetThingShadow Request for thingName: {}, shadowName: {}",
-                            thingName, shadowName);
-            throw new UnauthorizedError(e.getMessage());
-        } catch (InvalidArgumentsError e) {
-            logger.atInfo()
-                    .setEventType(IPCUtil.LogEvents.GET_THING_SHADOW.code())
-                    .setCause(e)
-                    .log("Could not process GetThingShadow Request for thingName: {}, shadowName: {}",
-                            thingName, shadowName);
-            throw e;
-        } catch (ShadowManagerDataException e) {
-            logger.atError()
-                    .setEventType(IPCUtil.LogEvents.GET_THING_SHADOW.code())
-                    .setCause(e)
-                    .log("Could not process GetThingShadow Request for thingName: {}, shadowName: {}",
-                            thingName, shadowName);
-            throw new ServiceError(e.getMessage());
-        }
+            } catch (AuthorizationException e) {
+                logger.atWarn()
+                        .setEventType(IPCUtil.LogEvents.GET_THING_SHADOW.code())
+                        .setCause(e)
+                        .log("Could not process GetThingShadow Request for thingName: {}, shadowName: {}",
+                                thingName, shadowName);
+                throw new UnauthorizedError(e.getMessage());
+            } catch (InvalidArgumentsError e) {
+                logger.atInfo()
+                        .setEventType(IPCUtil.LogEvents.GET_THING_SHADOW.code())
+                        .setCause(e)
+                        .log("Could not process GetThingShadow Request for thingName: {}, shadowName: {}",
+                                thingName, shadowName);
+                throw e;
+            } catch (ShadowManagerDataException e) {
+                logger.atError()
+                        .setEventType(IPCUtil.LogEvents.GET_THING_SHADOW.code())
+                        .setCause(e)
+                        .log("Could not process GetThingShadow Request for thingName: {}, shadowName: {}",
+                                thingName, shadowName);
+                throw new ServiceError(e.getMessage());
+            }
+        });
     }
 
     @Override

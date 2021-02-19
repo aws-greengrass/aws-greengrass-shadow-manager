@@ -21,6 +21,7 @@ import software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowResponse;
 import software.amazon.awssdk.eventstreamrpc.OperationContinuationHandlerContext;
 import software.amazon.awssdk.eventstreamrpc.model.EventStreamJsonMessage;
 
+import static com.aws.greengrass.ipc.common.ExceptionUtil.translateExceptions;
 import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.UPDATE_THING_SHADOW;
 
 /**
@@ -68,52 +69,54 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
      */
     @Override
     public UpdateThingShadowResponse handleRequest(UpdateThingShadowRequest request) {
-        String thingName = request.getThingName();
-        String shadowName = request.getShadowName();
-        byte[] payload = request.getPayload();
+        return translateExceptions(() -> {
+            String thingName = request.getThingName();
+            String shadowName = request.getShadowName();
+            byte[] payload = request.getPayload();
 
-        try {
-            logger.atTrace("ipc-update-thing-shadow-request").log();
+            try {
+                logger.atTrace("ipc-update-thing-shadow-request").log();
 
-            IPCUtil.validateThingNameAndDoAuthorization(authorizationHandler, UPDATE_THING_SHADOW,
-                    serviceName, thingName, shadowName);
-            if (payload == null || payload.length == 0) {
-                throw new InvalidArgumentsError("Missing update payload");
+                IPCUtil.validateThingNameAndDoAuthorization(authorizationHandler, UPDATE_THING_SHADOW,
+                        serviceName, thingName, shadowName);
+                if (payload == null || payload.length == 0) {
+                    throw new InvalidArgumentsError("Missing update payload");
+                }
+                validatePayloadVersion(thingName, shadowName, payload);
+
+                byte[] result = dao.updateShadowThing(thingName, shadowName, payload)
+                        .orElseGet(() -> {
+                            logger.atInfo().log("Update payload identical to stored shadow");
+                            return payload;
+                        });
+
+                UpdateThingShadowResponse response = new UpdateThingShadowResponse();
+                response.setPayload(result);
+                return response;
+
+            } catch (AuthorizationException e) {
+                logger.atWarn()
+                        .setEventType(IPCUtil.LogEvents.UPDATE_THING_SHADOW.code())
+                        .setCause(e)
+                        .log("Could not process UpdateThingShadow Request for thingName: {}, shadowName: {}",
+                                thingName, shadowName);
+                throw new UnauthorizedError(e.getMessage());
+            } catch (ConflictError | InvalidArgumentsError e) {
+                logger.atInfo()
+                        .setEventType(IPCUtil.LogEvents.UPDATE_THING_SHADOW.code())
+                        .setCause(e)
+                        .log("Could not process UpdateThingShadow Request for thingName: {}, shadowName: {}",
+                                thingName, shadowName);
+                throw e;
+            } catch (ShadowManagerDataException e) {
+                logger.atError()
+                        .setEventType(IPCUtil.LogEvents.UPDATE_THING_SHADOW.code())
+                        .setCause(e)
+                        .log("Could not process UpdateThingShadow Request for thingName: {}, shadowName: {}",
+                                thingName, shadowName);
+                throw new ServiceError(e.getMessage());
             }
-            validatePayloadVersion(thingName, shadowName, payload);
-
-            byte[] result = dao.updateShadowThing(thingName, shadowName, payload)
-                    .orElseGet(() -> {
-                        logger.atInfo().log("Update payload identical to stored shadow");
-                        return payload;
-                    });
-
-            UpdateThingShadowResponse response = new UpdateThingShadowResponse();
-            response.setPayload(result);
-            return response;
-
-        } catch (AuthorizationException e) {
-            logger.atWarn()
-                    .setEventType(IPCUtil.LogEvents.UPDATE_THING_SHADOW.code())
-                    .setCause(e)
-                    .log("Could not process UpdateThingShadow Request for thingName: {}, shadowName: {}",
-                            thingName, shadowName);
-            throw new UnauthorizedError(e.getMessage());
-        } catch (ConflictError | InvalidArgumentsError e) {
-            logger.atInfo()
-                    .setEventType(IPCUtil.LogEvents.UPDATE_THING_SHADOW.code())
-                    .setCause(e)
-                    .log("Could not process UpdateThingShadow Request for thingName: {}, shadowName: {}",
-                            thingName, shadowName);
-            throw e;
-        } catch (ShadowManagerDataException e) {
-            logger.atError()
-                    .setEventType(IPCUtil.LogEvents.UPDATE_THING_SHADOW.code())
-                    .setCause(e)
-                    .log("Could not process UpdateThingShadow Request for thingName: {}, shadowName: {}",
-                            thingName, shadowName);
-            throw new ServiceError(e.getMessage());
-        }
+        });
     }
 
     // TODO: Implement version conflict validation
