@@ -67,25 +67,25 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
      */
     @Override
     public GetThingShadowResponse handleRequest(GetThingShadowRequest request) {
+        String thingName = request.getThingName();
+        String shadowName = request.getShadowName();
+
         try {
             logger.atTrace("ipc-get-thing-shadow-request").log();
 
             GetThingShadowResponse response = new GetThingShadowResponse();
-            String thingName = request.getThingName();
-            String shadowName = request.getShadowName();
             IPCUtil.validateThingNameAndDoAuthorization(authorizationHandler, GET_THING_SHADOW,
                     serviceName, thingName, shadowName);
 
             byte[] result = dao.getShadowThing(thingName, shadowName)
                     .orElseThrow(() -> {
-                        ResourceNotFoundError rnf = new ResourceNotFoundError(
-                                String.format("No shadow found for thingName: %s, shadowName: %s",
-                                        thingName, shadowName));
+                        ResourceNotFoundError rnf = new ResourceNotFoundError("No shadow found");
                         rnf.setResourceType(IPCUtil.SHADOW_RESOURCE_TYPE);
                         logger.atInfo()
                                 .setEventType(IPCUtil.LogEvents.GET_THING_SHADOW.code())
                                 .setCause(rnf)
-                                .log("Could not process GetThingShadow Request");
+                                .log("Could not process GetThingShadow Request for thingName: {}, shadowName: {}",
+                                        thingName, shadowName);
                         return rnf;
                     });
 
@@ -96,19 +96,22 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
             logger.atWarn()
                     .setEventType(IPCUtil.LogEvents.GET_THING_SHADOW.code())
                     .setCause(e)
-                    .log("Could not process GetThingShadow Request");
+                    .log("Could not process GetThingShadow Request for thingName: {}, shadowName: {}",
+                            thingName, shadowName);
             throw new UnauthorizedError(e.getMessage());
         } catch (InvalidArgumentsError e) {
             logger.atInfo()
                     .setEventType(IPCUtil.LogEvents.GET_THING_SHADOW.code())
                     .setCause(e)
-                    .log("Could not process GetThingShadow Request");
+                    .log("Could not process GetThingShadow Request for thingName: {}, shadowName: {}",
+                            thingName, shadowName);
             throw e;
         } catch (ShadowManagerDataException e) {
             logger.atError()
                     .setEventType(IPCUtil.LogEvents.GET_THING_SHADOW.code())
                     .setCause(e)
-                    .log("Could not process GetThingShadow Request");
+                    .log("Could not process GetThingShadow Request for thingName: {}, shadowName: {}",
+                            thingName, shadowName);
             throw new ServiceError(e.getMessage());
         }
     }

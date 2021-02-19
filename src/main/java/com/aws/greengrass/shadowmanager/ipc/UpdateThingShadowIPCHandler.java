@@ -68,12 +68,12 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
      */
     @Override
     public UpdateThingShadowResponse handleRequest(UpdateThingShadowRequest request) {
+        String thingName = request.getThingName();
+        String shadowName = request.getShadowName();
+        byte[] payload = request.getPayload();
+
         try {
             logger.atTrace("ipc-update-thing-shadow-request").log();
-
-            String thingName = request.getThingName();
-            String shadowName = request.getShadowName();
-            byte[] payload = request.getPayload();
 
             IPCUtil.validateThingNameAndDoAuthorization(authorizationHandler, UPDATE_THING_SHADOW,
                     serviceName, thingName, shadowName);
@@ -83,7 +83,10 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
             validatePayloadVersion(thingName, shadowName, payload);
 
             byte[] result = dao.updateShadowThing(thingName, shadowName, payload)
-                    .orElseThrow(() -> new ServiceError("Empty document returned after executing SQL UPDATE"));
+                    .orElseGet(() -> {
+                        logger.atInfo().log("Update payload identical to stored shadow");
+                        return payload;
+                    });
 
             UpdateThingShadowResponse response = new UpdateThingShadowResponse();
             response.setPayload(result);
@@ -93,19 +96,22 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
             logger.atWarn()
                     .setEventType(IPCUtil.LogEvents.UPDATE_THING_SHADOW.code())
                     .setCause(e)
-                    .log("Could not process UpdateThingShadow Request");
+                    .log("Could not process UpdateThingShadow Request for thingName: {}, shadowName: {}",
+                            thingName, shadowName);
             throw new UnauthorizedError(e.getMessage());
         } catch (ConflictError | InvalidArgumentsError e) {
             logger.atInfo()
                     .setEventType(IPCUtil.LogEvents.UPDATE_THING_SHADOW.code())
                     .setCause(e)
-                    .log("Could not process UpdateThingShadow Request");
+                    .log("Could not process UpdateThingShadow Request for thingName: {}, shadowName: {}",
+                            thingName, shadowName);
             throw e;
         } catch (ShadowManagerDataException e) {
             logger.atError()
                     .setEventType(IPCUtil.LogEvents.UPDATE_THING_SHADOW.code())
                     .setCause(e)
-                    .log("Could not process UpdateThingShadow Request");
+                    .log("Could not process UpdateThingShadow Request for thingName: {}, shadowName: {}",
+                            thingName, shadowName);
             throw new ServiceError(e.getMessage());
         }
     }

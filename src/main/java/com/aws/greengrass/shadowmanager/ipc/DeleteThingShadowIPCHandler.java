@@ -67,25 +67,25 @@ public class DeleteThingShadowIPCHandler extends GeneratedAbstractDeleteThingSha
      */
     @Override
     public DeleteThingShadowResponse handleRequest(DeleteThingShadowRequest request) {
+        String thingName = request.getThingName();
+        String shadowName = request.getShadowName();
+
         try {
             logger.atTrace("ipc-update-thing-shadow-request").log();
 
             DeleteThingShadowResponse response = new DeleteThingShadowResponse();
-            String thingName = request.getThingName();
-            String shadowName = request.getShadowName();
             IPCUtil.validateThingNameAndDoAuthorization(authorizationHandler, DELETE_THING_SHADOW,
                     serviceName, thingName, shadowName);
 
             byte[] result = dao.deleteShadowThing(thingName, shadowName)
                     .orElseThrow(() -> {
-                        ResourceNotFoundError rnf = new ResourceNotFoundError(
-                                String.format("No shadow found for thingName: %s, shadowName: %s",
-                                        thingName, shadowName));
+                        ResourceNotFoundError rnf = new ResourceNotFoundError("No shadow found");
                         rnf.setResourceType(IPCUtil.SHADOW_RESOURCE_TYPE);
                         logger.atInfo()
                                 .setEventType(IPCUtil.LogEvents.DELETE_THING_SHADOW.code())
                                 .setCause(rnf)
-                                .log("Could not process DeleteThingShadow Request");
+                                .log("Could not process DeleteThingShadow Request for thingName: {}, shadowName: {}",
+                                        thingName, shadowName);
                         return rnf;
                     });
 
@@ -96,19 +96,22 @@ public class DeleteThingShadowIPCHandler extends GeneratedAbstractDeleteThingSha
             logger.atWarn()
                     .setEventType(IPCUtil.LogEvents.DELETE_THING_SHADOW.code())
                     .setCause(e)
-                    .log("Could not process DeleteThingShadow Request");
+                    .log("Could not process DeleteThingShadow Request for thingName: {}, shadowName: {}",
+                            thingName, shadowName);
             throw new UnauthorizedError(e.getMessage());
         } catch (InvalidArgumentsError e) {
             logger.atInfo()
                     .setEventType(IPCUtil.LogEvents.DELETE_THING_SHADOW.code())
                     .setCause(e)
-                    .log("Could not process DeleteThingShadow Request");
+                    .log("Could not process DeleteThingShadow Request for thingName: {}, shadowName: {}",
+                            thingName, shadowName);
             throw e;
         } catch (ShadowManagerDataException e) {
             logger.atError()
                     .setEventType(IPCUtil.LogEvents.DELETE_THING_SHADOW.code())
                     .setCause(e)
-                    .log("Could not process DeleteThingShadow Request");
+                    .log("Could not process DeleteThingShadow Request for thingName: {}, shadowName: {}",
+                            thingName, shadowName);
             throw new ServiceError(e.getMessage());
         }
     }
