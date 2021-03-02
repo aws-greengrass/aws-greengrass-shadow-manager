@@ -86,7 +86,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
 
                 byte[] result = dao.updateShadowThing(thingName, shadowName, payload)
                         .orElseThrow(() -> {
-                            ServiceError error = new ServiceError("Unexpected error occurred in trying to"
+                            ServiceError error = new ServiceError("Unexpected error occurred in trying to "
                                     + "update shadow thing.");
                             logger.atError()
                                     .setEventType(IPCUtil.LogEvents.GET_THING_SHADOW.code())
