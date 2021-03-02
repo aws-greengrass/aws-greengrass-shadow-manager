@@ -89,7 +89,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                             ServiceError error = new ServiceError("Unexpected error occurred in trying to "
                                     + "update shadow thing.");
                             logger.atError()
-                                    .setEventType(IPCUtil.LogEvents.GET_THING_SHADOW.code())
+                                    .setEventType(IPCUtil.LogEvents.UPDATE_THING_SHADOW.code())
                                     .setCause(error)
                                     .log("Could not process UpdateThingShadow Request for "
                                             + "thingName: {}, shadowName: {}", thingName, shadowName);

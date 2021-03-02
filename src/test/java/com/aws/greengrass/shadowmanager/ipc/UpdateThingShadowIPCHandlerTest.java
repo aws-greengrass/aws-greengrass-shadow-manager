@@ -4,6 +4,7 @@ import com.aws.greengrass.authorization.AuthorizationHandler;
 import com.aws.greengrass.authorization.Permission;
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
+import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -16,12 +17,12 @@ import software.amazon.awssdk.crt.eventstream.ServerConnectionContinuation;
 import software.amazon.awssdk.eventstreamrpc.AuthenticationData;
 import software.amazon.awssdk.eventstreamrpc.OperationContinuationHandlerContext;
 
-import javax.validation.constraints.Null;
 import java.util.Optional;
 
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -131,6 +132,20 @@ public class UpdateThingShadowIPCHandlerTest {
         UpdateThingShadowIPCHandler updateThingShadowIPCHandler = new UpdateThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandler);
         when(mockDao.updateShadowThing(any(), any(), any())).thenReturn(Optional.empty());
 
+        ServiceError thrown = assertThrows(ServiceError.class, () -> updateThingShadowIPCHandler.handleRequest(request));
+        assertTrue(thrown.getMessage().contains("Unexpected error"));
+    }
+
+    @Test
+    void GIVEN_update_thing_shadow_ipc_handler_WHEN_data_exception_occurs_THEN_throw_service_error_exception(ExtensionContext context) throws Exception {
+        ignoreExceptionOfType(context, ShadowManagerDataException.class);
+        UpdateThingShadowRequest request = new UpdateThingShadowRequest();
+        request.setThingName(THING_NAME);
+        request.setShadowName(SHADOW_NAME);
+        request.setPayload(UPDATE_DOCUMENT);
+
+        UpdateThingShadowIPCHandler updateThingShadowIPCHandler = new UpdateThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandler);
+        when(mockDao.updateShadowThing(any(), any(), any())).thenThrow(ShadowManagerDataException.class);
         assertThrows(ServiceError.class, () -> updateThingShadowIPCHandler.handleRequest(request));
     }
 }
