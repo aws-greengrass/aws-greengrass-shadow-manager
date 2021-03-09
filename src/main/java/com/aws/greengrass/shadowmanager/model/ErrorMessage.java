@@ -24,7 +24,7 @@ public class ErrorMessage {
     private int errorCode;
     private String message;
     private long timestamp;
-    // TOOD: Set the client token correctly based on the Shadow Request.
+    // TODO: Set the client token correctly based on the Shadow Request.
     private String clientToken;
 
     public static final ErrorMessage INVALID_VERSION_MESSAGE =
