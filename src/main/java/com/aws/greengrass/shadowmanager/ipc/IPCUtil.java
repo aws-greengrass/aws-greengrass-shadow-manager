@@ -54,7 +54,7 @@ public final class IPCUtil {
                 SHADOW_MANAGER_NAME,
                 Permission.builder()
                         .principal(serviceName)
-                        .operation(opCode.toLowerCase())
+                        .operation(opCode)
                         .resource(shadowResource.toString())
                         .build());
     }

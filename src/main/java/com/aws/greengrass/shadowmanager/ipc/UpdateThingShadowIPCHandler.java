@@ -85,9 +85,15 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                 validatePayloadVersion(thingName, shadowName, payload);
 
                 byte[] result = dao.updateShadowThing(thingName, shadowName, payload)
-                        .orElseGet(() -> {
-                            logger.atInfo().log("Update payload identical to stored shadow");
-                            return payload;
+                        .orElseThrow(() -> {
+                            ServiceError error = new ServiceError("Unexpected error occurred in trying to "
+                                    + "update shadow thing.");
+                            logger.atError()
+                                    .setEventType(IPCUtil.LogEvents.UPDATE_THING_SHADOW.code())
+                                    .setCause(error)
+                                    .log("Could not process UpdateThingShadow Request for "
+                                            + "thingName: {}, shadowName: {}", thingName, shadowName);
+                            return error;
                         });
 
                 UpdateThingShadowResponse response = new UpdateThingShadowResponse();

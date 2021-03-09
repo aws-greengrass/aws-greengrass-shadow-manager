@@ -90,7 +90,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
     }
 
     /**
-     * Attempts to update a shadow document from the local shadow storage.
+     * Attempts to update a shadow document from the local shadow storage. Will create document if shadow did not exist.
      *
      * @param thingName   Name of the Thing for the shadow topic prefix.
      * @param shadowName  Name of shadow topic prefix for thing.
@@ -99,11 +99,11 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      */
     @Override
     public Optional<byte[]> updateShadowThing(String thingName, String shadowName, byte[] newDocument) {
-        return execute("UPDATE documents SET document = ? WHERE thingName = ? AND shadowName = ?",
+        return execute("MERGE INTO documents KEY (thingName, shadowName) VALUES (?, ?, ?)",
                 preparedStatement -> {
-                    preparedStatement.setBytes(1, newDocument);
-                    preparedStatement.setString(2, thingName);
-                    preparedStatement.setString(3, shadowName);
+                    preparedStatement.setString(1, thingName);
+                    preparedStatement.setString(2, shadowName);
+                    preparedStatement.setBytes(3, newDocument);
                     int result = preparedStatement.executeUpdate();
                     if (result == 1) {
                         return Optional.ofNullable(newDocument);

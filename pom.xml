@@ -27,7 +27,7 @@
         <maven.compiler.target>1.8</maven.compiler.target>
         <skipTests>false</skipTests>
         <groups></groups>
-        <shadowmanagerjar.name>ShadowManager</shadowmanagerjar.name>
+        <shadowmanagerjar.name>aws.greengrass.ShadowManager</shadowmanagerjar.name>
 
         <h2.version>1.4.200</h2.version>
         <nucleus.version>2.0.0-SNAPSHOT</nucleus.version>

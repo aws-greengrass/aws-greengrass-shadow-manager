@@ -159,7 +159,8 @@ public class ShadowManagerDAOImplTest {
     @Test
     void testUpdateShadowThingWithNoMatchingThing() throws Exception {
         Optional<byte[]> result = dao.updateShadowThing(THING_NAME, SHADOW_NAME, UPDATED_DOCUMENT);
-        assertFalse(result.isPresent());
+        assertTrue(result.isPresent());
+        assertArrayEquals(UPDATED_DOCUMENT, result.get());
     }
 
 }
