@@ -5,6 +5,7 @@
 
 package com.aws.greengrass.shadowmanager;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface ShadowManagerDAO {
@@ -41,4 +42,14 @@ public interface ShadowManagerDAO {
      * @return Optional
      */
     Optional<byte[]> updateShadowThing(String thingName, String shadowName, byte[] newDocument);
+
+    /**
+     * Attempts to retrieve list of named shadows for a specified thing from the local shadow storage.
+     * @param thingName Name of the Thing to check Named Shadows.
+     * @param offset Number of Named Shadows to bypass.
+     * @param limit Maximum number of Named Shadows to retrieve.
+     * @return Optional
+     */
+    Optional<List<String>> listNamedShadowsForThing(String thingName, int offset, int limit);
+
 }

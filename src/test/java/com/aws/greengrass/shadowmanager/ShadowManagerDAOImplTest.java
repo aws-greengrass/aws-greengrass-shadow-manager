@@ -17,12 +17,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import javax.inject.Inject;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.sql.Array;
 import java.sql.SQLException;
-import java.util.Optional;
+import java.util.*;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 public class ShadowManagerDAOImplTest {
@@ -34,6 +33,10 @@ public class ShadowManagerDAOImplTest {
     private static final byte[] BASE_DOCUMENT =  "{\"id\": 1, \"name\": \"The Beatles\"}".getBytes();
     private static final byte[] NO_SHADOW_NAME_BASE_DOCUMENT =  "{\"id\": 2, \"name\": \"The Beach Boys\"}".getBytes();
     private static final byte[] UPDATED_DOCUMENT =  "{\"id\": 1, \"name\": \"New Name\"}".getBytes();
+    private static final List<String> SHADOW_NAME_LIST = Arrays.asList("alpha", "bravo", "charlie", "delta");
+    private static final int DEFAULT_OFFSET = 0;
+    private static final int DEFAULT_LIMIT = 100;
+
 
     @TempDir
     Path rootDir;
@@ -166,6 +169,40 @@ public class ShadowManagerDAOImplTest {
         Optional<byte[]> result = dao.updateShadowThing(THING_NAME, SHADOW_NAME, UPDATED_DOCUMENT);
         assertTrue(result.isPresent());
         assertArrayEquals(UPDATED_DOCUMENT, result.get());
+    }
+
+    @Test
+    void testListNamedShadowsForThing() throws Exception {
+        for (String shadowName : SHADOW_NAME_LIST) {
+            System.out.println(shadowName);
+            dao.updateShadowThing(THING_NAME, shadowName, UPDATED_DOCUMENT);
+        }
+
+        Optional<List<String>> listShadowResults = dao.listNamedShadowsForThing(THING_NAME, DEFAULT_OFFSET, DEFAULT_LIMIT);
+        assertTrue(listShadowResults.isPresent());
+        assertEquals(SHADOW_NAME_LIST, listShadowResults.get());
+    }
+
+    @Test
+    void testListNamedShadowsForThingWithOffsetAndLimit() throws Exception {
+        for (String shadowName : SHADOW_NAME_LIST) {
+            System.out.println(shadowName);
+            dao.updateShadowThing(THING_NAME, shadowName, UPDATED_DOCUMENT);
+        }
+
+        int offset = 1;
+        int limit = 2;
+        Optional<List<String>> listShadowResults = dao.listNamedShadowsForThing(THING_NAME, offset, limit);
+        List<String> expected_paginated_list = Arrays.asList("bravo", "charlie");
+        assertTrue(listShadowResults.isPresent());
+        assertEquals(expected_paginated_list, listShadowResults.get());
+    }
+
+    @Test
+    void testListNamedShadowsForThingWithNoShadowNames() throws Exception {
+        Optional<List<String>> listShadowResults = dao.listNamedShadowsForThing(THING_NAME, DEFAULT_OFFSET, DEFAULT_LIMIT);
+        assertTrue(listShadowResults.isPresent());
+        assertTrue(listShadowResults.get().isEmpty());
     }
 
 }

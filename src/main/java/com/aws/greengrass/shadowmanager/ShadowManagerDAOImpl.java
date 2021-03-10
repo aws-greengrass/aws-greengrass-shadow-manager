@@ -11,6 +11,8 @@ import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import javax.inject.Inject;
 
@@ -114,6 +116,28 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
                         return Optional.ofNullable(newDocument);
                     }
                     return Optional.empty();
+                });
+    }
+
+    /**
+     * Attempts to retrieve list of named shadows for a specified thing from the local shadow storage.
+     * @param thingName Name of the Thing to check Named Shadows.
+     * @param offset Number of Named Shadows to bypass.
+     * @param limit Maximum number of Named Shadows to retrieve.
+     * @return Optional
+     */
+    public Optional<List<String>> listNamedShadowsForThing(String thingName, int offset, int limit) {
+        return execute("SELECT shadowName from documents WHERE thingName = ? LIMIT ? OFFSET ? ",
+                preparedStatement -> {
+                    preparedStatement.setString(1, thingName);
+                    preparedStatement.setInt(2, limit);
+                    preparedStatement.setInt(3, offset);
+                    ResultSet resultSet = preparedStatement.executeQuery();
+                    List<String> namedShadowList = new ArrayList<>();
+                    while (resultSet.next()) {
+                        namedShadowList.add(resultSet.getString(1));
+                    }
+                    return Optional.of(namedShadowList);
                 });
     }
 
