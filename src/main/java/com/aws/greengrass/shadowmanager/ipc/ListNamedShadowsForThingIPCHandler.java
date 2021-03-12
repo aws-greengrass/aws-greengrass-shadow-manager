@@ -10,6 +10,7 @@ import com.aws.greengrass.authorization.exceptions.AuthorizationException;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
+import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import software.amazon.awssdk.aws.greengrass.GeneratedAbstractListNamedShadowsForThingOperationHandler;
 import software.amazon.awssdk.aws.greengrass.model.InvalidArgumentsError;
@@ -37,6 +38,9 @@ import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
 
 import static com.aws.greengrass.ipc.common.ExceptionUtil.translateExceptions;
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_NEXT_TOKEN_KEY;
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_PAGE_SIZE_KEY;
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
 import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.LIST_NAMED_SHADOWS_FOR_THING;
 
 /**
@@ -47,11 +51,11 @@ public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNam
     private static final int DEFAULT_PAGE_SIZE = 25;
     private static final int DEFAULT_OFFSET = 0;
 
-    private static final String cipherTransformation = "AES/CBC/PKCS5Padding";
-    private static final String encryptionAlgorithm = "AES";
-    private static final String secretKeyAlgorithm = "PBKDF2WithHmacSHA256";
-    private static final int PBEKeyIterationCount = 65536;
-    private static final int PBEKeyLength = 256;
+    private static final String CIPHER_TRANSFORMATION = "AES/CBC/PKCS5Padding";
+    private static final String ENCRYPTION_ALGORITHM = "AES";
+    private static final String SECRET_KEY_ALGORITHM = "PBKDF2WithHmacSHA256";
+    private static final int PBE_KEY_ITERATION_COUNT = 65536;
+    private static final int PBE_KEY_LENGTH = 256;
 
     private final String serviceName;
 
@@ -77,7 +81,7 @@ public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNam
 
     @Override
     protected void onStreamClosed() {
-
+        //NA
     }
 
     /**
@@ -130,7 +134,7 @@ public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNam
                             + "Request due to internal service error");
                     logger.atError()
                             .setEventType(IPCUtil.LogEvents.LIST_NAMED_SHADOWS.code())
-                            .kv(IPCUtil.LOG_THING_NAME_KEY, thingName)
+                            .kv(LOG_THING_NAME_KEY, thingName)
                             .setCause(error)
                             .log();
                     throw error;
@@ -141,23 +145,23 @@ public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNam
                 logger.atWarn()
                         .setEventType(IPCUtil.LogEvents.LIST_NAMED_SHADOWS.code())
                         .setCause(e)
-                        .kv(IPCUtil.LOG_THING_NAME_KEY, thingName)
+                        .kv(LOG_THING_NAME_KEY, thingName)
                         .log("Not authorized to list named shadows for thing");
                 throw new UnauthorizedError(e.getMessage());
-            } catch (IllegalArgumentException e) {
+            } catch (InvalidRequestParametersException | IllegalArgumentException e) {
                 logger.atWarn()
                         .setEventType(IPCUtil.LogEvents.LIST_NAMED_SHADOWS.code())
                         .setCause(e)
-                        .kv(IPCUtil.LOG_THING_NAME_KEY, thingName)
-                        .kv(IPCUtil.LOG_PAGE_SIZE_KEY, request.getPageSize())
-                        .kv(IPCUtil.LOG_NEXT_TOKEN_KEY, request.getNextToken())
+                        .kv(LOG_THING_NAME_KEY, thingName)
+                        .kv(LOG_PAGE_SIZE_KEY, request.getPageSize())
+                        .kv(LOG_NEXT_TOKEN_KEY, request.getNextToken())
                         .log();
                 throw new InvalidArgumentsError(e.getMessage());
             } catch (ShadowManagerDataException | GeneralSecurityException e) {
                 logger.atError()
                     .setEventType(IPCUtil.LogEvents.LIST_NAMED_SHADOWS.code())
                     .setCause(e)
-                    .kv(IPCUtil.LOG_THING_NAME_KEY, thingName)
+                    .kv(LOG_THING_NAME_KEY, thingName)
                     .log("Could not process ListNamedShadowsForThing Request due to internal service error");
                 throw new ServiceError(e.getMessage());
             }
@@ -166,7 +170,7 @@ public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNam
 
     @Override
     public void handleStreamEvent(EventStreamJsonMessage streamRequestEvent) {
-
+        //NA
     }
 
     /**
@@ -215,12 +219,13 @@ public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNam
      */
     private static Cipher createCipher(String secret, String salt, int cipherEncryptionMode)
             throws GeneralSecurityException {
-        KeySpec keySpec = new PBEKeySpec(secret.toCharArray(), salt.getBytes(), PBEKeyIterationCount, PBEKeyLength);
-        SecretKeyFactory secretKeyFactory = SecretKeyFactory.getInstance(secretKeyAlgorithm);
+        KeySpec keySpec = new PBEKeySpec(secret.toCharArray(), salt.getBytes(), PBE_KEY_ITERATION_COUNT,
+                PBE_KEY_LENGTH);
+        SecretKeyFactory secretKeyFactory = SecretKeyFactory.getInstance(SECRET_KEY_ALGORITHM);
         SecretKey secretKey = secretKeyFactory.generateSecret(keySpec);
-        SecretKeySpec secretKeySpec = new SecretKeySpec(secretKey.getEncoded(), encryptionAlgorithm);
+        SecretKeySpec secretKeySpec = new SecretKeySpec(secretKey.getEncoded(), ENCRYPTION_ALGORITHM);
 
-        Cipher cipher = Cipher.getInstance(cipherTransformation);
+        Cipher cipher = Cipher.getInstance(CIPHER_TRANSFORMATION);
         byte[] iv = new byte[cipher.getBlockSize()];
         IvParameterSpec ivParams = new IvParameterSpec(iv);
         cipher.init(cipherEncryptionMode, secretKeySpec, ivParams);

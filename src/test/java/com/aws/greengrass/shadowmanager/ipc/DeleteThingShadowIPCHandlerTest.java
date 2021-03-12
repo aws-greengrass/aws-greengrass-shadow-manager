@@ -8,13 +8,16 @@ package com.aws.greengrass.shadowmanager.ipc;
 import com.aws.greengrass.authorization.AuthorizationHandler;
 import com.aws.greengrass.authorization.Permission;
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
+import com.aws.greengrass.shadowmanager.JsonUtil;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
+import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.ipc.model.AcceptRequest;
 import com.aws.greengrass.shadowmanager.ipc.model.Operation;
 import com.aws.greengrass.shadowmanager.ipc.model.RejectRequest;
 import com.aws.greengrass.shadowmanager.model.ErrorMessage;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
+import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,16 +32,24 @@ import software.amazon.awssdk.aws.greengrass.model.*;
 import software.amazon.awssdk.crt.eventstream.ServerConnectionContinuation;
 import software.amazon.awssdk.eventstreamrpc.AuthenticationData;
 import software.amazon.awssdk.eventstreamrpc.OperationContinuationHandlerContext;
+import software.amazon.awssdk.eventstreamrpc.model.EventStreamJsonMessage;
 
+import java.io.File;
+import java.io.IOException;
+import java.net.URISyntaxException;
+import java.nio.file.Files;
 import java.time.Instant;
 import java.util.Optional;
 
+import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_VERSION;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -54,7 +65,6 @@ class DeleteThingShadowIPCHandlerTest {
     private static final String TEST_SERVICE = "TestService";
     private static final String THING_NAME = "testThingName";
     private static final String SHADOW_NAME = "testShadowName";
-    private static final byte[] BASE_DOCUMENT = "{\"id\": 1, \"name\": \"The Beatles\"}".getBytes();
 
     @Mock
     OperationContinuationHandlerContext mockContext;
@@ -84,40 +94,49 @@ class DeleteThingShadowIPCHandlerTest {
     }
 
     @Test
-    void GIVEN_delete_thing_shadow_ipc_handler_with_named_shadow_WHEN_handle_request_THEN_delete_thing_shadow() {
+    void GIVEN_delete_thing_shadow_ipc_handler_with_named_shadow_WHEN_handle_request_THEN_delete_thing_shadow() throws URISyntaxException, IOException {
+        File f = new File(getClass().getResource("json_shadow_examples/good_new_document.json").toURI());
+        byte[] allByteData = Files.readAllBytes(f.toPath());
+        Optional<JsonNode> shadowDocumentJson = JsonUtil.getPayloadJson(allByteData);
+        assertTrue(shadowDocumentJson.isPresent());
         DeleteThingShadowRequest request = new DeleteThingShadowRequest();
         request.setThingName(THING_NAME);
         request.setShadowName(SHADOW_NAME);
 
         DeleteThingShadowResponse expectedResponse = new DeleteThingShadowResponse();
-        expectedResponse.setPayload(BASE_DOCUMENT);
+        expectedResponse.setPayload(new byte[0]);
 
         DeleteThingShadowIPCHandler deleteThingShadowIPCHandler = new DeleteThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandler, mockPubSubClientWrapper);
-        when(mockDao.deleteShadowThing(any(), any())).thenReturn(Optional.of(BASE_DOCUMENT));
+        when(mockDao.deleteShadowThing(any(), any())).thenReturn(Optional.of(allByteData));
 
         DeleteThingShadowResponse actualResponse = deleteThingShadowIPCHandler.handleRequest(request);
         assertEquals(expectedResponse, actualResponse);
         verify(mockPubSubClientWrapper, times(1)).accept(acceptRequestCaptor.capture());
         assertNotNull(acceptRequestCaptor.getValue());
 
+
         assertEquals(SHADOW_NAME, acceptRequestCaptor.getValue().getShadowName());
-        assertArrayEquals(new byte[0], acceptRequestCaptor.getValue().getPayload());
+        assertArrayEquals(JsonUtil.getPayloadBytes(shadowDocumentJson.get().get(SHADOW_DOCUMENT_VERSION)), acceptRequestCaptor.getValue().getPayload());
         assertEquals(THING_NAME, acceptRequestCaptor.getValue().getThingName());
         assertEquals(Operation.DELETE_SHADOW, acceptRequestCaptor.getValue().getPublishOperation());
         assertEquals(IPCUtil.LogEvents.DELETE_THING_SHADOW.code(), acceptRequestCaptor.getValue().getPublishOperation().getLogEventType());
     }
 
     @Test
-    void GIVEN_delete_thing_shadow_ipc_handler_with_empty_shadow_name_WHEN_handle_request_THEN_delete_thing_shadow() {
+    void GIVEN_delete_thing_shadow_ipc_handler_with_empty_shadow_name_WHEN_handle_request_THEN_delete_thing_shadow() throws IOException, URISyntaxException {
+        File f = new File(getClass().getResource("json_shadow_examples/good_new_document.json").toURI());
+        byte[] allByteData = Files.readAllBytes(f.toPath());
+        Optional<JsonNode> shadowDocumentJson = JsonUtil.getPayloadJson(allByteData);
+        assertTrue(shadowDocumentJson.isPresent());
         DeleteThingShadowRequest request = new DeleteThingShadowRequest();
         request.setThingName(THING_NAME);
         request.setShadowName("");
 
         DeleteThingShadowResponse expectedResponse = new DeleteThingShadowResponse();
-        expectedResponse.setPayload(BASE_DOCUMENT);
+        expectedResponse.setPayload(new byte[0]);
 
         DeleteThingShadowIPCHandler deleteThingShadowIPCHandler = new DeleteThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandler, mockPubSubClientWrapper);
-        when(mockDao.deleteShadowThing(any(), any())).thenReturn(Optional.of(BASE_DOCUMENT));
+        when(mockDao.deleteShadowThing(any(), any())).thenReturn(Optional.of(allByteData));
 
         DeleteThingShadowResponse actualResponse = deleteThingShadowIPCHandler.handleRequest(request);
         assertEquals(expectedResponse, actualResponse);
@@ -127,7 +146,7 @@ class DeleteThingShadowIPCHandlerTest {
         assertNotNull(acceptRequestCaptor.getValue());
 
         assertEquals("", acceptRequestCaptor.getValue().getShadowName());
-        assertArrayEquals(new byte[0], acceptRequestCaptor.getValue().getPayload());
+        assertArrayEquals(JsonUtil.getPayloadBytes(shadowDocumentJson.get().get(SHADOW_DOCUMENT_VERSION)), acceptRequestCaptor.getValue().getPayload());
         assertEquals(THING_NAME, acceptRequestCaptor.getValue().getThingName());
 
         assertEquals(Operation.DELETE_SHADOW, acceptRequestCaptor.getValue().getPublishOperation());
@@ -206,7 +225,7 @@ class DeleteThingShadowIPCHandlerTest {
     @ParameterizedTest
     @NullAndEmptySource
     void GIVEN_missing_thing_name_WHEN_handle_request_THEN_throw_invalid_arguments_error(String thingName, ExtensionContext context) {
-        ignoreExceptionOfType(context, IllegalArgumentException.class);
+        ignoreExceptionOfType(context, InvalidRequestParametersException.class);
         DeleteThingShadowRequest request = new DeleteThingShadowRequest();
         request.setThingName(thingName);
         request.setShadowName(SHADOW_NAME);
@@ -221,7 +240,19 @@ class DeleteThingShadowIPCHandlerTest {
         assertEquals(SHADOW_NAME, rejectRequestCaptor.getValue().getShadowName());
         ErrorMessage errorMessage = rejectRequestCaptor.getValue().getErrorMessage();
         assertEquals(Operation.DELETE_SHADOW, rejectRequestCaptor.getValue().getPublishOperation());
-        assertEquals(400, errorMessage.getErrorCode());
-        assertEquals("Invalid clientToken", errorMessage.getMessage());
+        assertEquals(404, errorMessage.getErrorCode());
+        assertEquals("Thing not found", errorMessage.getMessage());
+    }
+
+    @Test
+    void GIVEN_delete_thing_shadow_ipc_handler_WHEN_handle_stream_event_THEN_nothing_happens() {
+        DeleteThingShadowIPCHandler deleteThingShadowIPCHandler = new DeleteThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandler, mockPubSubClientWrapper);
+        assertDoesNotThrow(() -> deleteThingShadowIPCHandler.handleStreamEvent(mock(EventStreamJsonMessage.class)));
+    }
+
+    @Test
+    void GIVEN_delete_thing_shadow_ipc_handler_WHEN_stream_closes_THEN_nothing_happens() {
+        DeleteThingShadowIPCHandler deleteThingShadowIPCHandler = new DeleteThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandler, mockPubSubClientWrapper);
+        assertDoesNotThrow(deleteThingShadowIPCHandler::onStreamClosed);
     }
 }

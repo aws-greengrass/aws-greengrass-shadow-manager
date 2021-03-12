@@ -1,0 +1,11 @@
+{
+  "state": {
+    "color": {
+      "g": 0,
+      "b": null
+    },
+    "temperature": 70
+  },
+  "version": 1,
+  "clientToken": "device"
+}
