@@ -28,6 +28,7 @@ import javax.inject.Inject;
 
 import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.DELETE_THING_SHADOW;
 import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.GET_THING_SHADOW;
+import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.LIST_NAMED_SHADOWS_FOR_THING;
 import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.UPDATE_THING_SHADOW;
 
 @ImplementsService(name = ShadowManager.SERVICE_NAME)
@@ -53,7 +54,7 @@ public class ShadowManager extends PluginService {
 
     public static final String SERVICE_NAME = "aws.greengrass.ShadowManager";
     protected static final List<String> SHADOW_AUTHORIZATION_OPCODES = Arrays.asList(GET_THING_SHADOW,
-            UPDATE_THING_SHADOW, DELETE_THING_SHADOW, "*");
+            UPDATE_THING_SHADOW, LIST_NAMED_SHADOWS_FOR_THING, DELETE_THING_SHADOW, "*");
 
     private final ShadowManagerDAO dao;
     private final ShadowManagerDatabase database;
