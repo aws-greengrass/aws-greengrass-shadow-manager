@@ -14,6 +14,7 @@ import com.aws.greengrass.dependency.State;
 import com.aws.greengrass.lifecyclemanager.PluginService;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowIPCHandler;
 import com.aws.greengrass.shadowmanager.ipc.GetThingShadowIPCHandler;
+import com.aws.greengrass.shadowmanager.ipc.ListNamedShadowsForThingIPCHandler;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowIPCHandler;
 import org.flywaydb.core.api.FlywayException;
 import software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService;
@@ -101,6 +102,8 @@ public class ShadowManager extends PluginService {
                 dao, authorizationHandler, pubSubIPCEventStreamAgent));
         greengrassCoreIPCService.setUpdateThingShadowHandler(context -> new UpdateThingShadowIPCHandler(context,
                 dao, authorizationHandler, pubSubIPCEventStreamAgent));
+        greengrassCoreIPCService.setListNamedShadowsForThingHandler(context -> new ListNamedShadowsForThingIPCHandler(
+                context, dao, authorizationHandler));
     }
 
     @Override
