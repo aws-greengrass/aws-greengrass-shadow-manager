@@ -1,0 +1,11 @@
+{
+  "state": {
+    "color": {
+      "g": 0,
+      "b": 0
+    },
+    "SomeKey": "SomeOtherValue"
+  },
+  "version": 1,
+  "clientToken": "device"
+}

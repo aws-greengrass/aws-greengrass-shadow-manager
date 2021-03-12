@@ -30,6 +30,13 @@ public class ErrorMessage {
     public static final ErrorMessage INVALID_VERSION_MESSAGE =
             ErrorMessage.builder().errorCode(400).message("Invalid version").build();
 
+    public static final ErrorMessage INVALID_STATE_NODE_DEPTH_MESSAGE =
+            ErrorMessage.builder().errorCode(400).message("JSON contains too many levels of nesting; maximum is 6")
+                    .build();
+
+    public static final ErrorMessage STATE_OBJECT_NOT_OBJECT_ERROR_MESSAGE =
+            ErrorMessage.builder().errorCode(400).message("State node must be an object").build();
+
     public static final ErrorMessage INVALID_CLIENT_TOKEN_MESSAGE =
             ErrorMessage.builder().errorCode(400).message("Invalid clientToken").build();
 
@@ -38,6 +45,17 @@ public class ErrorMessage {
 
     public static final ErrorMessage FORBIDDEN_MESSAGE =
             ErrorMessage.builder().errorCode(403).message("Forbidden").build();
+
+    /**
+     * Creates the error message when the payload JSON is not valid.
+     *
+     * @param errorMessages All the error messages separated by a new line.
+     * @return the ErrorMessage object for thing Not Found exception.
+     */
+    public static ErrorMessage createInvalidPayloadJsonMessage(String errorMessages) {
+       return ErrorMessage.builder().errorCode(400).timestamp(Instant.now().toEpochMilli())
+                .message(String.format("Invalid JSON%n%s", errorMessages)).build();
+    }
 
     /**
      * Creates the error message when the thing is not found.
@@ -59,6 +77,17 @@ public class ErrorMessage {
         shadowName = Utils.isEmpty(shadowName) ? "Unnamed Shadow" : shadowName;
         return ErrorMessage.builder().errorCode(404).timestamp(Instant.now().toEpochMilli())
                 .message(String.format("No shadow exists with name: %s", shadowName)).build();
+    }
+
+    /**
+     * Creates the error message when there is a version conflict in the request. The version of the
+     * update should be exactly one higher than the last received update.
+     *
+     * @return the ErrorMessage object for Version Conflict exception.
+     */
+    public static ErrorMessage createPayloadTooLargeMessage() {
+        return ErrorMessage.builder().errorCode(413).timestamp(Instant.now().toEpochMilli())
+                .message("The payload exceeds the maximum size allowed").build();
     }
 
     /**

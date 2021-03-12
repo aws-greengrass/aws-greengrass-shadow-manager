@@ -13,6 +13,7 @@ import com.aws.greengrass.shadowmanager.model.ErrorMessage;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeAll;
@@ -65,7 +66,7 @@ class PubSubClientWrapperTest {
 
     @ParameterizedTest
     @EnumSource(Operation.class)
-    void GIVEN_shadow_accept_request_accept_request_WHEN_accept_THEN_publishes_message(Operation operation) {
+    void GIVEN_good_shadow_accept_request_WHEN_accept_THEN_publishes_message(Operation operation) {
         PubSubClientWrapper pubSubClientWrapper = new PubSubClientWrapper(mockPubSubIPCEventStreamAgent);
         pubSubClientWrapper.accept(AcceptRequest.builder().shadowName(SHADOW_NAME).thingName(THING_NAME)
                 .payload(UPDATE_DOCUMENT)
@@ -80,7 +81,7 @@ class PubSubClientWrapperTest {
 
     @ParameterizedTest
     @EnumSource(Operation.class)
-    void GIVEN_shadow_accept_request_accept_request_WHEN_delta_THEN_publishes_message(Operation operation) {
+    void GIVEN_good_shadow_accept_request_WHEN_delta_THEN_publishes_message(Operation operation) {
         PubSubClientWrapper pubSubClientWrapper = new PubSubClientWrapper(mockPubSubIPCEventStreamAgent);
         pubSubClientWrapper.delta(AcceptRequest.builder().shadowName(SHADOW_NAME).thingName(THING_NAME)
                 .payload(UPDATE_DOCUMENT)
@@ -95,8 +96,7 @@ class PubSubClientWrapperTest {
 
     @ParameterizedTest
     @EnumSource(Operation.class)
-
-    void GIVEN_shadow_accept_request_accept_request_WHEN_documents_THEN_publishes_message(Operation operation) {
+    void GIVEN_good_shadow_accept_request_WHEN_documents_THEN_publishes_message(Operation operation) {
         PubSubClientWrapper pubSubClientWrapper = new PubSubClientWrapper(mockPubSubIPCEventStreamAgent);
         pubSubClientWrapper.documents(AcceptRequest.builder().shadowName(SHADOW_NAME).thingName(THING_NAME)
                 .payload(UPDATE_DOCUMENT)
@@ -111,8 +111,7 @@ class PubSubClientWrapperTest {
 
     @ParameterizedTest
     @EnumSource(Operation.class)
-
-    void GIVEN_shadow_accept_request_reject_request_WHEN_reject_THEN_publishes_message(Operation operation) throws IOException {
+    void GIVEN_good_shadow_reject_request_WHEN_reject_THEN_publishes_message(Operation operation) throws IOException {
         PubSubClientWrapper pubSubClientWrapper = new PubSubClientWrapper(mockPubSubIPCEventStreamAgent);
         pubSubClientWrapper.reject(RejectRequest.builder().shadowName(SHADOW_NAME).thingName(THING_NAME)
                 .errorMessage(ErrorMessage.createInternalServiceErrorMessage())
@@ -131,7 +130,7 @@ class PubSubClientWrapperTest {
     }
 
     @Test
-    void GIVEN_shadow_accept_request_accept_request_WHEN_accept_and_publish_throws_error_THEN_error_is_caught(ExtensionContext context) {
+    void GIVEN_shadow_accept_request_WHEN_accept_and_publish_throws_error_THEN_error_is_caught(ExtensionContext context) {
         ignoreExceptionOfType(context, InvalidArgumentsError.class);
         InvalidArgumentsError e = new InvalidArgumentsError();
         doThrow(e).when(mockPubSubIPCEventStreamAgent).publish(any(), any(), any());
@@ -145,7 +144,7 @@ class PubSubClientWrapperTest {
     }
 
     @Test
-    void GIVEN_shadow_accept_request_accept_request_WHEN_delta_and_publish_throws_error_THEN_error_is_caught(ExtensionContext context) {
+    void GIVEN_shadow_accept_request_WHEN_delta_and_publish_throws_error_THEN_error_is_caught(ExtensionContext context) {
         ignoreExceptionOfType(context, InvalidArgumentsError.class);
         InvalidArgumentsError e = new InvalidArgumentsError();
         doThrow(e).when(mockPubSubIPCEventStreamAgent).publish(any(), any(), any());
@@ -159,7 +158,7 @@ class PubSubClientWrapperTest {
     }
 
     @Test
-    void GIVEN_shadow_accept_request_accept_request_WHEN_documents_and_publish_throws_error_THEN_error_is_caught(ExtensionContext context) {
+    void GIVEN_shadow_accept_request_WHEN_documents_and_publish_throws_error_THEN_error_is_caught(ExtensionContext context) {
         ignoreExceptionOfType(context, InvalidArgumentsError.class);
         InvalidArgumentsError e = new InvalidArgumentsError();
         doThrow(e).when(mockPubSubIPCEventStreamAgent).publish(any(), any(), any());
@@ -173,7 +172,7 @@ class PubSubClientWrapperTest {
     }
 
     @Test
-    void GIVEN_shadow_accept_request_reject_request_WHEN_reject_and_publish_throws_error_THEN_error_is_caught(ExtensionContext context) {
+    void GIVEN_shadow_reject_request_WHEN_reject_and_publish_throws_error_THEN_error_is_caught(ExtensionContext context) {
         ignoreExceptionOfType(context, InvalidArgumentsError.class);
         InvalidArgumentsError e = new InvalidArgumentsError();
         doThrow(e).when(mockPubSubIPCEventStreamAgent).publish(any(), any(), any());
