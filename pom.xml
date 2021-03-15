@@ -30,7 +30,7 @@
         <shadowmanagerjar.name>ShadowManager</shadowmanagerjar.name>
 
         <h2.version>1.4.200</h2.version>
-        <nucleus.version>2.0.0-SNAPSHOT</nucleus.version>
+        <nucleus.version>2.1.0-SNAPSHOT</nucleus.version>
         <junit.version>5.6.2</junit.version>
         <mockito.version>3.2.4</mockito.version>
         <lombok.version>1.18.10</lombok.version>
@@ -253,7 +253,7 @@
         <dependency>
             <groupId>com.aws.greengrass</groupId>
             <artifactId>nucleus</artifactId>
-            <version>2.0.0-SNAPSHOT</version>
+            <version>${nucleus.version}</version>
             <scope>provided</scope>
         </dependency>
         <!-- https://mvnrepository.com/artifact/org.flywaydb/flyway-core -->
@@ -283,7 +283,7 @@
         <dependency>
             <groupId>com.aws.greengrass</groupId>
             <artifactId>nucleus</artifactId>
-            <version>2.0.0-SNAPSHOT</version>
+            <version>${nucleus.version}</version>
             <type>test-jar</type>
             <scope>test</scope>
         </dependency>
