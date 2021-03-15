@@ -36,7 +36,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      * @param thingName       The thing namespace of the shadow document.
      * @param shadowName      Name of shadow topic prefix for thing.
      * @param initialDocument The initial shadow document.
-     * @return Optional
+     * @return The shadow document inserted into the local shadow store
      */
     @Override
     public Optional<byte[]> createShadowThing(String thingName, String shadowName, byte[] initialDocument) {
@@ -57,7 +57,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      *
      * @param thingName  Name of the Thing for the shadow topic prefix.
      * @param shadowName Name of shadow topic prefix for thing.
-     * @return Optional
+     * @return The queried shadow from the local shadow store
      */
     @Override
     public Optional<byte[]> getShadowThing(String thingName, String shadowName) {
@@ -78,7 +78,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      *
      * @param thingName  Name of the Thing for the shadow topic prefix.
      * @param shadowName Name of shadow topic prefix for thing.
-     * @return Optional
+     * @return The deleted shadow from the local shadow store
      */
     @Override
     public Optional<byte[]> deleteShadowThing(String thingName, String shadowName) {
@@ -102,7 +102,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      * @param thingName   Name of the Thing for the shadow topic prefix.
      * @param shadowName  Name of shadow topic prefix for thing.
      * @param newDocument The new shadow document.
-     * @return Optional
+     * @return The updated shadow document from the local shadow store
      */
     @Override
     public Optional<byte[]> updateShadowThing(String thingName, String shadowName, byte[] newDocument) {
@@ -124,7 +124,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      * @param thingName Name of the Thing to check Named Shadows.
      * @param offset Number of Named Shadows to bypass.
      * @param limit Maximum number of Named Shadows to retrieve.
-     * @return Optional
+     * @return A limited list of named shadows matching the specified thingName
      */
     public Optional<List<String>> listNamedShadowsForThing(String thingName, int offset, int limit) {
         return execute("SELECT shadowName from documents WHERE thingName = ? LIMIT ? OFFSET ? ",

@@ -36,11 +36,19 @@ import javax.crypto.spec.SecretKeySpec;
 import static com.aws.greengrass.ipc.common.ExceptionUtil.translateExceptions;
 import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.LIST_NAMED_SHADOWS_FOR_THING;
 
-
+/**
+ * Handler class with business logic for all ListNamedShadowsForThing requests over IPC.
+ */
 public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNamedShadowsForThingOperationHandler {
     private static final Logger logger = LogManager.getLogger(ListNamedShadowsForThingIPCHandler.class);
     private static final int DEFAULT_PAGE_SIZE = 25;
     private static final int DEFAULT_OFFSET = 0;
+
+    private static final String cipherTransformation = "AES/CBC/PKCS5Padding";
+    private static final String encryptionAlgorithm = "AES";
+    private static final String secretKeyAlgorithm = "PBKDF2WithHmacSHA256";
+    private static final int PBEKeyIterationCount = 65536;
+    private static final int PBEKeyLength = 256;
 
     private final String serviceName;
 
@@ -163,9 +171,10 @@ public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNam
      * @param thingName thingName for the listNameShadowsForThing Request
      * @return The offset used in the list named shadows query
      */
-    private int decodeOffsetFromToken(String nextToken, String clientId, String thingName) {
+    private static int decodeOffsetFromToken(String nextToken, String clientId, String thingName) {
         try {
-            Cipher cipher = createCipher(clientId, thingName, Cipher.DECRYPT_MODE);
+            String secret = clientId + thingName;
+            Cipher cipher = createCipher(secret, thingName, Cipher.DECRYPT_MODE);
             String offsetString = new String(cipher.doFinal(Base64.getDecoder().decode(nextToken)));
             return Integer.parseInt(offsetString);
 
@@ -185,9 +194,10 @@ public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNam
      * @param thingName thingName for the ListNamedShadowsForThing Request
      * @return A generated string token to be returned as the nextToken in the ListNamedShadowsForThing response
      */
-    private String generateToken(int offset, String clientId, String thingName) {
+    private static String generateToken(int offset, String clientId, String thingName) {
         try {
-            Cipher cipher = createCipher(clientId, thingName, Cipher.ENCRYPT_MODE);
+            String secret = clientId + thingName;
+            Cipher cipher = createCipher(secret, thingName, Cipher.ENCRYPT_MODE);
             return Base64.getEncoder()
                     .encodeToString(cipher.doFinal(String.valueOf(offset).getBytes()));
 
@@ -206,19 +216,18 @@ public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNam
     /**
      * Creates a Cipher used to encrypt/decrypt the offset using the clientId and thingName as the secretKey.
      *
-     * @param clientId             client which requested the ListNamedShadowsForThing Request
-     * @param thingName            thingName for the ListNamedShadowsForThing Request
+     * @param secret               secret key used in the encryption process
+     * @param salt                 salt value used to randomize the encrypted password
      * @param cipherEncryptionMode mode to determine whether Cipher object will encrypt or decrypt
      * @return A Cipher object used to encrypt/decrypt a token
      */
-    private Cipher createCipher(String clientId, String thingName, int cipherEncryptionMode) throws Exception {
-        String secret = clientId + thingName;
-        KeySpec keySpec = new PBEKeySpec(secret.toCharArray(), thingName.getBytes(), 65536, 256);
-        SecretKeyFactory secretKeyFactory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+    private static Cipher createCipher(String secret, String salt, int cipherEncryptionMode) throws Exception {
+        KeySpec keySpec = new PBEKeySpec(secret.toCharArray(), salt.getBytes(), PBEKeyIterationCount, PBEKeyLength);
+        SecretKeyFactory secretKeyFactory = SecretKeyFactory.getInstance(secretKeyAlgorithm);
         SecretKey secretKey = secretKeyFactory.generateSecret(keySpec);
-        SecretKeySpec secretKeySpec = new SecretKeySpec(secretKey.getEncoded(), "AES");
+        SecretKeySpec secretKeySpec = new SecretKeySpec(secretKey.getEncoded(), encryptionAlgorithm);
 
-        Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+        Cipher cipher = Cipher.getInstance(cipherTransformation);
         byte[] iv = new byte[cipher.getBlockSize()];
         IvParameterSpec ivParams = new IvParameterSpec(iv);
         cipher.init(cipherEncryptionMode, secretKeySpec, ivParams);
