@@ -21,12 +21,19 @@ import software.amazon.awssdk.aws.greengrass.model.UnauthorizedError;
 import software.amazon.awssdk.eventstreamrpc.OperationContinuationHandlerContext;
 import software.amazon.awssdk.eventstreamrpc.model.EventStreamJsonMessage;
 
+import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
+import java.security.spec.InvalidKeySpecException;
 import java.security.spec.KeySpec;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
+import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
 import javax.crypto.SecretKey;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.IvParameterSpec;
@@ -89,7 +96,6 @@ public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNam
      */
     @Override
     public ListNamedShadowsForThingResponse handleRequest(ListNamedShadowsForThingRequest request) {
-
         return translateExceptions(() -> {
             String thingName = request.getThingName();
 
@@ -178,11 +184,11 @@ public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNam
             String offsetString = new String(cipher.doFinal(Base64.getDecoder().decode(nextToken)));
             return Integer.parseInt(offsetString);
 
-        } catch (Exception e) {
+        } catch (BadPaddingException | IllegalBlockSizeException e) {
             logger.atWarn()
                     .kv(IPCUtil.LOG_NEXT_TOKEN_KEY, nextToken)
-                    .log();
-            throw new InvalidArgumentsError("Unable to decode nextToken");
+                    .log("Invalid nextToken passed in");
+            throw new InvalidArgumentsError("Invalid nextToken passed in");
         }
     }
 
@@ -201,14 +207,14 @@ public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNam
             return Base64.getEncoder()
                     .encodeToString(cipher.doFinal(String.valueOf(offset).getBytes()));
 
-        } catch (Exception e) {
+        } catch (IllegalBlockSizeException | BadPaddingException e) {
             ServiceError serviceError = new ServiceError("Unexpected error occurred in trying to "
                     + "list named shadows for thing. Unable to generate nextToken");
             logger.atError()
                     .setEventType(IPCUtil.LogEvents.LIST_NAMED_SHADOWS.code())
                     .kv(IPCUtil.LOG_THING_NAME_KEY, thingName)
-                    .setCause(serviceError)
-                    .log();
+                    .setCause(e)
+                    .log("Failed to generate nextToken");
             throw serviceError;
         }
     }
@@ -221,18 +227,30 @@ public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNam
      * @param cipherEncryptionMode mode to determine whether Cipher object will encrypt or decrypt
      * @return A Cipher object used to encrypt/decrypt a token
      */
-    private static Cipher createCipher(String secret, String salt, int cipherEncryptionMode) throws Exception {
-        KeySpec keySpec = new PBEKeySpec(secret.toCharArray(), salt.getBytes(), PBEKeyIterationCount, PBEKeyLength);
-        SecretKeyFactory secretKeyFactory = SecretKeyFactory.getInstance(secretKeyAlgorithm);
-        SecretKey secretKey = secretKeyFactory.generateSecret(keySpec);
-        SecretKeySpec secretKeySpec = new SecretKeySpec(secretKey.getEncoded(), encryptionAlgorithm);
+    private static Cipher createCipher(String secret, String salt, int cipherEncryptionMode) {
+        try {
+            KeySpec keySpec = new PBEKeySpec(secret.toCharArray(), salt.getBytes(), PBEKeyIterationCount, PBEKeyLength);
+            SecretKeyFactory secretKeyFactory = SecretKeyFactory.getInstance(secretKeyAlgorithm);
+            SecretKey secretKey = secretKeyFactory.generateSecret(keySpec);
+            SecretKeySpec secretKeySpec = new SecretKeySpec(secretKey.getEncoded(), encryptionAlgorithm);
 
-        Cipher cipher = Cipher.getInstance(cipherTransformation);
-        byte[] iv = new byte[cipher.getBlockSize()];
-        IvParameterSpec ivParams = new IvParameterSpec(iv);
-        cipher.init(cipherEncryptionMode, secretKeySpec, ivParams);
+            Cipher cipher = Cipher.getInstance(cipherTransformation);
+            byte[] iv = new byte[cipher.getBlockSize()];
+            IvParameterSpec ivParams = new IvParameterSpec(iv);
+            cipher.init(cipherEncryptionMode, secretKeySpec, ivParams);
 
-        return cipher;
+            return cipher;
+
+        } catch (InvalidAlgorithmParameterException | InvalidKeyException | InvalidKeySpecException
+                    | NoSuchAlgorithmException | NoSuchPaddingException e) {
+            ServiceError serviceError = new ServiceError("Unexpected error occurred in trying to "
+                    + "list named shadows for thing. Failed to generate cipher.");
+            logger.atError()
+                    .setEventType(IPCUtil.LogEvents.LIST_NAMED_SHADOWS.code())
+                    .setCause(e)
+                    .log("Failed to generate cipher");
+            throw serviceError;
+        }
     }
 
 }
