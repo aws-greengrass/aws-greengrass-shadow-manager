@@ -17,10 +17,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import javax.inject.Inject;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.sql.Array;
 import java.sql.SQLException;
 import java.util.*;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.*;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
@@ -172,21 +174,19 @@ public class ShadowManagerDAOImplTest {
     }
 
     @Test
-    void testListNamedShadowsForThing() throws Exception {
+    void GIVEN_multiple_named_shadows_for_thing_WHEN_list_named_shadows_for_thing_THEN_return_named_shadow_list() throws Exception {
         for (String shadowName : SHADOW_NAME_LIST) {
-            System.out.println(shadowName);
             dao.updateShadowThing(THING_NAME, shadowName, UPDATED_DOCUMENT);
         }
 
         Optional<List<String>> listShadowResults = dao.listNamedShadowsForThing(THING_NAME, DEFAULT_OFFSET, DEFAULT_LIMIT);
-        assertTrue(listShadowResults.isPresent());
-        assertEquals(SHADOW_NAME_LIST, listShadowResults.get());
+        assertThat("has named shadow results", listShadowResults.isPresent(), is(true));
+        assertThat(listShadowResults.get(), is(equalTo(SHADOW_NAME_LIST)));
     }
 
     @Test
-    void testListNamedShadowsForThingWithOffsetAndLimit() throws Exception {
+    void GIVEN_offset_and_limit_WHEN_list_named_shadows_for_thing_THEN_return_named_shadow_subset() throws Exception {
         for (String shadowName : SHADOW_NAME_LIST) {
-            System.out.println(shadowName);
             dao.updateShadowThing(THING_NAME, shadowName, UPDATED_DOCUMENT);
         }
 
@@ -194,15 +194,15 @@ public class ShadowManagerDAOImplTest {
         int limit = 2;
         Optional<List<String>> listShadowResults = dao.listNamedShadowsForThing(THING_NAME, offset, limit);
         List<String> expected_paginated_list = Arrays.asList("bravo", "charlie");
-        assertTrue(listShadowResults.isPresent());
-        assertEquals(expected_paginated_list, listShadowResults.get());
+        assertThat("has named shadow results", listShadowResults.isPresent(), is(true));
+        assertThat(listShadowResults.get(), is(equalTo(expected_paginated_list)));
     }
 
     @Test
-    void testListNamedShadowsForThingWithNoShadowNames() throws Exception {
+    void GIVEN_no_named_shadows_for_thing_WHEN_list_named_shadows_for_thing_THEN_return_empty_list() throws Exception {
         Optional<List<String>> listShadowResults = dao.listNamedShadowsForThing(THING_NAME, DEFAULT_OFFSET, DEFAULT_LIMIT);
-        assertTrue(listShadowResults.isPresent());
-        assertTrue(listShadowResults.get().isEmpty());
+        assertThat("returned empty list is not null", listShadowResults.isPresent(), is(true));
+        assertThat(listShadowResults.get().isEmpty(), is(true));
     }
 
 }
