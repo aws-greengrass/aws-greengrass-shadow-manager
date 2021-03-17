@@ -12,6 +12,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import javax.inject.Inject;
@@ -32,9 +34,9 @@ public class ShadowManagerDAOImplTest {
     private static final String SHADOW_NAME = "testShadow";
     private static final String NO_SHADOW_NAME = "";
     private static final String MISSING_THING_NAME = "missingTestThing";
-    private static final byte[] BASE_DOCUMENT =  "{\"id\": 1, \"name\": \"The Beatles\"}".getBytes();
-    private static final byte[] NO_SHADOW_NAME_BASE_DOCUMENT =  "{\"id\": 2, \"name\": \"The Beach Boys\"}".getBytes();
-    private static final byte[] UPDATED_DOCUMENT =  "{\"id\": 1, \"name\": \"New Name\"}".getBytes();
+    private static final byte[] BASE_DOCUMENT = "{\"id\": 1, \"name\": \"The Beatles\"}".getBytes();
+    private static final byte[] NO_SHADOW_NAME_BASE_DOCUMENT = "{\"id\": 2, \"name\": \"The Beach Boys\"}".getBytes();
+    private static final byte[] UPDATED_DOCUMENT = "{\"id\": 1, \"name\": \"New Name\"}".getBytes();
     private static final List<String> SHADOW_NAME_LIST = Arrays.asList("alpha", "bravo", "charlie", "delta");
     private static final int DEFAULT_OFFSET = 0;
     private static final int DEFAULT_LIMIT = 100;
@@ -198,11 +200,40 @@ public class ShadowManagerDAOImplTest {
         assertThat(listShadowResults.get(), is(equalTo(expected_paginated_list)));
     }
 
-    @Test
-    void GIVEN_no_named_shadows_for_thing_WHEN_list_named_shadows_for_thing_THEN_return_empty_list() throws Exception {
-        Optional<List<String>> listShadowResults = dao.listNamedShadowsForThing(THING_NAME, DEFAULT_OFFSET, DEFAULT_LIMIT);
-        assertThat("returned empty list is not null", listShadowResults.isPresent(), is(true));
-        assertThat(listShadowResults.get().isEmpty(), is(true));
-    }
+    @ParameterizedTest
+    @CsvSource({
+            "testThing, 0, 5",   // limit greater than number of named shadows
+            "testThing, 0, 2",   // limit is less than number of named shadows
+            "testThing, 0, -10", // limit is negative
+            "testThing, 4, 5",   // offset is equal to or greater than number of named shadows
+            "testThing, -10, 5", // offset is negative
+            "missingTestThing, 0, 5", // list for thing that does not exist
+            "classicThing, 0, 5"      // list for thing that does not have named shadows
+    })
+    void GIVEN_valid_edge_inputs_WHEN_list_named_shadows_for_thing_THEN_return_valid_results(String thingName, String offsetString, String pageSizeString) throws Exception {
+        for (String shadowName : SHADOW_NAME_LIST) {
+            dao.updateShadowThing(THING_NAME, shadowName, UPDATED_DOCUMENT);
+        }
 
+        final String CLASSIC_SHADOW_THING = "classicThing";
+        dao.updateShadowThing(CLASSIC_SHADOW_THING, NO_SHADOW_NAME, UPDATED_DOCUMENT);
+
+        int offset = Integer.parseInt(offsetString);
+        int pageSize = Integer.parseInt(pageSizeString);
+
+        Optional<List<String>> listShadowResults = dao.listNamedShadowsForThing(thingName, offset, pageSize);
+        assertThat("has valid named shadow results", listShadowResults.isPresent(), is(true));
+
+        // cases where valid results are empty (missing thing, thing with no named shadows, offset greater/equal to number of named shadows)
+        if (thingName.equals(MISSING_THING_NAME)
+                || thingName.equals(CLASSIC_SHADOW_THING)
+                || offset >= SHADOW_NAME_LIST.size()) {
+            assertThat(Collections.emptyList(), is(equalTo(listShadowResults.get())));
+        }
+
+        // cases where offset and limit are ignored (offset/limit are negative)
+        if (offset < 0 || pageSize < 0) {
+            assertThat("Original results remained the same", SHADOW_NAME_LIST, is(equalTo(listShadowResults.get())));
+        }
+    }
 }

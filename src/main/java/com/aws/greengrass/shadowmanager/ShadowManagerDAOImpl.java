@@ -7,6 +7,7 @@ package com.aws.greengrass.shadowmanager;
 
 
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
+import com.aws.greengrass.shadowmanager.ipc.IPCUtil;
 
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -134,7 +135,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
                     preparedStatement.setInt(3, offset);
                     ResultSet resultSet = preparedStatement.executeQuery();
                     List<String> namedShadowList = new ArrayList<>();
-                    while (resultSet.next()) {
+                    while (resultSet.next() && !resultSet.getString(1).equals(IPCUtil.CLASSIC_SHADOW_IDENTIFIER)) {
                         namedShadowList.add(resultSet.getString(1));
                     }
                     return Optional.of(namedShadowList);
