@@ -7,7 +7,6 @@ package com.aws.greengrass.shadowmanager;
 
 import com.aws.greengrass.authorization.AuthorizationHandler;
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
-import com.aws.greengrass.builtin.services.pubsub.PubSubIPCEventStreamAgent;
 import com.aws.greengrass.config.Topics;
 import com.aws.greengrass.dependency.ImplementsService;
 import com.aws.greengrass.dependency.State;
@@ -15,6 +14,7 @@ import com.aws.greengrass.lifecyclemanager.PluginService;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowIPCHandler;
 import com.aws.greengrass.shadowmanager.ipc.GetThingShadowIPCHandler;
 import com.aws.greengrass.shadowmanager.ipc.ListNamedShadowsForThingIPCHandler;
+import com.aws.greengrass.shadowmanager.ipc.PubSubClientWrapper;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowIPCHandler;
 import org.flywaydb.core.api.FlywayException;
 import software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService;
@@ -59,7 +59,7 @@ public class ShadowManager extends PluginService {
     private final ShadowManagerDAO dao;
     private final ShadowManagerDatabase database;
     private final AuthorizationHandler authorizationHandler;
-    private final PubSubIPCEventStreamAgent pubSubIPCEventStreamAgent;
+    private final PubSubClientWrapper pubSubClientWrapper;
 
     @Inject
     private GreengrassCoreIPCService greengrassCoreIPCService;
@@ -67,11 +67,11 @@ public class ShadowManager extends PluginService {
     /**
      * Ctr for ShadowManager.
      *
-     * @param topics                    topics passed by the Nucleus
-     * @param database                  Local shadow database management
-     * @param dao                       Local shadow database management
-     * @param authorizationHandler      The authorization handler
-     * @param pubSubIPCEventStreamAgent The pubsub agent for new IPC
+     * @param topics               topics passed by the Nucleus
+     * @param database             Local shadow database management
+     * @param dao                  Local shadow database management
+     * @param authorizationHandler The authorization handler
+     * @param pubSubClientWrapper  The PubSub client wrapper
      */
     @Inject
     public ShadowManager(
@@ -79,12 +79,12 @@ public class ShadowManager extends PluginService {
             ShadowManagerDatabase database,
             ShadowManagerDAOImpl dao,
             AuthorizationHandler authorizationHandler,
-            PubSubIPCEventStreamAgent pubSubIPCEventStreamAgent) {
+            PubSubClientWrapper pubSubClientWrapper) {
         super(topics);
         this.database = database;
         this.authorizationHandler = authorizationHandler;
         this.dao = dao;
-        this.pubSubIPCEventStreamAgent = pubSubIPCEventStreamAgent;
+        this.pubSubClientWrapper = pubSubClientWrapper;
     }
 
     private void registerHandlers() {
@@ -98,11 +98,11 @@ public class ShadowManager extends PluginService {
         }
 
         greengrassCoreIPCService.setGetThingShadowHandler(context -> new GetThingShadowIPCHandler(context,
-                dao, authorizationHandler, pubSubIPCEventStreamAgent));
+                dao, authorizationHandler, pubSubClientWrapper));
         greengrassCoreIPCService.setDeleteThingShadowHandler(context -> new DeleteThingShadowIPCHandler(context,
-                dao, authorizationHandler, pubSubIPCEventStreamAgent));
+                dao, authorizationHandler, pubSubClientWrapper));
         greengrassCoreIPCService.setUpdateThingShadowHandler(context -> new UpdateThingShadowIPCHandler(context,
-                dao, authorizationHandler, pubSubIPCEventStreamAgent));
+                dao, authorizationHandler, pubSubClientWrapper));
         greengrassCoreIPCService.setListNamedShadowsForThingHandler(context -> new ListNamedShadowsForThingIPCHandler(
                 context, dao, authorizationHandler));
     }

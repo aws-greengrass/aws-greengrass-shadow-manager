@@ -163,7 +163,7 @@ public class ListNamedShadowsForThingIPCHandlerTest {
 
         ListNamedShadowsForThingIPCHandler listNamedShadowsForThingIPCHandler = new ListNamedShadowsForThingIPCHandler(mockContext, mockDao, mockAuthorizationHandler);
         InvalidArgumentsError thrown = assertThrows(InvalidArgumentsError.class, () -> listNamedShadowsForThingIPCHandler.handleRequest(request));
-        assertThat(thrown.getMessage(), startsWith("Unable to decode"));
+        assertThat(thrown.getMessage(), startsWith("Invalid nextToken"));
 
         verify(mockDao, times(0)).listNamedShadowsForThing(any(),
                 offsetCaptor.capture(), pageSizeCaptor.capture());
