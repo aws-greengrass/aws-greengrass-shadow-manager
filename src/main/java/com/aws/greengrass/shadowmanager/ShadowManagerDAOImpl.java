@@ -7,7 +7,6 @@ package com.aws.greengrass.shadowmanager;
 
 
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
-import com.aws.greengrass.shadowmanager.ipc.IPCUtil;
 
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -127,7 +126,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      * @param limit Maximum number of Named Shadows to retrieve.
      * @return A limited list of named shadows matching the specified thingName
      */
-    public Optional<List<String>> listNamedShadowsForThing(String thingName, int offset, int limit) {
+    public List<String> listNamedShadowsForThing(String thingName, int offset, int limit) {
         return execute("SELECT shadowName from documents WHERE thingName = ? AND shadowName != '' LIMIT ? OFFSET ? ",
                 preparedStatement -> {
                     preparedStatement.setString(1, thingName);
@@ -138,7 +137,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
                     while (resultSet.next()) {
                         namedShadowList.add(resultSet.getString(1));
                     }
-                    return Optional.of(namedShadowList);
+                    return namedShadowList;
                 });
     }
 

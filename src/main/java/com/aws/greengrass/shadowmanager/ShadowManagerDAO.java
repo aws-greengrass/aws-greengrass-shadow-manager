@@ -14,7 +14,7 @@ public interface ShadowManagerDAO {
      * @param thingName Name of the Thing for the shadow topic prefix.
      * @param shadowName Name of shadow topic prefix for thing.
      * @param initialDocument The initial shadow document.
-     * @return Optional
+     * @return The shadow document inserted into the local shadow store
      */
     Optional<byte[]> createShadowThing(String thingName, String shadowName, byte[] initialDocument);
 
@@ -22,7 +22,7 @@ public interface ShadowManagerDAO {
      * Attempts to obtain a shadow document from the local shadow storage.
      * @param thingName Name of the Thing for the shadow topic prefix.
      * @param shadowName Name of shadow topic prefix for thing.
-     * @return Optional
+     * @return The queried shadow from the local shadow store
      */
     Optional<byte[]> getShadowThing(String thingName, String shadowName);
 
@@ -30,7 +30,7 @@ public interface ShadowManagerDAO {
      * Attempts to delete a shadow document from the local shadow storage.
      * @param thingName Name of the Thing for the shadow topic prefix.
      * @param shadowName Name of shadow topic prefix for thing.
-     * @return Optional
+     * @return The deleted shadow from the local shadow store
      */
     Optional<byte[]> deleteShadowThing(String thingName, String shadowName);
 
@@ -48,8 +48,8 @@ public interface ShadowManagerDAO {
      * @param thingName Name of the Thing to check Named Shadows.
      * @param offset Number of Named Shadows to bypass.
      * @param limit Maximum number of Named Shadows to retrieve.
-     * @return Optional
+     * @return A limited list of named shadows matching the specified thingName
      */
-    Optional<List<String>> listNamedShadowsForThing(String thingName, int offset, int limit);
+    List<String> listNamedShadowsForThing(String thingName, int offset, int limit);
 
 }

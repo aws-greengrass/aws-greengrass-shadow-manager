@@ -117,17 +117,7 @@ public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNam
                         .map(token -> decodeOffsetFromToken(token, serviceName, thingName))
                         .orElse(DEFAULT_OFFSET);
 
-                List<String> results = dao.listNamedShadowsForThing(thingName, offset, pageSize)
-                        .orElseThrow(() -> {
-                            ServiceError error = new ServiceError("Unexpected error occurred in trying to "
-                                    + "list named shadows for thing.");
-                            logger.atError()
-                                    .setEventType(IPCUtil.LogEvents.LIST_NAMED_SHADOWS.code())
-                                    .kv(IPCUtil.LOG_THING_NAME_KEY, thingName)
-                                    .setCause(error)
-                                    .log();
-                            return error;
-                        });
+                List<String> results = dao.listNamedShadowsForThing(thingName, offset, pageSize);
 
                 ListNamedShadowsForThingResponse response = new ListNamedShadowsForThingResponse();
                 response.setResults(results);

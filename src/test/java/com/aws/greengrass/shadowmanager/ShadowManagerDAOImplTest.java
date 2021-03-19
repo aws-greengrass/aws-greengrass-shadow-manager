@@ -6,7 +6,6 @@
 package com.aws.greengrass.shadowmanager;
 
 import com.aws.greengrass.lifecyclemanager.Kernel;
-import com.aws.greengrass.shadowmanager.ipc.IPCUtil;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,8 +23,7 @@ import java.sql.SQLException;
 import java.util.*;
 
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
@@ -182,9 +180,10 @@ public class ShadowManagerDAOImplTest {
             dao.updateShadowThing(THING_NAME, shadowName, UPDATED_DOCUMENT);
         }
 
-        Optional<List<String>> listShadowResults = dao.listNamedShadowsForThing(THING_NAME, DEFAULT_OFFSET, DEFAULT_LIMIT);
-        assertThat("has named shadow results", listShadowResults.isPresent(), is(true));
-        assertThat(listShadowResults.get(), is(equalTo(SHADOW_NAME_LIST)));
+        List<String> listShadowResults = dao.listNamedShadowsForThing(THING_NAME, DEFAULT_OFFSET, DEFAULT_LIMIT);
+        assertThat(listShadowResults, is(notNullValue()));
+        assertThat(listShadowResults, is(not(empty())));
+        assertThat(listShadowResults, is(equalTo(SHADOW_NAME_LIST)));
     }
 
     @Test
@@ -194,10 +193,11 @@ public class ShadowManagerDAOImplTest {
         }
         dao.updateShadowThing(THING_NAME, NO_SHADOW_NAME, UPDATED_DOCUMENT);
 
-        Optional<List<String>> listShadowResults = dao.listNamedShadowsForThing(THING_NAME, DEFAULT_OFFSET, SHADOW_NAME_LIST.size());
-        assertThat("has named shadow results", listShadowResults.isPresent(), is(true));
-        assertThat(listShadowResults.get(), is(equalTo(SHADOW_NAME_LIST)));
-        assertThat(listShadowResults.get().size(), is(equalTo(SHADOW_NAME_LIST.size())));
+        List<String> listShadowResults = dao.listNamedShadowsForThing(THING_NAME, DEFAULT_OFFSET, SHADOW_NAME_LIST.size());
+        assertThat(listShadowResults, is(notNullValue()));
+        assertThat(listShadowResults, is(not(empty())));
+        assertThat(listShadowResults, is(equalTo(SHADOW_NAME_LIST)));
+        assertThat(listShadowResults.size(), is(equalTo(SHADOW_NAME_LIST.size())));
     }
 
     @Test
@@ -208,10 +208,11 @@ public class ShadowManagerDAOImplTest {
 
         int offset = 1;
         int limit = 2;
-        Optional<List<String>> listShadowResults = dao.listNamedShadowsForThing(THING_NAME, offset, limit);
+        List<String> listShadowResults = dao.listNamedShadowsForThing(THING_NAME, offset, limit);
         List<String> expected_paginated_list = Arrays.asList("bravo", "charlie");
-        assertThat("has named shadow results", listShadowResults.isPresent(), is(true));
-        assertThat(listShadowResults.get(), is(equalTo(expected_paginated_list)));
+        assertThat(listShadowResults, is(notNullValue()));
+        assertThat(listShadowResults, is(not(empty())));
+        assertThat(listShadowResults, is(equalTo(expected_paginated_list)));
     }
 
     @ParameterizedTest
@@ -235,19 +236,19 @@ public class ShadowManagerDAOImplTest {
         int offset = Integer.parseInt(offsetString);
         int pageSize = Integer.parseInt(pageSizeString);
 
-        Optional<List<String>> listShadowResults = dao.listNamedShadowsForThing(thingName, offset, pageSize);
-        assertThat("has valid named shadow results", listShadowResults.isPresent(), is(true));
+        List<String> listShadowResults = dao.listNamedShadowsForThing(thingName, offset, pageSize);
+        assertThat(listShadowResults, is(notNullValue()));
 
         // cases where valid results are empty (missing thing, thing with no named shadows, offset greater/equal to number of named shadows)
         if (thingName.equals(MISSING_THING_NAME)
                 || thingName.equals(CLASSIC_SHADOW_THING)
                 || offset >= SHADOW_NAME_LIST.size()) {
-            assertThat(Collections.emptyList(), is(equalTo(listShadowResults.get())));
+            assertThat(listShadowResults, is(empty()));
         }
 
         // cases where offset and limit are ignored (offset/limit are negative)
         if (offset < 0 || pageSize < 0) {
-            assertThat("Original results remained the same", SHADOW_NAME_LIST, is(equalTo(listShadowResults.get())));
+            assertThat("Original results remained the same", SHADOW_NAME_LIST, is(equalTo(listShadowResults)));
         }
     }
 }
