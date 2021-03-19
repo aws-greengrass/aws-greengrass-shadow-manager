@@ -129,8 +129,8 @@ public class ListNamedShadowsForThingIPCHandlerTest {
 
         verify(mockDao, times(1)).listNamedShadowsForThing(any(),
                 offsetCaptor.capture(), pageSizeCaptor.capture());
-        assertEquals(DECODED_OFFSET_VALUE, offsetCaptor.getValue());
-        assertEquals(DEFAULT_PAGE_SIZE, pageSizeCaptor.getValue());
+        assertThat(offsetCaptor.getValue(), is(equalTo(DECODED_OFFSET_VALUE)));
+        assertThat(pageSizeCaptor.getValue(), is(equalTo(DEFAULT_PAGE_SIZE)));
     }
 
     @Test
@@ -203,6 +203,8 @@ public class ListNamedShadowsForThingIPCHandlerTest {
 
         verify(mockDao, times(1)).listNamedShadowsForThing(any(),
                 offsetCaptor.capture(), pageSizeCaptor.capture());
+        assertThat(offsetCaptor.getValue(), is(equalTo(DEFAULT_OFFSET)));
+        assertThat(pageSizeCaptor.getValue(), is(equalTo(DEFAULT_PAGE_SIZE)));
     }
 
     @Test
@@ -235,5 +237,27 @@ public class ListNamedShadowsForThingIPCHandlerTest {
 
         verify(mockDao, times(1)).listNamedShadowsForThing(any(),
                 offsetCaptor.capture(), pageSizeCaptor.capture());
+        assertThat(offsetCaptor.getValue(), is(equalTo(DEFAULT_OFFSET)));
+        assertThat(pageSizeCaptor.getValue(), is(equalTo(DEFAULT_PAGE_SIZE)));
+    }
+
+    @Test
+    void GIVEN_dao_results_are_greater_than_page_size_WHEN_handle_request_THEN_throw_service_error(ExtensionContext context) throws IOException {
+        ignoreExceptionOfType(context, ServiceError.class);
+        int pageSize = 1;
+
+        ListNamedShadowsForThingRequest request = new ListNamedShadowsForThingRequest();
+        request.setThingName(THING_NAME);
+        request.setPageSize(pageSize);
+
+        ListNamedShadowsForThingIPCHandler listNamedShadowsForThingIPCHandler = new ListNamedShadowsForThingIPCHandler(mockContext, mockDao, mockAuthorizationHandler);
+        when(mockDao.listNamedShadowsForThing(any(), anyInt(), anyInt())).thenReturn(Optional.of(NAMED_SHADOW_LIST));
+        ServiceError thrown = assertThrows(ServiceError.class, () -> listNamedShadowsForThingIPCHandler.handleRequest(request));
+        assertThat(thrown.getMessage(), containsString("internal service error"));
+
+        verify(mockDao, times(1)).listNamedShadowsForThing(any(),
+                offsetCaptor.capture(), pageSizeCaptor.capture());
+        assertThat(offsetCaptor.getValue(), is(equalTo(DEFAULT_OFFSET)));
+        assertThat(pageSizeCaptor.getValue(), is(equalTo(pageSize)));
     }
 }

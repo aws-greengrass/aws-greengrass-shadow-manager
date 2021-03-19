@@ -50,6 +50,7 @@ public final class IPCUtil {
 
     /**
      * Validate the thingName and checks whether the service is authorized to run the operation on the shadow.
+     * TODO: Remove in oncoming PR to split this up
      *
      * @param authorizationHandler The pubsub agent for new IPC
      * @param opCode               The IPC defined operation code

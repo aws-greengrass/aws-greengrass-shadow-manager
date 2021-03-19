@@ -133,9 +133,18 @@ public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNam
                 response.setResults(results);
                 response.setTimestamp(Instant.now());
 
-                if (results.size() >= pageSize) {
+                if (results.size() == pageSize) {
                     String nextToken = generateToken(offset + pageSize, serviceName, thingName);
                     response.setNextToken(nextToken);
+                } else if (results.size() > pageSize) {
+                    ServiceError error = new ServiceError("Could not process ListNamedShadowsForThing "
+                            + "Request due to internal service error");
+                    logger.atError()
+                            .setEventType(IPCUtil.LogEvents.LIST_NAMED_SHADOWS.code())
+                            .kv(IPCUtil.LOG_THING_NAME_KEY, thingName)
+                            .setCause(error)
+                            .log();
+                    throw error;
                 }
                 return response;
 
@@ -208,19 +217,19 @@ public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNam
                     .encodeToString(cipher.doFinal(String.valueOf(offset).getBytes()));
 
         } catch (IllegalBlockSizeException | BadPaddingException e) {
-            ServiceError serviceError = new ServiceError("Unexpected error occurred in trying to "
-                    + "list named shadows for thing. Unable to generate nextToken");
+            ServiceError serviceError = new ServiceError("Failed to generate token");
             logger.atError()
                     .setEventType(IPCUtil.LogEvents.LIST_NAMED_SHADOWS.code())
                     .kv(IPCUtil.LOG_THING_NAME_KEY, thingName)
                     .setCause(e)
-                    .log("Failed to generate nextToken");
+                    .log("Failed to generate token");
             throw serviceError;
         }
     }
 
     /**
      * Creates a Cipher used to encrypt/decrypt the offset using the clientId and thingName as the secretKey.
+     * We use the thingName as the salt value in generating a derived secret key.
      *
      * @param secret               secret key used in the encryption process
      * @param salt                 salt value used to randomize the encrypted password
@@ -243,10 +252,10 @@ public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNam
 
         } catch (InvalidAlgorithmParameterException | InvalidKeyException | InvalidKeySpecException
                     | NoSuchAlgorithmException | NoSuchPaddingException e) {
-            ServiceError serviceError = new ServiceError("Unexpected error occurred in trying to "
-                    + "list named shadows for thing. Failed to generate cipher.");
+            ServiceError serviceError = new ServiceError("Failed to generate cipher");
             logger.atError()
                     .setEventType(IPCUtil.LogEvents.LIST_NAMED_SHADOWS.code())
+                    .kv(IPCUtil.LOG_THING_NAME_KEY, salt)
                     .setCause(e)
                     .log("Failed to generate cipher");
             throw serviceError;

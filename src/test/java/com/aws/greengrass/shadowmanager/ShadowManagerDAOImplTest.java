@@ -6,6 +6,7 @@
 package com.aws.greengrass.shadowmanager;
 
 import com.aws.greengrass.lifecyclemanager.Kernel;
+import com.aws.greengrass.shadowmanager.ipc.IPCUtil;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,7 +40,7 @@ public class ShadowManagerDAOImplTest {
     private static final byte[] UPDATED_DOCUMENT = "{\"id\": 1, \"name\": \"New Name\"}".getBytes();
     private static final List<String> SHADOW_NAME_LIST = Arrays.asList("alpha", "bravo", "charlie", "delta");
     private static final int DEFAULT_OFFSET = 0;
-    private static final int DEFAULT_LIMIT = 100;
+    private static final int DEFAULT_LIMIT = 25;
 
 
     @TempDir
@@ -184,6 +185,19 @@ public class ShadowManagerDAOImplTest {
         Optional<List<String>> listShadowResults = dao.listNamedShadowsForThing(THING_NAME, DEFAULT_OFFSET, DEFAULT_LIMIT);
         assertThat("has named shadow results", listShadowResults.isPresent(), is(true));
         assertThat(listShadowResults.get(), is(equalTo(SHADOW_NAME_LIST)));
+    }
+
+    @Test
+    void GIVEN_classic_and_named_shadows_WHEN_list_named_shadows_for_thing_THEN_return_list_does_not_include_classic_shadow() throws Exception {
+        for (String shadowName : SHADOW_NAME_LIST) {
+            dao.updateShadowThing(THING_NAME, shadowName, UPDATED_DOCUMENT);
+        }
+        dao.updateShadowThing(THING_NAME, NO_SHADOW_NAME, UPDATED_DOCUMENT);
+
+        Optional<List<String>> listShadowResults = dao.listNamedShadowsForThing(THING_NAME, DEFAULT_OFFSET, SHADOW_NAME_LIST.size());
+        assertThat("has named shadow results", listShadowResults.isPresent(), is(true));
+        assertThat(listShadowResults.get(), is(equalTo(SHADOW_NAME_LIST)));
+        assertThat(listShadowResults.get().size(), is(equalTo(SHADOW_NAME_LIST.size())));
     }
 
     @Test

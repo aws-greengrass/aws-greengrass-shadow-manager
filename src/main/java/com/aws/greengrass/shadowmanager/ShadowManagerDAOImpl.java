@@ -128,14 +128,14 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      * @return A limited list of named shadows matching the specified thingName
      */
     public Optional<List<String>> listNamedShadowsForThing(String thingName, int offset, int limit) {
-        return execute("SELECT shadowName from documents WHERE thingName = ? LIMIT ? OFFSET ? ",
+        return execute("SELECT shadowName from documents WHERE thingName = ? AND shadowName != '' LIMIT ? OFFSET ? ",
                 preparedStatement -> {
                     preparedStatement.setString(1, thingName);
                     preparedStatement.setInt(2, limit);
                     preparedStatement.setInt(3, offset);
                     ResultSet resultSet = preparedStatement.executeQuery();
                     List<String> namedShadowList = new ArrayList<>();
-                    while (resultSet.next() && !resultSet.getString(1).equals(IPCUtil.CLASSIC_SHADOW_IDENTIFIER)) {
+                    while (resultSet.next()) {
                         namedShadowList.add(resultSet.getString(1));
                     }
                     return Optional.of(namedShadowList);
