@@ -26,6 +26,7 @@ public final class IPCUtil {
     static final String LOG_THING_NAME_KEY = "thing name";
     static final String LOG_SHADOW_NAME_KEY = "shadow name";
     static final String LOG_NEXT_TOKEN_KEY = "nextToken";
+    static final String LOG_PAGE_SIZE_KEY = "pageSize";
     public static final String CLASSIC_SHADOW_IDENTIFIER = "";
 
     public enum LogEvents {

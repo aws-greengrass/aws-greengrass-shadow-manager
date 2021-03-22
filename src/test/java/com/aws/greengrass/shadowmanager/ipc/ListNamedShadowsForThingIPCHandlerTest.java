@@ -15,6 +15,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
@@ -24,6 +27,7 @@ import software.amazon.awssdk.crt.eventstream.ServerConnectionContinuation;
 import software.amazon.awssdk.eventstreamrpc.AuthenticationData;
 import software.amazon.awssdk.eventstreamrpc.OperationContinuationHandlerContext;
 
+import javax.crypto.BadPaddingException;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
@@ -72,10 +76,17 @@ public class ListNamedShadowsForThingIPCHandlerTest {
         when(mockAuthenticationData.getIdentityLabel()).thenReturn(TEST_SERVICE);
     }
 
-    @Test
-    void GIVEN_valid_request_WHEN_handle_request_THEN_return_list_of_named_shadows() {
+    @ParameterizedTest
+    @NullAndEmptySource
+    void GIVEN_valid_request_WHEN_handle_request_THEN_return_valid_response(String nextToken) {
         ListNamedShadowsForThingRequest request = new ListNamedShadowsForThingRequest();
         request.setThingName(THING_NAME);
+        request.setNextToken(nextToken);
+
+        // only tests for null pageSize
+        if (nextToken == null) {
+            request.setPageSize(null);
+        }
 
         ListNamedShadowsForThingIPCHandler listNamedShadowsForThingIPCHandler = new ListNamedShadowsForThingIPCHandler(mockContext, mockDao, mockAuthorizationHandler);
         when(mockDao.listNamedShadowsForThing(any(), anyInt(), anyInt())).thenReturn(NAMED_SHADOW_LIST);
@@ -132,21 +143,16 @@ public class ListNamedShadowsForThingIPCHandlerTest {
         assertThat(pageSizeCaptor.getValue(), is(equalTo(DEFAULT_PAGE_SIZE)));
     }
 
-    @Test
-    void GIVEN_invalid_page_size_WHEN_handle_request_THEN_throw_invalid_arguments_error(ExtensionContext context) {
+    @ParameterizedTest
+    @ValueSource(ints = {-1, 0, 101})
+    void GIVEN_invalid_page_size_WHEN_handle_request_THEN_throw_invalid_arguments_error(int pageSize, ExtensionContext context) {
         ignoreExceptionOfType(context, InvalidArgumentsError.class);
         ListNamedShadowsForThingRequest request = new ListNamedShadowsForThingRequest();
         request.setThingName(THING_NAME);
+        request.setPageSize(pageSize);
 
-        // test value at 0
-        request.setPageSize(0);
         ListNamedShadowsForThingIPCHandler listNamedShadowsForThingIPCHandler = new ListNamedShadowsForThingIPCHandler(mockContext, mockDao, mockAuthorizationHandler);
         InvalidArgumentsError thrown = assertThrows(InvalidArgumentsError.class, () -> listNamedShadowsForThingIPCHandler.handleRequest(request));
-        assertThat(thrown.getMessage(), startsWith("pageSize argument must"));
-
-        // test value at 101
-        request.setPageSize(101);
-        thrown = assertThrows(InvalidArgumentsError.class, () -> listNamedShadowsForThingIPCHandler.handleRequest(request));
         assertThat(thrown.getMessage(), startsWith("pageSize argument must"));
 
         verify(mockDao, times(0)).listNamedShadowsForThing(any(),
@@ -155,7 +161,7 @@ public class ListNamedShadowsForThingIPCHandlerTest {
 
     @Test
     void GIVEN_next_token_used_from_different_thing_WHEN_handle_request_THEN_throw_invalid_arguments_error(ExtensionContext context) {
-        ignoreExceptionOfType(context, InvalidArgumentsError.class);
+        ignoreExceptionOfType(context, BadPaddingException.class);
         ListNamedShadowsForThingRequest request = new ListNamedShadowsForThingRequest();
         request.setThingName("DifferentThingName");
         request.setNextToken(EXPECTED_TOKEN_WITH_OFFSET);
@@ -168,20 +174,15 @@ public class ListNamedShadowsForThingIPCHandlerTest {
                 offsetCaptor.capture(), pageSizeCaptor.capture());
     }
 
-    @Test
-    void GIVEN_missing_thing_name_WHEN_handle_request_THEN_throw_invalid_arguments_error(ExtensionContext context) {
+    @ParameterizedTest
+    @NullAndEmptySource
+    void GIVEN_missing_thing_name_WHEN_handle_request_THEN_throw_invalid_arguments_error(String thingName, ExtensionContext context) {
         ignoreExceptionOfType(context, InvalidArgumentsError.class);
-
-        // check if thingName omitted from request
         ListNamedShadowsForThingRequest request = new ListNamedShadowsForThingRequest();
+        request.setThingName(thingName);
 
         ListNamedShadowsForThingIPCHandler listNamedShadowsForThingIPCHandler = new ListNamedShadowsForThingIPCHandler(mockContext, mockDao, mockAuthorizationHandler);
         InvalidArgumentsError thrown = assertThrows(InvalidArgumentsError.class, () -> listNamedShadowsForThingIPCHandler.handleRequest(request));
-        assertThat(thrown.getMessage(), startsWith("ThingName absent"));
-
-        // check if thingName was empty string
-        request.setThingName("");
-        thrown = assertThrows(InvalidArgumentsError.class, () -> listNamedShadowsForThingIPCHandler.handleRequest(request));
         assertThat(thrown.getMessage(), startsWith("ThingName absent"));
 
         verify(mockDao, times(0)).listNamedShadowsForThing(any(),
