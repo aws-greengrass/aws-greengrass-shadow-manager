@@ -79,7 +79,7 @@ public final class IPCUtil {
             throws AuthorizationException, InvalidArgumentsError {
 
         if (Utils.isEmpty(thingName)) {
-            throw new InvalidArgumentsError("ThingName absent in request");
+            throw new IllegalArgumentException("ThingName absent in request");
         }
 
         StringJoiner shadowResource = new StringJoiner("/");

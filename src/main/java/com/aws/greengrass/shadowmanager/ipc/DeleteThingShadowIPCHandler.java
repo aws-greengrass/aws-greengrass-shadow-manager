@@ -129,7 +129,7 @@ public class DeleteThingShadowIPCHandler extends GeneratedAbstractDeleteThingSha
                         .publishOperation(Operation.DELETE_SHADOW)
                         .build());
                 throw new UnauthorizedError(e.getMessage());
-            } catch (InvalidArgumentsError e) {
+            } catch (IllegalArgumentException e) {
                 logger.atWarn()
                         .setEventType(IPCUtil.LogEvents.DELETE_THING_SHADOW.code())
                         .setCause(e)
@@ -141,7 +141,7 @@ public class DeleteThingShadowIPCHandler extends GeneratedAbstractDeleteThingSha
                         .errorMessage(ErrorMessage.INVALID_CLIENT_TOKEN_MESSAGE)
                         .publishOperation(Operation.DELETE_SHADOW)
                         .build());
-                throw e;
+                throw new InvalidArgumentsError(e.getMessage());
             } catch (ShadowManagerDataException e) {
                 logger.atError()
                         .setEventType(IPCUtil.LogEvents.DELETE_THING_SHADOW.code())

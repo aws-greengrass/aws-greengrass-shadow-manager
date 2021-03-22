@@ -105,7 +105,7 @@ public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNam
                         .orElse(DEFAULT_PAGE_SIZE);
 
                 if (pageSize < 1 || pageSize > 100) {
-                    throw new InvalidArgumentsError("pageSize argument must be between 1 and 100");
+                    throw new IllegalArgumentException("pageSize argument must be between 1 and 100");
                 }
 
                 int offset = DEFAULT_OFFSET;
@@ -144,24 +144,15 @@ public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNam
                         .kv(IPCUtil.LOG_THING_NAME_KEY, thingName)
                         .log("Not authorized to list named shadows for thing");
                 throw new UnauthorizedError(e.getMessage());
-            } catch (BadPaddingException | IllegalBlockSizeException | InvalidArgumentsError e) {
-                InvalidArgumentsError error = new InvalidArgumentsError(e.getMessage());
-
-                // set log message if error occurred when decrypting nextToken argument
-                String logMessage = "";
-                if (e instanceof BadPaddingException || e instanceof IllegalBlockSizeException) {
-                    logMessage = "Invalid nextToken argument";
-                    error.setMessage(logMessage);
-                }
-
+            } catch (IllegalArgumentException e) {
                 logger.atWarn()
                         .setEventType(IPCUtil.LogEvents.LIST_NAMED_SHADOWS.code())
                         .setCause(e)
                         .kv(IPCUtil.LOG_THING_NAME_KEY, thingName)
                         .kv(IPCUtil.LOG_PAGE_SIZE_KEY, request.getPageSize())
                         .kv(IPCUtil.LOG_NEXT_TOKEN_KEY, request.getNextToken())
-                        .log(logMessage);
-                throw error;
+                        .log();
+                throw new InvalidArgumentsError(e.getMessage());
             } catch (ShadowManagerDataException | GeneralSecurityException e) {
                 logger.atError()
                     .setEventType(IPCUtil.LogEvents.LIST_NAMED_SHADOWS.code())
@@ -187,11 +178,15 @@ public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNam
      * @return The offset used in the list named shadows query
      */
     private static int decodeOffsetFromToken(String nextToken, String clientId, String thingName)
-            throws BadPaddingException, IllegalBlockSizeException, GeneralSecurityException {
-        String secret = clientId + thingName;
-        Cipher cipher = createCipher(secret, thingName, Cipher.DECRYPT_MODE);
-        String offsetString = new String(cipher.doFinal(Base64.getDecoder().decode(nextToken)));
-        return Integer.parseInt(offsetString);
+            throws GeneralSecurityException, IllegalArgumentException {
+        try {
+            String secret = clientId + thingName;
+            Cipher cipher = createCipher(secret, thingName, Cipher.DECRYPT_MODE);
+            String offsetString = new String(cipher.doFinal(Base64.getDecoder().decode(nextToken)));
+            return Integer.parseInt(offsetString);
+        } catch (BadPaddingException | IllegalBlockSizeException e) {
+            throw new IllegalArgumentException("Invalid nextToken argument", e);
+        }
     }
 
     /**

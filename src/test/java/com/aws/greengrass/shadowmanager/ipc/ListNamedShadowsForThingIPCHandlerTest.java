@@ -146,7 +146,7 @@ public class ListNamedShadowsForThingIPCHandlerTest {
     @ParameterizedTest
     @ValueSource(ints = {-1, 0, 101})
     void GIVEN_invalid_page_size_WHEN_handle_request_THEN_throw_invalid_arguments_error(int pageSize, ExtensionContext context) {
-        ignoreExceptionOfType(context, InvalidArgumentsError.class);
+        ignoreExceptionOfType(context, IllegalArgumentException.class);
         ListNamedShadowsForThingRequest request = new ListNamedShadowsForThingRequest();
         request.setThingName(THING_NAME);
         request.setPageSize(pageSize);
@@ -161,6 +161,7 @@ public class ListNamedShadowsForThingIPCHandlerTest {
 
     @Test
     void GIVEN_next_token_used_from_different_thing_WHEN_handle_request_THEN_throw_invalid_arguments_error(ExtensionContext context) {
+        ignoreExceptionOfType(context, IllegalArgumentException.class);
         ignoreExceptionOfType(context, BadPaddingException.class);
         ListNamedShadowsForThingRequest request = new ListNamedShadowsForThingRequest();
         request.setThingName("DifferentThingName");
@@ -177,6 +178,7 @@ public class ListNamedShadowsForThingIPCHandlerTest {
     @ParameterizedTest
     @NullAndEmptySource
     void GIVEN_missing_thing_name_WHEN_handle_request_THEN_throw_invalid_arguments_error(String thingName, ExtensionContext context) {
+        ignoreExceptionOfType(context, IllegalArgumentException.class);
         ignoreExceptionOfType(context, InvalidArgumentsError.class);
         ListNamedShadowsForThingRequest request = new ListNamedShadowsForThingRequest();
         request.setThingName(thingName);

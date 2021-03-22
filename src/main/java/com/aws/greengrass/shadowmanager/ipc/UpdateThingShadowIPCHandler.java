@@ -96,7 +96,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                 IPCUtil.validateThingNameAndDoAuthorization(authorizationHandler, UPDATE_THING_SHADOW,
                         serviceName, thingName, shadowName);
                 if (payload == null || payload.length == 0) {
-                    throw new InvalidArgumentsError("Missing update payload");
+                    throw new IllegalArgumentException("Missing update payload");
                 }
                 byte[] source = dao.getShadowThing(thingName, shadowName)
                         .orElse(new byte[0]);
@@ -178,7 +178,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                         .publishOperation(Operation.UPDATE_SHADOW)
                         .build());
                 throw e;
-            } catch (InvalidArgumentsError e) {
+            } catch (IllegalArgumentException e) {
                 logger.atWarn()
                         .setEventType(IPCUtil.LogEvents.UPDATE_THING_SHADOW.code())
                         .setCause(e)
@@ -190,7 +190,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                         .errorMessage(ErrorMessage.INVALID_CLIENT_TOKEN_MESSAGE)
                         .publishOperation(Operation.UPDATE_SHADOW)
                         .build());
-                throw e;
+                throw new InvalidArgumentsError(e.getMessage());
             } catch (ShadowManagerDataException e) {
                 logger.atError()
                         .setEventType(IPCUtil.LogEvents.UPDATE_THING_SHADOW.code())

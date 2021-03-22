@@ -124,7 +124,7 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
                         .publishOperation(Operation.GET_SHADOW)
                         .build());
                 throw new UnauthorizedError(e.getMessage());
-            } catch (InvalidArgumentsError e) {
+            } catch (IllegalArgumentException e) {
                 logger.atWarn()
                         .setEventType(IPCUtil.LogEvents.GET_THING_SHADOW.code())
                         .setCause(e)
@@ -136,7 +136,7 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
                         .errorMessage(ErrorMessage.INVALID_CLIENT_TOKEN_MESSAGE)
                         .publishOperation(Operation.GET_SHADOW)
                         .build());
-                throw e;
+                throw new InvalidArgumentsError(e.getMessage());
             } catch (ShadowManagerDataException e) {
                 logger.atError()
                         .setEventType(IPCUtil.LogEvents.GET_THING_SHADOW.code())
