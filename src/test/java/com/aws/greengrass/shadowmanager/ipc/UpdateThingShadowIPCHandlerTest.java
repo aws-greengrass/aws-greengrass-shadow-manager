@@ -19,6 +19,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
@@ -190,7 +192,7 @@ class UpdateThingShadowIPCHandlerTest {
 
     @Test
     void GIVEN_update_thing_shadow_ipc_handler_WHEN_missing_payload_THEN_update_thing_shadow(ExtensionContext context) {
-        ignoreExceptionOfType(context, InvalidArgumentsError.class);
+        ignoreExceptionOfType(context, IllegalArgumentException.class);
         UpdateThingShadowRequest request = new UpdateThingShadowRequest();
         request.setThingName(THING_NAME);
         request.setShadowName(SHADOW_NAME);
@@ -234,11 +236,12 @@ class UpdateThingShadowIPCHandlerTest {
         assertEquals(IPCUtil.LogEvents.UPDATE_THING_SHADOW.code, rejectRequestCaptor.getAllValues().get(0).getPublishOperation().getLogEventType());
     }
 
-    @Test
-    void GIVEN_update_thing_shadow_ipc_handler_WHEN_missing_thing_name_THEN_throw_invalid_arguments_exception(ExtensionContext context) {
-        ignoreExceptionOfType(context, InvalidArgumentsError.class);
+    @ParameterizedTest
+    @NullAndEmptySource
+    void GIVEN_missing_thing_name_WHEN_handle_request_THEN_throw_invalid_arguments_error(String thingName, ExtensionContext context) {
+        ignoreExceptionOfType(context, IllegalArgumentException.class);
         UpdateThingShadowRequest request = new UpdateThingShadowRequest();
-        request.setThingName("");
+        request.setThingName(thingName);
         request.setShadowName(SHADOW_NAME);
         request.setPayload(UPDATE_DOCUMENT);
 
@@ -259,7 +262,7 @@ class UpdateThingShadowIPCHandlerTest {
 
     @Test
     void GIVEN_update_thing_shadow_ipc_handler_WHEN_missing_payload_THEN_throw_invalid_arguments_exception(ExtensionContext context) {
-        ignoreExceptionOfType(context, InvalidArgumentsError.class);
+        ignoreExceptionOfType(context, IllegalArgumentException.class);
         UpdateThingShadowRequest request = new UpdateThingShadowRequest();
         request.setThingName(THING_NAME);
         request.setShadowName(SHADOW_NAME);

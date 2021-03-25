@@ -12,17 +12,19 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import javax.inject.Inject;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.sql.SQLException;
-import java.util.Optional;
+import java.util.*;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 public class ShadowManagerDAOImplTest {
@@ -31,9 +33,13 @@ public class ShadowManagerDAOImplTest {
     private static final String SHADOW_NAME = "testShadow";
     private static final String NO_SHADOW_NAME = "";
     private static final String MISSING_THING_NAME = "missingTestThing";
-    private static final byte[] BASE_DOCUMENT =  "{\"id\": 1, \"name\": \"The Beatles\"}".getBytes();
-    private static final byte[] NO_SHADOW_NAME_BASE_DOCUMENT =  "{\"id\": 2, \"name\": \"The Beach Boys\"}".getBytes();
-    private static final byte[] UPDATED_DOCUMENT =  "{\"id\": 1, \"name\": \"New Name\"}".getBytes();
+    private static final byte[] BASE_DOCUMENT = "{\"id\": 1, \"name\": \"The Beatles\"}".getBytes();
+    private static final byte[] NO_SHADOW_NAME_BASE_DOCUMENT = "{\"id\": 2, \"name\": \"The Beach Boys\"}".getBytes();
+    private static final byte[] UPDATED_DOCUMENT = "{\"id\": 1, \"name\": \"New Name\"}".getBytes();
+    private static final List<String> SHADOW_NAME_LIST = Arrays.asList("alpha", "bravo", "charlie", "delta");
+    private static final int DEFAULT_OFFSET = 0;
+    private static final int DEFAULT_LIMIT = 25;
+
 
     @TempDir
     Path rootDir;
@@ -168,4 +174,81 @@ public class ShadowManagerDAOImplTest {
         assertArrayEquals(UPDATED_DOCUMENT, result.get());
     }
 
+    @Test
+    void GIVEN_multiple_named_shadows_for_thing_WHEN_list_named_shadows_for_thing_THEN_return_named_shadow_list() throws Exception {
+        for (String shadowName : SHADOW_NAME_LIST) {
+            dao.updateShadowThing(THING_NAME, shadowName, UPDATED_DOCUMENT);
+        }
+
+        List<String> listShadowResults = dao.listNamedShadowsForThing(THING_NAME, DEFAULT_OFFSET, DEFAULT_LIMIT);
+        assertThat(listShadowResults, is(notNullValue()));
+        assertThat(listShadowResults, is(not(empty())));
+        assertThat(listShadowResults, is(equalTo(SHADOW_NAME_LIST)));
+    }
+
+    @Test
+    void GIVEN_classic_and_named_shadows_WHEN_list_named_shadows_for_thing_THEN_return_list_does_not_include_classic_shadow() throws Exception {
+        for (String shadowName : SHADOW_NAME_LIST) {
+            dao.updateShadowThing(THING_NAME, shadowName, UPDATED_DOCUMENT);
+        }
+        dao.updateShadowThing(THING_NAME, NO_SHADOW_NAME, UPDATED_DOCUMENT);
+
+        List<String> listShadowResults = dao.listNamedShadowsForThing(THING_NAME, DEFAULT_OFFSET, SHADOW_NAME_LIST.size());
+        assertThat(listShadowResults, is(notNullValue()));
+        assertThat(listShadowResults, is(not(empty())));
+        assertThat(listShadowResults, is(equalTo(SHADOW_NAME_LIST)));
+        assertThat(listShadowResults.size(), is(equalTo(SHADOW_NAME_LIST.size())));
+    }
+
+    @Test
+    void GIVEN_offset_and_limit_WHEN_list_named_shadows_for_thing_THEN_return_named_shadow_subset() throws Exception {
+        for (String shadowName : SHADOW_NAME_LIST) {
+            dao.updateShadowThing(THING_NAME, shadowName, UPDATED_DOCUMENT);
+        }
+
+        int offset = 1;
+        int limit = 2;
+        List<String> listShadowResults = dao.listNamedShadowsForThing(THING_NAME, offset, limit);
+        List<String> expected_paginated_list = Arrays.asList("bravo", "charlie");
+        assertThat(listShadowResults, is(notNullValue()));
+        assertThat(listShadowResults, is(not(empty())));
+        assertThat(listShadowResults, is(equalTo(expected_paginated_list)));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "testThing, 0, 5",   // limit greater than number of named shadows
+            "testThing, 0, 2",   // limit is less than number of named shadows
+            "testThing, 0, -10", // limit is negative
+            "testThing, 4, 5",   // offset is equal to or greater than number of named shadows
+            "testThing, -10, 5", // offset is negative
+            "missingTestThing, 0, 5", // list for thing that does not exist
+            "classicThing, 0, 5"      // list for thing that does not have named shadows
+    })
+    void GIVEN_valid_edge_inputs_WHEN_list_named_shadows_for_thing_THEN_return_valid_results(String thingName, String offsetString, String pageSizeString) throws Exception {
+        for (String shadowName : SHADOW_NAME_LIST) {
+            dao.updateShadowThing(THING_NAME, shadowName, UPDATED_DOCUMENT);
+        }
+
+        final String CLASSIC_SHADOW_THING = "classicThing";
+        dao.updateShadowThing(CLASSIC_SHADOW_THING, NO_SHADOW_NAME, UPDATED_DOCUMENT);
+
+        int offset = Integer.parseInt(offsetString);
+        int pageSize = Integer.parseInt(pageSizeString);
+
+        List<String> listShadowResults = dao.listNamedShadowsForThing(thingName, offset, pageSize);
+        assertThat(listShadowResults, is(notNullValue()));
+
+        // cases where valid results are empty (missing thing, thing with no named shadows, offset greater/equal to number of named shadows)
+        if (thingName.equals(MISSING_THING_NAME)
+                || thingName.equals(CLASSIC_SHADOW_THING)
+                || offset >= SHADOW_NAME_LIST.size()) {
+            assertThat(listShadowResults, is(empty()));
+        }
+
+        // cases where offset and limit are ignored (offset/limit are negative)
+        if (offset < 0 || pageSize < 0) {
+            assertThat("Original results remained the same", SHADOW_NAME_LIST, is(equalTo(listShadowResults)));
+        }
+    }
 }

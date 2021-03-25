@@ -25,11 +25,15 @@ public final class IPCUtil {
     static final String NAMED_SHADOW_TOPIC_PREFIX = "/name/%s";
     static final String LOG_THING_NAME_KEY = "thing name";
     static final String LOG_SHADOW_NAME_KEY = "shadow name";
+    static final String LOG_NEXT_TOKEN_KEY = "nextToken";
+    static final String LOG_PAGE_SIZE_KEY = "pageSize";
+    public static final String CLASSIC_SHADOW_IDENTIFIER = "";
 
     public enum LogEvents {
         GET_THING_SHADOW("handle-get-thing-shadow"),
         UPDATE_THING_SHADOW("handle-update-thing-shadow"),
-        DELETE_THING_SHADOW("handle-delete-thing-shadow");
+        DELETE_THING_SHADOW("handle-delete-thing-shadow"),
+        LIST_NAMED_SHADOWS("handle-list-named-shadows-for-thing");
 
         String code;
 
@@ -45,12 +49,37 @@ public final class IPCUtil {
     private IPCUtil() {
     }
 
+    /**
+     * Validate the thingName and checks whether the service is authorized to run the operation on the shadow.
+     * TODO: Remove in oncoming PR to split this up
+     *
+     * @param authorizationHandler The pubsub agent for new IPC
+     * @param opCode               The IPC defined operation code
+     * @param serviceName          The service which will be running the operation
+     * @param thingName            The thingName of the local shadow
+     */
+    static void validateThingNameAndDoAuthorization(AuthorizationHandler authorizationHandler, String opCode,
+                                                    String serviceName, String thingName)
+            throws AuthorizationException, InvalidArgumentsError {
+        validateThingNameAndDoAuthorization(authorizationHandler, opCode, serviceName,
+                thingName, CLASSIC_SHADOW_IDENTIFIER);
+    }
+
+    /**
+     * Validate the thingName and checks whether the service is authorized to run the operation on the shadow.
+     *
+     * @param authorizationHandler The pubsub agent for new IPC
+     * @param opCode               The IPC defined operation code
+     * @param serviceName          The service which will be running the operation
+     * @param thingName            The thingName of the local shadow
+     * @param shadowName           the shadowName of the local shadow
+     */
     static void validateThingNameAndDoAuthorization(AuthorizationHandler authorizationHandler, String opCode,
                                                     String serviceName, String thingName, String shadowName)
             throws AuthorizationException, InvalidArgumentsError {
 
         if (Utils.isEmpty(thingName)) {
-            throw new InvalidArgumentsError("ThingName absent in request");
+            throw new IllegalArgumentException("ThingName absent in request");
         }
 
         StringJoiner shadowResource = new StringJoiner("/");

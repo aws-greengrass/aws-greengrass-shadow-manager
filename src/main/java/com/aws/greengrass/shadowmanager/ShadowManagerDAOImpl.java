@@ -11,6 +11,8 @@ import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import javax.inject.Inject;
 
@@ -34,7 +36,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      * @param thingName       The thing namespace of the shadow document.
      * @param shadowName      Name of shadow topic prefix for thing.
      * @param initialDocument The initial shadow document.
-     * @return Optional
+     * @return The shadow document inserted into the local shadow store
      */
     @Override
     public Optional<byte[]> createShadowThing(String thingName, String shadowName, byte[] initialDocument) {
@@ -55,7 +57,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      *
      * @param thingName  Name of the Thing for the shadow topic prefix.
      * @param shadowName Name of shadow topic prefix for thing.
-     * @return Optional
+     * @return The queried shadow from the local shadow store
      */
     @Override
     public Optional<byte[]> getShadowThing(String thingName, String shadowName) {
@@ -76,7 +78,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      *
      * @param thingName  Name of the Thing for the shadow topic prefix.
      * @param shadowName Name of shadow topic prefix for thing.
-     * @return Optional
+     * @return The deleted shadow from the local shadow store
      */
     @Override
     public Optional<byte[]> deleteShadowThing(String thingName, String shadowName) {
@@ -100,7 +102,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      * @param thingName   Name of the Thing for the shadow topic prefix.
      * @param shadowName  Name of shadow topic prefix for thing.
      * @param newDocument The new shadow document.
-     * @return Optional
+     * @return The updated shadow document from the local shadow store
      */
     @Override
     public Optional<byte[]> updateShadowThing(String thingName, String shadowName, byte[] newDocument) {
@@ -114,6 +116,28 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
                         return Optional.ofNullable(newDocument);
                     }
                     return Optional.empty();
+                });
+    }
+
+    /**
+     * Attempts to retrieve list of named shadows for a specified thing from the local shadow storage.
+     * @param thingName Name of the Thing to check Named Shadows.
+     * @param offset Number of Named Shadows to bypass.
+     * @param limit Maximum number of Named Shadows to retrieve.
+     * @return A limited list of named shadows matching the specified thingName
+     */
+    public List<String> listNamedShadowsForThing(String thingName, int offset, int limit) {
+        return execute("SELECT shadowName from documents WHERE thingName = ? AND shadowName != '' LIMIT ? OFFSET ? ",
+                preparedStatement -> {
+                    preparedStatement.setString(1, thingName);
+                    preparedStatement.setInt(2, limit);
+                    preparedStatement.setInt(3, offset);
+                    ResultSet resultSet = preparedStatement.executeQuery();
+                    List<String> namedShadowList = new ArrayList<>();
+                    while (resultSet.next()) {
+                        namedShadowList.add(resultSet.getString(1));
+                    }
+                    return namedShadowList;
                 });
     }
 

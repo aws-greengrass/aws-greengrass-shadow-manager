@@ -13,6 +13,7 @@ import com.aws.greengrass.dependency.State;
 import com.aws.greengrass.lifecyclemanager.PluginService;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowIPCHandler;
 import com.aws.greengrass.shadowmanager.ipc.GetThingShadowIPCHandler;
+import com.aws.greengrass.shadowmanager.ipc.ListNamedShadowsForThingIPCHandler;
 import com.aws.greengrass.shadowmanager.ipc.PubSubClientWrapper;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowIPCHandler;
 import org.flywaydb.core.api.FlywayException;
@@ -27,6 +28,7 @@ import javax.inject.Inject;
 
 import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.DELETE_THING_SHADOW;
 import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.GET_THING_SHADOW;
+import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.LIST_NAMED_SHADOWS_FOR_THING;
 import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.UPDATE_THING_SHADOW;
 
 @ImplementsService(name = ShadowManager.SERVICE_NAME)
@@ -52,7 +54,7 @@ public class ShadowManager extends PluginService {
 
     public static final String SERVICE_NAME = "aws.greengrass.ShadowManager";
     protected static final List<String> SHADOW_AUTHORIZATION_OPCODES = Arrays.asList(GET_THING_SHADOW,
-            UPDATE_THING_SHADOW, DELETE_THING_SHADOW, "*");
+            UPDATE_THING_SHADOW, LIST_NAMED_SHADOWS_FOR_THING, DELETE_THING_SHADOW, "*");
 
     private final ShadowManagerDAO dao;
     private final ShadowManagerDatabase database;
@@ -101,6 +103,8 @@ public class ShadowManager extends PluginService {
                 dao, authorizationHandler, pubSubClientWrapper));
         greengrassCoreIPCService.setUpdateThingShadowHandler(context -> new UpdateThingShadowIPCHandler(context,
                 dao, authorizationHandler, pubSubClientWrapper));
+        greengrassCoreIPCService.setListNamedShadowsForThingHandler(context -> new ListNamedShadowsForThingIPCHandler(
+                context, dao, authorizationHandler));
     }
 
     @Override
