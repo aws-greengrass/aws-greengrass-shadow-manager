@@ -9,12 +9,15 @@ import com.aws.greengrass.authorization.AuthorizationHandler;
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
+import com.aws.greengrass.shadowmanager.JsonUtil;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
+import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.ipc.model.AcceptRequest;
 import com.aws.greengrass.shadowmanager.ipc.model.Operation;
 import com.aws.greengrass.shadowmanager.ipc.model.RejectRequest;
 import com.aws.greengrass.shadowmanager.model.ErrorMessage;
+import com.aws.greengrass.shadowmanager.model.JsonShadowDocument;
 import software.amazon.awssdk.aws.greengrass.GeneratedAbstractDeleteThingShadowOperationHandler;
 import software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowRequest;
 import software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowResponse;
@@ -25,7 +28,12 @@ import software.amazon.awssdk.aws.greengrass.model.UnauthorizedError;
 import software.amazon.awssdk.eventstreamrpc.OperationContinuationHandlerContext;
 import software.amazon.awssdk.eventstreamrpc.model.EventStreamJsonMessage;
 
+import java.io.IOException;
+
 import static com.aws.greengrass.ipc.common.ExceptionUtil.translateExceptions;
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
+import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_RESOURCE_TYPE;
 import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.DELETE_THING_SHADOW;
 
 /**
@@ -61,7 +69,7 @@ public class DeleteThingShadowIPCHandler extends GeneratedAbstractDeleteThingSha
 
     @Override
     protected void onStreamClosed() {
-
+        //NA
     }
 
     /**
@@ -90,12 +98,12 @@ public class DeleteThingShadowIPCHandler extends GeneratedAbstractDeleteThingSha
                 byte[] result = dao.deleteShadowThing(thingName, shadowName)
                         .orElseThrow(() -> {
                             ResourceNotFoundError rnf = new ResourceNotFoundError("No shadow found");
-                            rnf.setResourceType(IPCUtil.SHADOW_RESOURCE_TYPE);
+                            rnf.setResourceType(SHADOW_RESOURCE_TYPE);
                             logger.atWarn()
                                     .setEventType(IPCUtil.LogEvents.DELETE_THING_SHADOW.code())
                                     .setCause(rnf)
-                                    .kv(IPCUtil.LOG_THING_NAME_KEY, thingName)
-                                    .kv(IPCUtil.LOG_SHADOW_NAME_KEY, shadowName)
+                                    .kv(LOG_THING_NAME_KEY, thingName)
+                                    .kv(LOG_SHADOW_NAME_KEY, shadowName)
                                     .log("Unable to process delete shadow since shadow does not exist");
                             pubSubClientWrapper.reject(RejectRequest.builder().thingName(thingName)
                                     .shadowName(shadowName)
@@ -106,13 +114,16 @@ public class DeleteThingShadowIPCHandler extends GeneratedAbstractDeleteThingSha
                         });
 
                 logger.atDebug()
-                        .kv(IPCUtil.LOG_THING_NAME_KEY, thingName)
-                        .kv(IPCUtil.LOG_SHADOW_NAME_KEY, shadowName)
+                        .kv(LOG_THING_NAME_KEY, thingName)
+                        .kv(LOG_SHADOW_NAME_KEY, shadowName)
                         .log("Successfully delete shadow");
-                response.setPayload(result);
+                response.setPayload(new byte[0]);
 
-                pubSubClientWrapper.accept(AcceptRequest.builder().thingName(thingName).shadowName(shadowName)
-                        .payload(new byte[0]).publishOperation(Operation.DELETE_SHADOW)
+                JsonShadowDocument deletedShadowDocument = new JsonShadowDocument(result);
+                pubSubClientWrapper.accept(AcceptRequest.builder()
+                        .thingName(thingName)
+                        .shadowName(shadowName)
+                        .payload(JsonUtil.getPayloadBytes(deletedShadowDocument.getVersionNode()))
                         .publishOperation(Operation.DELETE_SHADOW)
                         .build());
                 return response;
@@ -121,33 +132,32 @@ public class DeleteThingShadowIPCHandler extends GeneratedAbstractDeleteThingSha
                 logger.atWarn()
                         .setEventType(IPCUtil.LogEvents.DELETE_THING_SHADOW.code())
                         .setCause(e)
-                        .kv(IPCUtil.LOG_THING_NAME_KEY, thingName)
-                        .kv(IPCUtil.LOG_SHADOW_NAME_KEY, shadowName)
+                        .kv(LOG_THING_NAME_KEY, thingName)
+                        .kv(LOG_SHADOW_NAME_KEY, shadowName)
                         .log("Not authorized to update shadow");
                 pubSubClientWrapper.reject(RejectRequest.builder().thingName(thingName).shadowName(shadowName)
                         .errorMessage(ErrorMessage.UNAUTHORIZED_MESSAGE)
                         .publishOperation(Operation.DELETE_SHADOW)
                         .build());
                 throw new UnauthorizedError(e.getMessage());
-            } catch (IllegalArgumentException e) {
+            } catch (InvalidRequestParametersException e) {
                 logger.atWarn()
                         .setEventType(IPCUtil.LogEvents.DELETE_THING_SHADOW.code())
                         .setCause(e)
-                        .kv(IPCUtil.LOG_THING_NAME_KEY, thingName)
-                        .kv(IPCUtil.LOG_SHADOW_NAME_KEY, shadowName)
+                        .kv(LOG_THING_NAME_KEY, thingName)
+                        .kv(LOG_SHADOW_NAME_KEY, shadowName)
                         .log();
-                // TODO: Get the Error Message based on the exception message we get from the validate.
                 pubSubClientWrapper.reject(RejectRequest.builder().thingName(thingName).shadowName(shadowName)
-                        .errorMessage(ErrorMessage.INVALID_CLIENT_TOKEN_MESSAGE)
+                        .errorMessage(e.getErrorMessage())
                         .publishOperation(Operation.DELETE_SHADOW)
                         .build());
                 throw new InvalidArgumentsError(e.getMessage());
-            } catch (ShadowManagerDataException e) {
+            } catch (ShadowManagerDataException | IOException e) {
                 logger.atError()
                         .setEventType(IPCUtil.LogEvents.DELETE_THING_SHADOW.code())
                         .setCause(e)
-                        .kv(IPCUtil.LOG_THING_NAME_KEY, thingName)
-                        .kv(IPCUtil.LOG_SHADOW_NAME_KEY, shadowName)
+                        .kv(LOG_THING_NAME_KEY, thingName)
+                        .kv(LOG_SHADOW_NAME_KEY, shadowName)
                         .log("Could not process UpdateThingShadow Request due to internal service error");
                 pubSubClientWrapper.reject(RejectRequest.builder().thingName(thingName).shadowName(shadowName)
                         .errorMessage(ErrorMessage.createInternalServiceErrorMessage())
@@ -160,6 +170,6 @@ public class DeleteThingShadowIPCHandler extends GeneratedAbstractDeleteThingSha
 
     @Override
     public void handleStreamEvent(EventStreamJsonMessage streamRequestEvent) {
-
+        //NA
     }
 }

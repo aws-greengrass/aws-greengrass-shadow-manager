@@ -21,6 +21,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.net.URL;
 import java.nio.file.Path;
 import java.sql.SQLException;
 import java.util.concurrent.CountDownLatch;
@@ -65,6 +66,8 @@ public class ShadowManagerTest extends GGServiceTestUtil {
 
     private void startNucleusWithConfig(String configFile, State expectedState) throws InterruptedException {
         CountDownLatch shadowManagerRunning = new CountDownLatch(1);
+        URL resource = ShadowManagerTest.class.getResource("json_shadow_examples/good_initial_document.json");
+        URL resource2 = ShadowManagerTest.class.getResource("config.yaml");
         kernel.parseArgs("-r", rootDir.toAbsolutePath().toString(), "-i",
                 getClass().getResource(configFile).toString());
         listener = (GreengrassService service, State was, State newState) -> {

@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "Update Shadow State Node Schema",
+  "description": "Schema to validate the state node in the update shadow request node",
+  "type": "object",
+  "properties": {
+    "reported": {
+      "description": "The shadow document state reported by the components.",
+      "type": "object"
+    },
+    "desired": {
+      "description": "The desired change in the shadow document state by the components. ",
+      "type": "object"
+    },
+    "delta": {
+      "description": "The difference between the desired and reported nodes in the shadow documents.",
+      "type": "object"
+    }
+  },
+  "oneOf": [
+    {
+      "required": [
+        "reported"
+      ]
+    },
+    {
+      "required": [
+        "desired"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "state": {
+    "desired": {
+      "color": {
+        "r": 255,
+        "g": 0,
+        "b": 0
+      }
+    },
+    "reported": {
+      "color": {
+        "r": 255,
+        "g": 255,
+        "b": 255
+      },
+      "SomeKey": "SomeValue"
+    },
+    "delta": {
+      "g": 0,
+      "b": 0
+    }
+  },
+  "version": 1
+}

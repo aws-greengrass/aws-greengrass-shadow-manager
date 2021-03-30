@@ -9,6 +9,7 @@ import com.aws.greengrass.authorization.AuthorizationHandler;
 import com.aws.greengrass.authorization.Permission;
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
+import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,7 +42,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
-public class ListNamedShadowsForThingIPCHandlerTest {
+class ListNamedShadowsForThingIPCHandlerTest {
     private static final String TEST_SERVICE = "TestService";
     private static final String THING_NAME = "testThingName";
     private static final List<String> NAMED_SHADOW_LIST = Arrays.asList("one", "two", "three");
@@ -178,14 +179,13 @@ public class ListNamedShadowsForThingIPCHandlerTest {
     @ParameterizedTest
     @NullAndEmptySource
     void GIVEN_missing_thing_name_WHEN_handle_request_THEN_throw_invalid_arguments_error(String thingName, ExtensionContext context) {
-        ignoreExceptionOfType(context, IllegalArgumentException.class);
-        ignoreExceptionOfType(context, InvalidArgumentsError.class);
+        ignoreExceptionOfType(context, InvalidRequestParametersException.class);
         ListNamedShadowsForThingRequest request = new ListNamedShadowsForThingRequest();
         request.setThingName(thingName);
 
         ListNamedShadowsForThingIPCHandler listNamedShadowsForThingIPCHandler = new ListNamedShadowsForThingIPCHandler(mockContext, mockDao, mockAuthorizationHandler);
         InvalidArgumentsError thrown = assertThrows(InvalidArgumentsError.class, () -> listNamedShadowsForThingIPCHandler.handleRequest(request));
-        assertThat(thrown.getMessage(), startsWith("ThingName absent"));
+        assertThat(thrown.getMessage(), startsWith("Thing not found"));
 
         verify(mockDao, times(0)).listNamedShadowsForThing(any(),
                 offsetCaptor.capture(), pageSizeCaptor.capture());

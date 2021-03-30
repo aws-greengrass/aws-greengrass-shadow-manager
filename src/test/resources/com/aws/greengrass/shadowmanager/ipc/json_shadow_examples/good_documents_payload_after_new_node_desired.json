@@ -1,0 +1,37 @@
+{
+  "previous": {
+    "state": {
+      "reported": {
+        "color": {
+          "r": 255,
+          "g": 255,
+          "b": 255
+        },
+        "SomeKey": "SomeValue"
+      }
+    },
+    "version": 0
+  },
+  "current": {
+    "state": {
+      "desired": {
+        "color": {
+          "r": 255,
+          "g": 0,
+          "b": null
+        },
+        "temperature": 70
+      },
+      "reported": {
+        "color": {
+          "r": 255,
+          "g": 255,
+          "b": 255
+        },
+        "SomeKey": "SomeValue"
+      }
+    },
+    "version": 1
+  },
+  "clientToken": "device"
+}

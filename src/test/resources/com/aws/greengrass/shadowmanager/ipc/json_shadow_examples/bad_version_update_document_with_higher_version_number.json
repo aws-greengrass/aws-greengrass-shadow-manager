@@ -1,0 +1,13 @@
+{
+  "version": 100,
+  "clientToken": "device",
+  "state": {
+    "desired": {
+      "color": {
+        "r": 255,
+        "g": 0,
+        "b": 0
+      }
+    }
+  }
+}

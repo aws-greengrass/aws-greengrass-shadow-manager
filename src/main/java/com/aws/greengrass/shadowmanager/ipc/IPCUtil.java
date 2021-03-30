@@ -8,27 +8,18 @@ package com.aws.greengrass.shadowmanager.ipc;
 import com.aws.greengrass.authorization.AuthorizationHandler;
 import com.aws.greengrass.authorization.Permission;
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
+import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
+import com.aws.greengrass.shadowmanager.model.ErrorMessage;
 import com.aws.greengrass.util.Utils;
 import software.amazon.awssdk.aws.greengrass.model.InvalidArgumentsError;
 
 import java.util.StringJoiner;
 
+import static com.aws.greengrass.shadowmanager.model.Constants.CLASSIC_SHADOW_IDENTIFIER;
+import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_MANAGER_NAME;
+import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_RESOURCE_JOINER;
+
 public final class IPCUtil {
-
-    static final String SHADOW_RESOURCE_TYPE = "shadow";
-    static final String SHADOW_RESOURCE_JOINER = "shadow";
-    static final String SHADOW_MANAGER_NAME = "aws.greengrass.ShadowManager";
-    static final String SHADOW_PUBLISH_TOPIC_ACCEPTED_FORMAT = "$aws/things/%s/shadow%s/accepted";
-    static final String SHADOW_PUBLISH_TOPIC_REJECTED_FORMAT = "$aws/things/%s/shadow%s/rejected";
-    static final String SHADOW_PUBLISH_TOPIC_DELTA_FORMAT = "$aws/things/%s/shadow%s/delta";
-    static final String SHADOW_PUBLISH_TOPIC_DOCUMENTS_FORMAT = "$aws/things/%s/shadow%s/documents";
-    static final String NAMED_SHADOW_TOPIC_PREFIX = "/name/%s";
-    static final String LOG_THING_NAME_KEY = "thing name";
-    static final String LOG_SHADOW_NAME_KEY = "shadow name";
-    static final String LOG_NEXT_TOKEN_KEY = "nextToken";
-    static final String LOG_PAGE_SIZE_KEY = "pageSize";
-    public static final String CLASSIC_SHADOW_IDENTIFIER = "";
-
     public enum LogEvents {
         GET_THING_SHADOW("handle-get-thing-shadow"),
         UPDATE_THING_SHADOW("handle-update-thing-shadow"),
@@ -76,10 +67,10 @@ public final class IPCUtil {
      */
     static void validateThingNameAndDoAuthorization(AuthorizationHandler authorizationHandler, String opCode,
                                                     String serviceName, String thingName, String shadowName)
-            throws AuthorizationException, InvalidArgumentsError {
+            throws AuthorizationException, InvalidRequestParametersException {
 
         if (Utils.isEmpty(thingName)) {
-            throw new IllegalArgumentException("ThingName absent in request");
+            throw new InvalidRequestParametersException(ErrorMessage.createThingNotFoundMessage());
         }
 
         StringJoiner shadowResource = new StringJoiner("/");
