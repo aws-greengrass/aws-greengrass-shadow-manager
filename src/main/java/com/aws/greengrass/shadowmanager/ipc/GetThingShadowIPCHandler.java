@@ -17,7 +17,8 @@ import com.aws.greengrass.shadowmanager.ipc.model.AcceptRequest;
 import com.aws.greengrass.shadowmanager.ipc.model.Operation;
 import com.aws.greengrass.shadowmanager.ipc.model.RejectRequest;
 import com.aws.greengrass.shadowmanager.model.ErrorMessage;
-import com.aws.greengrass.shadowmanager.model.JsonShadowDocument;
+import com.aws.greengrass.shadowmanager.model.ResponseMessageBuilder;
+import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import software.amazon.awssdk.aws.greengrass.GeneratedAbstractGetThingShadowOperationHandler;
@@ -31,13 +32,13 @@ import software.amazon.awssdk.eventstreamrpc.OperationContinuationHandlerContext
 import software.amazon.awssdk.eventstreamrpc.model.EventStreamJsonMessage;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static com.aws.greengrass.ipc.common.ExceptionUtil.translateExceptions;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
-import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE;
-import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE_DELTA;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_RESOURCE_TYPE;
 import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.GET_THING_SHADOW;
 
@@ -91,9 +92,14 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
         return translateExceptions(() -> {
             String thingName = request.getThingName();
             String shadowName = request.getShadowName();
+            //TODO: Add payload to GetThingShadowRequest
+            byte[] payload = null;
 
             try {
-                logger.atTrace("ipc-get-thing-shadow-request").log();
+                logger.atTrace("ipc-get-thing-shadow-request")
+                        .kv(LOG_THING_NAME_KEY, thingName)
+                        .kv(LOG_SHADOW_NAME_KEY, shadowName)
+                        .log();
 
                 IPCUtil.validateThingNameAndDoAuthorization(authorizationHandler, GET_THING_SHADOW,
                         serviceName, thingName, shadowName);
@@ -115,10 +121,17 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
                                     .build());
                             return rnf;
                         });
-                JsonShadowDocument currentShadowDocument = new JsonShadowDocument(currentDocumentBytes);
-                handleGet(thingName, shadowName, currentShadowDocument);
+                ShadowDocument currentShadowDocument = new ShadowDocument(currentDocumentBytes);
+
+                // Get the Client Token if present in the payload.
+                Optional<JsonNode> payloadJson = JsonUtil.getPayloadJson(payload);
+                AtomicReference<Optional<String>> clientToken = new AtomicReference<>(Optional.empty());
+                payloadJson.ifPresent(jsonNode -> clientToken.set(JsonUtil.getClientToken(jsonNode)));
+
+                ObjectNode responseNode = createGetResponseAndPublishAccepted(thingName, shadowName, clientToken.get(),
+                        currentShadowDocument);
                 GetThingShadowResponse response = new GetThingShadowResponse();
-                response.setPayload(JsonUtil.getPayloadBytes(currentShadowDocument.getDocument()));
+                response.setPayload(JsonUtil.getPayloadBytes(responseNode));
                 return response;
 
             } catch (AuthorizationException e) {
@@ -161,18 +174,20 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
         });
     }
 
-    private void handleGet(String thingName, String shadowName, JsonShadowDocument jsonShadowDocument)
+    private ObjectNode createGetResponseAndPublishAccepted(String thingName, String shadowName,
+                                                           Optional<String> clientToken, ShadowDocument shadowDocument)
             throws IOException {
-        Optional<ObjectNode> deltaNode = jsonShadowDocument.delta(Operation.GET_SHADOW);
-        if (deltaNode.isPresent()) {
-            JsonNode stateNodeJson = jsonShadowDocument.getDocument().get(SHADOW_DOCUMENT_STATE);
-            ((ObjectNode) stateNodeJson).set(SHADOW_DOCUMENT_STATE_DELTA, deltaNode.get());
-        }
+        ObjectNode response = ResponseMessageBuilder.builder().withState(shadowDocument.getState().toJsonWithDelta())
+                //.withMetadata()
+                .withVersion(shadowDocument.getVersion())
+                .withClientToken(clientToken)
+                .withTimestamp(Instant.now()).build();
 
         pubSubClientWrapper.accept(AcceptRequest.builder().thingName(thingName).shadowName(shadowName)
-                .payload(JsonUtil.getPayloadBytes(jsonShadowDocument.getDocument()))
+                .payload(JsonUtil.getPayloadBytes(response))
                 .publishOperation(Operation.GET_SHADOW)
                 .build());
+        return response;
     }
 
 

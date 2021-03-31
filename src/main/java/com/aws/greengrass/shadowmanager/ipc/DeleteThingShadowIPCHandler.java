@@ -87,6 +87,9 @@ public class DeleteThingShadowIPCHandler extends GeneratedAbstractDeleteThingSha
         return translateExceptions(() -> {
             String thingName = request.getThingName();
             String shadowName = request.getShadowName();
+            //TODO: Add payload to DeleteThingShadowRequest and then validate the version of the document the customer
+            //    wants to delete and pass the client token in the response
+            //byte[] payload = request.getPayload();
 
             try {
                 logger.atTrace("ipc-update-thing-shadow-request").log();

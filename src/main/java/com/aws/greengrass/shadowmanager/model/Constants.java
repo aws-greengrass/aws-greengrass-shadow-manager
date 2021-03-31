@@ -20,6 +20,7 @@ public class Constants {
     public static final String SHADOW_DOCUMENT_TIMESTAMP = "timestamp";
     public static final String SHADOW_DOCUMENT_CLIENT_TOKEN = "clientToken";
     public static final String SHADOW_DOCUMENT_STATE = "state";
+    public static final String SHADOW_DOCUMENT_METADATA = "metadata";
     public static final String SHADOW_DOCUMENT_STATE_REPORTED = "reported";
     public static final String SHADOW_DOCUMENT_STATE_DESIRED = "desired";
     public static final String SHADOW_DOCUMENT_STATE_DELTA = "delta";
