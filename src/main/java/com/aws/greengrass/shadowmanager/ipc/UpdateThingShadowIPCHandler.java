@@ -19,6 +19,7 @@ import com.aws.greengrass.shadowmanager.model.ErrorMessage;
 import com.aws.greengrass.shadowmanager.model.ResponseMessageBuilder;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
+import com.aws.greengrass.util.Pair;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import software.amazon.awssdk.aws.greengrass.GeneratedAbstractUpdateThingShadowOperationHandler;
@@ -252,13 +253,14 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
     private void publishDeltaMessage(String thingName, String shadowName, Optional<String> clientToken,
                                      ShadowDocument updatedDocument)
             throws IOException {
-        Optional<JsonNode> delta = updatedDocument.getDelta();
+        Optional<Pair<JsonNode, JsonNode>> deltaMetaDataPair = updatedDocument.getDelta();
         // Only send the delta if there is any difference in the desired and reported states.
-        if (delta.isPresent()) {
+        if (deltaMetaDataPair.isPresent()) {
             JsonNode responseMessage = ResponseMessageBuilder.builder()
                     .withClientToken(clientToken)
                     .withTimestamp(Instant.now())
-                    .withState(delta.get())
+                    .withState(deltaMetaDataPair.get().getLeft())
+                    .withMetadata(deltaMetaDataPair.get().getRight())
                     .withVersion(updatedDocument.getVersion())
                     .build();
 

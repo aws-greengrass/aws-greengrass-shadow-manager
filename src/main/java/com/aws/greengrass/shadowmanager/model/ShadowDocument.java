@@ -6,6 +6,7 @@
 package com.aws.greengrass.shadowmanager.model;
 
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
+import com.aws.greengrass.util.Pair;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.LongNode;
@@ -96,7 +97,7 @@ public class ShadowDocument {
 
         updatedShadowDocument.getState().update(updatedStateNode);
         if (updatedShadowDocument.getMetadata() != null) {
-            updatedShadowDocument.getMetadata().update(updatedStateNode);
+            updatedShadowDocument.getMetadata().update(updatedStateNode, updatedShadowDocument.getState());
         }
 
         return updatedShadowDocument;
@@ -108,7 +109,7 @@ public class ShadowDocument {
      * @return a JSON node containing the shadow document.
      */
     public JsonNode toJson() {
-        final ObjectNode result = JsonUtil.createObjectNode();
+        final ObjectNode result = JsonUtil.OBJECT_MAPPER.createObjectNode();
         result.set(SHADOW_DOCUMENT_STATE, this.state.toJson());
         if (this.metadata != null) {
             result.set(SHADOW_DOCUMENT_METADATA, this.metadata.toJson());
@@ -124,12 +125,13 @@ public class ShadowDocument {
      *
      * @return an optional value of the delta node.
      */
-    public Optional<JsonNode> getDelta() {
+    public Optional<Pair<JsonNode, JsonNode>> getDelta() {
         final JsonNode delta = state.getDelta();
         if (delta == null) {
             return Optional.empty();
         }
         //TODO: Add the metadata node here as well and return that.
-        return Optional.of(delta);
+        final JsonNode deltaMetadata = metadata.getDeltaMetadata(delta);
+        return Optional.of(new Pair<>(delta, deltaMetadata));
     }
 }

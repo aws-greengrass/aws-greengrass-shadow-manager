@@ -26,7 +26,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_T
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_VERSION;
 
 public class ResponseMessageBuilder {
-    private final ObjectNode json = JsonUtil.createObjectNode();
+    private final ObjectNode json = JsonUtil.OBJECT_MAPPER.createObjectNode();
 
     public static ResponseMessageBuilder builder() {
         return new ResponseMessageBuilder();

@@ -14,7 +14,6 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.fasterxml.jackson.databind.node.TextNode;
 import com.github.fge.jackson.JsonLoader;
 import com.github.fge.jsonschema.core.exceptions.ProcessingException;
 import com.github.fge.jsonschema.core.report.ProcessingReport;
@@ -132,15 +131,6 @@ public final class JsonUtil {
     }
 
     /**
-     * Creates an Object node using the static Object Mapper.
-     *
-     * @return an empty object node.
-     */
-    public static ObjectNode createObjectNode() {
-        return OBJECT_MAPPER.createObjectNode();
-    }
-
-    /**
      * Validates that the state node depth is no deeper than the max depth for shadows (6).
      *
      * @param stateJson The state node to validate
@@ -194,17 +184,17 @@ public final class JsonUtil {
             ErrorMessage errorMessage = ErrorMessage.createPayloadTooLargeMessage();
             throw new InvalidRequestParametersException(errorMessage);
         }
-        Optional<JsonNode> updatedDocument = JsonUtil.getPayloadJson(updatedDocumentBytes);
+        Optional<JsonNode> updatedDocument = getPayloadJson(updatedDocumentBytes);
         if (!updatedDocument.isPresent() || isNullOrMissing(updatedDocument.get())) {
             ErrorMessage invalidPayloadJsonMessage = ErrorMessage.createInvalidPayloadJsonMessage("");
             throw new InvalidRequestParametersException(invalidPayloadJsonMessage);
         }
         // Validate the payload schema
-        JsonUtil.validatePayloadSchema(updatedDocument.get());
+        validatePayloadSchema(updatedDocument.get());
 
         // Validate the state node of the payload for the depth.
         JsonNode stateJson = updatedDocument.get().get(SHADOW_DOCUMENT_STATE);
-        JsonUtil.validatePayloadStateDepth(stateJson);
+        validatePayloadStateDepth(stateJson);
 
         // If there is no current version document, then this is the first version of the document and we only need
         // to en sure that if there is a version in the update request, it is 0.
@@ -281,7 +271,7 @@ public final class JsonUtil {
     }
 
     private static ObjectNode calculateDelta(final ObjectNode original, final ObjectNode updated) {
-        final ObjectNode result = JsonUtil.createObjectNode();
+        final ObjectNode result = OBJECT_MAPPER.createObjectNode();
         // Iterate over the updated shadow document and compare the values to the original shadow document.
         final Iterator<String> fields = updated.fieldNames();
 
