@@ -23,15 +23,10 @@ import com.github.fge.jsonschema.main.JsonSchema;
 import com.github.fge.jsonschema.main.JsonSchemaFactory;
 import software.amazon.awssdk.aws.greengrass.model.ConflictError;
 
-import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.StringJoiner;
-import java.util.stream.Collectors;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_VERSION;
@@ -165,22 +160,23 @@ public final class JsonUtil {
     }
 
     /**
-     * Validate the version of the payload sent in the update shadow request.
+     * Validates the payload schema to ensure that the JSON has the correct schema, the state node schema to ensure
+     * it's correctness, the depth of the state node to ensure it is within the boundaries and the version of the
+     * payload.
      *
-     * @param thingName            The name of the IoT Thing.
-     * @param shadowName           The name of the shadow being updated.
-     * @param updatedDocumentBytes The updated version of the shadow document sent in the request.
      * @param sourceDocument       The current version of the shadow document.
+     * @param updatedDocumentBytes The updated version of the shadow document sent in the request.
      * @throws ConflictError                     when the version number sent in the update request is not exactly one
      *                                           higher than the current shadow version
      * @throws InvalidRequestParametersException when the payload sent in the update request has bad data.
      * @throws IOException                       when the payload is not deserizable as JSON node.
      */
-    public static void validatePayload(String thingName, String shadowName, JsonShadowDocument sourceDocument,
+    public static void validatePayload(JsonShadowDocument sourceDocument,
                                        byte[] updatedDocumentBytes)
             throws ConflictError, InvalidRequestParametersException, IOException {
         // If the payload size is greater than the maximum default shadow document size, then raise an invalid
         // parameters error for payload too large.
+        //TODO: get the document size from AWS account.
         if (updatedDocumentBytes.length > Constants.DEFAULT_DOCUMENT_SIZE) {
             ErrorMessage errorMessage = ErrorMessage.createPayloadTooLargeMessage();
             throw new InvalidRequestParametersException(errorMessage);

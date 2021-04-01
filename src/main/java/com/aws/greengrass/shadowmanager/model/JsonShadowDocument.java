@@ -32,6 +32,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_V
 /**
  * Class to store the shadow document in JSON format and perform operations on it.
  */
+//TODO: Handle metadata node
 public class JsonShadowDocument {
     @Getter
     private final JsonNode document;

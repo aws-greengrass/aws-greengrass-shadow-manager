@@ -112,7 +112,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                 byte[] currentDocumentBytes = dao.getShadowThing(thingName, shadowName).orElse(new byte[0]);
                 currentDocument = new JsonShadowDocument(currentDocumentBytes);
 
-                JsonUtil.validatePayload(thingName, shadowName, currentDocument, updatedDocumentRequestBytes);
+                JsonUtil.validatePayload(currentDocument, updatedDocumentRequestBytes);
             } catch (AuthorizationException e) {
                 logger.atWarn()
                         .setEventType(IPCUtil.LogEvents.UPDATE_THING_SHADOW.code())
@@ -150,7 +150,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                         .build());
                 throw new InvalidArgumentsError(e.getMessage());
             } catch (ShadowManagerDataException | IOException e) {
-                throwServerError(thingName, shadowName, e);
+                throwServiceError(thingName, shadowName, e);
             }
 
             try {
@@ -171,7 +171,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                         .log("Successfully updated shadow");
                 return response;
             } catch (ShadowManagerDataException | IOException e) {
-                throwServerError(thingName, shadowName, e);
+                throwServiceError(thingName, shadowName, e);
             }
             return null;
         });
@@ -185,7 +185,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
      * @param e          The Exception thrown
      * @throws ServiceError always
      */
-    private void throwServerError(String thingName, String shadowName, Exception e)
+    private void throwServiceError(String thingName, String shadowName, Exception e)
             throws ServiceError {
         logger.atError()
                 .setEventType(IPCUtil.LogEvents.UPDATE_THING_SHADOW.code())

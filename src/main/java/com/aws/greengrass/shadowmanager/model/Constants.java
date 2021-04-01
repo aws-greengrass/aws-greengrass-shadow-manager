@@ -29,6 +29,7 @@ public class Constants {
             + "or desired node.";
     public static final int DEFAULT_DOCUMENT_STATE_DEPTH = 6;
     public static final int DEFAULT_DOCUMENT_SIZE = 8 * 1024;
+    public static final int MAX_ALLOWED_DOCUMENT_SIZE_IN_BYTES = 30 * 1024;
     public static final String LOG_NEXT_TOKEN_KEY = "nextToken";
     public static final String LOG_PAGE_SIZE_KEY = "pageSize";
     public static final String CLASSIC_SHADOW_IDENTIFIER = "";
