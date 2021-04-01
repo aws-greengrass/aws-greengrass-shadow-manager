@@ -6,14 +6,17 @@
 package com.aws.greengrass.shadowmanager.ipc;
 
 import com.aws.greengrass.builtin.services.pubsub.PubSubIPCEventStreamAgent;
-import com.aws.greengrass.shadowmanager.ipc.model.AcceptRequest;
 import com.aws.greengrass.shadowmanager.ipc.model.Operation;
-import com.aws.greengrass.shadowmanager.ipc.model.RejectRequest;
+import com.aws.greengrass.shadowmanager.ipc.model.PubSubRequest;
+import com.aws.greengrass.shadowmanager.model.Constants;
 import com.aws.greengrass.shadowmanager.model.ErrorMessage;
+import com.aws.greengrass.shadowmanager.model.ResponseMessageBuilder;
+import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeAll;
@@ -30,6 +33,7 @@ import software.amazon.awssdk.aws.greengrass.model.InvalidArgumentsError;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.Optional;
 
 import static com.aws.greengrass.shadowmanager.ShadowManager.SERVICE_NAME;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
@@ -68,7 +72,7 @@ class PubSubClientWrapperTest {
     @EnumSource(Operation.class)
     void GIVEN_good_shadow_accept_request_WHEN_accept_THEN_publishes_message(Operation operation) {
         PubSubClientWrapper pubSubClientWrapper = new PubSubClientWrapper(mockPubSubIPCEventStreamAgent);
-        pubSubClientWrapper.accept(AcceptRequest.builder().shadowName(SHADOW_NAME).thingName(THING_NAME)
+        pubSubClientWrapper.accept(PubSubRequest.builder().shadowName(SHADOW_NAME).thingName(THING_NAME)
                 .payload(UPDATE_DOCUMENT)
                 .publishOperation(operation)
                 .build());
@@ -83,7 +87,7 @@ class PubSubClientWrapperTest {
     @EnumSource(Operation.class)
     void GIVEN_good_shadow_accept_request_WHEN_delta_THEN_publishes_message(Operation operation) {
         PubSubClientWrapper pubSubClientWrapper = new PubSubClientWrapper(mockPubSubIPCEventStreamAgent);
-        pubSubClientWrapper.delta(AcceptRequest.builder().shadowName(SHADOW_NAME).thingName(THING_NAME)
+        pubSubClientWrapper.delta(PubSubRequest.builder().shadowName(SHADOW_NAME).thingName(THING_NAME)
                 .payload(UPDATE_DOCUMENT)
                 .publishOperation(operation)
                 .build());
@@ -98,7 +102,7 @@ class PubSubClientWrapperTest {
     @EnumSource(Operation.class)
     void GIVEN_good_shadow_accept_request_WHEN_documents_THEN_publishes_message(Operation operation) {
         PubSubClientWrapper pubSubClientWrapper = new PubSubClientWrapper(mockPubSubIPCEventStreamAgent);
-        pubSubClientWrapper.documents(AcceptRequest.builder().shadowName(SHADOW_NAME).thingName(THING_NAME)
+        pubSubClientWrapper.documents(PubSubRequest.builder().shadowName(SHADOW_NAME).thingName(THING_NAME)
                 .payload(UPDATE_DOCUMENT)
                 .publishOperation(operation)
                 .build());
@@ -113,8 +117,13 @@ class PubSubClientWrapperTest {
     @EnumSource(Operation.class)
     void GIVEN_good_shadow_reject_request_WHEN_reject_THEN_publishes_message(Operation operation) throws IOException {
         PubSubClientWrapper pubSubClientWrapper = new PubSubClientWrapper(mockPubSubIPCEventStreamAgent);
-        pubSubClientWrapper.reject(RejectRequest.builder().shadowName(SHADOW_NAME).thingName(THING_NAME)
-                .errorMessage(ErrorMessage.createInternalServiceErrorMessage())
+        JsonNode errorResponse = ResponseMessageBuilder.builder()
+                .withTimestamp(Instant.now())
+                .withClientToken(Optional.empty())
+                .withError(ErrorMessage.createInternalServiceErrorMessage()).build();
+
+        pubSubClientWrapper.reject(PubSubRequest.builder().shadowName(SHADOW_NAME).thingName(THING_NAME)
+                .payload(JsonUtil.getPayloadBytes(errorResponse))
                 .publishOperation(operation)
                 .build());
         verify(mockPubSubIPCEventStreamAgent, times(1)).publish(topicCaptor.capture(),
@@ -123,10 +132,9 @@ class PubSubClientWrapperTest {
         assertThat(serviceNameCaptor.getValue(), Matchers.is(SERVICE_NAME));
 
         assertNotNull(payloadCaptor.getValue());
-        ErrorMessage errorMessage = STRICT_MAPPER_JSON.readValue(payloadCaptor.getValue(), ErrorMessage.class);
-        assertThat(errorMessage.getErrorCode(), Matchers.is(500));
-        assertThat(errorMessage.getMessage(), Matchers.is("Internal service failure"));
-        assertThat(errorMessage.getTimestamp(), Matchers.is(Matchers.not(Instant.EPOCH.toEpochMilli())));
+        JsonNode errorMessage = STRICT_MAPPER_JSON.readValue(payloadCaptor.getValue(), JsonNode.class);
+        assertThat(errorMessage.get(Constants.ERROR_CODE_FIELD_NAME).asInt(), Matchers.is(500));
+        assertThat(errorMessage.get(Constants.ERROR_MESSAGE_FIELD_NAME).asText(), Matchers.is("Internal service failure"));
     }
 
     @Test
@@ -135,7 +143,7 @@ class PubSubClientWrapperTest {
         InvalidArgumentsError e = new InvalidArgumentsError();
         doThrow(e).when(mockPubSubIPCEventStreamAgent).publish(any(), any(), any());
         PubSubClientWrapper pubSubClientWrapper = new PubSubClientWrapper(mockPubSubIPCEventStreamAgent);
-        pubSubClientWrapper.accept(AcceptRequest.builder().shadowName(SHADOW_NAME).thingName(THING_NAME)
+        pubSubClientWrapper.accept(PubSubRequest.builder().shadowName(SHADOW_NAME).thingName(THING_NAME)
                 .payload(UPDATE_DOCUMENT)
                 .publishOperation(Operation.GET_SHADOW)
                 .build());
@@ -149,7 +157,7 @@ class PubSubClientWrapperTest {
         InvalidArgumentsError e = new InvalidArgumentsError();
         doThrow(e).when(mockPubSubIPCEventStreamAgent).publish(any(), any(), any());
         PubSubClientWrapper pubSubClientWrapper = new PubSubClientWrapper(mockPubSubIPCEventStreamAgent);
-        pubSubClientWrapper.delta(AcceptRequest.builder().shadowName(SHADOW_NAME).thingName(THING_NAME)
+        pubSubClientWrapper.delta(PubSubRequest.builder().shadowName(SHADOW_NAME).thingName(THING_NAME)
                 .payload(UPDATE_DOCUMENT)
                 .publishOperation(Operation.GET_SHADOW)
                 .build());
@@ -163,7 +171,7 @@ class PubSubClientWrapperTest {
         InvalidArgumentsError e = new InvalidArgumentsError();
         doThrow(e).when(mockPubSubIPCEventStreamAgent).publish(any(), any(), any());
         PubSubClientWrapper pubSubClientWrapper = new PubSubClientWrapper(mockPubSubIPCEventStreamAgent);
-        pubSubClientWrapper.documents(AcceptRequest.builder().shadowName(SHADOW_NAME).thingName(THING_NAME)
+        pubSubClientWrapper.documents(PubSubRequest.builder().shadowName(SHADOW_NAME).thingName(THING_NAME)
                 .payload(UPDATE_DOCUMENT)
                 .publishOperation(Operation.GET_SHADOW)
                 .build());
@@ -172,13 +180,18 @@ class PubSubClientWrapperTest {
     }
 
     @Test
-    void GIVEN_shadow_reject_request_WHEN_reject_and_publish_throws_error_THEN_error_is_caught(ExtensionContext context) {
+    void GIVEN_shadow_reject_request_WHEN_reject_and_publish_throws_error_THEN_error_is_caught(ExtensionContext context) throws JsonProcessingException {
         ignoreExceptionOfType(context, InvalidArgumentsError.class);
         InvalidArgumentsError e = new InvalidArgumentsError();
         doThrow(e).when(mockPubSubIPCEventStreamAgent).publish(any(), any(), any());
         PubSubClientWrapper pubSubClientWrapper = new PubSubClientWrapper(mockPubSubIPCEventStreamAgent);
-        pubSubClientWrapper.reject(RejectRequest.builder().shadowName(SHADOW_NAME).thingName(THING_NAME)
-                .errorMessage(ErrorMessage.createInternalServiceErrorMessage())
+        JsonNode errorResponse = ResponseMessageBuilder.builder()
+                .withTimestamp(Instant.now())
+                .withClientToken(Optional.empty())
+                .withError(ErrorMessage.createInternalServiceErrorMessage()).build();
+
+        pubSubClientWrapper.reject(PubSubRequest.builder().shadowName(SHADOW_NAME).thingName(THING_NAME)
+                .payload(JsonUtil.getPayloadBytes(errorResponse))
                 .publishOperation(Operation.GET_SHADOW)
                 .build());
         verify(mockPubSubIPCEventStreamAgent, times(1)).publish(topicCaptor.capture(),

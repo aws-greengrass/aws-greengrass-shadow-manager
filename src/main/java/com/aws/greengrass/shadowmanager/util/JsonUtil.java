@@ -11,10 +11,10 @@ import com.aws.greengrass.shadowmanager.model.ErrorMessage;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.util.Utils;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.fasterxml.jackson.databind.node.TextNode;
 import com.github.fge.jackson.JsonLoader;
 import com.github.fge.jsonschema.core.exceptions.ProcessingException;
 import com.github.fge.jsonschema.core.report.ProcessingReport;
@@ -123,7 +123,7 @@ public final class JsonUtil {
         return Optional.of(OBJECT_MAPPER.readTree(payload));
     }
 
-    public static byte[] getPayloadBytes(JsonNode node) throws IOException {
+    public static byte[] getPayloadBytes(JsonNode node) throws JsonProcessingException {
         return OBJECT_MAPPER.writeValueAsBytes(node);
     }
 
@@ -178,37 +178,21 @@ public final class JsonUtil {
      * payload.
      *
      * @param sourceDocument       The current version of the shadow document.
-     * @param updatedDocumentBytes The updated version of the shadow document sent in the request.
+     * @param updatedDocument The updated version of the shadow document sent in the request.
      * @throws ConflictError                     when the version number sent in the update request is not exactly one
      *                                           higher than the current shadow version
      * @throws InvalidRequestParametersException when the payload sent in the update request has bad data.
      * @throws IOException                       when the payload is not deserizable as JSON node.
      */
-    public static void validatePayload(ShadowDocument sourceDocument,
-                                       byte[] updatedDocumentBytes)
+    public static void validatePayload(ShadowDocument sourceDocument, JsonNode updatedDocument)
             throws ConflictError, InvalidRequestParametersException, IOException {
-        // If the payload size is greater than the maximum default shadow document size, then raise an invalid
-        // parameters error for payload too large.
-        //TODO: get the document size from AWS account.
-        if (updatedDocumentBytes.length > Constants.DEFAULT_DOCUMENT_SIZE) {
-            ErrorMessage errorMessage = ErrorMessage.createPayloadTooLargeMessage();
-            throw new InvalidRequestParametersException(errorMessage);
-        }
-        Optional<JsonNode> updatedDocument = JsonUtil.getPayloadJson(updatedDocumentBytes);
-        if (!updatedDocument.isPresent() || isNullOrMissing(updatedDocument.get())) {
-            ErrorMessage invalidPayloadJsonMessage = ErrorMessage.createInvalidPayloadJsonMessage("");
-            throw new InvalidRequestParametersException(invalidPayloadJsonMessage);
-        }
-        // Validate the payload schema
-        JsonUtil.validatePayloadSchema(updatedDocument.get());
-
         // Validate the state node of the payload for the depth.
-        JsonNode stateJson = updatedDocument.get().get(SHADOW_DOCUMENT_STATE);
+        JsonNode stateJson = updatedDocument.get(SHADOW_DOCUMENT_STATE);
         JsonUtil.validatePayloadStateDepth(stateJson);
 
         // If there is no current version document, then this is the first version of the document and we only need
         // to en sure that if there is a version in the update request, it is 0.
-        JsonNode updateVersion = updatedDocument.get().get(SHADOW_DOCUMENT_VERSION);
+        JsonNode updateVersion = updatedDocument.get(SHADOW_DOCUMENT_VERSION);
         if (sourceDocument.isNewDocument()) {
             if (!isNullOrMissing(updateVersion) && updateVersion.asInt() != 0) {
                 throw new InvalidRequestParametersException(ErrorMessage.INVALID_VERSION_MESSAGE);

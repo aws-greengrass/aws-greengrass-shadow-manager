@@ -6,15 +6,13 @@
 package com.aws.greengrass.shadowmanager.ipc;
 
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
+import com.aws.greengrass.shadowmanager.ipc.model.PubSubRequest;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
-import com.aws.greengrass.shadowmanager.ipc.model.AcceptRequest;
 import com.aws.greengrass.shadowmanager.ipc.model.Operation;
-import com.aws.greengrass.shadowmanager.ipc.model.RejectRequest;
-import com.aws.greengrass.shadowmanager.model.ErrorMessage;
 import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -48,14 +46,25 @@ import java.nio.file.Files;
 import java.time.Instant;
 import java.util.Optional;
 
-import static com.aws.greengrass.shadowmanager.TestUtils.*;
+import static com.aws.greengrass.shadowmanager.TestUtils.SAMPLE_EXCEPTION_MESSAGE;
+import static com.aws.greengrass.shadowmanager.TestUtils.SHADOW_NAME;
+import static com.aws.greengrass.shadowmanager.TestUtils.TEST_SERVICE;
+import static com.aws.greengrass.shadowmanager.TestUtils.THING_NAME;
 import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_DOCUMENT_SIZE;
+import static com.aws.greengrass.shadowmanager.model.Constants.ERROR_CODE_FIELD_NAME;
+import static com.aws.greengrass.shadowmanager.model.Constants.ERROR_MESSAGE_FIELD_NAME;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_TIMESTAMP;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_VERSION;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.*;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.either;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.startsWith;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -98,9 +107,7 @@ class UpdateThingShadowIPCHandlerTest {
     PubSubClientWrapper mockPubSubClientWrapper;
 
     @Captor
-    ArgumentCaptor<RejectRequest> rejectRequestCaptor;
-    @Captor
-    ArgumentCaptor<AcceptRequest> acceptRequestCaptor;
+    ArgumentCaptor<PubSubRequest> pubSubRequestCaptor;
 
     private byte[] getJsonFromResource(String fileName) throws IOException, URISyntaxException {
         File f = new File(getClass().getResource(fileName).toURI());
@@ -147,26 +154,26 @@ class UpdateThingShadowIPCHandlerTest {
 
         assertThat(updatedDocumentJson.get(), is(equalTo(expectedAcceptedJson.get())));
 
-        verify(mockPubSubClientWrapper, times(1)).accept(acceptRequestCaptor.capture());
-        verify(mockPubSubClientWrapper, times(1)).delta(acceptRequestCaptor.capture());
-        verify(mockPubSubClientWrapper, times(1)).documents(acceptRequestCaptor.capture());
+        verify(mockPubSubClientWrapper, times(1)).accept(pubSubRequestCaptor.capture());
+        verify(mockPubSubClientWrapper, times(1)).delta(pubSubRequestCaptor.capture());
+        verify(mockPubSubClientWrapper, times(1)).documents(pubSubRequestCaptor.capture());
 
-        assertThat(acceptRequestCaptor.getAllValues().size(), is(equalTo(3)));
+        assertThat(pubSubRequestCaptor.getAllValues().size(), is(equalTo(3)));
 
         Optional<JsonNode> expectedDeltaJson = JsonUtil.getPayloadJson(deltaPayload);
         assertThat("Found expectedDeltaJson", expectedDeltaJson.isPresent(), is(true));
         Optional<JsonNode> expectedDocumentsJson = JsonUtil.getPayloadJson(documentsPayload);
         assertThat("Found expectedDocumentsJson", expectedDocumentsJson.isPresent(), is(true));
 
-        Optional<JsonNode> acceptedJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(0).getPayload());
+        Optional<JsonNode> acceptedJson = JsonUtil.getPayloadJson(pubSubRequestCaptor.getAllValues().get(0).getPayload());
         assertThat("Retrieved acceptedJson", acceptedJson.isPresent(), is(true));
         assertThat("acceptedJson has timestamp", acceptedJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
         ((ObjectNode) acceptedJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
-        Optional<JsonNode> deltaJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(1).getPayload());
+        Optional<JsonNode> deltaJson = JsonUtil.getPayloadJson(pubSubRequestCaptor.getAllValues().get(1).getPayload());
         assertThat("Retrieved deltaJson", deltaJson.isPresent(), is(true));
         assertThat("deltaJson has timestamp", deltaJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
         ((ObjectNode) deltaJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
-        Optional<JsonNode> documentsJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(2).getPayload());
+        Optional<JsonNode> documentsJson = JsonUtil.getPayloadJson(pubSubRequestCaptor.getAllValues().get(2).getPayload());
         assertThat("Retrieved documentsJson", documentsJson.isPresent(), is(true));
         assertThat("documentsJson has timestamp", documentsJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
         ((ObjectNode) documentsJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
@@ -177,11 +184,11 @@ class UpdateThingShadowIPCHandlerTest {
         assertThat(documentsJson.get(), is(equalTo(expectedDocumentsJson.get())));
 
         // verify each pubsub call (accept, delta, documents) had expected values
-        for (int i = 0; i < acceptRequestCaptor.getAllValues().size(); i++) {
-            assertThat(acceptRequestCaptor.getAllValues().get(i).getShadowName(), is(equalTo(shadowName)));
-            assertThat(acceptRequestCaptor.getAllValues().get(i).getThingName(), is(equalTo(THING_NAME)));
-            assertThat("Expected operation", acceptRequestCaptor.getAllValues().get(i).getPublishOperation(), is(Operation.UPDATE_SHADOW));
-            assertThat("Expected log code", acceptRequestCaptor.getAllValues().get(i).getPublishOperation().getLogEventType(), is(LogEvents.UPDATE_THING_SHADOW.code()));
+        for (int i = 0; i < pubSubRequestCaptor.getAllValues().size(); i++) {
+            assertThat(pubSubRequestCaptor.getAllValues().get(i).getShadowName(), is(equalTo(shadowName)));
+            assertThat(pubSubRequestCaptor.getAllValues().get(i).getThingName(), is(equalTo(THING_NAME)));
+            assertThat("Expected operation", pubSubRequestCaptor.getAllValues().get(i).getPublishOperation(), is(Operation.UPDATE_SHADOW));
+            assertThat("Expected log code", pubSubRequestCaptor.getAllValues().get(i).getPublishOperation().getLogEventType(), is(LogEvents.UPDATE_THING_SHADOW.code()));
         }
     }
 
@@ -217,22 +224,22 @@ class UpdateThingShadowIPCHandlerTest {
 
         assertThat(updatedDocumentJson.get(), is(equalTo(expectedAcceptedJson.get())));
 
-        verify(mockPubSubClientWrapper, times(1)).accept(acceptRequestCaptor.capture());
-        verify(mockPubSubClientWrapper, times(0)).delta(acceptRequestCaptor.capture());
-        verify(mockPubSubClientWrapper, times(1)).documents(acceptRequestCaptor.capture());
+        verify(mockPubSubClientWrapper, times(1)).accept(pubSubRequestCaptor.capture());
+        verify(mockPubSubClientWrapper, times(0)).delta(pubSubRequestCaptor.capture());
+        verify(mockPubSubClientWrapper, times(1)).documents(pubSubRequestCaptor.capture());
 
-        assertThat(acceptRequestCaptor.getAllValues().size(), is(equalTo(2)));
+        assertThat(pubSubRequestCaptor.getAllValues().size(), is(equalTo(2)));
 
         Optional<JsonNode> expectedDeltaJson = JsonUtil.getPayloadJson(deltaPayload);
         assertThat("Found expectedDeltaJson", expectedDeltaJson.isPresent(), is(true));
         Optional<JsonNode> expectedDocumentsJson = JsonUtil.getPayloadJson(documentsPayload);
         assertThat("Found expectedDocumentsJson", expectedDocumentsJson.isPresent(), is(true));
 
-        Optional<JsonNode> acceptedJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(0).getPayload());
+        Optional<JsonNode> acceptedJson = JsonUtil.getPayloadJson(pubSubRequestCaptor.getAllValues().get(0).getPayload());
         assertThat("Retrieved acceptedJson", acceptedJson.isPresent(), is(true));
         assertThat("acceptedJson has timestamp", acceptedJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
         ((ObjectNode) acceptedJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
-        Optional<JsonNode> documentsJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(1).getPayload());
+        Optional<JsonNode> documentsJson = JsonUtil.getPayloadJson(pubSubRequestCaptor.getAllValues().get(1).getPayload());
         assertThat("Retrieved documentsJson", documentsJson.isPresent(), is(true));
         assertThat("documentsJson has timestamp", documentsJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
         ((ObjectNode) documentsJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
@@ -244,11 +251,11 @@ class UpdateThingShadowIPCHandlerTest {
         // assertThat(documentsJson.get(), is(equalTo(expectedDocumentsJson.get())));
 
         // verify each pubsub call (accept, documents) had expected values
-        for (int i = 0; i < acceptRequestCaptor.getAllValues().size(); i++) {
-            assertThat(acceptRequestCaptor.getAllValues().get(i).getShadowName(), is(equalTo(shadowName)));
-            assertThat(acceptRequestCaptor.getAllValues().get(i).getThingName(), is(equalTo(THING_NAME)));
-            assertThat("Expected operation", acceptRequestCaptor.getAllValues().get(i).getPublishOperation(), is(Operation.UPDATE_SHADOW));
-            assertThat("Expected log code", acceptRequestCaptor.getAllValues().get(i).getPublishOperation().getLogEventType(), is(LogEvents.UPDATE_THING_SHADOW.code()));
+        for (int i = 0; i < pubSubRequestCaptor.getAllValues().size(); i++) {
+            assertThat(pubSubRequestCaptor.getAllValues().get(i).getShadowName(), is(equalTo(shadowName)));
+            assertThat(pubSubRequestCaptor.getAllValues().get(i).getThingName(), is(equalTo(THING_NAME)));
+            assertThat("Expected operation", pubSubRequestCaptor.getAllValues().get(i).getPublishOperation(), is(Operation.UPDATE_SHADOW));
+            assertThat("Expected log code", pubSubRequestCaptor.getAllValues().get(i).getPublishOperation().getLogEventType(), is(LogEvents.UPDATE_THING_SHADOW.code()));
         }
     }
 
@@ -284,22 +291,22 @@ class UpdateThingShadowIPCHandlerTest {
 
         assertThat(updatedDocumentJson.get(), is(equalTo(expectedAcceptedJson.get())));
 
-        verify(mockPubSubClientWrapper, times(1)).accept(acceptRequestCaptor.capture());
-        verify(mockPubSubClientWrapper, times(0)).delta(acceptRequestCaptor.capture());
-        verify(mockPubSubClientWrapper, times(1)).documents(acceptRequestCaptor.capture());
+        verify(mockPubSubClientWrapper, times(1)).accept(pubSubRequestCaptor.capture());
+        verify(mockPubSubClientWrapper, times(0)).delta(pubSubRequestCaptor.capture());
+        verify(mockPubSubClientWrapper, times(1)).documents(pubSubRequestCaptor.capture());
 
-        assertThat(acceptRequestCaptor.getAllValues().size(), is(equalTo(2)));
+        assertThat(pubSubRequestCaptor.getAllValues().size(), is(equalTo(2)));
 
         Optional<JsonNode> expectedDeltaJson = JsonUtil.getPayloadJson(deltaPayload);
         assertThat("Found expectedDeltaJson", expectedDeltaJson.isPresent(), is(true));
         Optional<JsonNode> expectedDocumentsJson = JsonUtil.getPayloadJson(documentsPayload);
         assertThat("Found expectedDocumentsJson", expectedDocumentsJson.isPresent(), is(true));
 
-        Optional<JsonNode> acceptedJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(0).getPayload());
+        Optional<JsonNode> acceptedJson = JsonUtil.getPayloadJson(pubSubRequestCaptor.getAllValues().get(0).getPayload());
         assertThat("Retrieved acceptedJson", acceptedJson.isPresent(), is(true));
         assertThat("acceptedJson has timestamp", acceptedJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
         ((ObjectNode) acceptedJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
-        Optional<JsonNode> documentsJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(1).getPayload());
+        Optional<JsonNode> documentsJson = JsonUtil.getPayloadJson(pubSubRequestCaptor.getAllValues().get(1).getPayload());
         assertThat("Retrieved documentsJson", documentsJson.isPresent(), is(true));
         assertThat("documentsJson has timestamp", documentsJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
         ((ObjectNode) documentsJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
@@ -309,11 +316,11 @@ class UpdateThingShadowIPCHandlerTest {
         assertThat(documentsJson.get(), is(equalTo(expectedDocumentsJson.get())));
 
         // verify each pubsub call (accept, documents) had expected values
-        for (int i = 0; i < acceptRequestCaptor.getAllValues().size(); i++) {
-            assertThat(acceptRequestCaptor.getAllValues().get(i).getShadowName(), is(equalTo(shadowName)));
-            assertThat(acceptRequestCaptor.getAllValues().get(i).getThingName(), is(equalTo(THING_NAME)));
-            assertThat("Expected operation", acceptRequestCaptor.getAllValues().get(i).getPublishOperation(), is(Operation.UPDATE_SHADOW));
-            assertThat("Expected log code", acceptRequestCaptor.getAllValues().get(i).getPublishOperation().getLogEventType(), is(LogEvents.UPDATE_THING_SHADOW.code()));
+        for (int i = 0; i < pubSubRequestCaptor.getAllValues().size(); i++) {
+            assertThat(pubSubRequestCaptor.getAllValues().get(i).getShadowName(), is(equalTo(shadowName)));
+            assertThat(pubSubRequestCaptor.getAllValues().get(i).getThingName(), is(equalTo(THING_NAME)));
+            assertThat("Expected operation", pubSubRequestCaptor.getAllValues().get(i).getPublishOperation(), is(Operation.UPDATE_SHADOW));
+            assertThat("Expected log code", pubSubRequestCaptor.getAllValues().get(i).getPublishOperation().getLogEventType(), is(LogEvents.UPDATE_THING_SHADOW.code()));
         }
     }
 
@@ -355,20 +362,20 @@ class UpdateThingShadowIPCHandlerTest {
 
         assertThat(updatedDocumentJson.get(), is(equalTo(expectedAcceptedJson.get())));
 
-        verify(mockPubSubClientWrapper, times(1)).accept(acceptRequestCaptor.capture());
-        verify(mockPubSubClientWrapper, times(1)).delta(acceptRequestCaptor.capture());
-        verify(mockPubSubClientWrapper, times(1)).documents(acceptRequestCaptor.capture());
-        assertThat(acceptRequestCaptor.getAllValues().size(), is(equalTo(3)));
+        verify(mockPubSubClientWrapper, times(1)).accept(pubSubRequestCaptor.capture());
+        verify(mockPubSubClientWrapper, times(1)).delta(pubSubRequestCaptor.capture());
+        verify(mockPubSubClientWrapper, times(1)).documents(pubSubRequestCaptor.capture());
+        assertThat(pubSubRequestCaptor.getAllValues().size(), is(equalTo(3)));
 
-        Optional<JsonNode> acceptedJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(0).getPayload());
+        Optional<JsonNode> acceptedJson = JsonUtil.getPayloadJson(pubSubRequestCaptor.getAllValues().get(0).getPayload());
         assertThat("Retrieved acceptedJson", acceptedJson.isPresent(), is(true));
         assertThat("acceptedJson has timestamp", acceptedJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
         ((ObjectNode) acceptedJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
-        Optional<JsonNode> deltaJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(1).getPayload());
+        Optional<JsonNode> deltaJson = JsonUtil.getPayloadJson(pubSubRequestCaptor.getAllValues().get(1).getPayload());
         assertThat("Retrieved deltaJson", deltaJson.isPresent(), is(true));
         assertThat("deltaJson has timestamp", deltaJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
         ((ObjectNode) deltaJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
-        Optional<JsonNode> documentsJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(2).getPayload());
+        Optional<JsonNode> documentsJson = JsonUtil.getPayloadJson(pubSubRequestCaptor.getAllValues().get(2).getPayload());
         assertThat("Retrieved documentsJson", documentsJson.isPresent(), is(true));
         assertThat("documentsJson has timestamp", documentsJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
         ((ObjectNode) documentsJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
@@ -379,11 +386,11 @@ class UpdateThingShadowIPCHandlerTest {
         assertThat(documentsJson.get(), is(equalTo(expectedDocumentsJson.get())));
 
         // verify each pubsub call (accept, delta, documents) had expected values
-        for (int i = 0; i < acceptRequestCaptor.getAllValues().size(); i++) {
-            assertThat(acceptRequestCaptor.getAllValues().get(i).getShadowName(), is(equalTo(shadowName)));
-            assertThat(acceptRequestCaptor.getAllValues().get(i).getThingName(), is(equalTo(THING_NAME)));
-            assertThat("Expected operation", acceptRequestCaptor.getAllValues().get(i).getPublishOperation(), is(Operation.UPDATE_SHADOW));
-            assertThat("Expected log code", acceptRequestCaptor.getAllValues().get(i).getPublishOperation().getLogEventType(), is(LogEvents.UPDATE_THING_SHADOW.code()));
+        for (int i = 0; i < pubSubRequestCaptor.getAllValues().size(); i++) {
+            assertThat(pubSubRequestCaptor.getAllValues().get(i).getShadowName(), is(equalTo(shadowName)));
+            assertThat(pubSubRequestCaptor.getAllValues().get(i).getThingName(), is(equalTo(THING_NAME)));
+            assertThat("Expected operation", pubSubRequestCaptor.getAllValues().get(i).getPublishOperation(), is(Operation.UPDATE_SHADOW));
+            assertThat("Expected log code", pubSubRequestCaptor.getAllValues().get(i).getPublishOperation().getLogEventType(), is(LogEvents.UPDATE_THING_SHADOW.code()));
         }
     }
 
@@ -421,10 +428,10 @@ class UpdateThingShadowIPCHandlerTest {
 
         assertThat(updatedDocumentJson.get(), is(expectedAcceptedJson.get()));
 
-        verify(mockPubSubClientWrapper, times(1)).accept(acceptRequestCaptor.capture());
-        verify(mockPubSubClientWrapper, times(1)).delta(acceptRequestCaptor.capture());
-        verify(mockPubSubClientWrapper, times(1)).documents(acceptRequestCaptor.capture());
-        assertThat(acceptRequestCaptor.getAllValues().size(), is(equalTo(3)));
+        verify(mockPubSubClientWrapper, times(1)).accept(pubSubRequestCaptor.capture());
+        verify(mockPubSubClientWrapper, times(1)).delta(pubSubRequestCaptor.capture());
+        verify(mockPubSubClientWrapper, times(1)).documents(pubSubRequestCaptor.capture());
+        assertThat(pubSubRequestCaptor.getAllValues().size(), is(equalTo(3)));
 
         Optional<JsonNode> expectedDeltaJson = JsonUtil.getPayloadJson(deltaPayload);
         assertThat("Found expectedDeltaJson", expectedDeltaJson.isPresent(), is(true));
@@ -433,15 +440,15 @@ class UpdateThingShadowIPCHandlerTest {
         Optional<JsonNode> expectedDocumentsJson = JsonUtil.getPayloadJson(documentsPayload);
         assertThat("Found expectedDocumentsJson", expectedDocumentsJson.isPresent(), is(true));
 
-        Optional<JsonNode> acceptedJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(0).getPayload());
+        Optional<JsonNode> acceptedJson = JsonUtil.getPayloadJson(pubSubRequestCaptor.getAllValues().get(0).getPayload());
         assertThat("Retrieved acceptedJson", acceptedJson.isPresent(), is(true));
         assertThat("acceptedJson has timestamp", acceptedJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
         ((ObjectNode) acceptedJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
-        Optional<JsonNode> deltaJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(1).getPayload());
+        Optional<JsonNode> deltaJson = JsonUtil.getPayloadJson(pubSubRequestCaptor.getAllValues().get(1).getPayload());
         assertThat("Retrieved deltaJson", deltaJson.isPresent(), is(true));
         assertThat("deltaJson has timestamp", deltaJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
         ((ObjectNode) deltaJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
-        Optional<JsonNode> documentsJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(2).getPayload());
+        Optional<JsonNode> documentsJson = JsonUtil.getPayloadJson(pubSubRequestCaptor.getAllValues().get(2).getPayload());
         assertThat("Retrieved documentsJson", documentsJson.isPresent(), is(true));
         assertThat("documentsJson has timestamp", documentsJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
         ((ObjectNode) documentsJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
@@ -452,11 +459,11 @@ class UpdateThingShadowIPCHandlerTest {
         assertThat(documentsJson.get(), is(equalTo(expectedDocumentsJson.get())));
 
         // verify each pubsub call (accept, delta, documents) had expected values
-        for (int i = 0; i < acceptRequestCaptor.getAllValues().size(); i++) {
-            assertThat(acceptRequestCaptor.getAllValues().get(i).getShadowName(), is(equalTo(shadowName)));
-            assertThat(acceptRequestCaptor.getAllValues().get(i).getThingName(), is(equalTo(THING_NAME)));
-            assertThat("Expected operation", acceptRequestCaptor.getAllValues().get(i).getPublishOperation(), is(Operation.UPDATE_SHADOW));
-            assertThat("Expected log code", acceptRequestCaptor.getAllValues().get(i).getPublishOperation().getLogEventType(), is(LogEvents.UPDATE_THING_SHADOW.code()));
+        for (int i = 0; i < pubSubRequestCaptor.getAllValues().size(); i++) {
+            assertThat(pubSubRequestCaptor.getAllValues().get(i).getShadowName(), is(equalTo(shadowName)));
+            assertThat(pubSubRequestCaptor.getAllValues().get(i).getThingName(), is(equalTo(THING_NAME)));
+            assertThat("Expected operation", pubSubRequestCaptor.getAllValues().get(i).getPublishOperation(), is(Operation.UPDATE_SHADOW));
+            assertThat("Expected log code", pubSubRequestCaptor.getAllValues().get(i).getPublishOperation().getLogEventType(), is(LogEvents.UPDATE_THING_SHADOW.code()));
         }
     }
 
@@ -476,17 +483,17 @@ class UpdateThingShadowIPCHandlerTest {
         ServiceError thrown = assertThrows(ServiceError.class, () -> updateThingShadowIPCHandler.handleRequest(request));
         assertThat(thrown.getMessage(), containsString(SAMPLE_EXCEPTION_MESSAGE));
 
-        verify(mockPubSubClientWrapper, times(1)).reject(rejectRequestCaptor.capture());
+        verify(mockPubSubClientWrapper, times(1)).reject(pubSubRequestCaptor.capture());
 
-        assertThat(rejectRequestCaptor.getValue(), is(notNullValue()));
-        assertThat(rejectRequestCaptor.getValue().getShadowName(), is(equalTo(SHADOW_NAME)));
-        assertThat("Expected operation", rejectRequestCaptor.getValue().getPublishOperation(), is(Operation.UPDATE_SHADOW));
-        assertThat("Expected log code", rejectRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(LogEvents.UPDATE_THING_SHADOW.code()));
+        assertThat(pubSubRequestCaptor.getValue(), is(notNullValue()));
+        assertThat(pubSubRequestCaptor.getValue().getShadowName(), is(equalTo(SHADOW_NAME)));
+        assertThat("Expected operation", pubSubRequestCaptor.getValue().getPublishOperation(), is(Operation.UPDATE_SHADOW));
+        assertThat("Expected log code", pubSubRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(LogEvents.UPDATE_THING_SHADOW.code()));
 
-        ErrorMessage errorMessage = rejectRequestCaptor.getValue().getErrorMessage();
-        assertThat(errorMessage.getTimestamp(), is(not(equalTo(Instant.EPOCH.toEpochMilli()))));
-        assertThat(errorMessage.getErrorCode(), is(500));
-        assertThat(errorMessage.getMessage(), startsWith("Internal service failure"));
+        JsonNode errorNode = JsonUtil.getPayloadJson(pubSubRequestCaptor.getValue().getPayload()).get();
+        assertThat(errorNode.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(not(equalTo(Instant.EPOCH.toEpochMilli()))));
+        assertThat(errorNode.get(ERROR_CODE_FIELD_NAME).asInt(), is(500));
+        assertThat(errorNode.get(ERROR_MESSAGE_FIELD_NAME).asText(), startsWith("Internal service failure"));
     }
 
     @Test
@@ -503,17 +510,41 @@ class UpdateThingShadowIPCHandlerTest {
         ServiceError thrown = assertThrows(ServiceError.class, () -> updateThingShadowIPCHandler.handleRequest(request));
         assertThat(thrown.getMessage(), containsString(SAMPLE_EXCEPTION_MESSAGE));
 
-        verify(mockPubSubClientWrapper, times(1)).reject(rejectRequestCaptor.capture());
+        verify(mockPubSubClientWrapper, times(1)).reject(pubSubRequestCaptor.capture());
 
-        assertThat(rejectRequestCaptor.getValue(), is(notNullValue()));
-        assertThat(rejectRequestCaptor.getValue().getShadowName(), is(equalTo(SHADOW_NAME)));
-        assertThat("Expected operation", rejectRequestCaptor.getValue().getPublishOperation(), is(Operation.UPDATE_SHADOW));
-        assertThat("Expected log code", rejectRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(LogEvents.UPDATE_THING_SHADOW.code()));
+        assertThat(pubSubRequestCaptor.getValue(), is(notNullValue()));
+        assertThat(pubSubRequestCaptor.getValue().getShadowName(), is(equalTo(SHADOW_NAME)));
+        assertThat("Expected operation", pubSubRequestCaptor.getValue().getPublishOperation(), is(Operation.UPDATE_SHADOW));
+        assertThat("Expected log code", pubSubRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(LogEvents.UPDATE_THING_SHADOW.code()));
 
-        ErrorMessage errorMessage = rejectRequestCaptor.getValue().getErrorMessage();
-        assertThat(errorMessage.getTimestamp(), is(not(equalTo(Instant.EPOCH.toEpochMilli()))));
-        assertThat(errorMessage.getErrorCode(), is(500));
-        assertThat(errorMessage.getMessage(), startsWith("Internal service failure"));
+        JsonNode errorNode = JsonUtil.getPayloadJson(pubSubRequestCaptor.getValue().getPayload()).get();
+        assertThat(errorNode.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(not(equalTo(Instant.EPOCH.toEpochMilli()))));
+        assertThat(errorNode.get(ERROR_CODE_FIELD_NAME).asInt(), is(500));
+        assertThat(errorNode.get(ERROR_MESSAGE_FIELD_NAME).asText(), startsWith("Internal service failure"));
+    }
+
+    @Test
+    void GIVEN_update_thing_shadow_request_WHEN_missing_payload_THEN_update_thing_shadow(ExtensionContext context) throws IOException {
+        ignoreExceptionOfType(context, InvalidRequestParametersException.class);
+        UpdateThingShadowRequest request = new UpdateThingShadowRequest();
+        request.setThingName(THING_NAME);
+        request.setShadowName(SHADOW_NAME);
+        UpdateThingShadowIPCHandler updateThingShadowIPCHandler = new UpdateThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper);
+
+        InvalidArgumentsError thrown = assertThrows(InvalidArgumentsError.class, () -> updateThingShadowIPCHandler.handleRequest(request));
+        assertThat(thrown.getMessage(), Matchers.is("Missing update payload"));
+        verify(mockPubSubClientWrapper, times(1))
+                .reject(pubSubRequestCaptor.capture());
+
+        assertThat(pubSubRequestCaptor.getValue(), is(notNullValue()));
+        assertThat(pubSubRequestCaptor.getValue().getShadowName(), is(equalTo(SHADOW_NAME)));
+        assertThat("Expected operation", pubSubRequestCaptor.getValue().getPublishOperation(), is(Operation.UPDATE_SHADOW));
+        assertThat("Expected log code", pubSubRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(LogEvents.UPDATE_THING_SHADOW.code()));
+
+        JsonNode errorNode = JsonUtil.getPayloadJson(pubSubRequestCaptor.getValue().getPayload()).get();
+        assertThat(errorNode.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(not(equalTo(Instant.EPOCH.toEpochMilli()))));
+        assertThat(errorNode.get(ERROR_CODE_FIELD_NAME).asInt(), is(400));
+        assertThat(errorNode.get(ERROR_MESSAGE_FIELD_NAME).asText(), is("Missing update payload"));
     }
 
     @Test
@@ -530,16 +561,17 @@ class UpdateThingShadowIPCHandlerTest {
         UnauthorizedError thrown = assertThrows(UnauthorizedError.class, () -> updateThingShadowIPCHandler.handleRequest(request));
         assertThat(thrown.getMessage(), is(equalTo(SAMPLE_EXCEPTION_MESSAGE)));
 
-        verify(mockPubSubClientWrapper, times(1)).reject(rejectRequestCaptor.capture());
+        verify(mockPubSubClientWrapper, times(1)).reject(pubSubRequestCaptor.capture());
 
-        assertThat(rejectRequestCaptor.getValue(), is(notNullValue()));
-        assertThat(rejectRequestCaptor.getValue().getShadowName(), is(equalTo(SHADOW_NAME)));
-        assertThat("Expected operation", rejectRequestCaptor.getValue().getPublishOperation(), is(Operation.UPDATE_SHADOW));
-        assertThat("Expected log code", rejectRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(LogEvents.UPDATE_THING_SHADOW.code()));
+        assertThat(pubSubRequestCaptor.getValue(), is(notNullValue()));
+        assertThat(pubSubRequestCaptor.getValue().getShadowName(), is(equalTo(SHADOW_NAME)));
+        assertThat("Expected operation", pubSubRequestCaptor.getValue().getPublishOperation(), is(Operation.UPDATE_SHADOW));
+        assertThat("Expected log code", pubSubRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(LogEvents.UPDATE_THING_SHADOW.code()));
 
-        ErrorMessage errorMessage = rejectRequestCaptor.getValue().getErrorMessage();
-        assertThat(errorMessage.getErrorCode(), is(401));
-        assertThat(errorMessage.getMessage(), Matchers.startsWith("Unauthorized"));
+        JsonNode errorNode = JsonUtil.getPayloadJson(pubSubRequestCaptor.getValue().getPayload()).get();
+        assertThat(errorNode.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(not(equalTo(Instant.EPOCH.toEpochMilli()))));
+        assertThat(errorNode.get(ERROR_CODE_FIELD_NAME).asInt(), is(401));
+        assertThat(errorNode.get(ERROR_MESSAGE_FIELD_NAME).asText(), Matchers.startsWith("Unauthorized"));
     }
 
     @ParameterizedTest
@@ -556,17 +588,17 @@ class UpdateThingShadowIPCHandlerTest {
         InvalidArgumentsError thrown = assertThrows(InvalidArgumentsError.class, () -> updateThingShadowIPCHandler.handleRequest(request));
         assertThat(thrown.getMessage(),either(startsWith("ShadowName")).or(startsWith("ThingName")));
 
-        verify(mockPubSubClientWrapper, times(1)).reject(rejectRequestCaptor.capture());
+        verify(mockPubSubClientWrapper, times(1)).reject(pubSubRequestCaptor.capture());
 
-        assertThat(rejectRequestCaptor.getValue(), is(notNullValue()));
-        assertThat(rejectRequestCaptor.getValue().getShadowName(), is(equalTo(shadowName)));
-        assertThat("Expected operation", rejectRequestCaptor.getValue().getPublishOperation(), is(Operation.UPDATE_SHADOW));
-        assertThat("Expected log code", rejectRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(LogEvents.UPDATE_THING_SHADOW.code()));
+        assertThat(pubSubRequestCaptor.getValue(), is(notNullValue()));
+        assertThat(pubSubRequestCaptor.getValue().getShadowName(), is(equalTo(shadowName)));
+        assertThat("Expected operation", pubSubRequestCaptor.getValue().getPublishOperation(), is(Operation.UPDATE_SHADOW));
+        assertThat("Expected log code", pubSubRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(LogEvents.UPDATE_THING_SHADOW.code()));
 
-        ErrorMessage errorMessage = rejectRequestCaptor.getValue().getErrorMessage();
-        assertThat(errorMessage.getTimestamp(), is(not(equalTo(Instant.EPOCH.toEpochMilli()))));
-        assertThat(errorMessage.getErrorCode(), is(400));
-        assertThat(errorMessage.getMessage(),either(startsWith("ShadowName")).or(startsWith("ThingName")));
+        JsonNode errorNode = JsonUtil.getPayloadJson(pubSubRequestCaptor.getValue().getPayload()).get();
+        assertThat(errorNode.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(not(equalTo(Instant.EPOCH.toEpochMilli()))));
+        assertThat(errorNode.get(ERROR_CODE_FIELD_NAME).asInt(), is(400));
+        assertThat(errorNode.get(ERROR_MESSAGE_FIELD_NAME).asText(), either(startsWith("ShadowName")).or(startsWith("ThingName")));
     }
 
     @Test
@@ -587,21 +619,21 @@ class UpdateThingShadowIPCHandlerTest {
         assertThat(thrown.getMessage(), startsWith("Unexpected error"));
 
         verify(mockPubSubClientWrapper, times(1))
-                .reject(rejectRequestCaptor.capture());
+                .reject(pubSubRequestCaptor.capture());
 
-        assertThat(rejectRequestCaptor.getValue(), is(notNullValue()));
-        assertThat(rejectRequestCaptor.getValue().getShadowName(), is(equalTo(SHADOW_NAME)));
-        assertThat("Expected operation", rejectRequestCaptor.getValue().getPublishOperation(), is(Operation.UPDATE_SHADOW));
-        assertThat("Expected log code", rejectRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(LogEvents.UPDATE_THING_SHADOW.code()));
+        assertThat(pubSubRequestCaptor.getValue(), is(notNullValue()));
+        assertThat(pubSubRequestCaptor.getValue().getShadowName(), is(equalTo(SHADOW_NAME)));
+        assertThat("Expected operation", pubSubRequestCaptor.getValue().getPublishOperation(), is(Operation.UPDATE_SHADOW));
+        assertThat("Expected log code", pubSubRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(LogEvents.UPDATE_THING_SHADOW.code()));
 
-        ErrorMessage errorMessage = rejectRequestCaptor.getValue().getErrorMessage();
-        assertThat(errorMessage.getTimestamp(), is(not(equalTo(Instant.EPOCH.toEpochMilli()))));
-        assertThat(errorMessage.getErrorCode(), is(500));
-        assertThat(errorMessage.getMessage(), startsWith("Internal service failure"));
+        JsonNode errorNode = JsonUtil.getPayloadJson(pubSubRequestCaptor.getValue().getPayload()).get();
+        assertThat(errorNode.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(not(equalTo(Instant.EPOCH.toEpochMilli()))));
+        assertThat(errorNode.get(ERROR_CODE_FIELD_NAME).asInt(), is(500));
+        assertThat(errorNode.get(ERROR_MESSAGE_FIELD_NAME).asText(), startsWith("Internal service failure"));
     }
 
     // reusable function to verify InvalidArgumentsError from faulty update requests
-    private void assertInvalidArgumentsErrorFromPayloadUpdate(byte[] initialDocument, byte[] badUpdateRequest, String expectedErrorMessage, int expectedErrorCode, ExtensionContext context) {
+    private void assertInvalidArgumentsErrorFromPayloadUpdate(byte[] initialDocument, byte[] badUpdateRequest, String expectedErrorMessage, int expectedErrorCode, ExtensionContext context) throws IOException {
         ignoreExceptionOfType(context, InvalidRequestParametersException.class);
         UpdateThingShadowRequest request = new UpdateThingShadowRequest();
         request.setThingName(THING_NAME);
@@ -618,21 +650,22 @@ class UpdateThingShadowIPCHandlerTest {
         assertThat(thrown.getMessage().trim(), is(equalTo(expectedErrorMessage)));
 
         verify(mockPubSubClientWrapper, times(1))
-                .reject(rejectRequestCaptor.capture());
+                .reject(pubSubRequestCaptor.capture());
 
-        assertThat(rejectRequestCaptor.getValue(), is(notNullValue()));
-        assertThat(rejectRequestCaptor.getValue().getShadowName(), is(equalTo(SHADOW_NAME)));
-        assertThat("Expected operation", rejectRequestCaptor.getValue().getPublishOperation(), is(Operation.UPDATE_SHADOW));
-        assertThat("Expected log code", rejectRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(LogEvents.UPDATE_THING_SHADOW.code()));
+        assertThat(pubSubRequestCaptor.getValue(), is(notNullValue()));
+        assertThat(pubSubRequestCaptor.getValue().getShadowName(), is(equalTo(SHADOW_NAME)));
+        assertThat("Expected operation", pubSubRequestCaptor.getValue().getPublishOperation(), is(Operation.UPDATE_SHADOW));
+        assertThat("Expected log code", pubSubRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(LogEvents.UPDATE_THING_SHADOW.code()));
 
-        ErrorMessage errorMessage = rejectRequestCaptor.getValue().getErrorMessage();
-        assertThat(errorMessage.getErrorCode(), is(expectedErrorCode));
-        assertThat(errorMessage.getMessage(), is(equalTo(expectedErrorMessage)));
+        JsonNode errorNode = JsonUtil.getPayloadJson(pubSubRequestCaptor.getValue().getPayload()).get();
+        assertThat(errorNode.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(not(equalTo(Instant.EPOCH.toEpochMilli()))));
+        assertThat(errorNode.get(ERROR_CODE_FIELD_NAME).asInt(), is(expectedErrorCode));
+        assertThat(errorNode.get(ERROR_MESSAGE_FIELD_NAME).asText(), is(equalTo(expectedErrorMessage)));
     }
 
     @ParameterizedTest
     @NullAndEmptySource
-    void GIVEN_missing_payload_WHEN_handle_request_THEN_throw_invalid_arguments_error(byte[] updatePayload, ExtensionContext context) {
+    void GIVEN_missing_payload_WHEN_handle_request_THEN_throw_invalid_arguments_error(byte[] updatePayload, ExtensionContext context) throws IOException {
         String expectedErrorString = "Missing update payload";
         int expectedErrorCode = 400;
         assertInvalidArgumentsErrorFromPayloadUpdate(null, updatePayload, expectedErrorString, expectedErrorCode, context);
@@ -674,16 +707,17 @@ class UpdateThingShadowIPCHandlerTest {
         assertThat(thrown.getMessage().trim(), is(equalTo("Invalid version")));
 
         verify(mockPubSubClientWrapper, times(1))
-                .reject(rejectRequestCaptor.capture());
+                .reject(pubSubRequestCaptor.capture());
 
-        assertThat(rejectRequestCaptor.getValue(), is(notNullValue()));
-        assertThat(rejectRequestCaptor.getValue().getShadowName(), is(equalTo(SHADOW_NAME)));
-        assertThat("Expected operation", rejectRequestCaptor.getValue().getPublishOperation(), is(Operation.UPDATE_SHADOW));
-        assertThat("Expected log code", rejectRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(LogEvents.UPDATE_THING_SHADOW.code()));
+        assertThat(pubSubRequestCaptor.getValue(), is(notNullValue()));
+        assertThat(pubSubRequestCaptor.getValue().getShadowName(), is(equalTo(SHADOW_NAME)));
+        assertThat("Expected operation", pubSubRequestCaptor.getValue().getPublishOperation(), is(Operation.UPDATE_SHADOW));
+        assertThat("Expected log code", pubSubRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(LogEvents.UPDATE_THING_SHADOW.code()));
 
-        ErrorMessage errorMessage = rejectRequestCaptor.getValue().getErrorMessage();
-        assertThat(errorMessage.getErrorCode(), is(409));
-        assertThat(errorMessage.getMessage(), is(equalTo("Version conflict")));
+        JsonNode errorNode = JsonUtil.getPayloadJson(pubSubRequestCaptor.getValue().getPayload()).get();
+        assertThat(errorNode.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(not(equalTo(Instant.EPOCH.toEpochMilli()))));
+        assertThat(errorNode.get(ERROR_CODE_FIELD_NAME).asInt(), is(409));
+        assertThat(errorNode.get(ERROR_MESSAGE_FIELD_NAME).asText(), is(equalTo("Version conflict")));
     }
 
     @Test
