@@ -8,7 +8,7 @@ package com.aws.greengrass.shadowmanager.ipc;
 import com.aws.greengrass.authorization.AuthorizationHandler;
 import com.aws.greengrass.authorization.Permission;
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
-import com.aws.greengrass.shadowmanager.JsonUtil;
+import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;

@@ -9,7 +9,6 @@ import com.aws.greengrass.authorization.AuthorizationHandler;
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
-import com.aws.greengrass.shadowmanager.JsonUtil;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
@@ -17,7 +16,10 @@ import com.aws.greengrass.shadowmanager.ipc.model.AcceptRequest;
 import com.aws.greengrass.shadowmanager.ipc.model.Operation;
 import com.aws.greengrass.shadowmanager.ipc.model.RejectRequest;
 import com.aws.greengrass.shadowmanager.model.ErrorMessage;
-import com.aws.greengrass.shadowmanager.model.JsonShadowDocument;
+import com.aws.greengrass.shadowmanager.model.ResponseMessageBuilder;
+import com.aws.greengrass.shadowmanager.model.ShadowDocument;
+import com.aws.greengrass.shadowmanager.util.JsonUtil;
+import com.fasterxml.jackson.databind.JsonNode;
 import software.amazon.awssdk.aws.greengrass.GeneratedAbstractDeleteThingShadowOperationHandler;
 import software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowRequest;
 import software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowResponse;
@@ -29,6 +31,9 @@ import software.amazon.awssdk.eventstreamrpc.OperationContinuationHandlerContext
 import software.amazon.awssdk.eventstreamrpc.model.EventStreamJsonMessage;
 
 import java.io.IOException;
+import java.time.Instant;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static com.aws.greengrass.ipc.common.ExceptionUtil.translateExceptions;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
@@ -89,12 +94,11 @@ public class DeleteThingShadowIPCHandler extends GeneratedAbstractDeleteThingSha
             String shadowName = request.getShadowName();
             //TODO: Add payload to DeleteThingShadowRequest and then validate the version of the document the customer
             //    wants to delete and pass the client token in the response
-            //byte[] payload = request.getPayload();
+            byte[] payload = null;
 
             try {
                 logger.atTrace("ipc-update-thing-shadow-request").log();
 
-                DeleteThingShadowResponse response = new DeleteThingShadowResponse();
                 IPCUtil.validateThingNameAndDoAuthorization(authorizationHandler, DELETE_THING_SHADOW,
                         serviceName, thingName, shadowName);
 
@@ -120,15 +124,27 @@ public class DeleteThingShadowIPCHandler extends GeneratedAbstractDeleteThingSha
                         .kv(LOG_THING_NAME_KEY, thingName)
                         .kv(LOG_SHADOW_NAME_KEY, shadowName)
                         .log("Successfully delete shadow");
-                response.setPayload(new byte[0]);
 
-                JsonShadowDocument deletedShadowDocument = new JsonShadowDocument(result);
+                ShadowDocument deletedShadowDocument = new ShadowDocument(result);
+
+                // Get the Client Token if present in the payload.
+                Optional<JsonNode> payloadJson = JsonUtil.getPayloadJson(payload);
+                AtomicReference<Optional<String>> clientToken = new AtomicReference<>(Optional.empty());
+                payloadJson.ifPresent(jsonNode -> clientToken.set(JsonUtil.getClientToken(jsonNode)));
+
+                JsonNode responseNode = ResponseMessageBuilder.builder()
+                        .withVersion(deletedShadowDocument.getVersion())
+                        .withClientToken(clientToken.get())
+                        .withTimestamp(Instant.now())
+                        .build();
                 pubSubClientWrapper.accept(AcceptRequest.builder()
                         .thingName(thingName)
                         .shadowName(shadowName)
-                        .payload(JsonUtil.getPayloadBytes(deletedShadowDocument.getVersionNode()))
+                        .payload(JsonUtil.getPayloadBytes(responseNode))
                         .publishOperation(Operation.DELETE_SHADOW)
                         .build());
+                DeleteThingShadowResponse response = new DeleteThingShadowResponse();
+                response.setPayload(new byte[0]);
                 return response;
 
             } catch (AuthorizationException e) {

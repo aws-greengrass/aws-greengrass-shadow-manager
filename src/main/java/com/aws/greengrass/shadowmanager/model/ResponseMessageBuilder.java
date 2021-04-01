@@ -1,7 +1,13 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package com.aws.greengrass.shadowmanager.model;
 
-import com.aws.greengrass.shadowmanager.JsonUtil;
+import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.IntNode;
 import com.fasterxml.jackson.databind.node.LongNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
@@ -9,6 +15,8 @@ import com.fasterxml.jackson.databind.node.TextNode;
 import java.time.Instant;
 import java.util.Optional;
 
+import static com.aws.greengrass.shadowmanager.model.Constants.ERROR_CODE_FIELD_NAME;
+import static com.aws.greengrass.shadowmanager.model.Constants.ERROR_MESSAGE_FIELD_NAME;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_CLIENT_TOKEN;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_METADATA;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE;
@@ -44,11 +52,12 @@ public class ResponseMessageBuilder {
         return this;
     }
 
-    //public ResponseMessageBuilder withError(final SpectreException exception) {
-    //    json.set(ERROR_CODE_FIELD_NAME, exception.getCode().getValue());
-    //    json.set(ERROR_MESSAGE_FIELD_NAME, Json.fromJavaString(exception.getMessage()));
-    //    return this;
-    //}
+    //TODO: make it public when we use it.
+    private ResponseMessageBuilder withError(final ErrorMessage message) {
+        json.set(ERROR_CODE_FIELD_NAME, new IntNode(message.getErrorCode()));
+        json.set(ERROR_MESSAGE_FIELD_NAME, new TextNode(message.getMessage()));
+        return this;
+    }
 
     public ResponseMessageBuilder withState(final JsonNode state) {
         json.set(SHADOW_DOCUMENT_STATE, state);
@@ -72,7 +81,6 @@ public class ResponseMessageBuilder {
 
     /**
      * Return the build JsonNode object.
-     *
      * Note this does not make a deep copy of the object - any changes made to the builder
      * after this is called will affected the returned object.
      */

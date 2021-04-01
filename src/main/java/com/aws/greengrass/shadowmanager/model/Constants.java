@@ -5,7 +5,11 @@
 
 package com.aws.greengrass.shadowmanager.model;
 
-public class Constants {
+public final class Constants {
+    private Constants() {
+
+    }
+
     public static final String SHADOW_RESOURCE_TYPE = "shadow";
     public static final String SHADOW_RESOURCE_JOINER = "shadow";
     public static final String SHADOW_MANAGER_NAME = "aws.greengrass.ShadowManager";
@@ -34,4 +38,6 @@ public class Constants {
     public static final String LOG_NEXT_TOKEN_KEY = "nextToken";
     public static final String LOG_PAGE_SIZE_KEY = "pageSize";
     public static final String CLASSIC_SHADOW_IDENTIFIER = "";
+    public static final String ERROR_CODE_FIELD_NAME = "code";
+    public static final String ERROR_MESSAGE_FIELD_NAME = "message";
 }

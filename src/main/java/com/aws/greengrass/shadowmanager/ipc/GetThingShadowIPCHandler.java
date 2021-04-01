@@ -9,7 +9,6 @@ import com.aws.greengrass.authorization.AuthorizationHandler;
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
-import com.aws.greengrass.shadowmanager.JsonUtil;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
@@ -19,6 +18,7 @@ import com.aws.greengrass.shadowmanager.ipc.model.RejectRequest;
 import com.aws.greengrass.shadowmanager.model.ErrorMessage;
 import com.aws.greengrass.shadowmanager.model.ResponseMessageBuilder;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
+import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import software.amazon.awssdk.aws.greengrass.GeneratedAbstractGetThingShadowOperationHandler;
@@ -128,8 +128,19 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
                 AtomicReference<Optional<String>> clientToken = new AtomicReference<>(Optional.empty());
                 payloadJson.ifPresent(jsonNode -> clientToken.set(JsonUtil.getClientToken(jsonNode)));
 
-                ObjectNode responseNode = createGetResponseAndPublishAccepted(thingName, shadowName, clientToken.get(),
-                        currentShadowDocument);
+                ObjectNode responseNode = ResponseMessageBuilder.builder()
+                        .withState(currentShadowDocument.getState().toJsonWithDelta())
+                        //TODO: Update the metadata when implemented.
+                        //.withMetadata()
+                        .withVersion(currentShadowDocument.getVersion())
+                        .withClientToken(clientToken.get())
+                        .withTimestamp(Instant.now()).build();
+
+                pubSubClientWrapper.accept(AcceptRequest.builder().thingName(thingName).shadowName(shadowName)
+                        .payload(JsonUtil.getPayloadBytes(responseNode))
+                        .publishOperation(Operation.GET_SHADOW)
+                        .build());
+
                 GetThingShadowResponse response = new GetThingShadowResponse();
                 response.setPayload(JsonUtil.getPayloadBytes(responseNode));
                 return response;
@@ -173,23 +184,6 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
             }
         });
     }
-
-    private ObjectNode createGetResponseAndPublishAccepted(String thingName, String shadowName,
-                                                           Optional<String> clientToken, ShadowDocument shadowDocument)
-            throws IOException {
-        ObjectNode response = ResponseMessageBuilder.builder().withState(shadowDocument.getState().toJsonWithDelta())
-                //.withMetadata()
-                .withVersion(shadowDocument.getVersion())
-                .withClientToken(clientToken)
-                .withTimestamp(Instant.now()).build();
-
-        pubSubClientWrapper.accept(AcceptRequest.builder().thingName(thingName).shadowName(shadowName)
-                .payload(JsonUtil.getPayloadBytes(response))
-                .publishOperation(Operation.GET_SHADOW)
-                .build());
-        return response;
-    }
-
 
     @Override
     public void handleStreamEvent(EventStreamJsonMessage streamRequestEvent) {

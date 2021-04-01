@@ -3,20 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package com.aws.greengrass.shadowmanager;
+package com.aws.greengrass.shadowmanager.util;
 
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.model.Constants;
 import com.aws.greengrass.shadowmanager.model.ErrorMessage;
-import com.aws.greengrass.shadowmanager.model.JsonShadowDocument;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.ObjectReader;
-import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.fge.jackson.JsonLoader;
 import com.github.fge.jsonschema.core.exceptions.ProcessingException;
@@ -40,8 +37,6 @@ public final class JsonUtil {
     public static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private static final Logger logger = LogManager.getLogger(JsonUtil.class);
-    private static ObjectReader objectReader;
-    private static ObjectWriter objectWriter;
     private static JsonSchema updateShadowRequestJsonSchema;
     private static JsonSchema updateShadowPayloadJsonSchema;
 
@@ -55,8 +50,6 @@ public final class JsonUtil {
             updateShadowPayloadJsonSchema = factory.getJsonSchema(updatePayloadJsonNode);
 
             OBJECT_MAPPER.setSerializationInclusion(JsonInclude.Include.NON_NULL);
-            objectReader = OBJECT_MAPPER.reader();
-            objectWriter = OBJECT_MAPPER.writer();
         } catch (ProcessingException | IOException e) {
             logger.atError().cause(e).log("Unable to parse JSON schema from resource files");
         }
@@ -112,11 +105,11 @@ public final class JsonUtil {
         if (payload == null) {
             return Optional.empty();
         }
-        return Optional.of(objectReader.readTree(new ByteArrayInputStream(payload)));
+        return Optional.of(OBJECT_MAPPER.readTree(new ByteArrayInputStream(payload)));
     }
 
     public static byte[] getPayloadBytes(JsonNode node) throws IOException {
-        return objectWriter.writeValueAsBytes(node);
+        return OBJECT_MAPPER.writeValueAsBytes(node);
     }
 
     public static boolean isNullOrMissing(JsonNode node) {

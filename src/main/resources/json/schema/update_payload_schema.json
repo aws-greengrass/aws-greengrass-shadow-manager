@@ -6,7 +6,8 @@
   "properties": {
     "clientToken": {
       "description": "The unique identifier for the client making the update shadow request",
-      "type": "string"
+      "type": "string",
+      "maxLength": 64
     },
     "state": {
       "description": "The state node containing the shadow state.",
