@@ -11,7 +11,6 @@ import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.JsonUtil;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
-import com.aws.greengrass.shadowmanager.ShadowUtil;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.ipc.model.AcceptRequest;
@@ -91,7 +90,7 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
     public GetThingShadowResponse handleRequest(GetThingShadowRequest request) {
         return translateExceptions(() -> {
             String thingName = request.getThingName();
-            String shadowName = ShadowUtil.getClassicShadowIfMissingShadowName(request.getShadowName());
+            String shadowName = IPCUtil.getClassicShadowIfMissingShadowName(request.getShadowName());
 
             try {
                 logger.atTrace("ipc-get-thing-shadow-request").log();

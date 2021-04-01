@@ -11,7 +11,6 @@ import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.JsonUtil;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
-import com.aws.greengrass.shadowmanager.ShadowUtil;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.ipc.model.AcceptRequest;
@@ -93,7 +92,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
         return translateExceptions(() -> {
             // TODO: Sync this entire function possibly with delete handler as well.
             String thingName = request.getThingName();
-            String shadowName = ShadowUtil.getClassicShadowIfMissingShadowName(request.getShadowName());
+            String shadowName = IPCUtil.getClassicShadowIfMissingShadowName(request.getShadowName());
             byte[] updatedDocumentRequestBytes = request.getPayload();
             JsonShadowDocument currentDocument = null;
             try {
@@ -105,8 +104,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                 IPCUtil.validateThingName(thingName);
                 IPCUtil.validateShadowName(shadowName);
                 if (updatedDocumentRequestBytes == null || updatedDocumentRequestBytes.length == 0) {
-                    throw new InvalidRequestParametersException("Missing update payload",
-                            ErrorMessage.FORBIDDEN_MESSAGE);
+                    throw new InvalidRequestParametersException(ErrorMessage.createPayloadMissingMessage());
                 }
                 IPCUtil.doAuthorization(authorizationHandler, UPDATE_THING_SHADOW,
                         serviceName, thingName, shadowName);

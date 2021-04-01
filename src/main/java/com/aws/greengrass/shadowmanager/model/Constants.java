@@ -32,4 +32,16 @@ public class Constants {
     public static final String LOG_NEXT_TOKEN_KEY = "nextToken";
     public static final String LOG_PAGE_SIZE_KEY = "pageSize";
     public static final String CLASSIC_SHADOW_IDENTIFIER = "";
+    public static final int MAX_THING_NAME_LENGTH = 128;
+    public static final int MAX_SHADOW_NAME_LENGTH = 64;
+    public static final String SHADOW_PATTERN = "[a-zA-Z0-9:_-]+";
+    public static final int MIN_PAGE_SIZE = 1;
+    public static final int MAX_PAGE_SIZE = 100;
+    public static final int DEFAULT_PAGE_SIZE = 25;
+    public static final int DEFAULT_OFFSET = 0;
+    public static final String CIPHER_TRANSFORMATION = "AES/CBC/PKCS5Padding";
+    public static final String ENCRYPTION_ALGORITHM = "AES";
+    public static final String SECRET_KEY_ALGORITHM = "PBKDF2WithHmacSHA256";
+    public static final int PBE_KEY_ITERATION_COUNT = 65536;
+    public static final int PBE_KEY_LENGTH = 256;
 }

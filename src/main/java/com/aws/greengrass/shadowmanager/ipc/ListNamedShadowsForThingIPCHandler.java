@@ -38,9 +38,18 @@ import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
 
 import static com.aws.greengrass.ipc.common.ExceptionUtil.translateExceptions;
+import static com.aws.greengrass.shadowmanager.model.Constants.CIPHER_TRANSFORMATION;
+import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_OFFSET;
+import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_PAGE_SIZE;
+import static com.aws.greengrass.shadowmanager.model.Constants.ENCRYPTION_ALGORITHM;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_NEXT_TOKEN_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_PAGE_SIZE_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
+import static com.aws.greengrass.shadowmanager.model.Constants.MAX_PAGE_SIZE;
+import static com.aws.greengrass.shadowmanager.model.Constants.MIN_PAGE_SIZE;
+import static com.aws.greengrass.shadowmanager.model.Constants.PBE_KEY_ITERATION_COUNT;
+import static com.aws.greengrass.shadowmanager.model.Constants.PBE_KEY_LENGTH;
+import static com.aws.greengrass.shadowmanager.model.Constants.SECRET_KEY_ALGORITHM;
 import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.LIST_NAMED_SHADOWS_FOR_THING;
 
 /**
@@ -48,17 +57,8 @@ import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.LIS
  */
 public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNamedShadowsForThingOperationHandler {
     private static final Logger logger = LogManager.getLogger(ListNamedShadowsForThingIPCHandler.class);
-    private static final int DEFAULT_PAGE_SIZE = 25;
-    private static final int DEFAULT_OFFSET = 0;
-
-    private static final String CIPHER_TRANSFORMATION = "AES/CBC/PKCS5Padding";
-    private static final String ENCRYPTION_ALGORITHM = "AES";
-    private static final String SECRET_KEY_ALGORITHM = "PBKDF2WithHmacSHA256";
-    private static final int PBE_KEY_ITERATION_COUNT = 65536;
-    private static final int PBE_KEY_LENGTH = 256;
 
     private final String serviceName;
-
     private final ShadowManagerDAO dao;
     private final AuthorizationHandler authorizationHandler;
 
@@ -102,13 +102,13 @@ public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNam
             try {
                 logger.atTrace("ipc-list-named-shadow-for-thing-request").log();
 
-                IPCUtil.validateThingNameAndDoAuthorization(authorizationHandler, LIST_NAMED_SHADOWS_FOR_THING,
-                        serviceName, thingName);
+                IPCUtil.validateThingName(thingName);
+                IPCUtil.doAuthorization(authorizationHandler, LIST_NAMED_SHADOWS_FOR_THING, serviceName, thingName);
 
                 int pageSize = Optional.ofNullable(request.getPageSize())
                         .orElse(DEFAULT_PAGE_SIZE);
 
-                if (pageSize < 1 || pageSize > 100) {
+                if (pageSize < MIN_PAGE_SIZE || pageSize > MAX_PAGE_SIZE) {
                     throw new IllegalArgumentException("pageSize argument must be between 1 and 100");
                 }
 

@@ -43,9 +43,6 @@ public class ErrorMessage {
     public static final ErrorMessage UNAUTHORIZED_MESSAGE =
             ErrorMessage.builder().errorCode(401).message("Unauthorized").build();
 
-    public static final ErrorMessage FORBIDDEN_MESSAGE =
-            ErrorMessage.builder().errorCode(403).message("Forbidden").build();
-
     /**
      * Creates the error message when the payload JSON is not valid.
      *
@@ -58,13 +55,25 @@ public class ErrorMessage {
     }
 
     /**
-     * Creates the error message when the thing is not found.
+     * Creates the error message if the thing name is invalid.
      *
-     * @return the ErrorMessage object for thing Not Found exception.
+     * @param errorMessage the error message for why thing name was invalid.
+     * @return the ErrorMessage object for InvalidRequestParametersException.
      */
-    public static ErrorMessage createThingNotFoundMessage() {
-       return ErrorMessage.builder().errorCode(404).timestamp(Instant.now().toEpochMilli())
-                .message("Thing not found").build();
+    public static ErrorMessage createInvalidThingNameMessage(String errorMessage) {
+       return ErrorMessage.builder().errorCode(400).timestamp(Instant.now().toEpochMilli())
+                .message(errorMessage).build();
+    }
+
+    /**
+     * Creates the error message if shadow name is invalid.
+     *
+     * @param errorMessage the error message for why shadow name was invalid.
+     * @return the ErrorMessage object for InvalidRequestParametersException.
+     */
+    public static ErrorMessage createInvalidShadowNameMessage(String errorMessage) {
+        return ErrorMessage.builder().errorCode(400).timestamp(Instant.now().toEpochMilli())
+                .message(errorMessage).build();
     }
 
     /**
@@ -77,6 +86,16 @@ public class ErrorMessage {
         shadowName = Utils.isEmpty(shadowName) ? "Unnamed Shadow" : shadowName;
         return ErrorMessage.builder().errorCode(404).timestamp(Instant.now().toEpochMilli())
                 .message(String.format("No shadow exists with name: %s", shadowName)).build();
+    }
+
+    /**
+     * Creates the error message when the payload is missing from an update request.
+     *
+     * @return the ErrorMessage object for InvalidRequestParametersException.
+     */
+    public static ErrorMessage createPayloadMissingMessage() {
+        return ErrorMessage.builder().errorCode(400).timestamp(Instant.now().toEpochMilli())
+                .message("Missing update payload").build();
     }
 
     /**

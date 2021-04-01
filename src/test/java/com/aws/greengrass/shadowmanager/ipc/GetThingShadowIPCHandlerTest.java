@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
@@ -42,15 +43,15 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
+import java.time.Instant;
 import java.util.Optional;
 
+import static com.aws.greengrass.shadowmanager.TestUtils.*;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -62,10 +63,6 @@ import static org.mockito.Mockito.when;
 //TODO: Use Hamcrest assertions
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 class GetThingShadowIPCHandlerTest {
-
-    private static final String TEST_SERVICE = "TestService";
-    private static final String THING_NAME = "testThingName";
-    private static final String SHADOW_NAME = "testShadowName";
 
     @Mock
     OperationContinuationHandlerContext mockContext;
@@ -95,15 +92,16 @@ class GetThingShadowIPCHandlerTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {SHADOW_NAME, ""})
-    void GIVEN_get_thing_shadow_ipc_handler_with_only_reported_state_shadow_WHEN_handle_request_THEN_get_thing_shadow(String shadowName) throws IOException, URISyntaxException {
+    @NullAndEmptySource
+    @ValueSource(strings = {SHADOW_NAME})
+    void GIVEN_only_reported_state_WHEN_handle_request_THEN_get_response_with_reported(String shadowName) throws IOException, URISyntaxException {
         File f = new File(getClass().getResource("json_shadow_examples/good_initial_document.json").toURI());
         GetThingShadowRequest request = new GetThingShadowRequest();
         request.setThingName(THING_NAME);
         request.setShadowName(shadowName);
         byte[] allByteData = Files.readAllBytes(f.toPath());
         Optional<JsonNode> payloadJson = JsonUtil.getPayloadJson(allByteData);
-        assertTrue(payloadJson.isPresent());
+        assertThat("Found payloadJson", payloadJson.isPresent(), is(true));
 
         GetThingShadowResponse expectedResponse = new GetThingShadowResponse();
         expectedResponse.setPayload(allByteData);
@@ -112,24 +110,30 @@ class GetThingShadowIPCHandlerTest {
         when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(allByteData));
         GetThingShadowResponse actualResponse = getThingShadowIPCHandler.handleRequest(request);
         Optional<JsonNode> retrievedDocument = JsonUtil.getPayloadJson(actualResponse.getPayload());
-        assertTrue(retrievedDocument.isPresent());
-        assertThat(payloadJson.get(), Matchers.is(retrievedDocument.get()));
+        assertThat("Retrieved document", retrievedDocument.isPresent(), is(true));
+        assertThat(payloadJson.get(), is(equalTo(retrievedDocument.get())));
         verify(mockPubSubClientWrapper, times(1)).accept(acceptRequestCaptor.capture());
 
-        assertNotNull(acceptRequestCaptor.getValue());
+        assertThat(acceptRequestCaptor.getValue(), is(notNullValue()));
 
         Optional<JsonNode> acceptedJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getValue().getPayload());
-        assertTrue(acceptedJson.isPresent());
-        assertEquals(shadowName, acceptRequestCaptor.getValue().getShadowName());
-        assertEquals(THING_NAME, acceptRequestCaptor.getValue().getThingName());
-        assertEquals(Operation.GET_SHADOW, acceptRequestCaptor.getValue().getPublishOperation());
-        assertEquals(IPCUtil.LogEvents.GET_THING_SHADOW.code(), acceptRequestCaptor.getValue().getPublishOperation().getLogEventType());
-        assertThat(acceptedJson.get(), Matchers.is(payloadJson.get()));
+        assertThat("Accepted json", acceptedJson.isPresent(), is(true));
+
+        // IPCRequest does not accept null value for shadowName
+        if (shadowName != null) {
+            assertThat(acceptRequestCaptor.getValue().getShadowName(), is(equalTo(shadowName)));
+        }
+        assertThat(acceptRequestCaptor.getValue().getThingName(), is(equalTo(THING_NAME)));
+        assertThat("Expected operation", acceptRequestCaptor.getValue().getPublishOperation(), is(Operation.GET_SHADOW));
+        assertThat("Expected log code", acceptRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(IPCUtil.LogEvents.GET_THING_SHADOW.code()));
+
+        assertThat(acceptedJson.get(), is(equalTo(payloadJson.get())));
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {SHADOW_NAME, ""})
-    void GIVEN_get_thing_shadow_ipc_handler_with_reported_and_desired_state_shadow_WHEN_handle_request_THEN_get_thing_shadow(String shadowName) throws IOException, URISyntaxException {
+    @NullAndEmptySource
+    @ValueSource(strings = {SHADOW_NAME})
+    void GIVEN_reported_and_desired_state_shadow_WHEN_handle_request_THEN_get_response_with_desired_and_reported(String shadowName) throws IOException, URISyntaxException {
         File documentFile = new File(getClass().getResource("json_shadow_examples/good_new_document.json").toURI());
         File deltaFile = new File(getClass().getResource("json_shadow_examples/good_delta_node.json").toURI());
         GetThingShadowRequest request = new GetThingShadowRequest();
@@ -139,8 +143,8 @@ class GetThingShadowIPCHandlerTest {
         byte[] deltaFileByteData = Files.readAllBytes(deltaFile.toPath());
         Optional<JsonNode> documentJson = JsonUtil.getPayloadJson(documentByteData);
         Optional<JsonNode> deltaJson = JsonUtil.getPayloadJson(deltaFileByteData);
-        assertTrue(documentJson.isPresent());
-        assertTrue(deltaJson.isPresent());
+        assertThat("Retrieved documentJson", documentJson.isPresent(), is(true));
+        assertThat("Retrieved documentJson", deltaJson.isPresent(), is(true));
         JsonNode deltaColorNode = deltaJson.get().get(Constants.SHADOW_DOCUMENT_STATE);
         ((ObjectNode)documentJson.get().get(Constants.SHADOW_DOCUMENT_STATE))
                 .set(Constants.SHADOW_DOCUMENT_STATE_DELTA, deltaColorNode);
@@ -152,24 +156,29 @@ class GetThingShadowIPCHandlerTest {
         when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(documentByteData));
         GetThingShadowResponse actualResponse = getThingShadowIPCHandler.handleRequest(request);
         Optional<JsonNode> retrievedDocument = JsonUtil.getPayloadJson(actualResponse.getPayload());
-        assertTrue(retrievedDocument.isPresent());
-        assertThat(documentJson.get(), Matchers.is(retrievedDocument.get()));
+        assertThat("Retrieved document", retrievedDocument.isPresent(), is(true));
+        assertThat(documentJson.get(), is(equalTo(retrievedDocument.get())));
 
         verify(mockPubSubClientWrapper, times(1)).accept(acceptRequestCaptor.capture());
 
-        assertNotNull(acceptRequestCaptor.getValue());
+        assertThat(acceptRequestCaptor.getValue(), is(notNullValue()));
 
         Optional<JsonNode> acceptedJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getValue().getPayload());
-        assertTrue(acceptedJson.isPresent());
-        assertEquals(shadowName, acceptRequestCaptor.getValue().getShadowName());
-        assertEquals(THING_NAME, acceptRequestCaptor.getValue().getThingName());
-        assertEquals(Operation.GET_SHADOW, acceptRequestCaptor.getValue().getPublishOperation());
-        assertEquals(IPCUtil.LogEvents.GET_THING_SHADOW.code(), acceptRequestCaptor.getValue().getPublishOperation().getLogEventType());
-        assertThat(acceptedJson.get(), Matchers.is(documentJson.get()));
+        assertThat("Accepted json", acceptedJson.isPresent(), is(true));
+
+        // IPCRequest does not accept null value for shadowName
+        if (shadowName != null) {
+            assertThat(acceptRequestCaptor.getValue().getShadowName(), is(equalTo(shadowName)));
+        }
+        assertThat(acceptRequestCaptor.getValue().getThingName(), is(equalTo(THING_NAME)));
+        assertThat("Expected operation", acceptRequestCaptor.getValue().getPublishOperation(), is(Operation.GET_SHADOW));
+        assertThat("Expected log code", acceptRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(IPCUtil.LogEvents.GET_THING_SHADOW.code()));
+
+        assertThat(acceptedJson.get(), is(equalTo(documentJson.get())));
     }
 
     @Test
-    void GIVEN_get_thing_shadow_ipc_handler_WHEN_document_not_found_THEN_throw_resource_not_found_exception(ExtensionContext context) {
+    void GIVEN_no_shadow_document_found_WHEN_handle_request_THEN_throw_resource_not_found_error(ExtensionContext context) {
         ignoreExceptionOfType(context, ResourceNotFoundError.class);
         GetThingShadowRequest request = new GetThingShadowRequest();
         request.setThingName(THING_NAME);
@@ -177,84 +186,94 @@ class GetThingShadowIPCHandlerTest {
 
         when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.empty());
         GetThingShadowIPCHandler getThingShadowIPCHandler = new GetThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandler, mockPubSubClientWrapper);
-        assertThrows(ResourceNotFoundError.class, () -> getThingShadowIPCHandler.handleRequest(request));
+        ResourceNotFoundError thrown = assertThrows(ResourceNotFoundError.class, () -> getThingShadowIPCHandler.handleRequest(request));
+        assertThat(thrown.getMessage(), is(equalTo("No shadow found")));
+
         verify(mockPubSubClientWrapper, times(1)).reject(rejectRequestCaptor.capture());
 
-        assertNotNull(rejectRequestCaptor.getValue());
+        assertThat(rejectRequestCaptor.getValue(), is(not(nullValue())));
+        assertThat(rejectRequestCaptor.getValue().getShadowName(), is(equalTo(SHADOW_NAME)));
+        assertThat("Expected operation", rejectRequestCaptor.getValue().getPublishOperation(), is(Operation.GET_SHADOW));
+        assertThat("Expected log code", rejectRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(IPCUtil.LogEvents.GET_THING_SHADOW.code()));
 
-        assertEquals(SHADOW_NAME, rejectRequestCaptor.getValue().getShadowName());
         ErrorMessage errorMessage = rejectRequestCaptor.getValue().getErrorMessage();
-        assertEquals(Operation.GET_SHADOW, rejectRequestCaptor.getValue().getPublishOperation());
-        assertEquals(404, errorMessage.getErrorCode());
-        assertEquals("No shadow exists with name: testShadowName", errorMessage.getMessage());
-        assertEquals(IPCUtil.LogEvents.GET_THING_SHADOW.code(), rejectRequestCaptor.getValue().getPublishOperation().getLogEventType());
+        assertThat(errorMessage.getTimestamp(), is(not(equalTo(Instant.EPOCH.toEpochMilli()))));
+        assertThat(errorMessage.getErrorCode(), is(404));
+        assertThat(errorMessage.getMessage(), startsWith("No shadow exists"));
     }
 
     @Test
-    void GIVEN_get_thing_shadow_ipc_handler_WHEN_dao_sends_data_exception_THEN_throw_service_exception(ExtensionContext context) {
+    void GIVEN_shadow_manager_data_exception_from_query_WHEN_handle_request_THEN_throw_service_error(ExtensionContext context) {
         ignoreExceptionOfType(context, ShadowManagerDataException.class);
         GetThingShadowRequest request = new GetThingShadowRequest();
         request.setThingName(THING_NAME);
         request.setShadowName(SHADOW_NAME);
 
-        doThrow(ShadowManagerDataException.class).when(mockDao).getShadowThing(any(), any());
+        doThrow(new ShadowManagerDataException(new Exception("sample exception message"))).when(mockDao).getShadowThing(any(), any());
         GetThingShadowIPCHandler getThingShadowIPCHandler = new GetThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandler, mockPubSubClientWrapper);
-        assertThrows(ServiceError.class, () -> getThingShadowIPCHandler.handleRequest(request));
+        ServiceError thrown = assertThrows(ServiceError.class, () -> getThingShadowIPCHandler.handleRequest(request));
+        assertThat(thrown.getMessage(), containsString("sample"));
+
         verify(mockPubSubClientWrapper, times(1)).reject(rejectRequestCaptor.capture());
 
-        assertNotNull(rejectRequestCaptor.getValue());
+        assertThat(rejectRequestCaptor.getValue(), is(not(nullValue())));
+        assertThat(rejectRequestCaptor.getValue().getShadowName(), is(equalTo(SHADOW_NAME)));
+        assertThat("Expected operation", rejectRequestCaptor.getValue().getPublishOperation(), is(Operation.GET_SHADOW));
+        assertThat("Expected log code", rejectRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(IPCUtil.LogEvents.GET_THING_SHADOW.code()));
 
-        assertEquals(SHADOW_NAME, rejectRequestCaptor.getValue().getShadowName());
         ErrorMessage errorMessage = rejectRequestCaptor.getValue().getErrorMessage();
-        assertEquals(Operation.GET_SHADOW, rejectRequestCaptor.getValue().getPublishOperation());
-        assertEquals(500, errorMessage.getErrorCode());
-        assertEquals("Internal service failure", errorMessage.getMessage());
-        assertEquals(IPCUtil.LogEvents.GET_THING_SHADOW.code(), rejectRequestCaptor.getValue().getPublishOperation().getLogEventType());
+        assertThat(errorMessage.getTimestamp(), is(not(equalTo(Instant.EPOCH.toEpochMilli()))));
+        assertThat(errorMessage.getErrorCode(), is(500));
+        assertThat(errorMessage.getMessage(), startsWith("Internal service failure"));
     }
 
     @Test
-    void GIVEN_get_thing_shadow_ipc_handler_WHEN_ipc_request_unauthorized_THEN_throw_unauthorized_exception(ExtensionContext context) throws Exception {
+    void GIVEN_unauthorized_service_WHEN_handle_request_THEN_throw_unauthorized_error(ExtensionContext context) throws Exception {
         ignoreExceptionOfType(context, AuthorizationException.class);
         GetThingShadowRequest request = new GetThingShadowRequest();
         request.setThingName(THING_NAME);
         request.setShadowName(SHADOW_NAME);
         when(mockAuthorizationHandler.isAuthorized(any(), any(Permission.class)))
-                .thenThrow(AuthorizationException.class);
+                .thenThrow(new AuthorizationException("sample authorization error"));
 
         GetThingShadowIPCHandler getThingShadowIPCHandler = new GetThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandler, mockPubSubClientWrapper);
-        assertThrows(UnauthorizedError.class, () -> getThingShadowIPCHandler.handleRequest(request));
+        UnauthorizedError thrown = assertThrows(UnauthorizedError.class, () -> getThingShadowIPCHandler.handleRequest(request));
+        assertThat(thrown.getMessage(), startsWith("sample"));
+
         verify(mockPubSubClientWrapper, times(1)).reject(rejectRequestCaptor.capture());
 
-        assertNotNull(rejectRequestCaptor.getValue());
+        assertThat(rejectRequestCaptor.getValue(), is(not(nullValue())));
+        assertThat(rejectRequestCaptor.getValue().getShadowName(), is(equalTo(SHADOW_NAME)));
+        assertThat("Expected operation", rejectRequestCaptor.getValue().getPublishOperation(), is(Operation.GET_SHADOW));
+        assertThat("Expected log code", rejectRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(IPCUtil.LogEvents.GET_THING_SHADOW.code()));
 
-        assertEquals(SHADOW_NAME, rejectRequestCaptor.getValue().getShadowName());
         ErrorMessage errorMessage = rejectRequestCaptor.getValue().getErrorMessage();
-        assertEquals(Operation.GET_SHADOW, rejectRequestCaptor.getValue().getPublishOperation());
-        assertEquals(401, errorMessage.getErrorCode());
-        assertEquals("Unauthorized", errorMessage.getMessage());
-        assertEquals(IPCUtil.LogEvents.GET_THING_SHADOW.code(), rejectRequestCaptor.getValue().getPublishOperation().getLogEventType());
+        assertThat(errorMessage.getErrorCode(), is(401));
+        assertThat(errorMessage.getMessage(), Matchers.startsWith("Unauthorized"));
     }
 
     @ParameterizedTest
-    @NullAndEmptySource
-    void GIVEN_missing_thing_name_WHEN_handle_request_THEN_throw_invalid_arguments_error(String thingName, ExtensionContext context) {
+    @MethodSource("com.aws.greengrass.shadowmanager.TestUtils#invalidThingAndShadowName")
+    void GIVEN_invalid_request_input_WHEN_handle_request_THEN_throw_invalid_arguments_error(String thingName, String shadowName, ExtensionContext context) {
         ignoreExceptionOfType(context, InvalidRequestParametersException.class);
         GetThingShadowRequest request = new GetThingShadowRequest();
         request.setThingName(thingName);
-        request.setShadowName(SHADOW_NAME);
+        request.setShadowName(shadowName);
 
         GetThingShadowIPCHandler getThingShadowIPCHandler = new GetThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandler, mockPubSubClientWrapper);
-        assertThrows(InvalidArgumentsError.class, () -> getThingShadowIPCHandler.handleRequest(request));
+        InvalidArgumentsError thrown = assertThrows(InvalidArgumentsError.class, () -> getThingShadowIPCHandler.handleRequest(request));
+        assertThat(thrown.getMessage(),either(startsWith("ShadowName")).or(startsWith("ThingName")));
         verify(mockPubSubClientWrapper, times(1)).reject(rejectRequestCaptor.capture());
 
-        assertNotNull(rejectRequestCaptor.getValue());
+        assertThat(rejectRequestCaptor.getValue(), is(not(nullValue())));
+        assertThat(rejectRequestCaptor.getValue().getShadowName(), is(equalTo(shadowName)));
+        assertThat("Expected operation found", rejectRequestCaptor.getValue().getPublishOperation(), is(Operation.GET_SHADOW));
+        assertThat("Expected log code", rejectRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(IPCUtil.LogEvents.GET_THING_SHADOW.code()));
 
-        assertEquals(SHADOW_NAME, rejectRequestCaptor.getValue().getShadowName());
         ErrorMessage errorMessage = rejectRequestCaptor.getValue().getErrorMessage();
-        assertEquals(Operation.GET_SHADOW, rejectRequestCaptor.getValue().getPublishOperation());
-        assertEquals(404, errorMessage.getErrorCode());
-        assertEquals("Thing not found", errorMessage.getMessage());
-        assertEquals(IPCUtil.LogEvents.GET_THING_SHADOW.code(), rejectRequestCaptor.getValue().getPublishOperation().getLogEventType());
+        assertThat(errorMessage.getTimestamp(), is(not(equalTo(Instant.EPOCH.toEpochMilli()))));
+        assertThat(errorMessage.getErrorCode(), is(400));
+        assertThat(errorMessage.getMessage(),either(startsWith("ShadowName")).or(startsWith("ThingName")));
     }
 
     @Test
