@@ -50,8 +50,7 @@ public class ShadowDocument {
         if (documentBytes.length == 0) {
             return;
         }
-        ShadowDocument shadowDocument = JsonUtil.OBJECT_MAPPER
-                .convertValue(JsonUtil.getPayloadJson(documentBytes).get(), ShadowDocument.class);
+        ShadowDocument shadowDocument = JsonUtil.OBJECT_MAPPER.readValue(documentBytes, ShadowDocument.class);
         setFields(shadowDocument.getState(), shadowDocument.getMetadata(), shadowDocument.getVersion());
     }
 

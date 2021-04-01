@@ -129,12 +129,11 @@ public class DeleteThingShadowIPCHandler extends GeneratedAbstractDeleteThingSha
 
                 // Get the Client Token if present in the payload.
                 Optional<JsonNode> payloadJson = JsonUtil.getPayloadJson(payload);
-                AtomicReference<Optional<String>> clientToken = new AtomicReference<>(Optional.empty());
-                payloadJson.ifPresent(jsonNode -> clientToken.set(JsonUtil.getClientToken(jsonNode)));
+                Optional<String> clientToken = payloadJson.flatMap(JsonUtil::getClientToken);
 
                 JsonNode responseNode = ResponseMessageBuilder.builder()
                         .withVersion(deletedShadowDocument.getVersion())
-                        .withClientToken(clientToken.get())
+                        .withClientToken(clientToken)
                         .withTimestamp(Instant.now())
                         .build();
                 pubSubClientWrapper.accept(AcceptRequest.builder()
@@ -144,6 +143,11 @@ public class DeleteThingShadowIPCHandler extends GeneratedAbstractDeleteThingSha
                         .publishOperation(Operation.DELETE_SHADOW)
                         .build());
                 DeleteThingShadowResponse response = new DeleteThingShadowResponse();
+                /*
+                 After a successful delete, the payload expected over the synchronous operation is an empty response
+                 Reference:
+                 https://docs.aws.amazon.com/iot/latest/developerguide/device-shadow-rest-api.html#API_DeleteThingShadow
+                */
                 response.setPayload(new byte[0]);
                 return response;
 

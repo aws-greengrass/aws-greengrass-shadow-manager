@@ -125,15 +125,14 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
 
                 // Get the Client Token if present in the payload.
                 Optional<JsonNode> payloadJson = JsonUtil.getPayloadJson(payload);
-                AtomicReference<Optional<String>> clientToken = new AtomicReference<>(Optional.empty());
-                payloadJson.ifPresent(jsonNode -> clientToken.set(JsonUtil.getClientToken(jsonNode)));
+                Optional<String> clientToken = payloadJson.flatMap(JsonUtil::getClientToken);
 
                 ObjectNode responseNode = ResponseMessageBuilder.builder()
                         .withState(currentShadowDocument.getState().toJsonWithDelta())
                         //TODO: Update the metadata when implemented.
                         //.withMetadata()
                         .withVersion(currentShadowDocument.getVersion())
-                        .withClientToken(clientToken.get())
+                        .withClientToken(clientToken)
                         .withTimestamp(Instant.now()).build();
 
                 pubSubClientWrapper.accept(AcceptRequest.builder().thingName(thingName).shadowName(shadowName)

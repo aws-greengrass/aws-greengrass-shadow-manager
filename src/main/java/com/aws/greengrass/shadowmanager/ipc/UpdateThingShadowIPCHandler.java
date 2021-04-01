@@ -170,10 +170,30 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                 // Get the client token if present in the update shadow request.
                 Optional<String> clientToken = JsonUtil.getClientToken(updateDocumentRequest);
 
-                // 1. Updates the new document in the DAO.
-                // 2. Publishes the message on the delta topic over PubSub if applicable.
-                // 3. Publishes the documents message over the documents topic.
-                handleUpdate(thingName, shadowName, clientToken, currentDocument, updatedDocument);
+                // Update the new document in the DAO.
+                dao.updateShadowThing(thingName, shadowName, JsonUtil.getPayloadBytes(updatedDocument.toJson()))
+                        .orElseThrow(() -> {
+                            ServiceError error = new ServiceError("Unexpected error occurred in trying to "
+                                    + "update shadow thing.");
+                            logger.atError()
+                                    .setEventType(IPCUtil.LogEvents.UPDATE_THING_SHADOW.code())
+                                    .kv(LOG_THING_NAME_KEY, thingName)
+                                    .kv(LOG_SHADOW_NAME_KEY, shadowName)
+                                    .setCause(error)
+                                    .log();
+                            pubSubClientWrapper.reject(RejectRequest.builder().thingName(thingName)
+                                    .shadowName(shadowName)
+                                    .errorMessage(ErrorMessage.createInternalServiceErrorMessage())
+                                    .publishOperation(Operation.UPDATE_SHADOW)
+                                    .build());
+                            return error;
+                        });
+
+                // Publish the message on the delta topic over PubSub if applicable.
+                publishDeltaMessage(thingName, shadowName, clientToken, updatedDocument);
+
+                // Publish the documents message over the documents topic.
+                publishDocumentsMessage(thingName, shadowName, clientToken, currentDocument, updatedDocument);
 
                 // Build the response object to send over the accepted topic and as the payload in the response object.
                 // State node is the same shadow document update payload we received in the update request.
@@ -227,42 +247,6 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                 .publishOperation(Operation.UPDATE_SHADOW)
                 .build());
         throw new ServiceError(e.getMessage());
-    }
-
-    /**
-     * Handles the Shadow update by sending messages over PubSub for accepted, delta, documents and rejected topics
-     * as well as handles the update of the shadow document in the DAO.
-     *
-     * @param thingName       The thing name.
-     * @param shadowName      The name of the shadow.
-     * @param clientToken     The client token if present in the update shadow request.
-     * @param sourceDocument  The shadow document currently in the DAO.
-     * @param updatedDocument The updated shadow document.
-     * @throws IOException  if there is any issue while serializing/deserializing the shadow document.
-     * @throws ServiceError if there was an issue while updating the shadow in the DAO.
-     */
-    private void handleUpdate(String thingName, String shadowName, Optional<String> clientToken,
-                              ShadowDocument sourceDocument, ShadowDocument updatedDocument)
-            throws IOException, ServiceError {
-        dao.updateShadowThing(thingName, shadowName, JsonUtil.getPayloadBytes(updatedDocument.toJson()))
-                .orElseThrow(() -> {
-                    ServiceError error = new ServiceError("Unexpected error occurred in trying to "
-                            + "update shadow thing.");
-                    logger.atError()
-                            .setEventType(IPCUtil.LogEvents.UPDATE_THING_SHADOW.code())
-                            .kv(LOG_THING_NAME_KEY, thingName)
-                            .kv(LOG_SHADOW_NAME_KEY, shadowName)
-                            .setCause(error)
-                            .log();
-                    pubSubClientWrapper.reject(RejectRequest.builder().thingName(thingName)
-                            .shadowName(shadowName)
-                            .errorMessage(ErrorMessage.createInternalServiceErrorMessage())
-                            .publishOperation(Operation.UPDATE_SHADOW)
-                            .build());
-                    return error;
-                });
-        publishDeltaMessage(thingName, shadowName, clientToken, updatedDocument);
-        publishDocumentsMessage(thingName, shadowName, clientToken, sourceDocument, updatedDocument);
     }
 
     private void publishDeltaMessage(String thingName, String shadowName, Optional<String> clientToken,
