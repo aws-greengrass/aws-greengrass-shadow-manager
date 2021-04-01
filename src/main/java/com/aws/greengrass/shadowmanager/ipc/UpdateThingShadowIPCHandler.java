@@ -161,16 +161,14 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
             }
 
             try {
-                Optional<JsonNode> updateDocumentRequest = JsonUtil.getPayloadJson(updatedDocumentRequestBytes);
-                if (!updateDocumentRequest.isPresent()) {
-                    throw new InvalidRequestParametersException(ErrorMessage
-                            .createInvalidPayloadJsonMessage("Update shadow request payload must be an Object"));
-                }
+                JsonNode updateDocumentRequest = JsonUtil.getPayloadJson(updatedDocumentRequestBytes)
+                        .orElseThrow(() -> new InvalidRequestParametersException(ErrorMessage
+                        .createInvalidPayloadJsonMessage("Update shadow request payload must be an Object")));
                 // Generate the new merged document based on the update shadow patch payload.
-                ShadowDocument updatedDocument = currentDocument.createNewMergedDocument(updateDocumentRequest.get());
+                ShadowDocument updatedDocument = currentDocument.createNewMergedDocument(updateDocumentRequest);
 
                 // Get the client token if present in the update shadow request.
-                Optional<String> clientToken = JsonUtil.getClientToken(updateDocumentRequest.get());
+                Optional<String> clientToken = JsonUtil.getClientToken(updateDocumentRequest);
 
                 // 1. Updates the new document in the DAO.
                 // 2. Publishes the message on the delta topic over PubSub if applicable.
@@ -183,7 +181,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                         .withVersion(updatedDocument.getVersion())
                         .withClientToken(clientToken)
                         .withTimestamp(Instant.now())
-                        .withState(updateDocumentRequest.get().get(SHADOW_DOCUMENT_STATE))
+                        .withState(updateDocumentRequest.get(SHADOW_DOCUMENT_STATE))
                         //TODO: Handle metadata
                         //.withMetadata(updatedDocument.getMetadata())
                         .build();
