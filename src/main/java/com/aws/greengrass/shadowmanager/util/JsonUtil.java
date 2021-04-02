@@ -9,10 +9,12 @@ import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersExcept
 import com.aws.greengrass.shadowmanager.model.Constants;
 import com.aws.greengrass.shadowmanager.model.ErrorMessage;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
+import com.aws.greengrass.util.Utils;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.TextNode;
 import com.github.fge.jackson.JsonLoader;
 import com.github.fge.jsonschema.core.exceptions.ProcessingException;
 import com.github.fge.jsonschema.core.report.ProcessingReport;
@@ -89,7 +91,20 @@ public final class JsonUtil {
     private static String getAllValidationErrors(ProcessingReport report) {
         StringJoiner errorMessages = new StringJoiner("\r\n");
         if (report != null) {
-            report.forEach(processingMessage -> errorMessages.add(processingMessage.getMessage()));
+
+            report.forEach(processingMessage -> {
+                // Make sure the error messages contain the field name.
+                JsonNode instance = processingMessage.asJson().get("instance");
+                if (!isNullOrMissing(instance)) {
+                    JsonNode pointer = instance.get("pointer");
+                    if (!isNullOrMissing(pointer) && !Utils.isEmpty(pointer.asText())) {
+                        String fieldName = pointer.asText().substring(1);
+                        processingMessage.setMessage(String.format("Invalid %s. %s", fieldName,
+                                processingMessage.getMessage()));
+                    }
+                }
+                errorMessages.add(processingMessage.getMessage());
+            });
         }
         return errorMessages.toString();
     }
@@ -231,9 +246,6 @@ public final class JsonUtil {
         }
 
         final String token = payload.get(SHADOW_DOCUMENT_CLIENT_TOKEN).asText();
-        if (token == null) {
-            throw new InvalidRequestParametersException(ErrorMessage.INVALID_CLIENT_TOKEN_MESSAGE);
-        }
         return Optional.of(token);
     }
 

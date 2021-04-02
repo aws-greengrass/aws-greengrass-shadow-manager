@@ -690,7 +690,7 @@ class UpdateThingShadowIPCHandlerTest {
         UpdateThingShadowIPCHandler updateThingShadowIPCHandler = new UpdateThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandler, mockPubSubClientWrapper);
 
         InvalidArgumentsError thrown = assertThrows(InvalidArgumentsError.class, () -> updateThingShadowIPCHandler.handleRequest(request));
-        assertEquals("Invalid JSON\ninstance type (string) does not match any allowed primitive type (allowed: [\"integer\",\"number\"])", thrown.getMessage().trim());
+        assertEquals("Invalid JSON\nInvalid version. instance type (string) does not match any allowed primitive type (allowed: [\"integer\",\"number\"])", thrown.getMessage().trim());
 
         verify(mockPubSubClientWrapper, times(1))
                 .reject(rejectRequestCaptor.capture());
@@ -701,7 +701,7 @@ class UpdateThingShadowIPCHandlerTest {
         ErrorMessage errorMessage = rejectRequestCaptor.getValue().getErrorMessage();
         assertEquals(Operation.UPDATE_SHADOW, rejectRequestCaptor.getValue().getPublishOperation());
         assertEquals(400, errorMessage.getErrorCode());
-        assertEquals("Invalid JSON\ninstance type (string) does not match any allowed primitive type (allowed: [\"integer\",\"number\"])", errorMessage.getMessage());
+        assertEquals("Invalid JSON\nInvalid version. instance type (string) does not match any allowed primitive type (allowed: [\"integer\",\"number\"])", errorMessage.getMessage());
         assertEquals(IPCUtil.LogEvents.UPDATE_THING_SHADOW.code, rejectRequestCaptor.getAllValues().get(0).getPublishOperation().getLogEventType());
     }
 
@@ -752,7 +752,7 @@ class UpdateThingShadowIPCHandlerTest {
         UpdateThingShadowIPCHandler updateThingShadowIPCHandler = new UpdateThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandler, mockPubSubClientWrapper);
 
         InvalidArgumentsError thrown = assertThrows(InvalidArgumentsError.class, () -> updateThingShadowIPCHandler.handleRequest(request));
-        assertEquals("Invalid JSON\ninstance type (string) does not match any allowed primitive type (allowed: [\"object\"])", thrown.getMessage().trim());
+        assertEquals("Invalid JSON\nInvalid state. instance type (string) does not match any allowed primitive type (allowed: [\"object\"])", thrown.getMessage().trim());
 
         verify(mockPubSubClientWrapper, times(1))
                 .reject(rejectRequestCaptor.capture());
@@ -763,7 +763,7 @@ class UpdateThingShadowIPCHandlerTest {
         ErrorMessage errorMessage = rejectRequestCaptor.getValue().getErrorMessage();
         assertEquals(Operation.UPDATE_SHADOW, rejectRequestCaptor.getValue().getPublishOperation());
         assertEquals(400, errorMessage.getErrorCode());
-        assertEquals("Invalid JSON\ninstance type (string) does not match any allowed primitive type (allowed: [\"object\"])", errorMessage.getMessage());
+        assertEquals("Invalid JSON\nInvalid state. instance type (string) does not match any allowed primitive type (allowed: [\"object\"])", errorMessage.getMessage());
         assertEquals(IPCUtil.LogEvents.UPDATE_THING_SHADOW.code, rejectRequestCaptor.getAllValues().get(0).getPublishOperation().getLogEventType());
     }
 
