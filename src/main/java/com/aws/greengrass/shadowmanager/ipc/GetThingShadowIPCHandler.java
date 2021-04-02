@@ -135,13 +135,15 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
                         .withClientToken(clientToken)
                         .withTimestamp(Instant.now()).build();
 
+                byte[] responseNodeBytes = JsonUtil.getPayloadBytes(responseNode);
+
                 pubSubClientWrapper.accept(AcceptRequest.builder().thingName(thingName).shadowName(shadowName)
-                        .payload(JsonUtil.getPayloadBytes(responseNode))
+                        .payload(responseNodeBytes)
                         .publishOperation(Operation.GET_SHADOW)
                         .build());
 
                 GetThingShadowResponse response = new GetThingShadowResponse();
-                response.setPayload(JsonUtil.getPayloadBytes(responseNode));
+                response.setPayload(responseNodeBytes);
                 return response;
 
             } catch (AuthorizationException e) {
