@@ -16,6 +16,8 @@ import com.aws.greengrass.shadowmanager.ipc.GetThingShadowIPCHandler;
 import com.aws.greengrass.shadowmanager.ipc.ListNamedShadowsForThingIPCHandler;
 import com.aws.greengrass.shadowmanager.ipc.PubSubClientWrapper;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowIPCHandler;
+import com.aws.greengrass.shadowmanager.util.JsonUtil;
+import com.github.fge.jsonschema.core.exceptions.ProcessingException;
 import org.flywaydb.core.api.FlywayException;
 import software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService;
 
@@ -111,7 +113,8 @@ public class ShadowManager extends PluginService {
     protected void install() {
         try {
             database.install();
-        } catch (SQLException | FlywayException e) {
+            JsonUtil.setUpdateShadowJsonSchema();
+        } catch (SQLException | FlywayException | IOException | ProcessingException e) {
             serviceErrored(e);
         }
     }

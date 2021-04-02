@@ -5,8 +5,6 @@
 
 package com.aws.greengrass.shadowmanager.util;
 
-import com.aws.greengrass.logging.api.Logger;
-import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.model.Constants;
 import com.aws.greengrass.shadowmanager.model.ErrorMessage;
@@ -36,26 +34,29 @@ import static com.aws.greengrass.shadowmanager.model.Constants.STATE_NODE_REQUIR
 public final class JsonUtil {
     public static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
-    private static final Logger logger = LogManager.getLogger(JsonUtil.class);
     private static JsonSchema updateShadowRequestJsonSchema;
     private static JsonSchema updateShadowPayloadJsonSchema;
 
     static {
-        try {
-            final JsonSchemaFactory factory = JsonSchemaFactory.byDefault();
-            final JsonNode updateRequestJsonNode = JsonLoader.fromResource("/json/schema/update_payload_schema.json");
-            updateShadowRequestJsonSchema = factory.getJsonSchema(updateRequestJsonNode);
-            final JsonNode updatePayloadJsonNode = JsonLoader
-                    .fromResource("/json/schema/update_payload_state_schema.json");
-            updateShadowPayloadJsonSchema = factory.getJsonSchema(updatePayloadJsonNode);
-
-            OBJECT_MAPPER.setSerializationInclusion(JsonInclude.Include.NON_NULL);
-        } catch (ProcessingException | IOException e) {
-            logger.atError().cause(e).log("Unable to parse JSON schema from resource files");
-        }
+        OBJECT_MAPPER.setSerializationInclusion(JsonInclude.Include.NON_NULL);
     }
 
     private JsonUtil() {
+
+    }
+
+    /**
+     * Sets up the shadow document request and state schema objects by reading from the resources file.
+     *
+     * @throws IOException         if the resource file does not exist.
+     * @throws ProcessingException if the resource file has corrupted data which cannot be converted to JsonSchema.
+     */
+    public static void setUpdateShadowJsonSchema() throws IOException, ProcessingException {
+        final JsonSchemaFactory factory = JsonSchemaFactory.byDefault();
+        final JsonNode updateRequestJsonNode = JsonLoader.fromResource("/json/schema/update_payload_schema.json");
+        updateShadowRequestJsonSchema = factory.getJsonSchema(updateRequestJsonNode);
+        final JsonNode updatePayloadJsonNode = JsonLoader.fromResource("/json/schema/update_payload_state_schema.json");
+        updateShadowPayloadJsonSchema = factory.getJsonSchema(updatePayloadJsonNode);
 
     }
 
