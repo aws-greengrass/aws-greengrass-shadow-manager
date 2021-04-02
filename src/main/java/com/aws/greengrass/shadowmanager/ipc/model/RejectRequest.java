@@ -14,6 +14,7 @@ import lombok.Getter;
  */
 @Getter
 public class RejectRequest extends IPCRequest {
+    // TODO: change this to be byte payload and use the ResponseBuilder class.
     ErrorMessage errorMessage;
     Operation publishOperation;
 

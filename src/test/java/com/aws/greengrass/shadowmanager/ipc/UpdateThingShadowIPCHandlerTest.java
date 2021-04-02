@@ -8,7 +8,7 @@ package com.aws.greengrass.shadowmanager.ipc;
 import com.aws.greengrass.authorization.AuthorizationHandler;
 import com.aws.greengrass.authorization.Permission;
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
-import com.aws.greengrass.shadowmanager.JsonUtil;
+import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
@@ -20,6 +20,7 @@ import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.IntNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.github.fge.jsonschema.core.exceptions.ProcessingException;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -47,8 +48,6 @@ import java.util.Optional;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_DOCUMENT_SIZE;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE;
-import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE_DESIRED;
-import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE_REPORTED;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_TIMESTAMP;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_VERSION;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
@@ -111,10 +110,11 @@ class UpdateThingShadowIPCHandlerTest {
     }
 
     @BeforeEach
-    void setup() {
+    void setup() throws IOException, ProcessingException {
         when(mockContext.getContinuation()).thenReturn(mock(ServerConnectionContinuation.class));
         when(mockContext.getAuthenticationData()).thenReturn(mockAuthenticationData);
         when(mockAuthenticationData.getIdentityLabel()).thenReturn(TEST_SERVICE);
+        JsonUtil.setUpdateShadowJsonSchema();
     }
 
     @ParameterizedTest
@@ -140,18 +140,19 @@ class UpdateThingShadowIPCHandlerTest {
         UpdateThingShadowResponse actualResponse = updateThingShadowIPCHandler.handleRequest(request);
         Optional<JsonNode> updatedDocumentJson = JsonUtil.getPayloadJson(actualResponse.getPayload());
         assertTrue(updatedDocumentJson.isPresent());
-        Optional<JsonNode> expectedDocumentJson = JsonUtil.getPayloadJson(updateDocument);
-        assertTrue(expectedDocumentJson.isPresent());
-        assertThat(updatedDocumentJson.get(), Matchers.is(expectedDocumentJson.get()));
+        assertTrue(updatedDocumentJson.get().has(SHADOW_DOCUMENT_TIMESTAMP));
+        ((ObjectNode) updatedDocumentJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
+        Optional<JsonNode> expectedAcceptedJson = JsonUtil.getPayloadJson(updateRequest);
+        assertTrue(expectedAcceptedJson.isPresent());
+        ((ObjectNode) expectedAcceptedJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(1));
+
+        assertThat(updatedDocumentJson.get(), Matchers.is(expectedAcceptedJson.get()));
 
         verify(mockPubSubClientWrapper, times(1)).accept(acceptRequestCaptor.capture());
         verify(mockPubSubClientWrapper, times(1)).delta(acceptRequestCaptor.capture());
         verify(mockPubSubClientWrapper, times(1)).documents(acceptRequestCaptor.capture());
         assertEquals(3, acceptRequestCaptor.getAllValues().size());
 
-        Optional<JsonNode> expectedAcceptedJson = JsonUtil.getPayloadJson(updateRequest);
-        assertTrue(expectedAcceptedJson.isPresent());
-        ((ObjectNode) expectedAcceptedJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(1));
         Optional<JsonNode> expectedDeltaJson = JsonUtil.getPayloadJson(deltaPayload);
         assertTrue(expectedDeltaJson.isPresent());
         Optional<JsonNode> expectedDocumentsJson = JsonUtil.getPayloadJson(documentsPayload);
@@ -159,11 +160,15 @@ class UpdateThingShadowIPCHandlerTest {
 
         Optional<JsonNode> acceptedJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(0).getPayload());
         assertTrue(acceptedJson.isPresent());
+        assertTrue(acceptedJson.get().has(SHADOW_DOCUMENT_TIMESTAMP));
+        ((ObjectNode) acceptedJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
         Optional<JsonNode> deltaJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(1).getPayload());
         assertTrue(deltaJson.isPresent());
+        assertTrue(deltaJson.get().has(SHADOW_DOCUMENT_TIMESTAMP));
         ((ObjectNode) deltaJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
         Optional<JsonNode> documentsJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(2).getPayload());
         assertTrue(documentsJson.isPresent());
+        assertTrue(documentsJson.get().has(SHADOW_DOCUMENT_TIMESTAMP));
         ((ObjectNode) documentsJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
 
         assertEquals(shadowName, acceptRequestCaptor.getAllValues().get(0).getShadowName());
@@ -208,23 +213,19 @@ class UpdateThingShadowIPCHandlerTest {
         UpdateThingShadowResponse actualResponse = updateThingShadowIPCHandler.handleRequest(request);
         Optional<JsonNode> updatedDocumentJson = JsonUtil.getPayloadJson(actualResponse.getPayload());
         assertTrue(updatedDocumentJson.isPresent());
-        Optional<JsonNode> expectedDocumentJson = JsonUtil.getPayloadJson(updateDocument);
-        assertTrue(expectedDocumentJson.isPresent());
-        ((ObjectNode) expectedDocumentJson.get().get(SHADOW_DOCUMENT_STATE)).set(SHADOW_DOCUMENT_STATE_REPORTED,
-                expectedDocumentJson.get().get(SHADOW_DOCUMENT_STATE).get(SHADOW_DOCUMENT_STATE_DESIRED));
-        ((ObjectNode) expectedDocumentJson.get().get(SHADOW_DOCUMENT_STATE)).remove(SHADOW_DOCUMENT_STATE_DESIRED);
-        ((ObjectNode) expectedDocumentJson.get().get(SHADOW_DOCUMENT_STATE).get(SHADOW_DOCUMENT_STATE_REPORTED)).remove("SomeKey");
+        assertTrue(updatedDocumentJson.get().has(SHADOW_DOCUMENT_TIMESTAMP));
+        ((ObjectNode) updatedDocumentJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
+        Optional<JsonNode> expectedAcceptedJson = JsonUtil.getPayloadJson(updateRequest);
+        assertTrue(expectedAcceptedJson.isPresent());
+        ((ObjectNode) expectedAcceptedJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(1));
 
-        assertThat(updatedDocumentJson.get(), Matchers.is(expectedDocumentJson.get()));
+        assertThat(updatedDocumentJson.get(), Matchers.is(expectedAcceptedJson.get()));
 
         verify(mockPubSubClientWrapper, times(1)).accept(acceptRequestCaptor.capture());
         verify(mockPubSubClientWrapper, times(0)).delta(acceptRequestCaptor.capture());
         verify(mockPubSubClientWrapper, times(1)).documents(acceptRequestCaptor.capture());
         assertEquals(2, acceptRequestCaptor.getAllValues().size());
 
-        Optional<JsonNode> expectedAcceptedJson = JsonUtil.getPayloadJson(updateRequest);
-        assertTrue(expectedAcceptedJson.isPresent());
-        ((ObjectNode) expectedAcceptedJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(1));
         Optional<JsonNode> expectedDeltaJson = JsonUtil.getPayloadJson(deltaPayload);
         assertTrue(expectedDeltaJson.isPresent());
         Optional<JsonNode> expectedDocumentsJson = JsonUtil.getPayloadJson(documentsPayload);
@@ -232,8 +233,11 @@ class UpdateThingShadowIPCHandlerTest {
 
         Optional<JsonNode> acceptedJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(0).getPayload());
         assertTrue(acceptedJson.isPresent());
+        assertTrue(acceptedJson.get().has(SHADOW_DOCUMENT_TIMESTAMP));
+        ((ObjectNode) acceptedJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
         Optional<JsonNode> documentsJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(1).getPayload());
         assertTrue(documentsJson.isPresent());
+        assertTrue(documentsJson.get().has(SHADOW_DOCUMENT_TIMESTAMP));
         ((ObjectNode) documentsJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
 
         assertEquals(shadowName, acceptRequestCaptor.getAllValues().get(0).getShadowName());
@@ -272,21 +276,19 @@ class UpdateThingShadowIPCHandlerTest {
         UpdateThingShadowResponse actualResponse = updateThingShadowIPCHandler.handleRequest(request);
         Optional<JsonNode> updatedDocumentJson = JsonUtil.getPayloadJson(actualResponse.getPayload());
         assertTrue(updatedDocumentJson.isPresent());
-        Optional<JsonNode> expectedDocumentJson = JsonUtil.getPayloadJson(updateDocument);
-        assertTrue(expectedDocumentJson.isPresent());
-        ((ObjectNode) expectedDocumentJson.get().get(SHADOW_DOCUMENT_STATE)).set(SHADOW_DOCUMENT_STATE_DESIRED,
-                expectedDocumentJson.get().get(SHADOW_DOCUMENT_STATE).get(SHADOW_DOCUMENT_STATE_REPORTED));
+        assertTrue(updatedDocumentJson.get().has(SHADOW_DOCUMENT_TIMESTAMP));
+        ((ObjectNode) updatedDocumentJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
+        Optional<JsonNode> expectedAcceptedJson = JsonUtil.getPayloadJson(updateRequest);
+        assertTrue(expectedAcceptedJson.isPresent());
+        ((ObjectNode) expectedAcceptedJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(1));
 
-        assertThat(updatedDocumentJson.get(), Matchers.is(expectedDocumentJson.get()));
+        assertThat(updatedDocumentJson.get(), Matchers.is(expectedAcceptedJson.get()));
 
         verify(mockPubSubClientWrapper, times(1)).accept(acceptRequestCaptor.capture());
         verify(mockPubSubClientWrapper, times(0)).delta(acceptRequestCaptor.capture());
         verify(mockPubSubClientWrapper, times(1)).documents(acceptRequestCaptor.capture());
         assertEquals(2, acceptRequestCaptor.getAllValues().size());
 
-        Optional<JsonNode> expectedAcceptedJson = JsonUtil.getPayloadJson(updateRequest);
-        assertTrue(expectedAcceptedJson.isPresent());
-        ((ObjectNode) expectedAcceptedJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(1));
         Optional<JsonNode> expectedDeltaJson = JsonUtil.getPayloadJson(deltaPayload);
         assertTrue(expectedDeltaJson.isPresent());
         Optional<JsonNode> expectedDocumentsJson = JsonUtil.getPayloadJson(documentsPayload);
@@ -294,8 +296,11 @@ class UpdateThingShadowIPCHandlerTest {
 
         Optional<JsonNode> acceptedJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(0).getPayload());
         assertTrue(acceptedJson.isPresent());
+        assertTrue(acceptedJson.get().has(SHADOW_DOCUMENT_TIMESTAMP));
+        ((ObjectNode) acceptedJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
         Optional<JsonNode> documentsJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(1).getPayload());
         assertTrue(documentsJson.isPresent());
+        assertTrue(documentsJson.get().has(SHADOW_DOCUMENT_TIMESTAMP));
         ((ObjectNode) documentsJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
 
         assertEquals(shadowName, acceptRequestCaptor.getAllValues().get(0).getShadowName());
@@ -319,6 +324,14 @@ class UpdateThingShadowIPCHandlerTest {
         byte[] updateDocument = getJsonFromResource(RESOURCE_DIRECTORY_NAME + "good_new_document_with_add_delete_update.json");
         byte[] documentsPayload = getJsonFromResource(RESOURCE_DIRECTORY_NAME + "good_documents_payload_after_new_node_desired.json");
         byte[] deltaPayload = getJsonFromResource(RESOURCE_DIRECTORY_NAME + "good_delta_node_with_new_node.json");
+        Optional<JsonNode> expectedAcceptedJson = JsonUtil.getPayloadJson(updateRequest);
+        assertTrue(expectedAcceptedJson.isPresent());
+        ((ObjectNode) expectedAcceptedJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(1));
+        Optional<JsonNode> expectedDeltaJson = JsonUtil.getPayloadJson(deltaPayload);
+        assertTrue(expectedDeltaJson.isPresent());
+        Optional<JsonNode> expectedDocumentsJson = JsonUtil.getPayloadJson(documentsPayload);
+        assertTrue(expectedDocumentsJson.isPresent());
+
         UpdateThingShadowRequest request = new UpdateThingShadowRequest();
         request.setThingName(THING_NAME);
         request.setShadowName(shadowName);
@@ -334,30 +347,27 @@ class UpdateThingShadowIPCHandlerTest {
         UpdateThingShadowResponse actualResponse = updateThingShadowIPCHandler.handleRequest(request);
         Optional<JsonNode> updatedDocumentJson = JsonUtil.getPayloadJson(actualResponse.getPayload());
         assertTrue(updatedDocumentJson.isPresent());
-        Optional<JsonNode> expectedDocumentJson = JsonUtil.getPayloadJson(updateDocument);
-        assertTrue(expectedDocumentJson.isPresent());
-        assertThat(updatedDocumentJson.get(), Matchers.is(expectedDocumentJson.get()));
+        assertTrue(updatedDocumentJson.get().has(SHADOW_DOCUMENT_TIMESTAMP));
+        ((ObjectNode) updatedDocumentJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
+
+        assertThat(updatedDocumentJson.get(), Matchers.is(expectedAcceptedJson.get()));
 
         verify(mockPubSubClientWrapper, times(1)).accept(acceptRequestCaptor.capture());
         verify(mockPubSubClientWrapper, times(1)).delta(acceptRequestCaptor.capture());
         verify(mockPubSubClientWrapper, times(1)).documents(acceptRequestCaptor.capture());
         assertEquals(3, acceptRequestCaptor.getAllValues().size());
 
-        Optional<JsonNode> expectedAcceptedJson = JsonUtil.getPayloadJson(updateRequest);
-        assertTrue(expectedAcceptedJson.isPresent());
-        ((ObjectNode) expectedAcceptedJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(1));
-        Optional<JsonNode> expectedDeltaJson = JsonUtil.getPayloadJson(deltaPayload);
-        assertTrue(expectedDeltaJson.isPresent());
-        Optional<JsonNode> expectedDocumentsJson = JsonUtil.getPayloadJson(documentsPayload);
-        assertTrue(expectedDocumentsJson.isPresent());
-
         Optional<JsonNode> acceptedJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(0).getPayload());
         assertTrue(acceptedJson.isPresent());
+        assertTrue(acceptedJson.get().has(SHADOW_DOCUMENT_TIMESTAMP));
+        ((ObjectNode) acceptedJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
         Optional<JsonNode> deltaJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(1).getPayload());
         assertTrue(deltaJson.isPresent());
+        assertTrue(deltaJson.get().has(SHADOW_DOCUMENT_TIMESTAMP));
         ((ObjectNode) deltaJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
         Optional<JsonNode> documentsJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(2).getPayload());
         assertTrue(documentsJson.isPresent());
+        assertTrue(documentsJson.get().has(SHADOW_DOCUMENT_TIMESTAMP));
         ((ObjectNode) documentsJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
 
         assertEquals(shadowName, acceptRequestCaptor.getAllValues().get(0).getShadowName());
@@ -404,21 +414,19 @@ class UpdateThingShadowIPCHandlerTest {
         UpdateThingShadowResponse actualResponse = updateThingShadowIPCHandler.handleRequest(request);
         Optional<JsonNode> updatedDocumentJson = JsonUtil.getPayloadJson(actualResponse.getPayload());
         assertTrue(updatedDocumentJson.isPresent());
+        assertTrue(updatedDocumentJson.get().has(SHADOW_DOCUMENT_TIMESTAMP));
+        ((ObjectNode) updatedDocumentJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
+        Optional<JsonNode> expectedAcceptedJson = JsonUtil.getPayloadJson(updateRequest);
+        assertTrue(expectedAcceptedJson.isPresent());
+        ((ObjectNode) expectedAcceptedJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(0));
 
-        Optional<JsonNode> expectedDocumentJson = JsonUtil.getPayloadJson(updateDocument);
-        assertTrue(expectedDocumentJson.isPresent());
-        ((ObjectNode) expectedDocumentJson.get().get(SHADOW_DOCUMENT_STATE)).remove(SHADOW_DOCUMENT_STATE_REPORTED);
-        ((ObjectNode) expectedDocumentJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(0));
-        assertThat(updatedDocumentJson.get(), Matchers.is(expectedDocumentJson.get()));
+        assertThat(updatedDocumentJson.get(), Matchers.is(expectedAcceptedJson.get()));
 
         verify(mockPubSubClientWrapper, times(1)).accept(acceptRequestCaptor.capture());
         verify(mockPubSubClientWrapper, times(1)).delta(acceptRequestCaptor.capture());
         verify(mockPubSubClientWrapper, times(1)).documents(acceptRequestCaptor.capture());
         assertEquals(3, acceptRequestCaptor.getAllValues().size());
 
-        Optional<JsonNode> expectedAcceptedJson = JsonUtil.getPayloadJson(updateRequest);
-        assertTrue(expectedAcceptedJson.isPresent());
-        ((ObjectNode) expectedAcceptedJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(0));
         Optional<JsonNode> expectedDeltaJson = JsonUtil.getPayloadJson(deltaPayload);
         assertTrue(expectedDeltaJson.isPresent());
         ((ObjectNode) expectedDeltaJson.get().get(SHADOW_DOCUMENT_STATE).get("color")).set("r", new IntNode(255));
@@ -428,11 +436,15 @@ class UpdateThingShadowIPCHandlerTest {
 
         Optional<JsonNode> acceptedJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(0).getPayload());
         assertTrue(acceptedJson.isPresent());
+        assertTrue(acceptedJson.get().has(SHADOW_DOCUMENT_TIMESTAMP));
+        ((ObjectNode) acceptedJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
         Optional<JsonNode> deltaJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(1).getPayload());
         assertTrue(deltaJson.isPresent());
+        assertTrue(deltaJson.get().has(SHADOW_DOCUMENT_TIMESTAMP));
         ((ObjectNode) deltaJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
         Optional<JsonNode> documentsJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(2).getPayload());
         assertTrue(documentsJson.isPresent());
+        assertTrue(documentsJson.get().has(SHADOW_DOCUMENT_TIMESTAMP));
         ((ObjectNode) documentsJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
 
         assertEquals(shadowName, acceptRequestCaptor.getAllValues().get(0).getShadowName());
@@ -678,7 +690,7 @@ class UpdateThingShadowIPCHandlerTest {
         UpdateThingShadowIPCHandler updateThingShadowIPCHandler = new UpdateThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandler, mockPubSubClientWrapper);
 
         InvalidArgumentsError thrown = assertThrows(InvalidArgumentsError.class, () -> updateThingShadowIPCHandler.handleRequest(request));
-        assertEquals("Invalid JSON\ninstance type (string) does not match any allowed primitive type (allowed: [\"integer\",\"number\"])", thrown.getMessage().trim());
+        assertEquals("Invalid JSON\nInvalid version. instance type (string) does not match any allowed primitive type (allowed: [\"integer\",\"number\"])", thrown.getMessage().trim());
 
         verify(mockPubSubClientWrapper, times(1))
                 .reject(rejectRequestCaptor.capture());
@@ -689,7 +701,7 @@ class UpdateThingShadowIPCHandlerTest {
         ErrorMessage errorMessage = rejectRequestCaptor.getValue().getErrorMessage();
         assertEquals(Operation.UPDATE_SHADOW, rejectRequestCaptor.getValue().getPublishOperation());
         assertEquals(400, errorMessage.getErrorCode());
-        assertEquals("Invalid JSON\ninstance type (string) does not match any allowed primitive type (allowed: [\"integer\",\"number\"])", errorMessage.getMessage());
+        assertEquals("Invalid JSON\nInvalid version. instance type (string) does not match any allowed primitive type (allowed: [\"integer\",\"number\"])", errorMessage.getMessage());
         assertEquals(IPCUtil.LogEvents.UPDATE_THING_SHADOW.code, rejectRequestCaptor.getAllValues().get(0).getPublishOperation().getLogEventType());
     }
 
@@ -740,7 +752,7 @@ class UpdateThingShadowIPCHandlerTest {
         UpdateThingShadowIPCHandler updateThingShadowIPCHandler = new UpdateThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandler, mockPubSubClientWrapper);
 
         InvalidArgumentsError thrown = assertThrows(InvalidArgumentsError.class, () -> updateThingShadowIPCHandler.handleRequest(request));
-        assertEquals("Invalid JSON\ninstance type (string) does not match any allowed primitive type (allowed: [\"object\"])", thrown.getMessage().trim());
+        assertEquals("Invalid JSON\nInvalid state. instance type (string) does not match any allowed primitive type (allowed: [\"object\"])", thrown.getMessage().trim());
 
         verify(mockPubSubClientWrapper, times(1))
                 .reject(rejectRequestCaptor.capture());
@@ -751,7 +763,7 @@ class UpdateThingShadowIPCHandlerTest {
         ErrorMessage errorMessage = rejectRequestCaptor.getValue().getErrorMessage();
         assertEquals(Operation.UPDATE_SHADOW, rejectRequestCaptor.getValue().getPublishOperation());
         assertEquals(400, errorMessage.getErrorCode());
-        assertEquals("Invalid JSON\ninstance type (string) does not match any allowed primitive type (allowed: [\"object\"])", errorMessage.getMessage());
+        assertEquals("Invalid JSON\nInvalid state. instance type (string) does not match any allowed primitive type (allowed: [\"object\"])", errorMessage.getMessage());
         assertEquals(IPCUtil.LogEvents.UPDATE_THING_SHADOW.code, rejectRequestCaptor.getAllValues().get(0).getPublishOperation().getLogEventType());
     }
 

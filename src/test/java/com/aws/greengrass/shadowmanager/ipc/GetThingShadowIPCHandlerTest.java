@@ -8,7 +8,7 @@ package com.aws.greengrass.shadowmanager.ipc;
 import com.aws.greengrass.authorization.AuthorizationHandler;
 import com.aws.greengrass.authorization.Permission;
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
-import com.aws.greengrass.shadowmanager.JsonUtil;
+import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
@@ -44,6 +44,7 @@ import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.util.Optional;
 
+import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_TIMESTAMP;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -111,15 +112,20 @@ class GetThingShadowIPCHandlerTest {
         GetThingShadowIPCHandler getThingShadowIPCHandler = new GetThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandler, mockPubSubClientWrapper);
         when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(allByteData));
         GetThingShadowResponse actualResponse = getThingShadowIPCHandler.handleRequest(request);
+
         Optional<JsonNode> retrievedDocument = JsonUtil.getPayloadJson(actualResponse.getPayload());
         assertTrue(retrievedDocument.isPresent());
-        assertThat(payloadJson.get(), Matchers.is(retrievedDocument.get()));
+        assertTrue(retrievedDocument.get().has(SHADOW_DOCUMENT_TIMESTAMP));
+        ((ObjectNode) retrievedDocument.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
+        assertThat(retrievedDocument.get(), Matchers.is(payloadJson.get()));
         verify(mockPubSubClientWrapper, times(1)).accept(acceptRequestCaptor.capture());
 
         assertNotNull(acceptRequestCaptor.getValue());
 
         Optional<JsonNode> acceptedJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getValue().getPayload());
         assertTrue(acceptedJson.isPresent());
+        assertTrue(acceptedJson.get().has(SHADOW_DOCUMENT_TIMESTAMP));
+        ((ObjectNode) acceptedJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
         assertEquals(shadowName, acceptRequestCaptor.getValue().getShadowName());
         assertEquals(THING_NAME, acceptRequestCaptor.getValue().getThingName());
         assertEquals(Operation.GET_SHADOW, acceptRequestCaptor.getValue().getPublishOperation());
@@ -151,9 +157,12 @@ class GetThingShadowIPCHandlerTest {
         GetThingShadowIPCHandler getThingShadowIPCHandler = new GetThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandler, mockPubSubClientWrapper);
         when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(documentByteData));
         GetThingShadowResponse actualResponse = getThingShadowIPCHandler.handleRequest(request);
+
         Optional<JsonNode> retrievedDocument = JsonUtil.getPayloadJson(actualResponse.getPayload());
         assertTrue(retrievedDocument.isPresent());
-        assertThat(documentJson.get(), Matchers.is(retrievedDocument.get()));
+        assertTrue(retrievedDocument.get().has(SHADOW_DOCUMENT_TIMESTAMP));
+        ((ObjectNode) retrievedDocument.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
+        assertThat(retrievedDocument.get(), Matchers.is(documentJson.get()));
 
         verify(mockPubSubClientWrapper, times(1)).accept(acceptRequestCaptor.capture());
 
@@ -161,6 +170,8 @@ class GetThingShadowIPCHandlerTest {
 
         Optional<JsonNode> acceptedJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getValue().getPayload());
         assertTrue(acceptedJson.isPresent());
+        assertTrue(acceptedJson.get().has(SHADOW_DOCUMENT_TIMESTAMP));
+        ((ObjectNode) acceptedJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
         assertEquals(shadowName, acceptRequestCaptor.getValue().getShadowName());
         assertEquals(THING_NAME, acceptRequestCaptor.getValue().getThingName());
         assertEquals(Operation.GET_SHADOW, acceptRequestCaptor.getValue().getPublishOperation());

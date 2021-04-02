@@ -9,7 +9,6 @@ import com.aws.greengrass.authorization.AuthorizationHandler;
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
-import com.aws.greengrass.shadowmanager.JsonUtil;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
@@ -17,7 +16,9 @@ import com.aws.greengrass.shadowmanager.ipc.model.AcceptRequest;
 import com.aws.greengrass.shadowmanager.ipc.model.Operation;
 import com.aws.greengrass.shadowmanager.ipc.model.RejectRequest;
 import com.aws.greengrass.shadowmanager.model.ErrorMessage;
-import com.aws.greengrass.shadowmanager.model.JsonShadowDocument;
+import com.aws.greengrass.shadowmanager.model.ResponseMessageBuilder;
+import com.aws.greengrass.shadowmanager.model.ShadowDocument;
+import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import software.amazon.awssdk.aws.greengrass.GeneratedAbstractGetThingShadowOperationHandler;
@@ -31,13 +32,13 @@ import software.amazon.awssdk.eventstreamrpc.OperationContinuationHandlerContext
 import software.amazon.awssdk.eventstreamrpc.model.EventStreamJsonMessage;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static com.aws.greengrass.ipc.common.ExceptionUtil.translateExceptions;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
-import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE;
-import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE_DELTA;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_RESOURCE_TYPE;
 import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.GET_THING_SHADOW;
 
@@ -91,9 +92,14 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
         return translateExceptions(() -> {
             String thingName = request.getThingName();
             String shadowName = request.getShadowName();
+            //TODO: Add payload to GetThingShadowRequest
+            byte[] payload = null;
 
             try {
-                logger.atTrace("ipc-get-thing-shadow-request").log();
+                logger.atTrace("ipc-get-thing-shadow-request")
+                        .kv(LOG_THING_NAME_KEY, thingName)
+                        .kv(LOG_SHADOW_NAME_KEY, shadowName)
+                        .log();
 
                 IPCUtil.validateThingNameAndDoAuthorization(authorizationHandler, GET_THING_SHADOW,
                         serviceName, thingName, shadowName);
@@ -115,10 +121,29 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
                                     .build());
                             return rnf;
                         });
-                JsonShadowDocument currentShadowDocument = new JsonShadowDocument(currentDocumentBytes);
-                handleGet(thingName, shadowName, currentShadowDocument);
+                ShadowDocument currentShadowDocument = new ShadowDocument(currentDocumentBytes);
+
+                // Get the Client Token if present in the payload.
+                Optional<JsonNode> payloadJson = JsonUtil.getPayloadJson(payload);
+                Optional<String> clientToken = payloadJson.flatMap(JsonUtil::getClientToken);
+
+                ObjectNode responseNode = ResponseMessageBuilder.builder()
+                        .withState(currentShadowDocument.getState().toJsonWithDelta())
+                        //TODO: Update the metadata when implemented.
+                        //.withMetadata()
+                        .withVersion(currentShadowDocument.getVersion())
+                        .withClientToken(clientToken)
+                        .withTimestamp(Instant.now()).build();
+
+                byte[] responseNodeBytes = JsonUtil.getPayloadBytes(responseNode);
+
+                pubSubClientWrapper.accept(AcceptRequest.builder().thingName(thingName).shadowName(shadowName)
+                        .payload(responseNodeBytes)
+                        .publishOperation(Operation.GET_SHADOW)
+                        .build());
+
                 GetThingShadowResponse response = new GetThingShadowResponse();
-                response.setPayload(JsonUtil.getPayloadBytes(currentShadowDocument.getDocument()));
+                response.setPayload(responseNodeBytes);
                 return response;
 
             } catch (AuthorizationException e) {
@@ -160,21 +185,6 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
             }
         });
     }
-
-    private void handleGet(String thingName, String shadowName, JsonShadowDocument jsonShadowDocument)
-            throws IOException {
-        Optional<ObjectNode> deltaNode = jsonShadowDocument.delta(Operation.GET_SHADOW);
-        if (deltaNode.isPresent()) {
-            JsonNode stateNodeJson = jsonShadowDocument.getDocument().get(SHADOW_DOCUMENT_STATE);
-            ((ObjectNode) stateNodeJson).set(SHADOW_DOCUMENT_STATE_DELTA, deltaNode.get());
-        }
-
-        pubSubClientWrapper.accept(AcceptRequest.builder().thingName(thingName).shadowName(shadowName)
-                .payload(JsonUtil.getPayloadBytes(jsonShadowDocument.getDocument()))
-                .publishOperation(Operation.GET_SHADOW)
-                .build());
-    }
-
 
     @Override
     public void handleStreamEvent(EventStreamJsonMessage streamRequestEvent) {
