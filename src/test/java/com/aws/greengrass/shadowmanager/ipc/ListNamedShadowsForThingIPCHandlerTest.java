@@ -5,9 +5,8 @@
 
 package com.aws.greengrass.shadowmanager.ipc;
 
-import com.aws.greengrass.authorization.AuthorizationHandler;
-import com.aws.greengrass.authorization.Permission;
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
+import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
@@ -34,8 +33,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 
-import static com.aws.greengrass.shadowmanager.TestUtils.TEST_SERVICE;
-import static com.aws.greengrass.shadowmanager.TestUtils.THING_NAME;
+import static com.aws.greengrass.shadowmanager.TestUtils.*;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
@@ -60,7 +58,7 @@ class ListNamedShadowsForThingIPCHandlerTest {
     AuthenticationData mockAuthenticationData;
 
     @Mock
-    AuthorizationHandler mockAuthorizationHandler;
+    AuthorizationHandlerWrapper mockAuthorizationHandlerWrapper;
 
     @Mock
     ShadowManagerDAO mockDao;
@@ -89,7 +87,7 @@ class ListNamedShadowsForThingIPCHandlerTest {
             request.setPageSize(null);
         }
 
-        ListNamedShadowsForThingIPCHandler listNamedShadowsForThingIPCHandler = new ListNamedShadowsForThingIPCHandler(mockContext, mockDao, mockAuthorizationHandler);
+        ListNamedShadowsForThingIPCHandler listNamedShadowsForThingIPCHandler = new ListNamedShadowsForThingIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper);
         when(mockDao.listNamedShadowsForThing(any(), anyInt(), anyInt())).thenReturn(NAMED_SHADOW_LIST);
 
         ListNamedShadowsForThingResponse actualResponse = listNamedShadowsForThingIPCHandler.handleRequest(request);
@@ -109,7 +107,7 @@ class ListNamedShadowsForThingIPCHandlerTest {
         request.setThingName(THING_NAME);
         request.setPageSize(PAGE_SIZE_MATCHING_SHADOW_LIST);
 
-        ListNamedShadowsForThingIPCHandler listNamedShadowsForThingIPCHandler = new ListNamedShadowsForThingIPCHandler(mockContext, mockDao, mockAuthorizationHandler);
+        ListNamedShadowsForThingIPCHandler listNamedShadowsForThingIPCHandler = new ListNamedShadowsForThingIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper);
         when(mockDao.listNamedShadowsForThing(any(), anyInt(), anyInt())).thenReturn(NAMED_SHADOW_LIST);
         ListNamedShadowsForThingResponse actualResponse = listNamedShadowsForThingIPCHandler.handleRequest(request);
 
@@ -130,7 +128,7 @@ class ListNamedShadowsForThingIPCHandlerTest {
         request.setThingName(THING_NAME);
         request.setNextToken(EXPECTED_TOKEN_WITH_OFFSET);
 
-        ListNamedShadowsForThingIPCHandler listNamedShadowsForThingIPCHandler = new ListNamedShadowsForThingIPCHandler(mockContext, mockDao, mockAuthorizationHandler);
+        ListNamedShadowsForThingIPCHandler listNamedShadowsForThingIPCHandler = new ListNamedShadowsForThingIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper);
         when(mockDao.listNamedShadowsForThing(any(), anyInt(), anyInt())).thenReturn(NAMED_SHADOW_LIST);
         ListNamedShadowsForThingResponse actualResponse = listNamedShadowsForThingIPCHandler.handleRequest(request);
 
@@ -152,7 +150,7 @@ class ListNamedShadowsForThingIPCHandlerTest {
         request.setThingName(THING_NAME);
         request.setPageSize(pageSize);
 
-        ListNamedShadowsForThingIPCHandler listNamedShadowsForThingIPCHandler = new ListNamedShadowsForThingIPCHandler(mockContext, mockDao, mockAuthorizationHandler);
+        ListNamedShadowsForThingIPCHandler listNamedShadowsForThingIPCHandler = new ListNamedShadowsForThingIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper);
         InvalidArgumentsError thrown = assertThrows(InvalidArgumentsError.class, () -> listNamedShadowsForThingIPCHandler.handleRequest(request));
         assertThat(thrown.getMessage(), startsWith("pageSize argument must"));
 
@@ -168,7 +166,7 @@ class ListNamedShadowsForThingIPCHandlerTest {
         request.setThingName("DifferentThingName");
         request.setNextToken(EXPECTED_TOKEN_WITH_OFFSET);
 
-        ListNamedShadowsForThingIPCHandler listNamedShadowsForThingIPCHandler = new ListNamedShadowsForThingIPCHandler(mockContext, mockDao, mockAuthorizationHandler);
+        ListNamedShadowsForThingIPCHandler listNamedShadowsForThingIPCHandler = new ListNamedShadowsForThingIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper);
         InvalidArgumentsError thrown = assertThrows(InvalidArgumentsError.class, () -> listNamedShadowsForThingIPCHandler.handleRequest(request));
         assertThat(thrown.getMessage(), startsWith("Invalid nextToken"));
 
@@ -183,7 +181,7 @@ class ListNamedShadowsForThingIPCHandlerTest {
         ListNamedShadowsForThingRequest request = new ListNamedShadowsForThingRequest();
         request.setThingName(thingName);
 
-        ListNamedShadowsForThingIPCHandler listNamedShadowsForThingIPCHandler = new ListNamedShadowsForThingIPCHandler(mockContext, mockDao, mockAuthorizationHandler);
+        ListNamedShadowsForThingIPCHandler listNamedShadowsForThingIPCHandler = new ListNamedShadowsForThingIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper);
         InvalidArgumentsError thrown = assertThrows(InvalidArgumentsError.class, () -> listNamedShadowsForThingIPCHandler.handleRequest(request));
         assertThat(thrown.getMessage(), startsWith("ThingName"));
 
@@ -197,12 +195,11 @@ class ListNamedShadowsForThingIPCHandlerTest {
         ListNamedShadowsForThingRequest request = new ListNamedShadowsForThingRequest();
         request.setThingName(THING_NAME);
 
-        when(mockAuthorizationHandler.isAuthorized(any(), any(Permission.class)))
-                .thenThrow(new AuthorizationException("sample authorization error"));
+        doThrow(new AuthorizationException(SAMPLE_EXCEPTION_MESSAGE)).when(mockAuthorizationHandlerWrapper).doAuthorization(any(), any(), any());
 
-        ListNamedShadowsForThingIPCHandler listNamedShadowsForThingIPCHandler = new ListNamedShadowsForThingIPCHandler(mockContext, mockDao, mockAuthorizationHandler);
+        ListNamedShadowsForThingIPCHandler listNamedShadowsForThingIPCHandler = new ListNamedShadowsForThingIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper);
         UnauthorizedError thrown = assertThrows(UnauthorizedError.class, () -> listNamedShadowsForThingIPCHandler.handleRequest(request));
-        assertThat(thrown.getMessage(), startsWith("sample"));
+        assertThat(thrown.getMessage(), is(equalTo(SAMPLE_EXCEPTION_MESSAGE)));
 
         verify(mockDao, times(0)).listNamedShadowsForThing(any(),
                 offsetCaptor.capture(), pageSizeCaptor.capture());
@@ -214,10 +211,10 @@ class ListNamedShadowsForThingIPCHandlerTest {
         ListNamedShadowsForThingRequest request = new ListNamedShadowsForThingRequest();
         request.setThingName(THING_NAME);
 
-        ListNamedShadowsForThingIPCHandler listNamedShadowsForThingIPCHandler = new ListNamedShadowsForThingIPCHandler(mockContext, mockDao, mockAuthorizationHandler);
-        doThrow(new ShadowManagerDataException(new Exception("sample exception message"))).when(mockDao).listNamedShadowsForThing(any(), anyInt(), anyInt());
+        ListNamedShadowsForThingIPCHandler listNamedShadowsForThingIPCHandler = new ListNamedShadowsForThingIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper);
+        doThrow(new ShadowManagerDataException(new Exception(SAMPLE_EXCEPTION_MESSAGE))).when(mockDao).listNamedShadowsForThing(any(), anyInt(), anyInt());
         ServiceError thrown = assertThrows(ServiceError.class, () -> listNamedShadowsForThingIPCHandler.handleRequest(request));
-        assertThat(thrown.getMessage(), containsString("sample"));
+        assertThat(thrown.getMessage(), containsString(SAMPLE_EXCEPTION_MESSAGE));
 
         verify(mockDao, times(1)).listNamedShadowsForThing(any(),
                 offsetCaptor.capture(), pageSizeCaptor.capture());
@@ -234,7 +231,7 @@ class ListNamedShadowsForThingIPCHandlerTest {
         request.setThingName(THING_NAME);
         request.setPageSize(pageSize);
 
-        ListNamedShadowsForThingIPCHandler listNamedShadowsForThingIPCHandler = new ListNamedShadowsForThingIPCHandler(mockContext, mockDao, mockAuthorizationHandler);
+        ListNamedShadowsForThingIPCHandler listNamedShadowsForThingIPCHandler = new ListNamedShadowsForThingIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper);
         when(mockDao.listNamedShadowsForThing(any(), anyInt(), anyInt())).thenReturn(NAMED_SHADOW_LIST);
         ServiceError thrown = assertThrows(ServiceError.class, () -> listNamedShadowsForThingIPCHandler.handleRequest(request));
         assertThat(thrown.getMessage(), containsString("internal service error"));
@@ -247,13 +244,13 @@ class ListNamedShadowsForThingIPCHandlerTest {
 
     @Test
     void GIVEN_list_named_shadows_for_thing_ipc_handler_WHEN_handle_stream_event_THEN_nothing_happens() {
-        ListNamedShadowsForThingIPCHandler listNamedShadowsForThingIPCHandler = new ListNamedShadowsForThingIPCHandler(mockContext, mockDao, mockAuthorizationHandler);
+        ListNamedShadowsForThingIPCHandler listNamedShadowsForThingIPCHandler = new ListNamedShadowsForThingIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper);
         assertDoesNotThrow(() -> listNamedShadowsForThingIPCHandler.handleStreamEvent(mock(EventStreamJsonMessage.class)));
     }
 
     @Test
     void GIVEN_list_named_shadows_for_thing_ipc_handler_WHEN_stream_closes_event_THEN_nothing_happens() {
-        ListNamedShadowsForThingIPCHandler listNamedShadowsForThingIPCHandler = new ListNamedShadowsForThingIPCHandler(mockContext, mockDao, mockAuthorizationHandler);
+        ListNamedShadowsForThingIPCHandler listNamedShadowsForThingIPCHandler = new ListNamedShadowsForThingIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper);
         assertDoesNotThrow(listNamedShadowsForThingIPCHandler::onStreamClosed);
     }
 }

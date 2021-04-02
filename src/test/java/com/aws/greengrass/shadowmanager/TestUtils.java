@@ -18,6 +18,7 @@ public final class TestUtils {
     public static final String SHADOW_NAME = "testShadowName";
     public static final String INVALID_NAME_PATTERN = "invalidPattern$!@#";
     public static final String INVALID_NAME_LENGTH = "invalidThingOrShadowNameLengthOver128Characters----------------------------------------------------------------------------------------------------";
+    public final static String SAMPLE_EXCEPTION_MESSAGE = "sample exception message";
 
 
     static Stream<Arguments> invalidThingAndShadowName() {

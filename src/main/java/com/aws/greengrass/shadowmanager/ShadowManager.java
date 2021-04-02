@@ -5,7 +5,6 @@
 
 package com.aws.greengrass.shadowmanager;
 
-import com.aws.greengrass.authorization.AuthorizationHandler;
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
 import com.aws.greengrass.config.Topics;
 import com.aws.greengrass.dependency.ImplementsService;
@@ -16,6 +15,7 @@ import com.aws.greengrass.shadowmanager.ipc.GetThingShadowIPCHandler;
 import com.aws.greengrass.shadowmanager.ipc.ListNamedShadowsForThingIPCHandler;
 import com.aws.greengrass.shadowmanager.ipc.PubSubClientWrapper;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowIPCHandler;
+import com.aws.greengrass.shadowmanager.model.LogEvents;
 import org.flywaydb.core.api.FlywayException;
 import software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService;
 
@@ -33,32 +33,13 @@ import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.UPD
 
 @ImplementsService(name = ShadowManager.SERVICE_NAME)
 public class ShadowManager extends PluginService {
-    enum LogEvents {
-        AUTHORIZATION_ERROR("shadow-authorization-error"),
-        IPC_REGISTRATION("shadow-ipc-registration"),
-        IPC_ERROR("shadow-ipc-error"),
-        DCM_ERROR("shadow-dcm-error"),
-        DATABASE_OPERATION_ERROR("shadow-database-operation-error"),
-        DATABASE_CLOSE_ERROR("shadow-database-close-error");
-
-        String code;
-
-        LogEvents(String code) {
-            this.code = code;
-        }
-
-        public String code() {
-            return code;
-        }
-    }
-
     public static final String SERVICE_NAME = "aws.greengrass.ShadowManager";
     protected static final List<String> SHADOW_AUTHORIZATION_OPCODES = Arrays.asList(GET_THING_SHADOW,
             UPDATE_THING_SHADOW, LIST_NAMED_SHADOWS_FOR_THING, DELETE_THING_SHADOW, "*");
 
     private final ShadowManagerDAO dao;
     private final ShadowManagerDatabase database;
-    private final AuthorizationHandler authorizationHandler;
+    private final AuthorizationHandlerWrapper authorizationHandlerWrapper;
     private final PubSubClientWrapper pubSubClientWrapper;
 
     @Inject
@@ -67,44 +48,44 @@ public class ShadowManager extends PluginService {
     /**
      * Ctr for ShadowManager.
      *
-     * @param topics               topics passed by the Nucleus
-     * @param database             Local shadow database management
-     * @param dao                  Local shadow database management
-     * @param authorizationHandler The authorization handler
-     * @param pubSubClientWrapper  The PubSub client wrapper
+     * @param topics                      topics passed by the Nucleus
+     * @param database                    Local shadow database management
+     * @param dao                         Local shadow database management
+     * @param authorizationHandlerWrapper The authorization handler wrapper
+     * @param pubSubClientWrapper         The PubSub client wrapper
      */
     @Inject
     public ShadowManager(
             Topics topics,
             ShadowManagerDatabase database,
             ShadowManagerDAOImpl dao,
-            AuthorizationHandler authorizationHandler,
+            AuthorizationHandlerWrapper authorizationHandlerWrapper,
             PubSubClientWrapper pubSubClientWrapper) {
         super(topics);
         this.database = database;
-        this.authorizationHandler = authorizationHandler;
+        this.authorizationHandlerWrapper = authorizationHandlerWrapper;
         this.dao = dao;
         this.pubSubClientWrapper = pubSubClientWrapper;
     }
 
     private void registerHandlers() {
         try {
-            authorizationHandler.registerComponent(this.getName(), new HashSet<>(SHADOW_AUTHORIZATION_OPCODES));
+            authorizationHandlerWrapper.registerComponent(this.getName(), new HashSet<>(SHADOW_AUTHORIZATION_OPCODES));
         } catch (AuthorizationException e) {
             logger.atError()
-                    .setEventType(LogEvents.AUTHORIZATION_ERROR.code)
+                    .setEventType(LogEvents.AUTHORIZATION_ERROR.code())
                     .setCause(e)
                     .log("Failed to initialize the ShadowManager service with the Authorization module.");
         }
 
         greengrassCoreIPCService.setGetThingShadowHandler(context -> new GetThingShadowIPCHandler(context,
-                dao, authorizationHandler, pubSubClientWrapper));
+                dao, authorizationHandlerWrapper, pubSubClientWrapper));
         greengrassCoreIPCService.setDeleteThingShadowHandler(context -> new DeleteThingShadowIPCHandler(context,
-                dao, authorizationHandler, pubSubClientWrapper));
+                dao, authorizationHandlerWrapper, pubSubClientWrapper));
         greengrassCoreIPCService.setUpdateThingShadowHandler(context -> new UpdateThingShadowIPCHandler(context,
-                dao, authorizationHandler, pubSubClientWrapper));
+                dao, authorizationHandlerWrapper, pubSubClientWrapper));
         greengrassCoreIPCService.setListNamedShadowsForThingHandler(context -> new ListNamedShadowsForThingIPCHandler(
-                context, dao, authorizationHandler));
+                context, dao, authorizationHandlerWrapper));
     }
 
     @Override

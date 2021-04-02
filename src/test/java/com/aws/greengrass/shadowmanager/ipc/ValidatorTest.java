@@ -19,46 +19,46 @@ import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
-public class IPCUtilTest {
+public class ValidatorTest {
 
     @ParameterizedTest
     @NullAndEmptySource
     void GIVEN_missing_thing_name_WHEN_validate_thing_name_THEN_throw_invalid_request_parameters_exception(String thingName, ExtensionContext context) {
-        InvalidRequestParametersException thrown = assertThrows(InvalidRequestParametersException.class, () -> IPCUtil.validateThingName(thingName));
+        InvalidRequestParametersException thrown = assertThrows(InvalidRequestParametersException.class, () -> Validator.validateThingName(thingName));
         assertThat(thrown.getMessage(), is(equalTo("ThingName is missing")));
     }
 
     @Test
     void GIVEN_invalid_thing_name_length_WHEN_validate_thing_name_THEN_throw_invalid_request_parameters_exception(ExtensionContext context) {
         String invalidThingName = "invalidThingNameLengthOver128Characters----------------------------------------------------------------------------------------------------";
-        InvalidRequestParametersException thrown = assertThrows(InvalidRequestParametersException.class, () -> IPCUtil.validateThingName(invalidThingName));
+        InvalidRequestParametersException thrown = assertThrows(InvalidRequestParametersException.class, () -> Validator.validateThingName(invalidThingName));
         assertThat(thrown.getMessage(), startsWith("ThingName has a maximum"));
     }
 
     @Test
     void GIVEN_invalid_thing_name_pattern_WHEN_validate_thing_name_THEN_throw_invalid_request_parameters_exception(ExtensionContext context) {
         String invalidThingName = "InvalidThingName!@#";
-        InvalidRequestParametersException thrown = assertThrows(InvalidRequestParametersException.class, () -> IPCUtil.validateThingName(invalidThingName));
+        InvalidRequestParametersException thrown = assertThrows(InvalidRequestParametersException.class, () -> Validator.validateThingName(invalidThingName));
         assertThat(thrown.getMessage(), startsWith("ThingName must match"));
     }
 
     @Test
     void GIVEN_invalid_shadow_name_length_WHEN_validate_shadow_name_THEN_throw_invalid_request_parameters_exception(ExtensionContext context) {
         String invalidShadowName = "invalidShadowNameLengthOver128Characters----------------------------------------------------------------------------------------------------";
-        InvalidRequestParametersException thrown = assertThrows(InvalidRequestParametersException.class, () -> IPCUtil.validateShadowName(invalidShadowName));
+        InvalidRequestParametersException thrown = assertThrows(InvalidRequestParametersException.class, () -> Validator.validateShadowName(invalidShadowName));
         assertThat(thrown.getMessage(), startsWith("ShadowName has a maximum"));
     }
 
     @Test
     void GIVEN_invalid_shadow_name_pattern_WHEN_validate_shadow_name_THEN_throw_invalid_request_parameters_exception(ExtensionContext context) {
         String invalidShadowName = "InvalidThingName!@#";
-        InvalidRequestParametersException thrown = assertThrows(InvalidRequestParametersException.class, () -> IPCUtil.validateShadowName(invalidShadowName));
+        InvalidRequestParametersException thrown = assertThrows(InvalidRequestParametersException.class, () -> Validator.validateShadowName(invalidShadowName));
         assertThat(thrown.getMessage(), startsWith("ShadowName must match"));
     }
 
     @ParameterizedTest
     @NullAndEmptySource
     void GIVEN_empty_or_null_shadow_name_WHEN_validate_shadow_name_THEN_do_nothing(String shadowName, ExtensionContext context) {
-        assertDoesNotThrow(() -> IPCUtil.validateShadowName(shadowName));
+        assertDoesNotThrow(() -> Validator.validateShadowName(shadowName));
     }
 }

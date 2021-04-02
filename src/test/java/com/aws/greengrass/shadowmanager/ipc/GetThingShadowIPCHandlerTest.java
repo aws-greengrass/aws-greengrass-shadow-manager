@@ -5,9 +5,8 @@
 
 package com.aws.greengrass.shadowmanager.ipc;
 
-import com.aws.greengrass.authorization.AuthorizationHandler;
-import com.aws.greengrass.authorization.Permission;
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
+import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
 import com.aws.greengrass.shadowmanager.JsonUtil;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
@@ -17,6 +16,7 @@ import com.aws.greengrass.shadowmanager.ipc.model.Operation;
 import com.aws.greengrass.shadowmanager.ipc.model.RejectRequest;
 import com.aws.greengrass.shadowmanager.model.Constants;
 import com.aws.greengrass.shadowmanager.model.ErrorMessage;
+import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -71,7 +71,7 @@ class GetThingShadowIPCHandlerTest {
     AuthenticationData mockAuthenticationData;
 
     @Mock
-    AuthorizationHandler mockAuthorizationHandler;
+    AuthorizationHandlerWrapper mockAuthorizationHandlerWrapper;
 
     @Mock
     ShadowManagerDAO mockDao;
@@ -106,7 +106,7 @@ class GetThingShadowIPCHandlerTest {
         GetThingShadowResponse expectedResponse = new GetThingShadowResponse();
         expectedResponse.setPayload(allByteData);
 
-        GetThingShadowIPCHandler getThingShadowIPCHandler = new GetThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandler, mockPubSubClientWrapper);
+        GetThingShadowIPCHandler getThingShadowIPCHandler = new GetThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper);
         when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(allByteData));
         GetThingShadowResponse actualResponse = getThingShadowIPCHandler.handleRequest(request);
         Optional<JsonNode> retrievedDocument = JsonUtil.getPayloadJson(actualResponse.getPayload());
@@ -125,7 +125,7 @@ class GetThingShadowIPCHandlerTest {
         }
         assertThat(acceptRequestCaptor.getValue().getThingName(), is(equalTo(THING_NAME)));
         assertThat("Expected operation", acceptRequestCaptor.getValue().getPublishOperation(), is(Operation.GET_SHADOW));
-        assertThat("Expected log code", acceptRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(IPCUtil.LogEvents.GET_THING_SHADOW.code()));
+        assertThat("Expected log code", acceptRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(LogEvents.GET_THING_SHADOW.code()));
 
         assertThat(acceptedJson.get(), is(equalTo(payloadJson.get())));
     }
@@ -152,7 +152,7 @@ class GetThingShadowIPCHandlerTest {
         GetThingShadowResponse expectedResponse = new GetThingShadowResponse();
         expectedResponse.setPayload(documentByteData);
 
-        GetThingShadowIPCHandler getThingShadowIPCHandler = new GetThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandler, mockPubSubClientWrapper);
+        GetThingShadowIPCHandler getThingShadowIPCHandler = new GetThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper);
         when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(documentByteData));
         GetThingShadowResponse actualResponse = getThingShadowIPCHandler.handleRequest(request);
         Optional<JsonNode> retrievedDocument = JsonUtil.getPayloadJson(actualResponse.getPayload());
@@ -172,7 +172,7 @@ class GetThingShadowIPCHandlerTest {
         }
         assertThat(acceptRequestCaptor.getValue().getThingName(), is(equalTo(THING_NAME)));
         assertThat("Expected operation", acceptRequestCaptor.getValue().getPublishOperation(), is(Operation.GET_SHADOW));
-        assertThat("Expected log code", acceptRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(IPCUtil.LogEvents.GET_THING_SHADOW.code()));
+        assertThat("Expected log code", acceptRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(LogEvents.GET_THING_SHADOW.code()));
 
         assertThat(acceptedJson.get(), is(equalTo(documentJson.get())));
     }
@@ -185,7 +185,7 @@ class GetThingShadowIPCHandlerTest {
         request.setShadowName(SHADOW_NAME);
 
         when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.empty());
-        GetThingShadowIPCHandler getThingShadowIPCHandler = new GetThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandler, mockPubSubClientWrapper);
+        GetThingShadowIPCHandler getThingShadowIPCHandler = new GetThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper);
         ResourceNotFoundError thrown = assertThrows(ResourceNotFoundError.class, () -> getThingShadowIPCHandler.handleRequest(request));
         assertThat(thrown.getMessage(), is(equalTo("No shadow found")));
 
@@ -194,7 +194,7 @@ class GetThingShadowIPCHandlerTest {
         assertThat(rejectRequestCaptor.getValue(), is(not(nullValue())));
         assertThat(rejectRequestCaptor.getValue().getShadowName(), is(equalTo(SHADOW_NAME)));
         assertThat("Expected operation", rejectRequestCaptor.getValue().getPublishOperation(), is(Operation.GET_SHADOW));
-        assertThat("Expected log code", rejectRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(IPCUtil.LogEvents.GET_THING_SHADOW.code()));
+        assertThat("Expected log code", rejectRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(LogEvents.GET_THING_SHADOW.code()));
 
         ErrorMessage errorMessage = rejectRequestCaptor.getValue().getErrorMessage();
         assertThat(errorMessage.getTimestamp(), is(not(equalTo(Instant.EPOCH.toEpochMilli()))));
@@ -209,17 +209,17 @@ class GetThingShadowIPCHandlerTest {
         request.setThingName(THING_NAME);
         request.setShadowName(SHADOW_NAME);
 
-        doThrow(new ShadowManagerDataException(new Exception("sample exception message"))).when(mockDao).getShadowThing(any(), any());
-        GetThingShadowIPCHandler getThingShadowIPCHandler = new GetThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandler, mockPubSubClientWrapper);
+        doThrow(new ShadowManagerDataException(new Exception(SAMPLE_EXCEPTION_MESSAGE))).when(mockDao).getShadowThing(any(), any());
+        GetThingShadowIPCHandler getThingShadowIPCHandler = new GetThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper);
         ServiceError thrown = assertThrows(ServiceError.class, () -> getThingShadowIPCHandler.handleRequest(request));
-        assertThat(thrown.getMessage(), containsString("sample"));
+        assertThat(thrown.getMessage(), containsString(SAMPLE_EXCEPTION_MESSAGE));
 
         verify(mockPubSubClientWrapper, times(1)).reject(rejectRequestCaptor.capture());
 
         assertThat(rejectRequestCaptor.getValue(), is(not(nullValue())));
         assertThat(rejectRequestCaptor.getValue().getShadowName(), is(equalTo(SHADOW_NAME)));
         assertThat("Expected operation", rejectRequestCaptor.getValue().getPublishOperation(), is(Operation.GET_SHADOW));
-        assertThat("Expected log code", rejectRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(IPCUtil.LogEvents.GET_THING_SHADOW.code()));
+        assertThat("Expected log code", rejectRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(LogEvents.GET_THING_SHADOW.code()));
 
         ErrorMessage errorMessage = rejectRequestCaptor.getValue().getErrorMessage();
         assertThat(errorMessage.getTimestamp(), is(not(equalTo(Instant.EPOCH.toEpochMilli()))));
@@ -233,19 +233,18 @@ class GetThingShadowIPCHandlerTest {
         GetThingShadowRequest request = new GetThingShadowRequest();
         request.setThingName(THING_NAME);
         request.setShadowName(SHADOW_NAME);
-        when(mockAuthorizationHandler.isAuthorized(any(), any(Permission.class)))
-                .thenThrow(new AuthorizationException("sample authorization error"));
+        doThrow(new AuthorizationException(SAMPLE_EXCEPTION_MESSAGE)).when(mockAuthorizationHandlerWrapper).doAuthorization(any(), any(), any(), any());
 
-        GetThingShadowIPCHandler getThingShadowIPCHandler = new GetThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandler, mockPubSubClientWrapper);
+        GetThingShadowIPCHandler getThingShadowIPCHandler = new GetThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper);
         UnauthorizedError thrown = assertThrows(UnauthorizedError.class, () -> getThingShadowIPCHandler.handleRequest(request));
-        assertThat(thrown.getMessage(), startsWith("sample"));
+        assertThat(thrown.getMessage(), is(equalTo(SAMPLE_EXCEPTION_MESSAGE)));
 
         verify(mockPubSubClientWrapper, times(1)).reject(rejectRequestCaptor.capture());
 
         assertThat(rejectRequestCaptor.getValue(), is(not(nullValue())));
         assertThat(rejectRequestCaptor.getValue().getShadowName(), is(equalTo(SHADOW_NAME)));
         assertThat("Expected operation", rejectRequestCaptor.getValue().getPublishOperation(), is(Operation.GET_SHADOW));
-        assertThat("Expected log code", rejectRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(IPCUtil.LogEvents.GET_THING_SHADOW.code()));
+        assertThat("Expected log code", rejectRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(LogEvents.GET_THING_SHADOW.code()));
 
         ErrorMessage errorMessage = rejectRequestCaptor.getValue().getErrorMessage();
         assertThat(errorMessage.getErrorCode(), is(401));
@@ -260,7 +259,7 @@ class GetThingShadowIPCHandlerTest {
         request.setThingName(thingName);
         request.setShadowName(shadowName);
 
-        GetThingShadowIPCHandler getThingShadowIPCHandler = new GetThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandler, mockPubSubClientWrapper);
+        GetThingShadowIPCHandler getThingShadowIPCHandler = new GetThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper);
         InvalidArgumentsError thrown = assertThrows(InvalidArgumentsError.class, () -> getThingShadowIPCHandler.handleRequest(request));
         assertThat(thrown.getMessage(),either(startsWith("ShadowName")).or(startsWith("ThingName")));
         verify(mockPubSubClientWrapper, times(1)).reject(rejectRequestCaptor.capture());
@@ -268,7 +267,7 @@ class GetThingShadowIPCHandlerTest {
         assertThat(rejectRequestCaptor.getValue(), is(not(nullValue())));
         assertThat(rejectRequestCaptor.getValue().getShadowName(), is(equalTo(shadowName)));
         assertThat("Expected operation found", rejectRequestCaptor.getValue().getPublishOperation(), is(Operation.GET_SHADOW));
-        assertThat("Expected log code", rejectRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(IPCUtil.LogEvents.GET_THING_SHADOW.code()));
+        assertThat("Expected log code", rejectRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(LogEvents.GET_THING_SHADOW.code()));
 
         ErrorMessage errorMessage = rejectRequestCaptor.getValue().getErrorMessage();
         assertThat(errorMessage.getTimestamp(), is(not(equalTo(Instant.EPOCH.toEpochMilli()))));
@@ -278,13 +277,13 @@ class GetThingShadowIPCHandlerTest {
 
     @Test
     void GIVEN_get_thing_shadow_ipc_handler_WHEN_handle_stream_event_THEN_nothing_happens() {
-        GetThingShadowIPCHandler getThingShadowIPCHandler = new GetThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandler, mockPubSubClientWrapper);
+        GetThingShadowIPCHandler getThingShadowIPCHandler = new GetThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper);
         assertDoesNotThrow(() -> getThingShadowIPCHandler.handleStreamEvent(mock(EventStreamJsonMessage.class)));
     }
 
     @Test
     void GIVEN_get_thing_shadow_ipc_handler_WHEN_stream_closes_THEN_nothing_happens() {
-        GetThingShadowIPCHandler getThingShadowIPCHandler = new GetThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandler, mockPubSubClientWrapper);
+        GetThingShadowIPCHandler getThingShadowIPCHandler = new GetThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper);
         assertDoesNotThrow(getThingShadowIPCHandler::onStreamClosed);
     }
 }

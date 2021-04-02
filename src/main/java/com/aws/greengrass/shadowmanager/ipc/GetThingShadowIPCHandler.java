@@ -5,10 +5,10 @@
 
 package com.aws.greengrass.shadowmanager.ipc;
 
-import com.aws.greengrass.authorization.AuthorizationHandler;
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
+import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
 import com.aws.greengrass.shadowmanager.JsonUtil;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
@@ -18,6 +18,7 @@ import com.aws.greengrass.shadowmanager.ipc.model.Operation;
 import com.aws.greengrass.shadowmanager.ipc.model.RejectRequest;
 import com.aws.greengrass.shadowmanager.model.ErrorMessage;
 import com.aws.greengrass.shadowmanager.model.JsonShadowDocument;
+import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import software.amazon.awssdk.aws.greengrass.GeneratedAbstractGetThingShadowOperationHandler;
@@ -49,23 +50,23 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
     private final String serviceName;
 
     private final ShadowManagerDAO dao;
-    private final AuthorizationHandler authorizationHandler;
+    private final AuthorizationHandlerWrapper authorizationHandlerWrapper;
     private final PubSubClientWrapper pubSubClientWrapper;
 
     /**
      * IPC Handler class for responding to GetThingShadow requests.
      *
-     * @param context              topics passed by the Nucleus
-     * @param dao                  Local shadow database management
-     * @param authorizationHandler The authorization handler
-     * @param pubSubClientWrapper  The PubSub client wrapper
+     * @param context                     topics passed by the Nucleus
+     * @param dao                         Local shadow database management
+     * @param authorizationHandlerWrapper The authorization handler wrapper
+     * @param pubSubClientWrapper         The PubSub client wrapper
      */
     public GetThingShadowIPCHandler(OperationContinuationHandlerContext context,
                                     ShadowManagerDAO dao,
-                                    AuthorizationHandler authorizationHandler,
+                                    AuthorizationHandlerWrapper authorizationHandlerWrapper,
                                     PubSubClientWrapper pubSubClientWrapper) {
         super(context);
-        this.authorizationHandler = authorizationHandler;
+        this.authorizationHandlerWrapper = authorizationHandlerWrapper;
         this.dao = dao;
         this.pubSubClientWrapper = pubSubClientWrapper;
         this.serviceName = context.getAuthenticationData().getIdentityLabel();
@@ -90,22 +91,21 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
     public GetThingShadowResponse handleRequest(GetThingShadowRequest request) {
         return translateExceptions(() -> {
             String thingName = request.getThingName();
-            String shadowName = IPCUtil.getClassicShadowIfMissingShadowName(request.getShadowName());
+            String shadowName = Validator.getClassicShadowIfMissingShadowName(request.getShadowName());
 
             try {
                 logger.atTrace("ipc-get-thing-shadow-request").log();
 
-                IPCUtil.validateThingName(thingName);
-                IPCUtil.validateShadowName(shadowName);
-                IPCUtil.doAuthorization(authorizationHandler, GET_THING_SHADOW,
-                        serviceName, thingName, shadowName);
+                Validator.validateThingName(thingName);
+                Validator.validateShadowName(shadowName);
+                authorizationHandlerWrapper.doAuthorization(GET_THING_SHADOW, serviceName, thingName, shadowName);
 
                 byte[] currentDocumentBytes = dao.getShadowThing(thingName, shadowName)
                         .orElseThrow(() -> {
                             ResourceNotFoundError rnf = new ResourceNotFoundError("No shadow found");
                             rnf.setResourceType(SHADOW_RESOURCE_TYPE);
                             logger.atWarn()
-                                    .setEventType(IPCUtil.LogEvents.GET_THING_SHADOW.code())
+                                    .setEventType(LogEvents.GET_THING_SHADOW.code())
                                     .setCause(rnf)
                                     .kv(LOG_THING_NAME_KEY, thingName)
                                     .kv(LOG_SHADOW_NAME_KEY, shadowName)
@@ -125,7 +125,7 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
 
             } catch (AuthorizationException e) {
                 logger.atWarn()
-                        .setEventType(IPCUtil.LogEvents.GET_THING_SHADOW.code())
+                        .setEventType(LogEvents.GET_THING_SHADOW.code())
                         .setCause(e)
                         .kv(LOG_THING_NAME_KEY, thingName)
                         .kv(LOG_SHADOW_NAME_KEY, shadowName)
@@ -137,7 +137,7 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
                 throw new UnauthorizedError(e.getMessage());
             } catch (InvalidRequestParametersException e) {
                 logger.atWarn()
-                        .setEventType(IPCUtil.LogEvents.GET_THING_SHADOW.code())
+                        .setEventType(LogEvents.GET_THING_SHADOW.code())
                         .setCause(e)
                         .kv(LOG_THING_NAME_KEY, thingName)
                         .kv(LOG_SHADOW_NAME_KEY, shadowName)
@@ -149,7 +149,7 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
                 throw new InvalidArgumentsError(e.getMessage());
             } catch (ShadowManagerDataException | IOException e) {
                 logger.atError()
-                        .setEventType(IPCUtil.LogEvents.GET_THING_SHADOW.code())
+                        .setEventType(LogEvents.GET_THING_SHADOW.code())
                         .setCause(e)
                         .kv(LOG_THING_NAME_KEY, thingName)
                         .kv(LOG_SHADOW_NAME_KEY, shadowName)

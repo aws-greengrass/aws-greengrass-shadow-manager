@@ -5,11 +5,12 @@
 
 package com.aws.greengrass.shadowmanager;
 
-import com.aws.greengrass.authorization.AuthorizationHandler;
+import com.aws.greengrass.authorization.exceptions.AuthorizationException;
 import com.aws.greengrass.dependency.State;
 import com.aws.greengrass.lifecyclemanager.GreengrassService;
 import com.aws.greengrass.lifecyclemanager.GlobalStateChangeListener;
 import com.aws.greengrass.lifecyclemanager.Kernel;
+import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.testcommons.testutilities.GGServiceTestUtil;
 import org.junit.jupiter.api.AfterEach;
@@ -28,8 +29,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
@@ -46,7 +47,7 @@ public class ShadowManagerTest extends GGServiceTestUtil {
     Path rootDir;
 
     @Mock
-    AuthorizationHandler mockAuthorizationHandler;
+    AuthorizationHandlerWrapper mockAuthorizationHandlerWrapper;
 
     @Mock
     ShadowManagerDatabase mockShadowManagerDatabase;
@@ -78,7 +79,7 @@ public class ShadowManagerTest extends GGServiceTestUtil {
         kernel.getContext().addGlobalStateChangeListener(listener);
         kernel.getContext().put(ShadowManagerDatabase.class, mockShadowManagerDatabase);
         kernel.getContext().put(ShadowManagerDAOImpl.class, mockShadowManagerDAOImpl);
-        kernel.getContext().put(AuthorizationHandler.class, mockAuthorizationHandler);
+        kernel.getContext().put(AuthorizationHandlerWrapper.class, mockAuthorizationHandlerWrapper);
         kernel.launch();
 
         assertTrue(shadowManagerRunning.await(TEST_TIME_OUT_SEC, TimeUnit.SECONDS));
@@ -105,9 +106,18 @@ public class ShadowManagerTest extends GGServiceTestUtil {
     }
 
     @Test
-    void GIVEN_shadow_manager_When_log_event_occurs_THEN_code_returned() {
-        for(ShadowManager.LogEvents logEvent : ShadowManager.LogEvents.values()) {
-            assertFalse(logEvent.code.isEmpty());
+    void GIVEN_invalid_component_registration_WHEN_startup_THEN_shadow_manager_still_starts(ExtensionContext context) throws Exception {
+        ignoreExceptionOfType(context, AuthorizationException.class);
+        doThrow(new AuthorizationException("Test")).when(mockAuthorizationHandlerWrapper).registerComponent(any(), any());
+
+        // Failing to register component does not break ShadowManager
+        assertDoesNotThrow(() -> startNucleusWithConfig(DEFAULT_CONFIG, State.RUNNING));
+    }
+
+    @Test
+    void GIVEN_shadow_manager_WHEN_log_event_occurs_THEN_code_returned() {
+        for(LogEvents logEvent : LogEvents.values()) {
+            assertFalse(logEvent.code().isEmpty());
         }
     }
 }
