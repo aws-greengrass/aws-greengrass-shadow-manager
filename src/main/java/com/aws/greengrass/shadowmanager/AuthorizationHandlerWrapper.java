@@ -8,14 +8,12 @@ package com.aws.greengrass.shadowmanager;
 import com.aws.greengrass.authorization.AuthorizationHandler;
 import com.aws.greengrass.authorization.Permission;
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
-import com.aws.greengrass.util.Utils;
 
-import java.util.StringJoiner;
+import java.util.Set;
 import javax.inject.Inject;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.CLASSIC_SHADOW_IDENTIFIER;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_MANAGER_NAME;
-import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_RESOURCE_JOINER;
 
 /**
  * Class to check if ipc requests are authorized.
@@ -33,7 +31,14 @@ public class AuthorizationHandlerWrapper {
         this.authorizationHandler = authorizationHandler;
     }
 
-    public void registerComponent(String componentName, java.util.Set<String> operations)
+    /**
+     * Registers component and set of permissible operations with the Authorization module.
+     *
+     * @param componentName Name of component to be initialized with the Authorization module
+     * @param operations    Set of operations that component will be authorized to execute
+     * @throws AuthorizationException When invalid arguments were passed into the registerComponent function call
+     */
+    public void registerComponent(String componentName, Set<String> operations)
             throws AuthorizationException {
         authorizationHandler.registerComponent(componentName, operations);
     }
@@ -62,20 +67,13 @@ public class AuthorizationHandlerWrapper {
      */
     public void doAuthorization(String opCode, String serviceName,
                                 String thingName, String shadowName) throws AuthorizationException {
-        StringJoiner shadowResource = new StringJoiner("/");
-        shadowResource.add(thingName);
-        shadowResource.add(SHADOW_RESOURCE_JOINER);
-
-        if (Utils.isNotEmpty(shadowName)) {
-            shadowResource.add(shadowName);
-        }
-
+        String shadowResource = ShadowUtil.getShadowTopicPrefix(thingName, shadowName);
         authorizationHandler.isAuthorized(
                 SHADOW_MANAGER_NAME,
                 Permission.builder()
                         .principal(serviceName)
                         .operation(opCode)
-                        .resource(shadowResource.toString())
+                        .resource(shadowResource)
                         .build());
     }
 }

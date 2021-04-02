@@ -9,11 +9,12 @@ public class Constants {
     public static final String SHADOW_RESOURCE_TYPE = "shadow";
     public static final String SHADOW_RESOURCE_JOINER = "shadow";
     public static final String SHADOW_MANAGER_NAME = "aws.greengrass.ShadowManager";
-    public static final String SHADOW_PUBLISH_TOPIC_ACCEPTED_FORMAT = "$aws/things/%s/shadow%s/accepted";
-    public static final String SHADOW_PUBLISH_TOPIC_REJECTED_FORMAT = "$aws/things/%s/shadow%s/rejected";
-    public static final String SHADOW_PUBLISH_TOPIC_DELTA_FORMAT = "$aws/things/%s/shadow%s/delta";
-    public static final String SHADOW_PUBLISH_TOPIC_DOCUMENTS_FORMAT = "$aws/things/%s/shadow%s/documents";
-    public static final String NAMED_SHADOW_TOPIC_PREFIX = "/name/%s";
+    public static final String SHADOW_PUBLISH_ACCEPTED_TOPIC = "/accepted";
+    public static final String SHADOW_PUBLISH_REJECTED_TOPIC = "/rejected";
+    public static final String SHADOW_PUBLISH_DELTA_TOPIC = "/delta";
+    public static final String SHADOW_PUBLISH_DOCUMENTS_TOPIC = "/documents";
+    public static final String NAMED_SHADOW_TOPIC_PREFIX = "$aws/things/%s/shadow/name/%s";
+    public static final String CLASSIC_SHADOW_TOPIC_PREFIX = "$aws/things/%s/shadow";
     public static final String LOG_THING_NAME_KEY = "thing name";
     public static final String LOG_SHADOW_NAME_KEY = "shadow name";
     public static final String SHADOW_DOCUMENT_VERSION = "version";

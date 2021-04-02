@@ -28,6 +28,7 @@ import java.sql.SQLException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import static com.aws.greengrass.shadowmanager.TestUtils.SAMPLE_EXCEPTION_MESSAGE;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -108,7 +109,7 @@ public class ShadowManagerTest extends GGServiceTestUtil {
     @Test
     void GIVEN_invalid_component_registration_WHEN_startup_THEN_shadow_manager_still_starts(ExtensionContext context) throws Exception {
         ignoreExceptionOfType(context, AuthorizationException.class);
-        doThrow(new AuthorizationException("Test")).when(mockAuthorizationHandlerWrapper).registerComponent(any(), any());
+        doThrow(new AuthorizationException(SAMPLE_EXCEPTION_MESSAGE)).when(mockAuthorizationHandlerWrapper).registerComponent(any(), any());
 
         // Failing to register component does not break ShadowManager
         assertDoesNotThrow(() -> startNucleusWithConfig(DEFAULT_CONFIG, State.RUNNING));

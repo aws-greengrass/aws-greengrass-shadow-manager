@@ -11,6 +11,7 @@ import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
 import com.aws.greengrass.shadowmanager.JsonUtil;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
+import com.aws.greengrass.shadowmanager.ShadowUtil;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.ipc.model.AcceptRequest;
@@ -93,7 +94,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
         return translateExceptions(() -> {
             // TODO: Sync this entire function possibly with delete handler as well.
             String thingName = request.getThingName();
-            String shadowName = Validator.getClassicShadowIfMissingShadowName(request.getShadowName());
+            String shadowName = ShadowUtil.getClassicShadowIfMissingShadowName(request.getShadowName());
             byte[] updatedDocumentRequestBytes = request.getPayload();
             JsonShadowDocument currentDocument = null;
 

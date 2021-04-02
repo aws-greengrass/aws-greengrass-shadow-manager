@@ -8,9 +8,10 @@ package com.aws.greengrass.shadowmanager.ipc;
 import com.aws.greengrass.builtin.services.pubsub.PubSubIPCEventStreamAgent;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
+import com.aws.greengrass.shadowmanager.ShadowUtil;
 import com.aws.greengrass.shadowmanager.ipc.model.AcceptRequest;
+import com.aws.greengrass.shadowmanager.ipc.model.IPCRequest;
 import com.aws.greengrass.shadowmanager.ipc.model.RejectRequest;
-import com.aws.greengrass.util.Utils;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -22,11 +23,10 @@ import javax.inject.Inject;
 import static com.aws.greengrass.shadowmanager.ShadowManager.SERVICE_NAME;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
-import static com.aws.greengrass.shadowmanager.model.Constants.NAMED_SHADOW_TOPIC_PREFIX;
-import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_PUBLISH_TOPIC_ACCEPTED_FORMAT;
-import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_PUBLISH_TOPIC_DELTA_FORMAT;
-import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_PUBLISH_TOPIC_DOCUMENTS_FORMAT;
-import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_PUBLISH_TOPIC_REJECTED_FORMAT;
+import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_PUBLISH_ACCEPTED_TOPIC;
+import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_PUBLISH_DELTA_TOPIC;
+import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_PUBLISH_DOCUMENTS_TOPIC;
+import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_PUBLISH_REJECTED_TOPIC;
 
 /**
  * Class to handle PubSub interaction with the PubSub Event Stream Agent.
@@ -67,11 +67,7 @@ public class PubSubClientWrapper {
             return;
         }
         try {
-            this.pubSubIPCEventStreamAgent.publish(
-                    String.format(SHADOW_PUBLISH_TOPIC_REJECTED_FORMAT,
-                            rejectRequest.getThingName(),
-                            getShadowNamePrefix(rejectRequest.getShadowName(),
-                                    rejectRequest.getPublishOperation().getOp())),
+            this.pubSubIPCEventStreamAgent.publish(getShadowTopic(rejectRequest, SHADOW_PUBLISH_REJECTED_TOPIC),
                     payload, SERVICE_NAME);
             logger.atTrace()
                     .setEventType(rejectRequest.getPublishOperation().getLogEventType())
@@ -93,7 +89,7 @@ public class PubSubClientWrapper {
      * @param acceptRequest The request object containing the accepted information.
      */
     public void accept(AcceptRequest acceptRequest) {
-        handleAcceptedMessage(acceptRequest, SHADOW_PUBLISH_TOPIC_ACCEPTED_FORMAT);
+        handleAcceptedMessage(acceptRequest, SHADOW_PUBLISH_ACCEPTED_TOPIC);
     }
 
 
@@ -104,7 +100,7 @@ public class PubSubClientWrapper {
      * @param acceptRequest The request object containing the delta information.
      */
     public void delta(AcceptRequest acceptRequest) {
-        handleAcceptedMessage(acceptRequest, SHADOW_PUBLISH_TOPIC_DELTA_FORMAT);
+        handleAcceptedMessage(acceptRequest, SHADOW_PUBLISH_DELTA_TOPIC);
     }
 
     /**
@@ -114,7 +110,7 @@ public class PubSubClientWrapper {
      * @param acceptRequest The request object containing the documents information.
      */
     public void documents(AcceptRequest acceptRequest) {
-        handleAcceptedMessage(acceptRequest, SHADOW_PUBLISH_TOPIC_DOCUMENTS_FORMAT);
+        handleAcceptedMessage(acceptRequest, SHADOW_PUBLISH_DOCUMENTS_TOPIC);
     }
 
     /**
@@ -125,10 +121,7 @@ public class PubSubClientWrapper {
      */
     private void handleAcceptedMessage(AcceptRequest acceptRequest, String shadowTopicFormat) {
         try {
-
-            this.pubSubIPCEventStreamAgent.publish(String.format(shadowTopicFormat, acceptRequest.getThingName(),
-                    getShadowNamePrefix(acceptRequest.getShadowName(),
-                            acceptRequest.getPublishOperation().getOp())),
+            this.pubSubIPCEventStreamAgent.publish(getShadowTopic(acceptRequest, shadowTopicFormat),
                     acceptRequest.getPayload(), SERVICE_NAME);
             logger.atTrace()
                     .setEventType(acceptRequest.getPublishOperation().getLogEventType())
@@ -147,15 +140,13 @@ public class PubSubClientWrapper {
     /**
      * Gets the Shadow name topic prefix.
      *
-     * @param shadowName     The name of the shadow
-     * @param publishTopicOp The operation causing the publish
+     * @param ipcRequest Object that includes thingName, shadowName, and operation to form the shadow topic prefix
      * @return the full topic prefix for the shadow name for the publish topic.
      */
-    private String getShadowNamePrefix(String shadowName, String publishTopicOp) {
-        String shadowNamePrefix = publishTopicOp;
-        if (!Utils.isEmpty(shadowName)) {
-            shadowNamePrefix = String.format(NAMED_SHADOW_TOPIC_PREFIX, shadowName) + publishTopicOp;
-        }
-        return shadowNamePrefix;
+    private String getShadowTopic(IPCRequest ipcRequest, String topic) {
+        String thingName = ipcRequest.getThingName();
+        String shadowName = ipcRequest.getShadowName();
+        String publishTopicOp = ipcRequest.getPublishOperation().getOp();
+        return ShadowUtil.getShadowTopicPrefix(thingName, shadowName) + publishTopicOp + topic;
     }
 }

@@ -19,4 +19,5 @@ public class IPCRequest {
     @NotNull
     String thingName;
     String shadowName;
+    Operation publishOperation;
 }

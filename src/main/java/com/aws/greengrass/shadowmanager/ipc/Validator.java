@@ -24,17 +24,7 @@ public final class Validator {
     private Validator() {
     }
 
-    /**
-     * Checks and returns the CLASSIC_SHADOW_IDENTIFIER if shadowName input was null.
-     *
-     * @param shadowName The name of the shadow
-     * @return The shadowName input or CLASSIC_SHADOW_IDENTIFIER
-     */
-    static String getClassicShadowIfMissingShadowName(String shadowName) {
-        return Optional.ofNullable(shadowName)
-                .filter(s -> !s.isEmpty())
-                .orElse(CLASSIC_SHADOW_IDENTIFIER);
-    }
+
 
     /**
      * Validates thingName if it exists and if it has valid length and pattern.
