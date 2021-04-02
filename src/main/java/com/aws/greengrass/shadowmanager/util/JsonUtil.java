@@ -20,7 +20,6 @@ import com.github.fge.jsonschema.main.JsonSchema;
 import com.github.fge.jsonschema.main.JsonSchemaFactory;
 import software.amazon.awssdk.aws.greengrass.model.ConflictError;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.Optional;
@@ -106,7 +105,7 @@ public final class JsonUtil {
         if (payload == null) {
             return Optional.empty();
         }
-        return Optional.of(OBJECT_MAPPER.readTree(new ByteArrayInputStream(payload)));
+        return Optional.of(OBJECT_MAPPER.readTree(payload));
     }
 
     public static byte[] getPayloadBytes(JsonNode node) throws IOException {
