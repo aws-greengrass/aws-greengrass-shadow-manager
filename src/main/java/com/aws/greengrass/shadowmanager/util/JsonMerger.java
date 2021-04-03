@@ -15,6 +15,9 @@ import java.util.Iterator;
 
 import static com.aws.greengrass.shadowmanager.util.JsonUtil.isNullOrMissing;
 
+/**
+ * Handles merge of two JsonNode objects.
+ */
 public class JsonMerger {
     private JsonMerger() {
     }
