@@ -8,6 +8,7 @@ package com.aws.greengrass.shadowmanager;
 import com.aws.greengrass.authorization.AuthorizationHandler;
 import com.aws.greengrass.authorization.Permission;
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
+import com.aws.greengrass.shadowmanager.model.ShadowRequest;
 
 import java.util.Set;
 import javax.inject.Inject;
@@ -44,36 +45,21 @@ public class AuthorizationHandlerWrapper {
     }
 
     /**
-     * Checks if service is authorized to run the operation on the target classic shadow resource.
-     *
-     * @param opCode      The operation to be executed
-     * @param serviceName The service trying to run the operation
-     * @param thingName   The thing name to be formed into the shadow resource
-     * @throws AuthorizationException When the service is unauthorized to execute the operation on shadow resource
-     */
-    public void doAuthorization(String opCode, String serviceName,
-                                String thingName) throws AuthorizationException {
-        doAuthorization(opCode, serviceName, thingName, CLASSIC_SHADOW_IDENTIFIER);
-    }
-
-    /**
      * Checks if service is authorized to run the operation on the target shadow resource.
      *
-     * @param opCode      The operation to be executed
-     * @param serviceName The service trying to run the operation
-     * @param thingName   The thing name to be formed into the shadow resource
-     * @param shadowName  The shadow name to be formed into the shadow resource
+     * @param opCode        The operation to be executed
+     * @param serviceName   The service trying to run the operation
+     * @param shadowRequest The shadow request object containing the thingName and shadowName
      * @throws AuthorizationException When the service is unauthorized to execute the operation on shadow resource
      */
-    public void doAuthorization(String opCode, String serviceName,
-                                String thingName, String shadowName) throws AuthorizationException {
-        String shadowResource = ShadowUtil.getShadowTopicPrefix(thingName, shadowName);
+    public void doAuthorization(String opCode, String serviceName, ShadowRequest shadowRequest)
+            throws AuthorizationException {
         authorizationHandler.isAuthorized(
                 SHADOW_MANAGER_NAME,
                 Permission.builder()
                         .principal(serviceName)
                         .operation(opCode)
-                        .resource(shadowResource)
+                        .resource(shadowRequest.getShadowTopicPrefix())
                         .build());
     }
 }

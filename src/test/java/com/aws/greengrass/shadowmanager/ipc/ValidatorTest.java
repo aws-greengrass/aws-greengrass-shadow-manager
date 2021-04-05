@@ -6,14 +6,20 @@
 package com.aws.greengrass.shadowmanager.ipc;
 
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
+import com.aws.greengrass.shadowmanager.model.ShadowRequest;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.stream.Stream;
+
+import static com.aws.greengrass.shadowmanager.TestUtils.SHADOW_NAME;
+import static com.aws.greengrass.shadowmanager.TestUtils.THING_NAME;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -21,44 +27,34 @@ import static org.junit.jupiter.api.Assertions.*;
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 public class ValidatorTest {
 
+    private static Stream<Arguments> invalidShadowRequests() {
+        String invalidNameLength = "invalidThingNameLengthOver128Characters----------------------------------------------------------------------------------------------------";
+        String invalidPattern = "InvalidPatternName!@#";
+
+        return Stream.of(
+                Arguments.of(null, SHADOW_NAME, "ThingName is missing"),
+                Arguments.of("", SHADOW_NAME, "ThingName is missing"),
+                Arguments.of(invalidNameLength, SHADOW_NAME, "ThingName has a maximum"),
+                Arguments.of(invalidPattern, SHADOW_NAME, "ThingName must match"),
+
+                Arguments.of(THING_NAME, invalidNameLength, "ShadowName has a maximum"),
+                Arguments.of(THING_NAME, invalidPattern, "ShadowName must match")
+        );
+    }
+
     @ParameterizedTest
-    @NullAndEmptySource
-    void GIVEN_missing_thing_name_WHEN_validate_thing_name_THEN_throw_invalid_request_parameters_exception(String thingName, ExtensionContext context) {
-        InvalidRequestParametersException thrown = assertThrows(InvalidRequestParametersException.class, () -> Validator.validateThingName(thingName));
-        assertThat(thrown.getMessage(), is(equalTo("ThingName is missing")));
-    }
-
-    @Test
-    void GIVEN_invalid_thing_name_length_WHEN_validate_thing_name_THEN_throw_invalid_request_parameters_exception(ExtensionContext context) {
-        String invalidThingName = "invalidThingNameLengthOver128Characters----------------------------------------------------------------------------------------------------";
-        InvalidRequestParametersException thrown = assertThrows(InvalidRequestParametersException.class, () -> Validator.validateThingName(invalidThingName));
-        assertThat(thrown.getMessage(), startsWith("ThingName has a maximum"));
-    }
-
-    @Test
-    void GIVEN_invalid_thing_name_pattern_WHEN_validate_thing_name_THEN_throw_invalid_request_parameters_exception(ExtensionContext context) {
-        String invalidThingName = "InvalidThingName!@#";
-        InvalidRequestParametersException thrown = assertThrows(InvalidRequestParametersException.class, () -> Validator.validateThingName(invalidThingName));
-        assertThat(thrown.getMessage(), startsWith("ThingName must match"));
-    }
-
-    @Test
-    void GIVEN_invalid_shadow_name_length_WHEN_validate_shadow_name_THEN_throw_invalid_request_parameters_exception(ExtensionContext context) {
-        String invalidShadowName = "invalidShadowNameLengthOver128Characters----------------------------------------------------------------------------------------------------";
-        InvalidRequestParametersException thrown = assertThrows(InvalidRequestParametersException.class, () -> Validator.validateShadowName(invalidShadowName));
-        assertThat(thrown.getMessage(), startsWith("ShadowName has a maximum"));
-    }
-
-    @Test
-    void GIVEN_invalid_shadow_name_pattern_WHEN_validate_shadow_name_THEN_throw_invalid_request_parameters_exception(ExtensionContext context) {
-        String invalidShadowName = "InvalidThingName!@#";
-        InvalidRequestParametersException thrown = assertThrows(InvalidRequestParametersException.class, () -> Validator.validateShadowName(invalidShadowName));
-        assertThat(thrown.getMessage(), startsWith("ShadowName must match"));
+    @MethodSource("invalidShadowRequests")
+    void GIVEN_invalid_shadow_request_WHEN_validate_shadow_request_THEN_throw_invalid_request_parameters_exception(String thingName, String shadowName, String errorMessage) {
+        ShadowRequest shadowRequest = new ShadowRequest(thingName, shadowName);
+        InvalidRequestParametersException thrown = assertThrows(InvalidRequestParametersException.class, () -> Validator.validateShadowRequest(shadowRequest));
+        assertThat(thrown.getMessage(), startsWith(errorMessage));
     }
 
     @ParameterizedTest
     @NullAndEmptySource
-    void GIVEN_empty_or_null_shadow_name_WHEN_validate_shadow_name_THEN_do_nothing(String shadowName, ExtensionContext context) {
-        assertDoesNotThrow(() -> Validator.validateShadowName(shadowName));
+    @ValueSource(strings = {SHADOW_NAME})
+    void GIVEN_valid_shadow_request_WHEN_validate_shadow_request_THEN_do_nothing(String shadowName) {
+        ShadowRequest shadowRequest = new ShadowRequest(THING_NAME, shadowName);
+        assertDoesNotThrow(() -> Validator.validateShadowRequest(shadowRequest));
     }
 }

@@ -10,7 +10,6 @@ import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
-import com.aws.greengrass.shadowmanager.ShadowUtil;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.ipc.model.AcceptRequest;
@@ -20,6 +19,7 @@ import com.aws.greengrass.shadowmanager.model.ErrorMessage;
 import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.model.ResponseMessageBuilder;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
+import com.aws.greengrass.shadowmanager.model.ShadowRequest;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -94,7 +94,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
         return translateExceptions(() -> {
             // TODO: Sync this entire function possibly with delete handler as well.
             String thingName = request.getThingName();
-            String shadowName = ShadowUtil.getClassicShadowIfMissingShadowName(request.getShadowName());
+            String shadowName = request.getShadowName();
             byte[] updatedDocumentRequestBytes = request.getPayload();
             ShadowDocument currentDocument = null;
             try {
@@ -103,12 +103,12 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                         .kv(LOG_SHADOW_NAME_KEY, shadowName)
                         .log();
 
-                Validator.validateThingName(thingName);
-                Validator.validateShadowName(shadowName);
+                ShadowRequest shadowRequest = new ShadowRequest(thingName, shadowName);
+                Validator.validateShadowRequest(shadowRequest);
                 if (updatedDocumentRequestBytes == null || updatedDocumentRequestBytes.length == 0) {
                     throw new InvalidRequestParametersException(ErrorMessage.createPayloadMissingMessage());
                 }
-                authorizationHandlerWrapper.doAuthorization(UPDATE_THING_SHADOW, serviceName, thingName, shadowName);
+                authorizationHandlerWrapper.doAuthorization(UPDATE_THING_SHADOW, serviceName, shadowRequest);
 
                 // Get the current document from the DAO if present and convert it into a ShadowDocument object.
                 byte[] currentDocumentBytes = dao.getShadowThing(thingName, shadowName).orElse(new byte[0]);

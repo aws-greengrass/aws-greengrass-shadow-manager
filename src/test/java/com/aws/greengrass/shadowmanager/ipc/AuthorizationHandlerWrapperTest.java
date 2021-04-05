@@ -9,9 +9,13 @@ import com.aws.greengrass.authorization.AuthorizationHandler;
 import com.aws.greengrass.authorization.Permission;
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
 import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
+import com.aws.greengrass.shadowmanager.model.ShadowRequest;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -37,40 +41,28 @@ public class AuthorizationHandlerWrapperTest {
     @Mock
     AuthorizationHandler mockAuthorizationHandler;
 
-    @Test
-    void GIVEN_valid_authorization_without_shadow_name_WHEN_do_authorization_THEN_throw_authorization_exception() throws AuthorizationException {
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {SHADOW_NAME})
+    void GIVEN_valid_authorization_WHEN_do_authorization_THEN_do_nothing(String shadowName) throws AuthorizationException {
         when(mockAuthorizationHandler.isAuthorized(any(), any(Permission.class))).thenReturn(true);
         AuthorizationHandlerWrapper authorizationHandlerWrapper = new AuthorizationHandlerWrapper(mockAuthorizationHandler);
+        ShadowRequest shadowRequest = new ShadowRequest(THING_NAME, shadowName);
 
-        assertDoesNotThrow(() -> authorizationHandlerWrapper.doAuthorization(OP_CODE, TEST_SERVICE, THING_NAME));
+        assertDoesNotThrow(() -> authorizationHandlerWrapper.doAuthorization(OP_CODE, TEST_SERVICE, shadowRequest));
     }
 
-    @Test
-    void GIVEN_invalid_authorization_without_shadow_name_WHEN_do_authorization_THEN_throw_authorization_exception() throws AuthorizationException {
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {SHADOW_NAME})
+    void GIVEN_invalid_authorization_WHEN_do_authorization_THEN_throw_authorization_exception(String shadowName) throws AuthorizationException {
         when(mockAuthorizationHandler.isAuthorized(any(), any(Permission.class)))
                 .thenThrow(new AuthorizationException(SAMPLE_EXCEPTION_MESSAGE));
         AuthorizationHandlerWrapper authorizationHandlerWrapper = new AuthorizationHandlerWrapper(mockAuthorizationHandler);
+        ShadowRequest shadowRequest = new ShadowRequest(THING_NAME, shadowName);
+
         AuthorizationException thrown = assertThrows(AuthorizationException.class,
-                () -> authorizationHandlerWrapper.doAuthorization(OP_CODE, TEST_SERVICE, THING_NAME));
-
-        assertThat(thrown.getMessage(), is(equalTo(SAMPLE_EXCEPTION_MESSAGE)));
-    }
-
-    @Test
-    void GIVEN_valid_authorization_with_shadow_name_WHEN_do_authorization_THEN_do_nothing() throws AuthorizationException {
-        when(mockAuthorizationHandler.isAuthorized(any(), any(Permission.class))).thenReturn(true);
-        AuthorizationHandlerWrapper authorizationHandlerWrapper = new AuthorizationHandlerWrapper(mockAuthorizationHandler);
-
-        assertDoesNotThrow(() -> authorizationHandlerWrapper.doAuthorization(OP_CODE, TEST_SERVICE, THING_NAME, SHADOW_NAME));
-    }
-
-    @Test
-    void GIVEN_invalid_authorization_with_shadow_name_WHEN_do_authorization_THEN_throw_authorization_exception() throws AuthorizationException {
-        when(mockAuthorizationHandler.isAuthorized(any(), any(Permission.class)))
-                .thenThrow(new AuthorizationException(SAMPLE_EXCEPTION_MESSAGE));
-        AuthorizationHandlerWrapper authorizationHandlerWrapper = new AuthorizationHandlerWrapper(mockAuthorizationHandler);
-        AuthorizationException thrown = assertThrows(AuthorizationException.class,
-                () -> authorizationHandlerWrapper.doAuthorization(OP_CODE, TEST_SERVICE, THING_NAME, SHADOW_NAME));
+                () -> authorizationHandlerWrapper.doAuthorization(OP_CODE, TEST_SERVICE, shadowRequest));
 
         assertThat(thrown.getMessage(), is(equalTo(SAMPLE_EXCEPTION_MESSAGE)));
     }

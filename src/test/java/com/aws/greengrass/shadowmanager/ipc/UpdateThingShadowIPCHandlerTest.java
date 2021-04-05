@@ -524,7 +524,7 @@ class UpdateThingShadowIPCHandlerTest {
         request.setThingName(THING_NAME);
         request.setShadowName(SHADOW_NAME);
         request.setPayload(updateRequest);
-        doThrow(new AuthorizationException(SAMPLE_EXCEPTION_MESSAGE)).when(mockAuthorizationHandlerWrapper).doAuthorization(any(), any(), any(), any());
+        doThrow(new AuthorizationException(SAMPLE_EXCEPTION_MESSAGE)).when(mockAuthorizationHandlerWrapper).doAuthorization(any(), any(), any());
 
         UpdateThingShadowIPCHandler updateThingShadowIPCHandler = new UpdateThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper);
         UnauthorizedError thrown = assertThrows(UnauthorizedError.class, () -> updateThingShadowIPCHandler.handleRequest(request));

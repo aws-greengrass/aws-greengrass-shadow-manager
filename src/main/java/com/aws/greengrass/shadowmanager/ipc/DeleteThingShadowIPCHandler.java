@@ -10,7 +10,6 @@ import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
-import com.aws.greengrass.shadowmanager.ShadowUtil;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.ipc.model.AcceptRequest;
@@ -20,6 +19,7 @@ import com.aws.greengrass.shadowmanager.model.ErrorMessage;
 import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.model.ResponseMessageBuilder;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
+import com.aws.greengrass.shadowmanager.model.ShadowRequest;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 import software.amazon.awssdk.aws.greengrass.GeneratedAbstractDeleteThingShadowOperationHandler;
@@ -35,7 +35,6 @@ import software.amazon.awssdk.eventstreamrpc.model.EventStreamJsonMessage;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static com.aws.greengrass.ipc.common.ExceptionUtil.translateExceptions;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
@@ -93,7 +92,7 @@ public class DeleteThingShadowIPCHandler extends GeneratedAbstractDeleteThingSha
     public DeleteThingShadowResponse handleRequest(DeleteThingShadowRequest request) {
         return translateExceptions(() -> {
             String thingName = request.getThingName();
-            String shadowName = ShadowUtil.getClassicShadowIfMissingShadowName(request.getShadowName());
+            String shadowName = request.getShadowName();
             //TODO: Add payload to DeleteThingShadowRequest and then validate the version of the document the customer
             //    wants to delete and pass the client token in the response
             byte[] payload = null;
@@ -101,9 +100,9 @@ public class DeleteThingShadowIPCHandler extends GeneratedAbstractDeleteThingSha
             try {
                 logger.atTrace("ipc-update-thing-shadow-request").log();
 
-                Validator.validateThingName(thingName);
-                Validator.validateShadowName(shadowName);
-                authorizationHandlerWrapper.doAuthorization(DELETE_THING_SHADOW, serviceName, thingName, shadowName);
+                ShadowRequest shadowRequest = new ShadowRequest(thingName, shadowName);
+                Validator.validateShadowRequest(shadowRequest);
+                authorizationHandlerWrapper.doAuthorization(DELETE_THING_SHADOW, serviceName, shadowRequest);
 
                 byte[] result = dao.deleteShadowThing(thingName, shadowName)
                         .orElseThrow(() -> {

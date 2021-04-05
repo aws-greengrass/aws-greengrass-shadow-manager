@@ -243,7 +243,7 @@ class GetThingShadowIPCHandlerTest {
         GetThingShadowRequest request = new GetThingShadowRequest();
         request.setThingName(THING_NAME);
         request.setShadowName(SHADOW_NAME);
-        doThrow(new AuthorizationException(SAMPLE_EXCEPTION_MESSAGE)).when(mockAuthorizationHandlerWrapper).doAuthorization(any(), any(), any(), any());
+        doThrow(new AuthorizationException(SAMPLE_EXCEPTION_MESSAGE)).when(mockAuthorizationHandlerWrapper).doAuthorization(any(), any(), any());
 
         GetThingShadowIPCHandler getThingShadowIPCHandler = new GetThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper);
         UnauthorizedError thrown = assertThrows(UnauthorizedError.class, () -> getThingShadowIPCHandler.handleRequest(request));

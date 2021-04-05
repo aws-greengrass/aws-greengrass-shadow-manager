@@ -8,7 +8,6 @@ package com.aws.greengrass.shadowmanager.ipc;
 import com.aws.greengrass.builtin.services.pubsub.PubSubIPCEventStreamAgent;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
-import com.aws.greengrass.shadowmanager.ShadowUtil;
 import com.aws.greengrass.shadowmanager.ipc.model.AcceptRequest;
 import com.aws.greengrass.shadowmanager.ipc.model.IPCRequest;
 import com.aws.greengrass.shadowmanager.ipc.model.RejectRequest;
@@ -67,7 +66,7 @@ public class PubSubClientWrapper {
             return;
         }
         try {
-            this.pubSubIPCEventStreamAgent.publish(getShadowTopic(rejectRequest, SHADOW_PUBLISH_REJECTED_TOPIC),
+            this.pubSubIPCEventStreamAgent.publish(getShadowPublishTopic(rejectRequest, SHADOW_PUBLISH_REJECTED_TOPIC),
                     payload, SERVICE_NAME);
             logger.atTrace()
                     .setEventType(rejectRequest.getPublishOperation().getLogEventType())
@@ -121,7 +120,7 @@ public class PubSubClientWrapper {
      */
     private void handleAcceptedMessage(AcceptRequest acceptRequest, String shadowTopicFormat) {
         try {
-            this.pubSubIPCEventStreamAgent.publish(getShadowTopic(acceptRequest, shadowTopicFormat),
+            this.pubSubIPCEventStreamAgent.publish(getShadowPublishTopic(acceptRequest, shadowTopicFormat),
                     acceptRequest.getPayload(), SERVICE_NAME);
             logger.atTrace()
                     .setEventType(acceptRequest.getPublishOperation().getLogEventType())
@@ -141,12 +140,12 @@ public class PubSubClientWrapper {
      * Gets the Shadow name topic prefix.
      *
      * @param ipcRequest Object that includes thingName, shadowName, and operation to form the shadow topic prefix
+     * @param topic      The shadow publish topic to be added onto the topic prefix and operation
      * @return the full topic prefix for the shadow name for the publish topic.
      */
-    private String getShadowTopic(IPCRequest ipcRequest, String topic) {
-        String thingName = ipcRequest.getThingName();
-        String shadowName = ipcRequest.getShadowName();
+    private String getShadowPublishTopic(IPCRequest ipcRequest, String topic) {
+        String shadowTopicPrefix = ipcRequest.getShadowTopicPrefix();
         String publishTopicOp = ipcRequest.getPublishOperation().getOp();
-        return ShadowUtil.getShadowTopicPrefix(thingName, shadowName) + publishTopicOp + topic;
+        return shadowTopicPrefix + publishTopicOp + topic;
     }
 }

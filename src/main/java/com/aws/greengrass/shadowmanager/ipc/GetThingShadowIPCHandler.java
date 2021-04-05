@@ -10,7 +10,6 @@ import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
-import com.aws.greengrass.shadowmanager.ShadowUtil;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.ipc.model.AcceptRequest;
@@ -20,6 +19,7 @@ import com.aws.greengrass.shadowmanager.model.ErrorMessage;
 import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.model.ResponseMessageBuilder;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
+import com.aws.greengrass.shadowmanager.model.ShadowRequest;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -36,7 +36,6 @@ import software.amazon.awssdk.eventstreamrpc.model.EventStreamJsonMessage;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static com.aws.greengrass.ipc.common.ExceptionUtil.translateExceptions;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
@@ -93,7 +92,7 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
     public GetThingShadowResponse handleRequest(GetThingShadowRequest request) {
         return translateExceptions(() -> {
             String thingName = request.getThingName();
-            String shadowName = ShadowUtil.getClassicShadowIfMissingShadowName(request.getShadowName());
+            String shadowName = request.getShadowName();
             //TODO: Add payload to GetThingShadowRequest
             byte[] payload = null;
 
@@ -103,9 +102,9 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
                         .kv(LOG_SHADOW_NAME_KEY, shadowName)
                         .log();
 
-                Validator.validateThingName(thingName);
-                Validator.validateShadowName(shadowName);
-                authorizationHandlerWrapper.doAuthorization(GET_THING_SHADOW, serviceName, thingName, shadowName);
+                ShadowRequest shadowRequest = new ShadowRequest(thingName, shadowName);
+                Validator.validateShadowRequest(shadowRequest);
+                authorizationHandlerWrapper.doAuthorization(GET_THING_SHADOW, serviceName, shadowRequest);
 
                 byte[] currentDocumentBytes = dao.getShadowThing(thingName, shadowName)
                         .orElseThrow(() -> {

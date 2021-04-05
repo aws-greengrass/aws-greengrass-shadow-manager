@@ -188,7 +188,7 @@ class DeleteThingShadowIPCHandlerTest {
         DeleteThingShadowRequest request = new DeleteThingShadowRequest();
         request.setThingName(THING_NAME);
         request.setShadowName(SHADOW_NAME);
-        doThrow(new AuthorizationException(SAMPLE_EXCEPTION_MESSAGE)).when(mockAuthorizationHandlerWrapper).doAuthorization(any(), any(), any(), any());
+        doThrow(new AuthorizationException(SAMPLE_EXCEPTION_MESSAGE)).when(mockAuthorizationHandlerWrapper).doAuthorization(any(), any(), any());
 
         DeleteThingShadowIPCHandler deleteThingShadowIPCHandler = new DeleteThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper);
         UnauthorizedError thrown = assertThrows(UnauthorizedError.class, () -> deleteThingShadowIPCHandler.handleRequest(request));

@@ -7,13 +7,12 @@ package com.aws.greengrass.shadowmanager.ipc;
 
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.model.ErrorMessage;
+import com.aws.greengrass.shadowmanager.model.ShadowRequest;
 import com.aws.greengrass.util.Utils;
 
-import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static com.aws.greengrass.shadowmanager.model.Constants.CLASSIC_SHADOW_IDENTIFIER;
 import static com.aws.greengrass.shadowmanager.model.Constants.MAX_SHADOW_NAME_LENGTH;
 import static com.aws.greengrass.shadowmanager.model.Constants.MAX_THING_NAME_LENGTH;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_PATTERN;
@@ -24,14 +23,13 @@ public final class Validator {
     private Validator() {
     }
 
-
-
     /**
-     * Validates thingName if it exists and if it has valid length and pattern.
+     * Validates the shadow request if the thing name and shadow name has valid length and pattern.
      *
-     * @param thingName The thingName of shadow
+     * @param shadowRequest The shadow request object containing the thingName and shadowName
      */
-    static void validateThingName(String thingName) {
+    static void validateShadowRequest(ShadowRequest shadowRequest) {
+        String thingName = shadowRequest.getThingName();
         if (Utils.isEmpty(thingName)) {
             throw new InvalidRequestParametersException(ErrorMessage.createInvalidThingNameMessage(
                     "ThingName is missing"));
@@ -47,14 +45,8 @@ public final class Validator {
             throw new InvalidRequestParametersException(ErrorMessage.createInvalidThingNameMessage(String.format(
                     "ThingName must match pattern %s", SHADOW_PATTERN)));
         }
-    }
 
-    /**
-     * Validates shadowName if it has valid length and pattern.
-     *
-     * @param shadowName The name of shadow
-     */
-    static void validateShadowName(String shadowName) {
+        String shadowName = shadowRequest.getShadowName();
         if (Utils.isEmpty(shadowName)) {
             return;
         }
@@ -64,7 +56,7 @@ public final class Validator {
                     "ShadowName has a maximum length of %d", MAX_SHADOW_NAME_LENGTH)));
         }
 
-        Matcher matcher = PATTERN.matcher(shadowName);
+        matcher = PATTERN.matcher(shadowName);
         if (!matcher.matches()) {
             throw new InvalidRequestParametersException(ErrorMessage.createInvalidShadowNameMessage(String.format(
                     "ShadowName must match pattern %s", SHADOW_PATTERN)));
