@@ -5,7 +5,11 @@
 
 package com.aws.greengrass.shadowmanager.model;
 
-public class Constants {
+public final class Constants {
+    private Constants() {
+
+    }
+
     public static final String SHADOW_RESOURCE_TYPE = "shadow";
     public static final String SHADOW_RESOURCE_JOINER = "shadow";
     public static final String SHADOW_MANAGER_NAME = "aws.greengrass.ShadowManager";
@@ -21,6 +25,7 @@ public class Constants {
     public static final String SHADOW_DOCUMENT_TIMESTAMP = "timestamp";
     public static final String SHADOW_DOCUMENT_CLIENT_TOKEN = "clientToken";
     public static final String SHADOW_DOCUMENT_STATE = "state";
+    public static final String SHADOW_DOCUMENT_METADATA = "metadata";
     public static final String SHADOW_DOCUMENT_STATE_REPORTED = "reported";
     public static final String SHADOW_DOCUMENT_STATE_DESIRED = "desired";
     public static final String SHADOW_DOCUMENT_STATE_DELTA = "delta";
@@ -33,6 +38,8 @@ public class Constants {
     public static final String LOG_NEXT_TOKEN_KEY = "nextToken";
     public static final String LOG_PAGE_SIZE_KEY = "pageSize";
     public static final String CLASSIC_SHADOW_IDENTIFIER = "";
+    public static final String ERROR_CODE_FIELD_NAME = "code";
+    public static final String ERROR_MESSAGE_FIELD_NAME = "message";
     public static final int MAX_THING_NAME_LENGTH = 128;
     public static final int MAX_SHADOW_NAME_LENGTH = 64;
     public static final String SHADOW_PATTERN = "[a-zA-Z0-9:_-]+";

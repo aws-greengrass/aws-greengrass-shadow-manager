@@ -7,7 +7,7 @@ package com.aws.greengrass.shadowmanager.ipc;
 
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
 import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
-import com.aws.greengrass.shadowmanager.JsonUtil;
+import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
@@ -18,6 +18,7 @@ import com.aws.greengrass.shadowmanager.model.ErrorMessage;
 import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,7 +28,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.mockito.*;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
+import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import software.amazon.awssdk.aws.greengrass.model.*;
 import software.amazon.awssdk.crt.eventstream.ServerConnectionContinuation;
@@ -43,12 +46,12 @@ import java.time.Instant;
 import java.util.Optional;
 
 import static com.aws.greengrass.shadowmanager.TestUtils.*;
+import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_TIMESTAMP;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_VERSION;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -109,21 +112,26 @@ class DeleteThingShadowIPCHandlerTest {
         DeleteThingShadowResponse actualResponse = deleteThingShadowIPCHandler.handleRequest(request);
         assertThat(actualResponse, is(equalTo(expectedResponse)));
         verify(mockPubSubClientWrapper, times(1)).accept(acceptRequestCaptor.capture());
-
         assertThat(acceptRequestCaptor.getValue(), is(notNullValue()));
+
+        Optional<JsonNode> acceptedJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getValue().getPayload());
+        assertThat("Retrieved acceptedJson", acceptedJson.isPresent(), is(true));
+        assertThat("acceptedJson has timestamp", acceptedJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(equalTo(true)));
+        ((ObjectNode) acceptedJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
 
         // IPCRequest does not accept null value for shadowName
         if (shadowName != null) {
             assertThat(acceptRequestCaptor.getValue().getShadowName(), is(equalTo(shadowName)));
         }
+
+        assertThat("Expected shadow document version", acceptedJson.get().get(SHADOW_DOCUMENT_VERSION), is(equalTo(shadowDocumentJson.get().get(SHADOW_DOCUMENT_VERSION))));
         assertThat(acceptRequestCaptor.getValue().getThingName(), is(equalTo(THING_NAME)));
-        assertThat("Expected payload", acceptRequestCaptor.getValue().getPayload(), is(equalTo(JsonUtil.getPayloadBytes(shadowDocumentJson.get().get(SHADOW_DOCUMENT_VERSION)))));
         assertThat("Expected operation", acceptRequestCaptor.getValue().getPublishOperation(), is(Operation.DELETE_SHADOW));
         assertThat("Expected log code", acceptRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(LogEvents.DELETE_THING_SHADOW.code()));
     }
 
     @Test
-    void GIVEN_no_shadow_document_found_WHEN_handle_request_THEN_throw_resource_not_found_error(ExtensionContext context) {
+    void GIVEN_delete_thing_shadow_ipc_handler_WHEN_document_not_found_THEN_throw_resource_not_found_exception(ExtensionContext context) {
         ignoreExceptionOfType(context, ResourceNotFoundError.class);
         DeleteThingShadowRequest request = new DeleteThingShadowRequest();
         request.setThingName(THING_NAME);

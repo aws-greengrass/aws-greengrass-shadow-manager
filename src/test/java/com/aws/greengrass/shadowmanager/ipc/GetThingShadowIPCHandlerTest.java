@@ -7,7 +7,6 @@ package com.aws.greengrass.shadowmanager.ipc;
 
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
 import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
-import com.aws.greengrass.shadowmanager.JsonUtil;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
@@ -17,6 +16,7 @@ import com.aws.greengrass.shadowmanager.ipc.model.RejectRequest;
 import com.aws.greengrass.shadowmanager.model.Constants;
 import com.aws.greengrass.shadowmanager.model.ErrorMessage;
 import com.aws.greengrass.shadowmanager.model.LogEvents;
+import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -46,6 +46,7 @@ import java.nio.file.Files;
 import java.time.Instant;
 import java.util.Optional;
 
+import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_TIMESTAMP;
 import static com.aws.greengrass.shadowmanager.TestUtils.*;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -111,22 +112,26 @@ class GetThingShadowIPCHandlerTest {
         GetThingShadowResponse actualResponse = getThingShadowIPCHandler.handleRequest(request);
         Optional<JsonNode> retrievedDocument = JsonUtil.getPayloadJson(actualResponse.getPayload());
         assertThat("Retrieved document", retrievedDocument.isPresent(), is(true));
-        assertThat(payloadJson.get(), is(equalTo(retrievedDocument.get())));
+        assertThat("retrievedDocument has timestamp", retrievedDocument.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
+        ((ObjectNode) retrievedDocument.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
+        assertThat("retrievedDocument matches expected payload", retrievedDocument.get(), is(equalTo(payloadJson.get())));
+
         verify(mockPubSubClientWrapper, times(1)).accept(acceptRequestCaptor.capture());
 
         assertThat(acceptRequestCaptor.getValue(), is(notNullValue()));
-
         Optional<JsonNode> acceptedJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getValue().getPayload());
         assertThat("Accepted json", acceptedJson.isPresent(), is(true));
+        assertThat("acceptedJson has timestamp", acceptedJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
+        ((ObjectNode) acceptedJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
 
         // IPCRequest does not accept null value for shadowName
         if (shadowName != null) {
             assertThat(acceptRequestCaptor.getValue().getShadowName(), is(equalTo(shadowName)));
         }
+
         assertThat(acceptRequestCaptor.getValue().getThingName(), is(equalTo(THING_NAME)));
         assertThat("Expected operation", acceptRequestCaptor.getValue().getPublishOperation(), is(Operation.GET_SHADOW));
         assertThat("Expected log code", acceptRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(LogEvents.GET_THING_SHADOW.code()));
-
         assertThat(acceptedJson.get(), is(equalTo(payloadJson.get())));
     }
 
@@ -155,9 +160,12 @@ class GetThingShadowIPCHandlerTest {
         GetThingShadowIPCHandler getThingShadowIPCHandler = new GetThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper);
         when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(documentByteData));
         GetThingShadowResponse actualResponse = getThingShadowIPCHandler.handleRequest(request);
+
         Optional<JsonNode> retrievedDocument = JsonUtil.getPayloadJson(actualResponse.getPayload());
         assertThat("Retrieved document", retrievedDocument.isPresent(), is(true));
-        assertThat(documentJson.get(), is(equalTo(retrievedDocument.get())));
+        assertThat("retrievedDocument has timestamp", retrievedDocument.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
+        ((ObjectNode) retrievedDocument.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
+        assertThat("retrievedDocument matches expected document", retrievedDocument.get(), is(equalTo(documentJson.get())));
 
         verify(mockPubSubClientWrapper, times(1)).accept(acceptRequestCaptor.capture());
 
@@ -165,15 +173,17 @@ class GetThingShadowIPCHandlerTest {
 
         Optional<JsonNode> acceptedJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getValue().getPayload());
         assertThat("Accepted json", acceptedJson.isPresent(), is(true));
+        assertThat("acceptedJson has timestamp", acceptedJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
+        ((ObjectNode) acceptedJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
 
         // IPCRequest does not accept null value for shadowName
         if (shadowName != null) {
             assertThat(acceptRequestCaptor.getValue().getShadowName(), is(equalTo(shadowName)));
         }
+
         assertThat(acceptRequestCaptor.getValue().getThingName(), is(equalTo(THING_NAME)));
         assertThat("Expected operation", acceptRequestCaptor.getValue().getPublishOperation(), is(Operation.GET_SHADOW));
         assertThat("Expected log code", acceptRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(LogEvents.GET_THING_SHADOW.code()));
-
         assertThat(acceptedJson.get(), is(equalTo(documentJson.get())));
     }
 

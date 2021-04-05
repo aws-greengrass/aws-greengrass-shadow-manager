@@ -24,8 +24,6 @@ public class ErrorMessage {
     private int errorCode;
     private String message;
     private long timestamp;
-    // TODO: Set the client token correctly based on the Shadow Request.
-    private String clientToken;
 
     public static final ErrorMessage INVALID_VERSION_MESSAGE =
             ErrorMessage.builder().errorCode(400).message("Invalid version").build();
