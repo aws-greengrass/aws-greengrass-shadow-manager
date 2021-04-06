@@ -5,16 +5,16 @@
 
 package com.aws.greengrass.shadowmanager.ipc.model;
 
-import com.aws.greengrass.shadowmanager.ipc.IPCUtil;
+import com.aws.greengrass.shadowmanager.model.LogEvents;
 import lombok.Getter;
 
 /**
  * Enum to state the operation for the shadow.
  */
 public enum Operation {
-    GET_SHADOW("/get", IPCUtil.LogEvents.GET_THING_SHADOW.code()),
-    DELETE_SHADOW("/delete", IPCUtil.LogEvents.DELETE_THING_SHADOW.code()),
-    UPDATE_SHADOW("/update", IPCUtil.LogEvents.UPDATE_THING_SHADOW.code());
+    GET_SHADOW("/get", LogEvents.GET_THING_SHADOW.code()),
+    DELETE_SHADOW("/delete", LogEvents.DELETE_THING_SHADOW.code()),
+    UPDATE_SHADOW("/update", LogEvents.UPDATE_THING_SHADOW.code());
 
     @Getter
     String op;

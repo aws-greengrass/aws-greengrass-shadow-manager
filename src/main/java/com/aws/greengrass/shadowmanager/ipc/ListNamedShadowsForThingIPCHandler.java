@@ -5,13 +5,15 @@
 
 package com.aws.greengrass.shadowmanager.ipc;
 
-import com.aws.greengrass.authorization.AuthorizationHandler;
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
+import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
+import com.aws.greengrass.shadowmanager.model.LogEvents;
+import com.aws.greengrass.shadowmanager.model.ShadowRequest;
 import software.amazon.awssdk.aws.greengrass.GeneratedAbstractListNamedShadowsForThingOperationHandler;
 import software.amazon.awssdk.aws.greengrass.model.InvalidArgumentsError;
 import software.amazon.awssdk.aws.greengrass.model.ListNamedShadowsForThingRequest;
@@ -38,9 +40,18 @@ import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
 
 import static com.aws.greengrass.ipc.common.ExceptionUtil.translateExceptions;
+import static com.aws.greengrass.shadowmanager.model.Constants.CIPHER_TRANSFORMATION;
+import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_OFFSET;
+import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_PAGE_SIZE;
+import static com.aws.greengrass.shadowmanager.model.Constants.ENCRYPTION_ALGORITHM;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_NEXT_TOKEN_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_PAGE_SIZE_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
+import static com.aws.greengrass.shadowmanager.model.Constants.MAX_PAGE_SIZE;
+import static com.aws.greengrass.shadowmanager.model.Constants.MIN_PAGE_SIZE;
+import static com.aws.greengrass.shadowmanager.model.Constants.PBE_KEY_ITERATION_COUNT;
+import static com.aws.greengrass.shadowmanager.model.Constants.PBE_KEY_LENGTH;
+import static com.aws.greengrass.shadowmanager.model.Constants.SECRET_KEY_ALGORITHM;
 import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.LIST_NAMED_SHADOWS_FOR_THING;
 
 /**
@@ -48,33 +59,24 @@ import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.LIS
  */
 public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNamedShadowsForThingOperationHandler {
     private static final Logger logger = LogManager.getLogger(ListNamedShadowsForThingIPCHandler.class);
-    private static final int DEFAULT_PAGE_SIZE = 25;
-    private static final int DEFAULT_OFFSET = 0;
-
-    private static final String CIPHER_TRANSFORMATION = "AES/CBC/PKCS5Padding";
-    private static final String ENCRYPTION_ALGORITHM = "AES";
-    private static final String SECRET_KEY_ALGORITHM = "PBKDF2WithHmacSHA256";
-    private static final int PBE_KEY_ITERATION_COUNT = 65536;
-    private static final int PBE_KEY_LENGTH = 256;
 
     private final String serviceName;
-
     private final ShadowManagerDAO dao;
-    private final AuthorizationHandler authorizationHandler;
+    private final AuthorizationHandlerWrapper authorizationHandlerWrapper;
 
     /**
      * IPC Handler class for responding to ListNamedShadowsForThing requests.
      *
-     * @param context              topics passed by the Nucleus
-     * @param dao                  Local shadow database management
-     * @param authorizationHandler The authorization handler
+     * @param context                     topics passed by the Nucleus
+     * @param dao                         Local shadow database management
+     * @param authorizationHandlerWrapper The authorization handler wrapper
      */
     public ListNamedShadowsForThingIPCHandler(
             OperationContinuationHandlerContext context,
             ShadowManagerDAO dao,
-            AuthorizationHandler authorizationHandler) {
+            AuthorizationHandlerWrapper authorizationHandlerWrapper) {
         super(context);
-        this.authorizationHandler = authorizationHandler;
+        this.authorizationHandlerWrapper = authorizationHandlerWrapper;
         this.dao = dao;
         this.serviceName = context.getAuthenticationData().getIdentityLabel();
     }
@@ -102,13 +104,14 @@ public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNam
             try {
                 logger.atTrace("ipc-list-named-shadow-for-thing-request").log();
 
-                IPCUtil.validateThingNameAndDoAuthorization(authorizationHandler, LIST_NAMED_SHADOWS_FOR_THING,
-                        serviceName, thingName);
+                ShadowRequest shadowRequest = new ShadowRequest(thingName);
+                Validator.validateShadowRequest(shadowRequest);
+                authorizationHandlerWrapper.doAuthorization(LIST_NAMED_SHADOWS_FOR_THING, serviceName, shadowRequest);
 
                 int pageSize = Optional.ofNullable(request.getPageSize())
                         .orElse(DEFAULT_PAGE_SIZE);
 
-                if (pageSize < 1 || pageSize > 100) {
+                if (pageSize < MIN_PAGE_SIZE || pageSize > MAX_PAGE_SIZE) {
                     throw new IllegalArgumentException("pageSize argument must be between 1 and 100");
                 }
 
@@ -133,7 +136,7 @@ public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNam
                     ServiceError error = new ServiceError("Could not process ListNamedShadowsForThing "
                             + "Request due to internal service error");
                     logger.atError()
-                            .setEventType(IPCUtil.LogEvents.LIST_NAMED_SHADOWS.code())
+                            .setEventType(LogEvents.LIST_NAMED_SHADOWS.code())
                             .kv(LOG_THING_NAME_KEY, thingName)
                             .setCause(error)
                             .log();
@@ -143,14 +146,14 @@ public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNam
 
             } catch (AuthorizationException e) {
                 logger.atWarn()
-                        .setEventType(IPCUtil.LogEvents.LIST_NAMED_SHADOWS.code())
+                        .setEventType(LogEvents.LIST_NAMED_SHADOWS.code())
                         .setCause(e)
                         .kv(LOG_THING_NAME_KEY, thingName)
                         .log("Not authorized to list named shadows for thing");
                 throw new UnauthorizedError(e.getMessage());
             } catch (InvalidRequestParametersException | IllegalArgumentException e) {
                 logger.atWarn()
-                        .setEventType(IPCUtil.LogEvents.LIST_NAMED_SHADOWS.code())
+                        .setEventType(LogEvents.LIST_NAMED_SHADOWS.code())
                         .setCause(e)
                         .kv(LOG_THING_NAME_KEY, thingName)
                         .kv(LOG_PAGE_SIZE_KEY, request.getPageSize())
@@ -159,7 +162,7 @@ public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNam
                 throw new InvalidArgumentsError(e.getMessage());
             } catch (ShadowManagerDataException | GeneralSecurityException e) {
                 logger.atError()
-                    .setEventType(IPCUtil.LogEvents.LIST_NAMED_SHADOWS.code())
+                    .setEventType(LogEvents.LIST_NAMED_SHADOWS.code())
                     .setCause(e)
                     .kv(LOG_THING_NAME_KEY, thingName)
                     .log("Could not process ListNamedShadowsForThing Request due to internal service error");
