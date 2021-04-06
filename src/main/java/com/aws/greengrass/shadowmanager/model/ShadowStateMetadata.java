@@ -13,7 +13,7 @@ import com.fasterxml.jackson.databind.node.LongNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.Getter;
 
-import java.time.Instant;
+import java.time.Clock;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -33,9 +33,15 @@ public class ShadowStateMetadata {
 
     @JsonProperty(SHADOW_DOCUMENT_STATE_REPORTED)
     private JsonNode reported;
+    private Clock clock = Clock.systemDefaultZone();
 
     public ShadowStateMetadata() {
         this(null, null);
+    }
+
+    public ShadowStateMetadata(final JsonNode desired, final JsonNode reported, final Clock t) {
+        this(desired, reported);
+        this.clock = t;
     }
 
     public ShadowStateMetadata(final JsonNode desired, final JsonNode reported) {
@@ -91,7 +97,7 @@ public class ShadowStateMetadata {
     private JsonNode createMetadataPatch(final JsonNode source) {
         if (source.isValueNode()) {
             ObjectNode node = JsonUtil.OBJECT_MAPPER.createObjectNode();
-            node.set(Constants.SHADOW_DOCUMENT_TIMESTAMP, new LongNode(Instant.now().getEpochSecond()));
+            node.set(Constants.SHADOW_DOCUMENT_TIMESTAMP, new LongNode(this.clock.instant().getEpochSecond()));
             return node;
         }
 
