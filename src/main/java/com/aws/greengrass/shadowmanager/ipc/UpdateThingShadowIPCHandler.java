@@ -131,19 +131,18 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                     ErrorMessage errorMessage = ErrorMessage.createPayloadTooLargeMessage();
                     throw new InvalidRequestParametersException(errorMessage);
                 }
-                Optional<JsonNode> updatedDocument = JsonUtil.getPayloadJson(updatedDocumentRequestBytes);
-                if (!updatedDocument.isPresent() || isNullOrMissing(updatedDocument.get())) {
-                    ErrorMessage invalidPayloadJsonMessage = ErrorMessage.createInvalidPayloadJsonMessage("");
-                    throw new InvalidRequestParametersException(invalidPayloadJsonMessage);
-                }
+                updateDocumentRequest = JsonUtil.getPayloadJson(updatedDocumentRequestBytes)
+                        .filter(d -> !isNullOrMissing(d))
+                        .orElseThrow(() ->
+                                new InvalidRequestParametersException(ErrorMessage
+                                        .createInvalidPayloadJsonMessage("")));
                 // Validate the payload schema
-                JsonUtil.validatePayloadSchema(updatedDocument.get());
+                JsonUtil.validatePayloadSchema(updateDocumentRequest);
 
-                updateDocumentRequest = updatedDocument.get();
                 // Get the client token if present in the update shadow request.
                 clientToken = JsonUtil.getClientToken(updateDocumentRequest);
 
-                JsonUtil.validatePayload(currentDocument, updatedDocument.get());
+                JsonUtil.validatePayload(currentDocument, updateDocumentRequest);
             } catch (AuthorizationException e) {
                 logger.atWarn()
                         .setEventType(LogEvents.UPDATE_THING_SHADOW.code())
