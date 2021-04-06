@@ -6,6 +6,7 @@
 package com.aws.greengrass.shadowmanager;
 
 import com.aws.greengrass.lifecyclemanager.Kernel;
+import lombok.Getter;
 import org.flywaydb.core.Flyway;
 import org.h2.jdbcx.JdbcDataSource;
 
@@ -28,6 +29,8 @@ public class ShadowManagerDatabase implements Closeable {
     private static final String DATABASE_FORMAT = "jdbc:h2:%s/shadow";
     private final JdbcDataSource dataSource;
     private Connection connection;
+    @Getter
+    private long maxDiskUtilization;
 
     /**
      * Creates a database with a {@link javax.sql.DataSource} using the kernel config.
@@ -70,5 +73,14 @@ public class ShadowManagerDatabase implements Closeable {
                 throw new IOException(e);
             }
         }
+    }
+
+    /**
+     * Sets the max disk utilization.
+     *
+     * @param newMaxDiskUtilization the new max disk utilization.
+     */
+    public void setMaxDiskUtilization(int newMaxDiskUtilization) {
+        maxDiskUtilization = newMaxDiskUtilization;
     }
 }

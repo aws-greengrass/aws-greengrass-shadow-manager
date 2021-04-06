@@ -7,7 +7,6 @@ package com.aws.greengrass.shadowmanager.model;
 
 public final class Constants {
     public static final String SHADOW_RESOURCE_TYPE = "shadow";
-    public static final String SHADOW_RESOURCE_JOINER = "shadow";
     public static final String SHADOW_MANAGER_NAME = "aws.greengrass.ShadowManager";
     public static final String SHADOW_PUBLISH_ACCEPTED_TOPIC = "/accepted";
     public static final String SHADOW_PUBLISH_REJECTED_TOPIC = "/rejected";
@@ -31,6 +30,12 @@ public final class Constants {
             + "or desired node.";
     public static final int DEFAULT_DOCUMENT_STATE_DEPTH = 6;
     public static final int DEFAULT_DOCUMENT_SIZE = 8 * 1024;
+    public static final int MAX_SHADOW_DOCUMENT_SIZE = 30 * 1024;
+    // https://docs.aws.amazon.com/general/latest/gr/iot-core.html#device-shadow-limits
+    // 400 is max TPS for some regions (account level), others are 4000
+    public static final int DEFAULT_MAX_OUTBOUND_SYNC_UPDATES_PS = 400;
+    public static final boolean DEFAULT_PROVIDE_SYNC_STATUS = false;
+    public static final int DEFAULT_DISK_UTILIZATION_SIZE_B = 16 * 1024 * 1024;
     public static final String LOG_NEXT_TOKEN_KEY = "nextToken";
     public static final String LOG_PAGE_SIZE_KEY = "pageSize";
     public static final String CLASSIC_SHADOW_IDENTIFIER = "";
@@ -48,6 +53,16 @@ public final class Constants {
     public static final String SECRET_KEY_ALGORITHM = "PBKDF2WithHmacSHA256";
     public static final int PBE_KEY_ITERATION_COUNT = 65_536;
     public static final int PBE_KEY_LENGTH = 256;
+    public static final String CONFIGURATION_SYNCHRONIZATION_TOPIC = "synchronize";
+    public static final String CONFIGURATION_NUCLEUS_THING_TOPIC = "nucleusThing";
+    public static final String CONFIGURATION_CLASSIC_SHADOW_TOPIC = "classic";
+    public static final String CONFIGURATION_NAMED_SHADOWS_TOPIC = "namedShadows";
+    public static final String CONFIGURATION_SHADOW_DOCUMENTS_TOPIC = "shadowDocuments";
+    public static final String CONFIGURATION_THING_NAME_TOPIC = "thingName";
+    public static final String CONFIGURATION_PROVIDE_SYNC_STATUS_TOPIC = "provideSyncStatus";
+    public static final String CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC = "maxOutboundSyncUpdatesPerSecond";
+    public static final String CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC = "shadowDocumentSizeLimitBytes";
+    public static final String CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC = "maxDiskUtilizationMegaBytes";
 
     private Constants() {
     }

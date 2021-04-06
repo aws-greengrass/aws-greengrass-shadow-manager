@@ -5,20 +5,26 @@
 
 package com.aws.greengrass.shadowmanager.ipc;
 
+import com.aws.greengrass.shadowmanager.exception.InvalidConfigurationException;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.model.ErrorMessage;
 import com.aws.greengrass.shadowmanager.model.ShadowRequest;
 import com.aws.greengrass.util.Utils;
+import lombok.Getter;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_DOCUMENT_SIZE;
+import static com.aws.greengrass.shadowmanager.model.Constants.MAX_SHADOW_DOCUMENT_SIZE;
 import static com.aws.greengrass.shadowmanager.model.Constants.MAX_SHADOW_NAME_LENGTH;
 import static com.aws.greengrass.shadowmanager.model.Constants.MAX_THING_NAME_LENGTH;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_PATTERN;
 
 public final class Validator {
     private static final Pattern PATTERN = Pattern.compile(SHADOW_PATTERN);
+    @Getter
+    private static int maxShadowDocumentSize = DEFAULT_DOCUMENT_SIZE;
 
     private Validator() {
     }
@@ -61,5 +67,24 @@ public final class Validator {
             throw new InvalidRequestParametersException(ErrorMessage.createInvalidShadowNameMessage(String.format(
                     "ShadowName must match pattern %s", SHADOW_PATTERN)));
         }
+    }
+
+    /**
+     * Validates the maximum shadow size is within the appropriate limits.
+     *
+     * @param newMaxShadowSize The new max shadow size
+     * @throws InvalidConfigurationException if the new max shadow size is less than 0 or more than the default
+     *                                       max size (30 MB).
+     */
+    public static void validateMaxShadowSize(int newMaxShadowSize) throws InvalidConfigurationException {
+        if (MAX_SHADOW_DOCUMENT_SIZE < newMaxShadowSize || newMaxShadowSize < 0) {
+            throw new InvalidConfigurationException(String.format(
+                    "Maximum shadow size provided %s exceeds the default maximum shadow size of %s", newMaxShadowSize,
+                    MAX_SHADOW_DOCUMENT_SIZE));
+        }
+    }
+
+    public static void setMaxShadowDocumentSize(int newMaxShadowSize) {
+        maxShadowDocumentSize = newMaxShadowSize;
     }
 }

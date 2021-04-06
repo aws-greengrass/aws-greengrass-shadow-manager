@@ -9,15 +9,22 @@ import com.aws.greengrass.authorization.exceptions.AuthorizationException;
 import com.aws.greengrass.config.Topics;
 import com.aws.greengrass.dependency.ImplementsService;
 import com.aws.greengrass.dependency.State;
+import com.aws.greengrass.deployment.DeviceConfiguration;
 import com.aws.greengrass.lifecyclemanager.PluginService;
+import com.aws.greengrass.shadowmanager.exception.InvalidConfigurationException;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowIPCHandler;
 import com.aws.greengrass.shadowmanager.ipc.GetThingShadowIPCHandler;
 import com.aws.greengrass.shadowmanager.ipc.ListNamedShadowsForThingIPCHandler;
 import com.aws.greengrass.shadowmanager.ipc.PubSubClientWrapper;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowIPCHandler;
+import com.aws.greengrass.shadowmanager.ipc.Validator;
 import com.aws.greengrass.shadowmanager.model.LogEvents;
+import com.aws.greengrass.shadowmanager.model.configuration.ShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
+import com.aws.greengrass.util.Coerce;
 import com.github.fge.jsonschema.core.exceptions.ProcessingException;
+import lombok.AccessLevel;
+import lombok.Getter;
 import org.flywaydb.core.api.FlywayException;
 import software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService;
 
@@ -26,8 +33,15 @@ import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import javax.inject.Inject;
 
+import static com.aws.greengrass.componentmanager.KernelConfigResolver.CONFIGURATION_CONFIG_KEY;
+import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC;
+import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC;
+import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SYNCHRONIZATION_TOPIC;
+import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_DISK_UTILIZATION_SIZE_B;
+import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_DOCUMENT_SIZE;
 import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.DELETE_THING_SHADOW;
 import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.GET_THING_SHADOW;
 import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.LIST_NAMED_SHADOWS_FOR_THING;
@@ -43,6 +57,10 @@ public class ShadowManager extends PluginService {
     private final ShadowManagerDatabase database;
     private final AuthorizationHandlerWrapper authorizationHandlerWrapper;
     private final PubSubClientWrapper pubSubClientWrapper;
+    private final DeviceConfiguration deviceConfiguration;
+    //TODO: Move this to sync handler?
+    @Getter(AccessLevel.PACKAGE)
+    private ShadowSyncConfiguration syncConfiguration;
 
     @Inject
     private GreengrassCoreIPCService greengrassCoreIPCService;
@@ -55,6 +73,7 @@ public class ShadowManager extends PluginService {
      * @param dao                         Local shadow database management
      * @param authorizationHandlerWrapper The authorization handler wrapper
      * @param pubSubClientWrapper         The PubSub client wrapper
+     * @param deviceConfiguration         {@link DeviceConfiguration}
      */
     @Inject
     public ShadowManager(
@@ -62,12 +81,45 @@ public class ShadowManager extends PluginService {
             ShadowManagerDatabase database,
             ShadowManagerDAOImpl dao,
             AuthorizationHandlerWrapper authorizationHandlerWrapper,
-            PubSubClientWrapper pubSubClientWrapper) {
+            PubSubClientWrapper pubSubClientWrapper,
+            DeviceConfiguration deviceConfiguration) {
         super(topics);
         this.database = database;
         this.authorizationHandlerWrapper = authorizationHandlerWrapper;
         this.dao = dao;
         this.pubSubClientWrapper = pubSubClientWrapper;
+        this.deviceConfiguration = deviceConfiguration;
+
+        Topics configTopics = topics.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC);
+        configTopics.subscribe((why, newv) -> {
+            Map<String, Object> configTopicsPojo = configTopics.toPOJO();
+            try {
+                syncConfiguration = ShadowSyncConfiguration.processConfiguration(configTopicsPojo,
+                        Coerce.toString(this.deviceConfiguration.getThingName()));
+            } catch (InvalidConfigurationException e) {
+                serviceErrored(e);
+            }
+        });
+
+        topics.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC)
+                .dflt(DEFAULT_DOCUMENT_SIZE)
+                .subscribe((why, newv) -> {
+                    int newMaxShadowSize = Coerce.toInt(newv);
+                    try {
+                        Validator.validateMaxShadowSize(newMaxShadowSize);
+                        Validator.setMaxShadowDocumentSize(newMaxShadowSize);
+                    } catch (InvalidConfigurationException e) {
+                        serviceErrored(e);
+                    }
+                });
+
+        topics.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC)
+                .dflt(DEFAULT_DISK_UTILIZATION_SIZE_B)
+                .subscribe((why, newv) -> {
+                    //TODO: Validate that the current size of the DB is not greater than this?
+                    this.database.setMaxDiskUtilization(Coerce.toInt(newv));
+                });
+
     }
 
     private void registerHandlers() {
