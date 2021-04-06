@@ -15,8 +15,6 @@ import lombok.Getter;
 public class AcceptRequest extends IPCRequest {
     byte[] payload;
 
-    Operation publishOperation;
-
     /**
      * Constructor/Builder for Accept request class.
      *
@@ -28,8 +26,7 @@ public class AcceptRequest extends IPCRequest {
     @Builder
     public AcceptRequest(String thingName, String shadowName, byte[] payload,
                          Operation publishOperation) {
-        super(thingName, shadowName);
+        super(thingName, shadowName, publishOperation);
         this.payload = payload;
-        this.publishOperation = publishOperation;
     }
 }

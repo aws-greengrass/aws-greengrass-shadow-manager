@@ -13,7 +13,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import javax.inject.Inject;
@@ -21,18 +22,20 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.sql.SQLException;
 import java.util.*;
+import java.util.stream.Stream;
 
+import static com.aws.greengrass.shadowmanager.TestUtils.SHADOW_NAME;
+import static com.aws.greengrass.shadowmanager.TestUtils.THING_NAME;
+import static com.aws.greengrass.shadowmanager.model.Constants.CLASSIC_SHADOW_IDENTIFIER;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 public class ShadowManagerDAOImplTest {
 
-    private static final String THING_NAME = "testThing";
-    private static final String SHADOW_NAME = "testShadow";
-    private static final String NO_SHADOW_NAME = "";
     private static final String MISSING_THING_NAME = "missingTestThing";
+    private static final String CLASSIC_SHADOW_THING = "classicThing";
     private static final byte[] BASE_DOCUMENT = "{\"id\": 1, \"name\": \"The Beatles\"}".getBytes();
     private static final byte[] NO_SHADOW_NAME_BASE_DOCUMENT = "{\"id\": 2, \"name\": \"The Beach Boys\"}".getBytes();
     private static final byte[] UPDATED_DOCUMENT = "{\"id\": 1, \"name\": \"New Name\"}".getBytes();
@@ -69,109 +72,92 @@ public class ShadowManagerDAOImplTest {
         kernel.shutdown();
     }
 
-    @Test
-    void testCreateShadowThing() throws Exception {
+    private static Stream<Arguments> classicAndNamedShadow() {
+        return Stream.of(
+                arguments(SHADOW_NAME, BASE_DOCUMENT),
+                arguments(CLASSIC_SHADOW_IDENTIFIER, NO_SHADOW_NAME_BASE_DOCUMENT)
+        );
+    }
+
+    void createNamedShadow() throws Exception {
         Optional<byte[]> result = dao.createShadowThing(THING_NAME, SHADOW_NAME, BASE_DOCUMENT);
-        assertTrue(result.isPresent());
-        assertArrayEquals(BASE_DOCUMENT, result.get());
+        assertThat("Created named shadow", result.isPresent(), is(true));
+        assertThat(result.get(), is(equalTo(BASE_DOCUMENT)));
+    }
+
+    void createClassicShadow() throws Exception {
+        Optional<byte[]> result = dao.createShadowThing(THING_NAME, CLASSIC_SHADOW_IDENTIFIER, NO_SHADOW_NAME_BASE_DOCUMENT);
+        assertThat("Created classic shadow", result.isPresent(), is(true));
+        assertThat(result.get(), is(equalTo(NO_SHADOW_NAME_BASE_DOCUMENT)));
+    }
+
+    @ParameterizedTest
+    @MethodSource("classicAndNamedShadow")
+    void GIVEN_named_and_classic_shadow_WHEN_get_shadow_thing_THEN_return_correct_payload(String shadowName, byte[] expectedPayload) throws Exception {
+        createNamedShadow();
+        createClassicShadow();
+        Optional<byte[]> result = dao.getShadowThing(THING_NAME, shadowName); // NOPMD
+        assertThat("Retrieved shadow", result.isPresent(), is(true));
+        assertThat(result.get(), is(equalTo(expectedPayload)));
     }
 
     @Test
-    void testCreateShadowThingWithNoShadowName() throws Exception {
-        Optional<byte[]> result = dao.createShadowThing(THING_NAME, NO_SHADOW_NAME, NO_SHADOW_NAME_BASE_DOCUMENT);
-        assertTrue(result.isPresent());
-        assertArrayEquals(NO_SHADOW_NAME_BASE_DOCUMENT, result.get());
-    }
-
-    @Test
-    void testGetShadowThing() throws Exception {
-        testCreateShadowThing();
-        Optional<byte[]> result = dao.getShadowThing(THING_NAME, SHADOW_NAME); // NOPMD
-        assertTrue(result.isPresent());
-        assertArrayEquals(BASE_DOCUMENT, result.get());
-    }
-
-    @Test
-    void testGetShadowThingWithNoShadowName() throws Exception {
-        testCreateShadowThing();
-        testCreateShadowThingWithNoShadowName();
-        Optional<byte[]> result = dao.getShadowThing(THING_NAME, NO_SHADOW_NAME); // NOPMD
-        assertTrue(result.isPresent());
-        assertArrayEquals(NO_SHADOW_NAME_BASE_DOCUMENT, result.get());
-    }
-
-    @Test
-    void testGetShadowThingWithNoMatchingThing() throws Exception {
+    void GIVEN_no_shadow_WHEN_get_shadow_thing_THEN_return_nothing() throws Exception {
         Optional<byte[]> result = dao.getShadowThing(MISSING_THING_NAME, SHADOW_NAME);
-        assertFalse(result.isPresent());
+        assertThat("No shadow found", result.isPresent(), is(false));
+    }
+
+    @ParameterizedTest
+    @MethodSource("classicAndNamedShadow")
+    void GIVEN_named_and_classic_shadow_WHEN_delete_shadow_thing_THEN_shadow_deleted(String shadowName, byte[] expectedPayload) throws Exception {
+        createNamedShadow();
+        createClassicShadow();
+        Optional<byte[]> result = dao.deleteShadowThing(THING_NAME, shadowName); //NOPMD
+        assertThat("Correct payload returned", result.isPresent(), is(true));
+        assertThat(result.get(), is(equalTo(expectedPayload)));
+
+        Optional<byte[]> getResults = dao.getShadowThing(THING_NAME, shadowName);
+        assertThat("Could not GET deleted shadow", getResults.isPresent(), is(false));
     }
 
     @Test
-    void testDeleteShadowThing() throws Exception {
-        testCreateShadowThing();
-        Optional<byte[]> result = dao.deleteShadowThing(THING_NAME, SHADOW_NAME); //NOPMD
-        assertTrue(result.isPresent());
-        assertArrayEquals(BASE_DOCUMENT, result.get());
-    }
-
-    @Test
-    void testDeleteShadowThingWithNoShadowName() throws Exception {
-        testCreateShadowThing();
-        testCreateShadowThingWithNoShadowName();
-
-        // check that deleted object was the one without a shadow name
-        Optional<byte[]> result = dao.deleteShadowThing(THING_NAME, NO_SHADOW_NAME); // NOPMD
-        assertTrue(result.isPresent());
-        assertArrayEquals(NO_SHADOW_NAME_BASE_DOCUMENT, result.get());
-
-        // check that the original object still exists
-        result = dao.getShadowThing(THING_NAME, SHADOW_NAME);
-        assertTrue(result.isPresent());
-    }
-
-    @Test
-    void testDeleteShadowThingWithNoMatchingThing() throws Exception {
+    void GIVEN_no_shadow_WHEN_delete_shadow_thing_THEN_return_nothing() throws Exception {
         Optional<byte[]> result = dao.deleteShadowThing(THING_NAME, SHADOW_NAME);
-        assertFalse(result.isPresent());
+        assertThat("No shadow found", result.isPresent(), is(false));
     }
 
-    @Test
-    void testUpdateShadowThing() throws Exception {
-        testCreateShadowThing();
-        Optional<byte[]> result = dao.updateShadowThing(THING_NAME, SHADOW_NAME, UPDATED_DOCUMENT); //NOPMD
-        assertTrue(result.isPresent());
-        assertArrayEquals(UPDATED_DOCUMENT, result.get());
-
-        // Verify we can get the new document
-        result = dao.getShadowThing(THING_NAME, SHADOW_NAME);
-        assertTrue(result.isPresent());
-        assertArrayEquals(UPDATED_DOCUMENT, result.get());
+    private static Stream<Arguments> namedShadowUpdateSupport() {
+        return Stream.of(
+                arguments(SHADOW_NAME, CLASSIC_SHADOW_IDENTIFIER, NO_SHADOW_NAME_BASE_DOCUMENT),
+                arguments(CLASSIC_SHADOW_IDENTIFIER, SHADOW_NAME, BASE_DOCUMENT)
+        );
     }
 
-    @Test
-    void testUpdateShadowThingWithNoShadowName() throws Exception {
-        testCreateShadowThing();
-        testCreateShadowThingWithNoShadowName();
-        Optional<byte[]> result = dao.updateShadowThing(THING_NAME, NO_SHADOW_NAME, UPDATED_DOCUMENT); //NOPMD
-        assertTrue(result.isPresent());
-        assertArrayEquals(UPDATED_DOCUMENT, result.get());
+    @ParameterizedTest
+    @MethodSource("namedShadowUpdateSupport")
+    void GIVEN_named_and_classic_shadow_WHEN_update_shadow_thing_THEN_correct_shadow_updated(String shadowName, String ignoredShadowName, byte[] ignoredPayload) throws Exception {
+        createNamedShadow();
+        createClassicShadow();
+        Optional<byte[]> result = dao.updateShadowThing(THING_NAME, shadowName, UPDATED_DOCUMENT); //NOPMD
+        assertThat("Updated shadow", result.isPresent(), is(true));
+        assertThat(result.get(), is(equalTo(UPDATED_DOCUMENT)));
 
         // Verify we can get the new document
-        result = dao.getShadowThing(THING_NAME, NO_SHADOW_NAME);
-        assertTrue(result.isPresent());
-        assertArrayEquals(UPDATED_DOCUMENT, result.get());
+        result = dao.getShadowThing(THING_NAME, shadowName);
+        assertThat("Can GET updated shadow", result.isPresent(), is(true));
+        assertThat(result.get(), is(equalTo(UPDATED_DOCUMENT)));
 
         // Verify that the original shadow with shadowName has not been updated
-        result = dao.getShadowThing(THING_NAME, SHADOW_NAME);
-        assertTrue(result.isPresent());
-        assertArrayEquals(BASE_DOCUMENT, result.get());
+        result = dao.getShadowThing(THING_NAME, ignoredShadowName);
+        assertThat("Can GET other shadow that was not updated", result.isPresent(), is(true));
+        assertThat("Other shadow not updated", result.get(), is(equalTo(ignoredPayload)));
     }
 
     @Test
-    void testUpdateShadowThingWithNoMatchingThing() throws Exception {
+    void GIVEN_no_shadow_WHEN_update_shadow_thing_THEN_shadow_created() throws Exception {
         Optional<byte[]> result = dao.updateShadowThing(THING_NAME, SHADOW_NAME, UPDATED_DOCUMENT);
-        assertTrue(result.isPresent());
-        assertArrayEquals(UPDATED_DOCUMENT, result.get());
+        assertThat("Shadow created", result.isPresent(), is(true));
+        assertThat(result.get(), is(equalTo(UPDATED_DOCUMENT)));
     }
 
     @Test
@@ -191,7 +177,7 @@ public class ShadowManagerDAOImplTest {
         for (String shadowName : SHADOW_NAME_LIST) {
             dao.updateShadowThing(THING_NAME, shadowName, UPDATED_DOCUMENT);
         }
-        dao.updateShadowThing(THING_NAME, NO_SHADOW_NAME, UPDATED_DOCUMENT);
+        dao.updateShadowThing(THING_NAME, CLASSIC_SHADOW_IDENTIFIER, UPDATED_DOCUMENT);
 
         List<String> listShadowResults = dao.listNamedShadowsForThing(THING_NAME, DEFAULT_OFFSET, SHADOW_NAME_LIST.size());
         assertThat(listShadowResults, is(notNullValue()));
@@ -215,26 +201,26 @@ public class ShadowManagerDAOImplTest {
         assertThat(listShadowResults, is(equalTo(expected_paginated_list)));
     }
 
+    static Stream<Arguments> validListTestParameters() {
+        return Stream.of(
+                arguments(THING_NAME, 0, 5),   // limit greater than number of named shadows
+                arguments(THING_NAME, 0, 2),   // limit is less than number of named shadows
+                arguments(THING_NAME, 0, -10), // limit is negative
+                arguments(THING_NAME, 4, 5),   // offset is equal to or greater than number of named shadows
+                arguments(THING_NAME, -10, 5), // offset is negative
+                arguments(MISSING_THING_NAME, 0, 5),  // list for thing that does not exist
+                arguments(CLASSIC_SHADOW_THING, 0, 5) // list for thing that does not have named shadows
+        );
+    }
+
     @ParameterizedTest
-    @CsvSource({
-            "testThing, 0, 5",   // limit greater than number of named shadows
-            "testThing, 0, 2",   // limit is less than number of named shadows
-            "testThing, 0, -10", // limit is negative
-            "testThing, 4, 5",   // offset is equal to or greater than number of named shadows
-            "testThing, -10, 5", // offset is negative
-            "missingTestThing, 0, 5", // list for thing that does not exist
-            "classicThing, 0, 5"      // list for thing that does not have named shadows
-    })
-    void GIVEN_valid_edge_inputs_WHEN_list_named_shadows_for_thing_THEN_return_valid_results(String thingName, String offsetString, String pageSizeString) throws Exception {
+    @MethodSource("validListTestParameters")
+    void GIVEN_valid_edge_inputs_WHEN_list_named_shadows_for_thing_THEN_return_valid_results(String thingName, int offset, int pageSize) throws Exception {
         for (String shadowName : SHADOW_NAME_LIST) {
             dao.updateShadowThing(THING_NAME, shadowName, UPDATED_DOCUMENT);
         }
 
-        final String CLASSIC_SHADOW_THING = "classicThing";
-        dao.updateShadowThing(CLASSIC_SHADOW_THING, NO_SHADOW_NAME, UPDATED_DOCUMENT);
-
-        int offset = Integer.parseInt(offsetString);
-        int pageSize = Integer.parseInt(pageSizeString);
+        dao.updateShadowThing(CLASSIC_SHADOW_THING, CLASSIC_SHADOW_IDENTIFIER, UPDATED_DOCUMENT);
 
         List<String> listShadowResults = dao.listNamedShadowsForThing(thingName, offset, pageSize);
         assertThat(listShadowResults, is(notNullValue()));
@@ -248,7 +234,7 @@ public class ShadowManagerDAOImplTest {
 
         // cases where offset and limit are ignored (offset/limit are negative)
         if (offset < 0 || pageSize < 0) {
-            assertThat("Original results remained the same", SHADOW_NAME_LIST, is(equalTo(listShadowResults)));
+            assertThat("Original results remained the same", listShadowResults, is(equalTo(SHADOW_NAME_LIST)));
         }
     }
 }

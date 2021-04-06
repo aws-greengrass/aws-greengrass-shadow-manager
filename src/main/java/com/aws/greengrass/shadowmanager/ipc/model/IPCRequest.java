@@ -5,7 +5,7 @@
 
 package com.aws.greengrass.shadowmanager.ipc.model;
 
-import lombok.AllArgsConstructor;
+import com.aws.greengrass.shadowmanager.model.ShadowRequest;
 import lombok.Getter;
 
 import javax.validation.constraints.NotNull;
@@ -14,9 +14,11 @@ import javax.validation.constraints.NotNull;
  * Base class containing IPC request information for publishing messages for Shadow operations.
  */
 @Getter
-@AllArgsConstructor
-public class IPCRequest {
-    @NotNull
-    String thingName;
-    String shadowName;
+public class IPCRequest extends ShadowRequest {
+    Operation publishOperation;
+
+    public IPCRequest(@NotNull String thingName, String shadowName, Operation publishOperation) {
+        super(thingName, shadowName);
+        this.publishOperation = publishOperation;
+    }
 }
