@@ -33,20 +33,20 @@ public class ShadowStateMetadata {
 
     @JsonProperty(SHADOW_DOCUMENT_STATE_REPORTED)
     private JsonNode reported;
-    private Clock clock = Clock.systemDefaultZone();
+    private final Clock clock;
 
     public ShadowStateMetadata() {
-        this(null, null);
-    }
-
-    public ShadowStateMetadata(final JsonNode desired, final JsonNode reported, final Clock t) {
-        this(desired, reported);
-        this.clock = t;
+        this(null, null, Clock.systemDefaultZone());
     }
 
     public ShadowStateMetadata(final JsonNode desired, final JsonNode reported) {
+        this(desired, reported, Clock.systemDefaultZone());
+    }
+
+    ShadowStateMetadata(final JsonNode desired, final JsonNode reported, final Clock t) {
         this.desired = nullIfEmpty(desired);
         this.reported = nullIfEmpty(reported);
+        this.clock = t;
     }
 
     /**
