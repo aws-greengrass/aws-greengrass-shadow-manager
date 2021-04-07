@@ -10,7 +10,6 @@
         "SomeKey": "SomeValue"
       }
     },
-    "metadata":null,
     "version": 0
   },
   "current": {
@@ -24,7 +23,6 @@
         "SomeKey": "SomeValue"
       }
     },
-    "metadata":null,
     "version": 1
   },
   "clientToken": "device"

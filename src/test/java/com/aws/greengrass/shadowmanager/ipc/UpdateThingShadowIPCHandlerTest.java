@@ -6,6 +6,7 @@
 package com.aws.greengrass.shadowmanager.ipc;
 
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
+import com.aws.greengrass.shadowmanager.model.Constants;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
@@ -49,12 +50,19 @@ import java.util.Optional;
 
 import static com.aws.greengrass.shadowmanager.TestUtils.*;
 import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_DOCUMENT_SIZE;
+import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_METADATA;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_TIMESTAMP;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_VERSION;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.*;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.either;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.startsWith;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -106,6 +114,17 @@ class UpdateThingShadowIPCHandlerTest {
         return Files.readAllBytes(f.toPath());
     }
 
+    private void assertAndRemoveTsAndMetadata(JsonNode node) {
+        assertThat("Node has timestamp", node.has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
+        ((ObjectNode) node).remove(SHADOW_DOCUMENT_TIMESTAMP);
+        assertAndRemoveMetadata(node);
+    }
+
+    private void assertAndRemoveMetadata(JsonNode node) {
+        assertThat("Node has metadata", node.has(SHADOW_DOCUMENT_METADATA), is(true));
+        ((ObjectNode) node).remove(SHADOW_DOCUMENT_METADATA);
+    }
+
     @BeforeEach
     void setup() throws IOException, ProcessingException {
         when(mockContext.getContinuation()).thenReturn(mock(ServerConnectionContinuation.class));
@@ -138,8 +157,8 @@ class UpdateThingShadowIPCHandlerTest {
             UpdateThingShadowResponse actualResponse = updateThingShadowIPCHandler.handleRequest(request);
             Optional<JsonNode> updatedDocumentJson = JsonUtil.getPayloadJson(actualResponse.getPayload());
             assertThat("Retrieved updateDocumentJson", updatedDocumentJson.isPresent(), is(true));
-            assertThat("updateDocumentJson has timestamp", updatedDocumentJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
-            ((ObjectNode) updatedDocumentJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
+            assertAndRemoveTsAndMetadata(updatedDocumentJson.get());
+
             Optional<JsonNode> expectedAcceptedJson = JsonUtil.getPayloadJson(updateRequest);
             assertThat("Retrieved expectedAcceptedJson", expectedAcceptedJson.isPresent(), is(true));
             ((ObjectNode) expectedAcceptedJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(1));
@@ -159,16 +178,18 @@ class UpdateThingShadowIPCHandlerTest {
 
             Optional<JsonNode> acceptedJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(0).getPayload());
             assertThat("Retrieved acceptedJson", acceptedJson.isPresent(), is(true));
-            assertThat("acceptedJson has timestamp", acceptedJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
-            ((ObjectNode) acceptedJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
+            assertAndRemoveTsAndMetadata(acceptedJson.get());
+
             Optional<JsonNode> deltaJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(1).getPayload());
             assertThat("Retrieved deltaJson", deltaJson.isPresent(), is(true));
-            assertThat("deltaJson has timestamp", deltaJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
-            ((ObjectNode) deltaJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
+            assertAndRemoveTsAndMetadata(deltaJson.get());
+
             Optional<JsonNode> documentsJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(2).getPayload());
             assertThat("Retrieved documentsJson", documentsJson.isPresent(), is(true));
             assertThat("documentsJson has timestamp", documentsJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
             ((ObjectNode) documentsJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
+            assertAndRemoveMetadata(documentsJson.get().get(Constants.SHADOW_DOCUMENT_STATE_CURRENT));
+            assertAndRemoveMetadata(documentsJson.get().get(Constants.SHADOW_DOCUMENT_STATE_PREVIOUS));
 
             // verify pubsub payloads match expected output
             assertThat(acceptedJson.get(), is(equalTo(expectedAcceptedJson.get())));
@@ -209,8 +230,8 @@ class UpdateThingShadowIPCHandlerTest {
             UpdateThingShadowResponse actualResponse = updateThingShadowIPCHandler.handleRequest(request);
             Optional<JsonNode> updatedDocumentJson = JsonUtil.getPayloadJson(actualResponse.getPayload());
             assertThat("Retrieved updateDocumentJson", updatedDocumentJson.isPresent(), is(true));
-            assertThat("updateDocumentJson has timestamp", updatedDocumentJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
-            ((ObjectNode) updatedDocumentJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
+            assertAndRemoveTsAndMetadata(updatedDocumentJson.get());
+
             Optional<JsonNode> expectedAcceptedJson = JsonUtil.getPayloadJson(updateRequest);
             assertThat("Retrieved expectedAcceptedJson", expectedAcceptedJson.isPresent(), is(true));
             ((ObjectNode) expectedAcceptedJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(1));
@@ -230,12 +251,14 @@ class UpdateThingShadowIPCHandlerTest {
 
             Optional<JsonNode> acceptedJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(0).getPayload());
             assertThat("Retrieved acceptedJson", acceptedJson.isPresent(), is(true));
-            assertThat("acceptedJson has timestamp", acceptedJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
-            ((ObjectNode) acceptedJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
+            assertAndRemoveTsAndMetadata(acceptedJson.get());
+
             Optional<JsonNode> documentsJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(1).getPayload());
             assertThat("Retrieved documentsJson", documentsJson.isPresent(), is(true));
             assertThat("documentsJson has timestamp", documentsJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
             ((ObjectNode) documentsJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
+            assertAndRemoveMetadata(documentsJson.get().get(Constants.SHADOW_DOCUMENT_STATE_CURRENT));
+            assertAndRemoveMetadata(documentsJson.get().get(Constants.SHADOW_DOCUMENT_STATE_PREVIOUS));
 
             // verify pubsub payloads match expected output
             assertThat(acceptedJson.get(), is(equalTo(expectedAcceptedJson.get())));
@@ -277,8 +300,8 @@ class UpdateThingShadowIPCHandlerTest {
             UpdateThingShadowResponse actualResponse = updateThingShadowIPCHandler.handleRequest(request);
             Optional<JsonNode> updatedDocumentJson = JsonUtil.getPayloadJson(actualResponse.getPayload());
             assertThat("Retrieved updateDocumentJson", updatedDocumentJson.isPresent(), is(true));
-            assertThat("updateDocumentJson has timestamp", updatedDocumentJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
-            ((ObjectNode) updatedDocumentJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
+            assertAndRemoveTsAndMetadata(updatedDocumentJson.get());
+
             Optional<JsonNode> expectedAcceptedJson = JsonUtil.getPayloadJson(updateRequest);
             assertThat("Retrieved expectedAcceptedJson", expectedAcceptedJson.isPresent(), is(true));
             ((ObjectNode) expectedAcceptedJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(1));
@@ -298,12 +321,14 @@ class UpdateThingShadowIPCHandlerTest {
 
             Optional<JsonNode> acceptedJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(0).getPayload());
             assertThat("Retrieved acceptedJson", acceptedJson.isPresent(), is(true));
-            assertThat("acceptedJson has timestamp", acceptedJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
-            ((ObjectNode) acceptedJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
+            assertAndRemoveTsAndMetadata(acceptedJson.get());
+
             Optional<JsonNode> documentsJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(1).getPayload());
             assertThat("Retrieved documentsJson", documentsJson.isPresent(), is(true));
             assertThat("documentsJson has timestamp", documentsJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
             ((ObjectNode) documentsJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
+            assertAndRemoveMetadata(documentsJson.get().get(Constants.SHADOW_DOCUMENT_STATE_CURRENT));
+            assertAndRemoveMetadata(documentsJson.get().get(Constants.SHADOW_DOCUMENT_STATE_PREVIOUS));
 
             // verify pubsub payloads match expected output
             assertThat(acceptedJson.get(), is(equalTo(expectedAcceptedJson.get())));
@@ -352,8 +377,7 @@ class UpdateThingShadowIPCHandlerTest {
             UpdateThingShadowResponse actualResponse = updateThingShadowIPCHandler.handleRequest(request);
             Optional<JsonNode> updatedDocumentJson = JsonUtil.getPayloadJson(actualResponse.getPayload());
             assertThat("Retrieved updatedDocumentJson", updatedDocumentJson.isPresent(), is(true));
-            assertThat("updatedDocumentJson has timestamp", updatedDocumentJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
-            ((ObjectNode) updatedDocumentJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
+            assertAndRemoveTsAndMetadata(updatedDocumentJson.get());
 
             assertThat(updatedDocumentJson.get(), is(equalTo(expectedAcceptedJson.get())));
 
@@ -364,16 +388,18 @@ class UpdateThingShadowIPCHandlerTest {
 
             Optional<JsonNode> acceptedJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(0).getPayload());
             assertThat("Retrieved acceptedJson", acceptedJson.isPresent(), is(true));
-            assertThat("acceptedJson has timestamp", acceptedJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
-            ((ObjectNode) acceptedJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
+            assertAndRemoveTsAndMetadata(acceptedJson.get());
+
             Optional<JsonNode> deltaJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(1).getPayload());
             assertThat("Retrieved deltaJson", deltaJson.isPresent(), is(true));
-            assertThat("deltaJson has timestamp", deltaJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
-            ((ObjectNode) deltaJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
+            assertAndRemoveTsAndMetadata(deltaJson.get());
+
             Optional<JsonNode> documentsJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(2).getPayload());
             assertThat("Retrieved documentsJson", documentsJson.isPresent(), is(true));
             assertThat("documentsJson has timestamp", documentsJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
             ((ObjectNode) documentsJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
+            assertAndRemoveMetadata(documentsJson.get().get(Constants.SHADOW_DOCUMENT_STATE_CURRENT));
+            assertAndRemoveMetadata(documentsJson.get().get(Constants.SHADOW_DOCUMENT_STATE_PREVIOUS));
 
             // verify pubsub payloads match expected output
             assertThat(acceptedJson.get(), is(equalTo(expectedAcceptedJson.get())));
@@ -396,7 +422,7 @@ class UpdateThingShadowIPCHandlerTest {
     void GIVEN_update_thing_shadow_request_with_non_existent_shadow_WHEN_handle_request_THEN_update_thing_shadow(String shadowName) throws IOException, URISyntaxException {
         byte[] updateRequest = getJsonFromResource(RESOURCE_DIRECTORY_NAME + GOOD_UPDATE_DOCUMENT_WITH_DESIRED_REQUEST_FILE_NAME);
         JsonNode payloadJson = JsonUtil.getPayloadJson(updateRequest).get();
-        ((ObjectNode)payloadJson).remove(SHADOW_DOCUMENT_VERSION);
+        ((ObjectNode) payloadJson).remove(SHADOW_DOCUMENT_VERSION);
         updateRequest = JsonUtil.getPayloadBytes(payloadJson);
         byte[] updateDocument = getJsonFromResource(RESOURCE_DIRECTORY_NAME + GOOD_UPDATED_DOCUMENT_FILE_NAME);
         byte[] documentsPayload = getJsonFromResource(RESOURCE_DIRECTORY_NAME + GOOD_DOCUMENTS_PAYLOAD_WITH_NO_PREVIOUS_FILE_NAME);
@@ -416,8 +442,8 @@ class UpdateThingShadowIPCHandlerTest {
             UpdateThingShadowResponse actualResponse = updateThingShadowIPCHandler.handleRequest(request);
             Optional<JsonNode> updatedDocumentJson = JsonUtil.getPayloadJson(actualResponse.getPayload());
             assertTrue(updatedDocumentJson.isPresent());
-            assertTrue(updatedDocumentJson.get().has(SHADOW_DOCUMENT_TIMESTAMP));
-            ((ObjectNode) updatedDocumentJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
+            assertAndRemoveTsAndMetadata(updatedDocumentJson.get());
+
             Optional<JsonNode> expectedAcceptedJson = JsonUtil.getPayloadJson(updateRequest);
             assertTrue(expectedAcceptedJson.isPresent());
             ((ObjectNode) expectedAcceptedJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(0));
@@ -438,16 +464,17 @@ class UpdateThingShadowIPCHandlerTest {
 
             Optional<JsonNode> acceptedJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(0).getPayload());
             assertThat("Retrieved acceptedJson", acceptedJson.isPresent(), is(true));
-            assertThat("acceptedJson has timestamp", acceptedJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
-            ((ObjectNode) acceptedJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
+            assertAndRemoveTsAndMetadata(acceptedJson.get());
+
             Optional<JsonNode> deltaJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(1).getPayload());
             assertThat("Retrieved deltaJson", deltaJson.isPresent(), is(true));
-            assertThat("deltaJson has timestamp", deltaJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
-            ((ObjectNode) deltaJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
+            assertAndRemoveTsAndMetadata(deltaJson.get());
+
             Optional<JsonNode> documentsJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getAllValues().get(2).getPayload());
             assertThat("Retrieved documentsJson", documentsJson.isPresent(), is(true));
             assertThat("documentsJson has timestamp", documentsJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
             ((ObjectNode) documentsJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
+            assertAndRemoveMetadata(documentsJson.get().get(Constants.SHADOW_DOCUMENT_STATE_CURRENT));
 
             // verify pubsub payloads match expected output
             assertThat(acceptedJson.get(), is(equalTo(expectedAcceptedJson.get())));
@@ -551,7 +578,7 @@ class UpdateThingShadowIPCHandlerTest {
 
     @ParameterizedTest
     @MethodSource("com.aws.greengrass.shadowmanager.TestUtils#invalidThingAndShadowName")
-    void GIVEN_invalid_thing_or_shadow_name_WHEN_handle_request_THEN_throw_invalid_arguments_error(String thingName, String shadowName,ExtensionContext context) throws IOException, URISyntaxException {
+    void GIVEN_invalid_thing_or_shadow_name_WHEN_handle_request_THEN_throw_invalid_arguments_error(String thingName, String shadowName, ExtensionContext context) throws IOException, URISyntaxException {
         byte[] updateRequest = getJsonFromResource(RESOURCE_DIRECTORY_NAME + GOOD_UPDATE_DOCUMENT_WITH_DESIRED_REQUEST_FILE_NAME);
         ignoreExceptionOfType(context, InvalidRequestParametersException.class);
         UpdateThingShadowRequest request = new UpdateThingShadowRequest();

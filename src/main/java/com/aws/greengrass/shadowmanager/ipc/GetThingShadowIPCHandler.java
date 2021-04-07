@@ -144,7 +144,6 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
                         .payload(responseNodeBytes)
                         .publishOperation(Operation.GET_SHADOW)
                         .build());
-
                 GetThingShadowResponse response = new GetThingShadowResponse();
                 response.setPayload(responseNodeBytes);
                 return response;
