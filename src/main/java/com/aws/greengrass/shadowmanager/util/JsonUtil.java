@@ -14,7 +14,6 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.fasterxml.jackson.databind.node.TextNode;
 import com.github.fge.jackson.JsonLoader;
 import com.github.fge.jsonschema.core.exceptions.ProcessingException;
 import com.github.fge.jsonschema.core.report.ProcessingReport;
@@ -68,6 +67,7 @@ public final class JsonUtil {
      * @throws InvalidRequestParametersException if there were any processing errors based on the specified
      *                                           schema
      */
+    @SuppressWarnings("PMD.PreserveStackTrace")
     public static void validatePayloadSchema(JsonNode payload) throws InvalidRequestParametersException {
         ProcessingReport report;
         try {
@@ -88,6 +88,7 @@ public final class JsonUtil {
         }
     }
 
+    @SuppressWarnings("PMD.AvoidDeeplyNestedIfStmts")
     private static String getAllValidationErrors(ProcessingReport report) {
         StringJoiner errorMessages = new StringJoiner("\r\n");
         if (report != null) {
@@ -128,7 +129,7 @@ public final class JsonUtil {
     }
 
     public static boolean isNullOrMissing(JsonNode node) {
-        return node == null || node.isNull() || node.isMissingNode() || (node.isObject() && node.isEmpty());
+        return node == null || node.isNull() || node.isMissingNode() || node.isObject() && node.isEmpty();
     }
 
     /**
@@ -153,7 +154,7 @@ public final class JsonUtil {
     private static int calculateDepth(final JsonNode node, final int currentDepth, final int maxDepth)
             throws InvalidRequestParametersException {
         // If the Node is not a value node (i.e. either an object or an array), then add another level to the depth.
-        int newDepth = (!node.isValueNode()) ? currentDepth + 1 : currentDepth;
+        int newDepth = node.isValueNode() ? currentDepth : currentDepth + 1;
 
         // If the new depth is greater than the max depth, then raise an invalid request parameters error for max
         //depth reached.
@@ -265,8 +266,7 @@ public final class JsonUtil {
 
         // This handles the semantic number comparison.
         if (reported.isNumber() && desired.isNumber()) {
-            return reported.asLong() != desired.asLong()
-                    || reported.asDouble() != desired.asDouble() ? desired : null;
+            return reported.asLong() == desired.asLong() && reported.asDouble() == desired.asDouble() ? null : desired;
         }
 
         // Now, if they both the original and updated shadow documents aren't objects or numbers, then they are either

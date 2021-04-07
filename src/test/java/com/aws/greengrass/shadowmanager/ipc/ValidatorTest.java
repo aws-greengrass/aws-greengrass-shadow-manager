@@ -25,8 +25,9 @@ import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
-public class ValidatorTest {
+class ValidatorTest {
 
+    @SuppressWarnings("PMD.UnusedPrivateMethod")
     private static Stream<Arguments> invalidShadowRequests() {
         String invalidNameLength = "invalidThingNameLengthOver128Characters----------------------------------------------------------------------------------------------------";
         String invalidPattern = "InvalidPatternName!@#";

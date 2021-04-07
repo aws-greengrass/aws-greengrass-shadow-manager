@@ -31,6 +31,7 @@ public class ShadowManagerDatabase implements Closeable {
 
     /**
      * Creates a database with a {@link javax.sql.DataSource} using the kernel config.
+     *
      * @param kernel Kernel config for the database manager.
      */
     @Inject
@@ -46,6 +47,7 @@ public class ShadowManagerDatabase implements Closeable {
 
     /**
      * Performs the database installation. This includes any migrations that needs to be performed.
+     *
      * @throws SQLException When a connection to the local db fails for any reason.
      */
     public synchronized void install() throws SQLException {
@@ -60,7 +62,7 @@ public class ShadowManagerDatabase implements Closeable {
     }
 
     @Override
-    public void close() throws IOException {
+    public synchronized void close() throws IOException {
         if (Objects.nonNull(connection)) {
             try {
                 connection.close();

@@ -32,7 +32,7 @@ import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
-public class ShadowManagerDAOImplTest {
+class ShadowManagerDAOImplTest {
 
     private static final String MISSING_THING_NAME = "missingTestThing";
     private static final String CLASSIC_SHADOW_THING = "classicThing";
@@ -72,6 +72,7 @@ public class ShadowManagerDAOImplTest {
         kernel.shutdown();
     }
 
+    @SuppressWarnings("PMD.UnusedPrivateMethod")
     private static Stream<Arguments> classicAndNamedShadow() {
         return Stream.of(
                 arguments(SHADOW_NAME, BASE_DOCUMENT),
@@ -79,13 +80,13 @@ public class ShadowManagerDAOImplTest {
         );
     }
 
-    void createNamedShadow() throws Exception {
+    private void createNamedShadow() {
         Optional<byte[]> result = dao.createShadowThing(THING_NAME, SHADOW_NAME, BASE_DOCUMENT);
         assertThat("Created named shadow", result.isPresent(), is(true));
         assertThat(result.get(), is(equalTo(BASE_DOCUMENT)));
     }
 
-    void createClassicShadow() throws Exception {
+    private void createClassicShadow() {
         Optional<byte[]> result = dao.createShadowThing(THING_NAME, CLASSIC_SHADOW_IDENTIFIER, NO_SHADOW_NAME_BASE_DOCUMENT);
         assertThat("Created classic shadow", result.isPresent(), is(true));
         assertThat(result.get(), is(equalTo(NO_SHADOW_NAME_BASE_DOCUMENT)));
@@ -126,6 +127,7 @@ public class ShadowManagerDAOImplTest {
         assertThat("No shadow found", result.isPresent(), is(false));
     }
 
+    @SuppressWarnings("PMD.UnusedPrivateMethod")
     private static Stream<Arguments> namedShadowUpdateSupport() {
         return Stream.of(
                 arguments(SHADOW_NAME, CLASSIC_SHADOW_IDENTIFIER, NO_SHADOW_NAME_BASE_DOCUMENT),
