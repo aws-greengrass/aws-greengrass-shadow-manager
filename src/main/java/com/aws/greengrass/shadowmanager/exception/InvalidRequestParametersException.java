@@ -9,6 +9,7 @@ import com.aws.greengrass.shadowmanager.model.ErrorMessage;
 import lombok.Getter;
 
 public class InvalidRequestParametersException extends RuntimeException {
+    private static final long serialVersionUID = -1488980916089225328L;
     @Getter
     private final ErrorMessage errorMessage;
 

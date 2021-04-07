@@ -32,4 +32,6 @@ public final class TestUtils {
         );
     }
 
+    private TestUtils() {
+    }
 }

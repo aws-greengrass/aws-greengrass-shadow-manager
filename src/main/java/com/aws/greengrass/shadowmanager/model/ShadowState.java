@@ -56,6 +56,7 @@ public class ShadowState {
      *
      * @param updatedStateNode The state node in the update shadow request.
      */
+    @SuppressWarnings({"PMD.ForLoopCanBeForeach", "PMD.NullAssignment"})
     public void update(JsonNode updatedStateNode) {
         for (final Iterator<String> i = updatedStateNode.fieldNames(); i.hasNext(); ) {
             final String field = i.next();

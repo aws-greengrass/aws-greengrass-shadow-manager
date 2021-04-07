@@ -13,7 +13,6 @@ import com.aws.greengrass.shadowmanager.model.ShadowRequest;
 import java.util.Set;
 import javax.inject.Inject;
 
-import static com.aws.greengrass.shadowmanager.model.Constants.CLASSIC_SHADOW_IDENTIFIER;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_MANAGER_NAME;
 
 /**
