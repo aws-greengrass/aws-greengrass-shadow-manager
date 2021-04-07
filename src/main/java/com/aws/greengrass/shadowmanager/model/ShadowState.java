@@ -5,6 +5,7 @@
 
 package com.aws.greengrass.shadowmanager.model;
 
+import com.aws.greengrass.shadowmanager.util.JsonMerger;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -55,6 +56,7 @@ public class ShadowState {
      *
      * @param updatedStateNode The state node in the update shadow request.
      */
+    @SuppressWarnings({"PMD.ForLoopCanBeForeach", "PMD.NullAssignment"})
     public void update(JsonNode updatedStateNode) {
         for (final Iterator<String> i = updatedStateNode.fieldNames(); i.hasNext(); ) {
             final String field = i.next();
@@ -66,8 +68,7 @@ public class ShadowState {
                 } else if (this.desired == null) {
                     this.desired = nullIfEmpty(value);
                 } else {
-                    //TODO: uncomment this and add the JsonMerger class for partial updates
-                    //JsonMerger.merge(this.desired, value);
+                    JsonMerger.merge(this.desired, value);
                     this.desired = nullIfEmpty(this.desired);
                 }
                 continue;
@@ -79,8 +80,7 @@ public class ShadowState {
                 } else if (this.reported == null) {
                     this.reported = nullIfEmpty(value);
                 } else {
-                    //TODO: uncomment this and add the JsonMerger class for partial updates
-                    //JsonMerger.merge(this.reported, value);
+                    JsonMerger.merge(this.reported, value);
                     this.reported = nullIfEmpty(reported);
                 }
             }

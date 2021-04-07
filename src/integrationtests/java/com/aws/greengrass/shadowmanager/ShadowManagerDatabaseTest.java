@@ -1,8 +1,3 @@
-/*
- * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0
- */
-
 package com.aws.greengrass.shadowmanager;
 
 import com.aws.greengrass.dependency.State;
@@ -30,7 +25,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
-public class ShadowManagerDatabaseTest extends GGServiceTestUtil {
+@SuppressWarnings("PMD.CloseResource")
+class ShadowManagerDatabaseTest extends GGServiceTestUtil {
     private static final long TEST_TIME_OUT_SEC = 30L;
 
     private Kernel kernel;

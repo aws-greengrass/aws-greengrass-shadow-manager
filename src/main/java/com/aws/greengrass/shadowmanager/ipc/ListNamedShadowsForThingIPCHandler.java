@@ -97,6 +97,7 @@ public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNam
      * @throws ServiceError          if database error occurs
      */
     @Override
+    @SuppressWarnings("PMD.PreserveStackTrace")
     public ListNamedShadowsForThingResponse handleRequest(ListNamedShadowsForThingRequest request) {
         return translateExceptions(() -> {
             String thingName = request.getThingName();
@@ -184,6 +185,7 @@ public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNam
      * @param thingName thingName for the listNameShadowsForThing Request
      * @return The offset used in the list named shadows query
      */
+    @SuppressWarnings("PMD.AvoidUncheckedExceptionsInSignatures")
     private static int decodeOffsetFromToken(String nextToken, String clientId, String thingName)
             throws GeneralSecurityException, IllegalArgumentException {
         try {

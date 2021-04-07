@@ -89,6 +89,7 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
      * @throws ServiceError          if database error occurs
      */
     @Override
+    @SuppressWarnings("PMD.PreserveStackTrace")
     public GetThingShadowResponse handleRequest(GetThingShadowRequest request) {
         return translateExceptions(() -> {
             String thingName = request.getThingName();
