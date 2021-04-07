@@ -12,9 +12,9 @@ import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
-import com.aws.greengrass.shadowmanager.ipc.model.AcceptRequest;
 import com.aws.greengrass.shadowmanager.ipc.model.Operation;
-import com.aws.greengrass.shadowmanager.ipc.model.RejectRequest;
+import com.aws.greengrass.shadowmanager.ipc.model.PubSubRequest;
+import com.aws.greengrass.shadowmanager.model.Constants;
 import com.aws.greengrass.shadowmanager.model.ErrorMessage;
 import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.model.ResponseMessageBuilder;
@@ -22,6 +22,7 @@ import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.ShadowRequest;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.util.Pair;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import software.amazon.awssdk.aws.greengrass.GeneratedAbstractUpdateThingShadowOperationHandler;
@@ -41,6 +42,7 @@ import java.util.Optional;
 import static com.aws.greengrass.ipc.common.ExceptionUtil.translateExceptions;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
+import static com.aws.greengrass.shadowmanager.util.JsonUtil.isNullOrMissing;
 import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.UPDATE_THING_SHADOW;
 
 /**
@@ -90,7 +92,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
      * @throws ServiceError          if database error occurs
      */
     @Override
-    @SuppressWarnings("PMD.PreserveStackTrace")
+    @SuppressWarnings({"PMD.PreserveStackTrace", "PMD.PrematureDeclaration"})
     public UpdateThingShadowResponse handleRequest(UpdateThingShadowRequest request) {
         return translateExceptions(() -> {
             // TODO: Sync this entire function possibly with delete handler as well.
@@ -98,6 +100,8 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
             String shadowName = request.getShadowName();
             byte[] updatedDocumentRequestBytes = request.getPayload();
             ShadowDocument currentDocument = null;
+            Optional<String> clientToken = Optional.empty();
+            JsonNode updateDocumentRequest = null;
             try {
                 logger.atTrace("ipc-update-thing-shadow-request")
                         .kv(LOG_THING_NAME_KEY, thingName)
@@ -120,7 +124,26 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                 // 2. The state node schema to ensure it's correctness.
                 // 3. The depth of the state node to ensure it is within the boundaries.
                 // 4. The version of the payload to ensure that its current version + 1.
-                JsonUtil.validatePayload(currentDocument, updatedDocumentRequestBytes);
+
+                // If the payload size is greater than the maximum default shadow document size, then raise an invalid
+                // parameters error for payload too large.
+                //TODO: get the max doc size from config.
+                if (updatedDocumentRequestBytes.length > Constants.DEFAULT_DOCUMENT_SIZE) {
+                    ErrorMessage errorMessage = ErrorMessage.createPayloadTooLargeMessage();
+                    throw new InvalidRequestParametersException(errorMessage);
+                }
+                updateDocumentRequest = JsonUtil.getPayloadJson(updatedDocumentRequestBytes)
+                        .filter(d -> !isNullOrMissing(d))
+                        .orElseThrow(() ->
+                                new InvalidRequestParametersException(ErrorMessage
+                                        .createInvalidPayloadJsonMessage("")));
+                // Validate the payload schema
+                JsonUtil.validatePayloadSchema(updateDocumentRequest);
+
+                // Get the client token if present in the update shadow request.
+                clientToken = JsonUtil.getClientToken(updateDocumentRequest);
+
+                JsonUtil.validatePayload(currentDocument, updateDocumentRequest);
             } catch (AuthorizationException e) {
                 logger.atWarn()
                         .setEventType(LogEvents.UPDATE_THING_SHADOW.code())
@@ -128,10 +151,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                         .kv(LOG_THING_NAME_KEY, thingName)
                         .kv(LOG_SHADOW_NAME_KEY, shadowName)
                         .log("Not authorized to update shadow");
-                pubSubClientWrapper.reject(RejectRequest.builder().thingName(thingName).shadowName(shadowName)
-                        .errorMessage(ErrorMessage.UNAUTHORIZED_MESSAGE)
-                        .publishOperation(Operation.UPDATE_SHADOW)
-                        .build());
+                publishErrorMessage(thingName, shadowName, clientToken, ErrorMessage.UNAUTHORIZED_MESSAGE);
                 throw new UnauthorizedError(e.getMessage());
             } catch (ConflictError e) {
                 logger.atWarn()
@@ -140,10 +160,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                         .kv(LOG_THING_NAME_KEY, thingName)
                         .kv(LOG_SHADOW_NAME_KEY, shadowName)
                         .log("Conflicting version in shadow update message");
-                pubSubClientWrapper.reject(RejectRequest.builder().thingName(thingName).shadowName(shadowName)
-                        .errorMessage(ErrorMessage.createVersionConflictMessage())
-                        .publishOperation(Operation.UPDATE_SHADOW)
-                        .build());
+                publishErrorMessage(thingName, shadowName, clientToken, ErrorMessage.createVersionConflictMessage());
                 throw e;
             } catch (InvalidRequestParametersException e) {
                 logger.atWarn()
@@ -152,45 +169,33 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                         .kv(LOG_THING_NAME_KEY, thingName)
                         .kv(LOG_SHADOW_NAME_KEY, shadowName)
                         .log();
-                pubSubClientWrapper.reject(RejectRequest.builder().thingName(thingName).shadowName(shadowName)
-                        .errorMessage(e.getErrorMessage())
-                        .publishOperation(Operation.UPDATE_SHADOW)
-                        .build());
+                publishErrorMessage(thingName, shadowName, clientToken, e.getErrorMessage());
                 throw new InvalidArgumentsError(e.getMessage());
             } catch (ShadowManagerDataException | IOException e) {
-                throwServiceError(thingName, shadowName, e);
+                throwServiceError(thingName, shadowName, clientToken, e);
             }
 
             try {
-                JsonNode updateDocumentRequest = JsonUtil.getPayloadJson(updatedDocumentRequestBytes)
-                        .orElseThrow(() -> new InvalidRequestParametersException(ErrorMessage
-                        .createInvalidPayloadJsonMessage("Update shadow request payload must be an Object")));
                 // Generate the new merged document based on the update shadow patch payload.
                 ShadowDocument updatedDocument = new ShadowDocument(currentDocument);
                 final Pair<JsonNode, JsonNode> patchStateMetadataPair = updatedDocument.update(updateDocumentRequest);
 
-                // Get the client token if present in the update shadow request.
-                Optional<String> clientToken = JsonUtil.getClientToken(updateDocumentRequest);
-
                 // Update the new document in the DAO.
-                dao.updateShadowThing(thingName, shadowName, JsonUtil.getPayloadBytes(updatedDocument.toJson()))
-                        .orElseThrow(() -> {
-                            ServiceError error = new ServiceError("Unexpected error occurred in trying to "
-                                    + "update shadow thing.");
-                            logger.atError()
-                                    .setEventType(LogEvents.UPDATE_THING_SHADOW.code())
-                                    .kv(LOG_THING_NAME_KEY, thingName)
-                                    .kv(LOG_SHADOW_NAME_KEY, shadowName)
-                                    .setCause(error)
-                                    .log();
-                            pubSubClientWrapper.reject(RejectRequest.builder().thingName(thingName)
-                                    .shadowName(shadowName)
-                                    .errorMessage(ErrorMessage.createInternalServiceErrorMessage())
-                                    .publishOperation(Operation.UPDATE_SHADOW)
-                                    .build());
-                            return error;
-                        });
-
+                Optional<byte[]> result = dao.updateShadowThing(thingName, shadowName,
+                        JsonUtil.getPayloadBytes(updatedDocument.toJson()));
+                if (!result.isPresent()) {
+                    ServiceError error = new ServiceError("Unexpected error occurred in trying to "
+                            + "update shadow thing.");
+                    logger.atError()
+                            .setEventType(LogEvents.UPDATE_THING_SHADOW.code())
+                            .kv(LOG_THING_NAME_KEY, thingName)
+                            .kv(LOG_SHADOW_NAME_KEY, shadowName)
+                            .setCause(error)
+                            .log();
+                    publishErrorMessage(thingName, shadowName, clientToken,
+                            ErrorMessage.createInternalServiceErrorMessage());
+                    throw error;
+                }
 
                 // Publish the message on the delta topic over PubSub if applicable.
                 publishDeltaMessage(thingName, shadowName, clientToken, updatedDocument);
@@ -209,7 +214,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                         .build();
                 byte[] responseNodeBytes = JsonUtil.getPayloadBytes(responseNode);
 
-                pubSubClientWrapper.accept(AcceptRequest.builder().thingName(thingName).shadowName(shadowName)
+                pubSubClientWrapper.accept(PubSubRequest.builder().thingName(thingName).shadowName(shadowName)
                         .payload(responseNodeBytes)
                         .publishOperation(Operation.UPDATE_SHADOW)
                         .build());
@@ -222,7 +227,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                         .log("Successfully updated shadow");
                 return response;
             } catch (ShadowManagerDataException | IOException e) {
-                throwServiceError(thingName, shadowName, e);
+                throwServiceError(thingName, shadowName, clientToken, e);
             }
             return null;
         });
@@ -237,7 +242,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
      * @throws ServiceError always
      */
     @SuppressWarnings("PMD.AvoidUncheckedExceptionsInSignatures")
-    private void throwServiceError(String thingName, String shadowName, Exception e)
+    private void throwServiceError(String thingName, String shadowName, Optional<String> clientToken, Exception e)
             throws ServiceError {
         logger.atError()
                 .setEventType(LogEvents.UPDATE_THING_SHADOW.code())
@@ -245,11 +250,41 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                 .kv(LOG_THING_NAME_KEY, thingName)
                 .kv(LOG_SHADOW_NAME_KEY, shadowName)
                 .log("Could not process UpdateThingShadow Request due to internal service error");
-        pubSubClientWrapper.reject(RejectRequest.builder().thingName(thingName).shadowName(shadowName)
-                .errorMessage(ErrorMessage.createInternalServiceErrorMessage())
-                .publishOperation(Operation.UPDATE_SHADOW)
-                .build());
+        publishErrorMessage(thingName, shadowName, clientToken, ErrorMessage.createInternalServiceErrorMessage());
         throw new ServiceError(e.getMessage());
+    }
+
+    /**
+     * Build the error response message and publish the error message over PubSub.
+     *
+     * @param thingName    The thing name.
+     * @param shadowName   The shadow name.
+     * @param clientToken  The client token if present in the update shadow request.
+     * @param errorMessage The error message containing error information.
+     */
+    //TODO: Maybe move this class into a util class?
+    private void publishErrorMessage(String thingName, String shadowName, Optional<String> clientToken,
+                                     ErrorMessage errorMessage) {
+        JsonNode errorResponse = ResponseMessageBuilder.builder()
+                .withTimestamp(Instant.now())
+                .withClientToken(clientToken)
+                .withError(errorMessage).build();
+
+        try {
+            pubSubClientWrapper.reject(PubSubRequest.builder()
+                    .thingName(thingName)
+                    .shadowName(shadowName)
+                    .payload(JsonUtil.getPayloadBytes(errorResponse))
+                    .publishOperation(Operation.UPDATE_SHADOW)
+                    .build());
+        } catch (JsonProcessingException e) {
+            logger.atError()
+                    .setEventType(Operation.UPDATE_SHADOW.getLogEventType())
+                    .kv(LOG_THING_NAME_KEY, thingName)
+                    .kv(LOG_SHADOW_NAME_KEY, shadowName)
+                    .cause(e)
+                    .log("Unable to publish reject message");
+        }
     }
 
     private void publishDeltaMessage(String thingName, String shadowName, Optional<String> clientToken,
@@ -266,7 +301,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                     .withClientToken(clientToken)
                     .build();
 
-            pubSubClientWrapper.delta(AcceptRequest.builder().thingName(thingName)
+            pubSubClientWrapper.delta(PubSubRequest.builder().thingName(thingName)
                     .shadowName(shadowName)
                     .payload(JsonUtil.getPayloadBytes(responseMessage))
                     .publishOperation(Operation.UPDATE_SHADOW)
@@ -284,7 +319,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                 .withTimestamp(Instant.now())
                 .build();
         // Send the current document on the documents topic after successfully updating the shadow document.
-        pubSubClientWrapper.documents(AcceptRequest.builder().thingName(thingName).shadowName(shadowName)
+        pubSubClientWrapper.documents(PubSubRequest.builder().thingName(thingName).shadowName(shadowName)
                 .payload(JsonUtil.getPayloadBytes(responseMessage))
                 .publishOperation(Operation.UPDATE_SHADOW)
                 .build());

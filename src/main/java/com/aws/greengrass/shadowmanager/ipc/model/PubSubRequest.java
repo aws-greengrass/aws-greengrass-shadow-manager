@@ -5,18 +5,22 @@
 
 package com.aws.greengrass.shadowmanager.ipc.model;
 
+import com.aws.greengrass.shadowmanager.model.ShadowRequest;
 import lombok.Builder;
 import lombok.Getter;
 
+import javax.validation.constraints.NotNull;
+
 /**
- * Class containing the details when a shadow operation is accepted.
+ * Class to store information needed for publishing message over local PubSub.
  */
 @Getter
-public class AcceptRequest extends IPCRequest {
+public class PubSubRequest extends ShadowRequest {
     byte[] payload;
+    Operation publishOperation;
 
     /**
-     * Constructor/Builder for Accept request class.
+     * Constructor/Builder for PubSub request class.
      *
      * @param thingName        The thing name
      * @param shadowName       The name of the shadow on which the operation was requested
@@ -24,9 +28,9 @@ public class AcceptRequest extends IPCRequest {
      * @param publishOperation The Operation type to be performed on the shadow
      */
     @Builder
-    public AcceptRequest(String thingName, String shadowName, byte[] payload,
-                         Operation publishOperation) {
-        super(thingName, shadowName, publishOperation);
+    public PubSubRequest(@NotNull String thingName, String shadowName, Operation publishOperation, byte[] payload) {
+        super(thingName, shadowName);
+        this.publishOperation = publishOperation;
         this.payload = payload;
     }
 }

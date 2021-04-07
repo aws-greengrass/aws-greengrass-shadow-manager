@@ -12,15 +12,15 @@ import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
-import com.aws.greengrass.shadowmanager.ipc.model.AcceptRequest;
 import com.aws.greengrass.shadowmanager.ipc.model.Operation;
-import com.aws.greengrass.shadowmanager.ipc.model.RejectRequest;
+import com.aws.greengrass.shadowmanager.ipc.model.PubSubRequest;
 import com.aws.greengrass.shadowmanager.model.ErrorMessage;
 import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.model.ResponseMessageBuilder;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.ShadowRequest;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import software.amazon.awssdk.aws.greengrass.GeneratedAbstractGetThingShadowOperationHandler;
@@ -96,6 +96,7 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
             String shadowName = request.getShadowName();
             //TODO: Add payload to GetThingShadowRequest
             byte[] payload = null;
+            Optional<String> clientToken = Optional.empty();
 
             try {
                 logger.atTrace("ipc-get-thing-shadow-request")
@@ -107,28 +108,25 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
                 Validator.validateShadowRequest(shadowRequest);
                 authorizationHandlerWrapper.doAuthorization(GET_THING_SHADOW, serviceName, shadowRequest);
 
-                byte[] currentDocumentBytes = dao.getShadowThing(thingName, shadowName)
-                        .orElseThrow(() -> {
-                            ResourceNotFoundError rnf = new ResourceNotFoundError("No shadow found");
-                            rnf.setResourceType(SHADOW_RESOURCE_TYPE);
-                            logger.atWarn()
-                                    .setEventType(LogEvents.GET_THING_SHADOW.code())
-                                    .setCause(rnf)
-                                    .kv(LOG_THING_NAME_KEY, thingName)
-                                    .kv(LOG_SHADOW_NAME_KEY, shadowName)
-                                    .log("Shadow does not exist");
-                            pubSubClientWrapper.reject(RejectRequest.builder().thingName(thingName)
-                                    .shadowName(shadowName)
-                                    .errorMessage(ErrorMessage.createShadowNotFoundMessage(shadowName))
-                                    .publishOperation(Operation.GET_SHADOW)
-                                    .build());
-                            return rnf;
-                        });
-                ShadowDocument currentShadowDocument = new ShadowDocument(currentDocumentBytes);
+                Optional<byte[]> currentDocumentBytes = dao.getShadowThing(thingName, shadowName);
+                if (!currentDocumentBytes.isPresent()) {
+                    ResourceNotFoundError rnf = new ResourceNotFoundError("No shadow found");
+                    rnf.setResourceType(SHADOW_RESOURCE_TYPE);
+                    logger.atWarn()
+                            .setEventType(LogEvents.GET_THING_SHADOW.code())
+                            .setCause(rnf)
+                            .kv(LOG_THING_NAME_KEY, thingName)
+                            .kv(LOG_SHADOW_NAME_KEY, shadowName)
+                            .log("Shadow does not exist");
+                    publishErrorMessage(thingName, shadowName, clientToken,
+                            ErrorMessage.createShadowNotFoundMessage(shadowName));
+                    throw rnf;
+                }
+                ShadowDocument currentShadowDocument = new ShadowDocument(currentDocumentBytes.get());
 
                 // Get the Client Token if present in the payload.
                 Optional<JsonNode> payloadJson = JsonUtil.getPayloadJson(payload);
-                Optional<String> clientToken = payloadJson.flatMap(JsonUtil::getClientToken);
+                clientToken = payloadJson.flatMap(JsonUtil::getClientToken);
 
                 ObjectNode responseNode = ResponseMessageBuilder.builder()
                         .withState(currentShadowDocument.getState().toJsonWithDelta())
@@ -140,7 +138,7 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
 
                 byte[] responseNodeBytes = JsonUtil.getPayloadBytes(responseNode);
 
-                pubSubClientWrapper.accept(AcceptRequest.builder().thingName(thingName).shadowName(shadowName)
+                pubSubClientWrapper.accept(PubSubRequest.builder().thingName(thingName).shadowName(shadowName)
                         .payload(responseNodeBytes)
                         .publishOperation(Operation.GET_SHADOW)
                         .build());
@@ -155,10 +153,7 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
                         .kv(LOG_THING_NAME_KEY, thingName)
                         .kv(LOG_SHADOW_NAME_KEY, shadowName)
                         .log("Not authorized to update shadow");
-                pubSubClientWrapper.reject(RejectRequest.builder().thingName(thingName).shadowName(shadowName)
-                        .errorMessage(ErrorMessage.UNAUTHORIZED_MESSAGE)
-                        .publishOperation(Operation.GET_SHADOW)
-                        .build());
+                publishErrorMessage(thingName, shadowName, clientToken, ErrorMessage.UNAUTHORIZED_MESSAGE);
                 throw new UnauthorizedError(e.getMessage());
             } catch (InvalidRequestParametersException e) {
                 logger.atWarn()
@@ -167,10 +162,7 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
                         .kv(LOG_THING_NAME_KEY, thingName)
                         .kv(LOG_SHADOW_NAME_KEY, shadowName)
                         .log();
-                pubSubClientWrapper.reject(RejectRequest.builder().thingName(thingName).shadowName(shadowName)
-                        .errorMessage(e.getErrorMessage())
-                        .publishOperation(Operation.GET_SHADOW)
-                        .build());
+                publishErrorMessage(thingName, shadowName, clientToken, e.getErrorMessage());
                 throw new InvalidArgumentsError(e.getMessage());
             } catch (ShadowManagerDataException | IOException e) {
                 logger.atError()
@@ -179,14 +171,45 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
                         .kv(LOG_THING_NAME_KEY, thingName)
                         .kv(LOG_SHADOW_NAME_KEY, shadowName)
                         .log("Could not process UpdateThingShadow Request due to internal service error");
-                pubSubClientWrapper.reject(RejectRequest.builder().thingName(thingName).shadowName(shadowName)
-                        .errorMessage(ErrorMessage.createInternalServiceErrorMessage())
-                        .publishOperation(Operation.GET_SHADOW)
-                        .build());
+                publishErrorMessage(thingName, shadowName, clientToken,
+                        ErrorMessage.createInternalServiceErrorMessage());
                 throw new ServiceError(e.getMessage());
             }
         });
     }
+
+    /**
+     * Build the error response message and publish the error message over PubSub.
+     *
+     * @param thingName    The thing name.
+     * @param shadowName   The shadow name.
+     * @param clientToken  The client token if present in the update shadow request.
+     * @param errorMessage The error message containing error information.
+     */
+    //TODO: Maybe move this class into a util class?
+    private void publishErrorMessage(String thingName, String shadowName, Optional<String> clientToken,
+                                     ErrorMessage errorMessage) {
+        JsonNode errorResponse = ResponseMessageBuilder.builder()
+                .withTimestamp(Instant.now())
+                .withClientToken(clientToken)
+                .withError(errorMessage).build();
+
+        try {
+            pubSubClientWrapper.reject(PubSubRequest.builder().thingName(thingName)
+                    .shadowName(shadowName)
+                    .payload(JsonUtil.getPayloadBytes(errorResponse))
+                    .publishOperation(Operation.GET_SHADOW)
+                    .build());
+        } catch (JsonProcessingException e) {
+            logger.atError()
+                    .setEventType(Operation.GET_SHADOW.getLogEventType())
+                    .kv(LOG_THING_NAME_KEY, thingName)
+                    .kv(LOG_SHADOW_NAME_KEY, shadowName)
+                    .cause(e)
+                    .log("Unable to publish reject message");
+        }
+    }
+
 
     @Override
     public void handleStreamEvent(EventStreamJsonMessage streamRequestEvent) {

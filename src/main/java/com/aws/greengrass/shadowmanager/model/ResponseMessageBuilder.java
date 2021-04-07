@@ -52,9 +52,13 @@ public class ResponseMessageBuilder {
         return this;
     }
 
-    @SuppressWarnings("PMD.UnusedPrivateMethod")
-    //TODO: make it public when we use it.
-    private ResponseMessageBuilder withError(final ErrorMessage message) {
+    /**
+     * Create a response message with error message.
+     *
+     * @param message the ErrorMessage object containing the error information.
+     * @return the ResponseMessageBuilder object containing the error information.
+     */
+    public ResponseMessageBuilder withError(final ErrorMessage message) {
         json.set(ERROR_CODE_FIELD_NAME, new IntNode(message.getErrorCode()));
         json.set(ERROR_MESSAGE_FIELD_NAME, new TextNode(message.getMessage()));
         return this;

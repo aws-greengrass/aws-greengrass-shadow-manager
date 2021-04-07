@@ -8,13 +8,7 @@ package com.aws.greengrass.shadowmanager.ipc;
 import com.aws.greengrass.builtin.services.pubsub.PubSubIPCEventStreamAgent;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
-import com.aws.greengrass.shadowmanager.ipc.model.AcceptRequest;
-import com.aws.greengrass.shadowmanager.ipc.model.IPCRequest;
-import com.aws.greengrass.shadowmanager.ipc.model.RejectRequest;
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.core.JsonFactory;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.aws.greengrass.shadowmanager.ipc.model.PubSubRequest;
 import software.amazon.awssdk.aws.greengrass.model.InvalidArgumentsError;
 
 import javax.inject.Inject;
@@ -32,7 +26,6 @@ import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_PUBLISH_RE
  */
 public class PubSubClientWrapper {
     private static final Logger logger = LogManager.getLogger(PubSubClientWrapper.class);
-    private static final ObjectMapper STRICT_MAPPER_JSON = new ObjectMapper(new JsonFactory());
     private final PubSubIPCEventStreamAgent pubSubIPCEventStreamAgent;
 
     /**
@@ -42,8 +35,6 @@ public class PubSubClientWrapper {
      */
     @Inject
     public PubSubClientWrapper(PubSubIPCEventStreamAgent pubSubIPCEventStreamAgent) {
-        STRICT_MAPPER_JSON.findAndRegisterModules();
-        STRICT_MAPPER_JSON.setDefaultPropertyInclusion(JsonInclude.Include.NON_NULL);
         this.pubSubIPCEventStreamAgent = pubSubIPCEventStreamAgent;
     }
 
@@ -52,34 +43,8 @@ public class PubSubClientWrapper {
      *
      * @param rejectRequest The request object containing the reject information.
      */
-    public void reject(RejectRequest rejectRequest) {
-        byte[] payload;
-        try {
-            payload = STRICT_MAPPER_JSON.writeValueAsBytes(rejectRequest.getErrorMessage());
-        } catch (JsonProcessingException e) {
-            logger.atError()
-                    .setEventType(rejectRequest.getPublishOperation().getLogEventType())
-                    .kv(LOG_THING_NAME_KEY, rejectRequest.getThingName())
-                    .kv(LOG_SHADOW_NAME_KEY, rejectRequest.getShadowName())
-                    .cause(e)
-                    .log("Unable to publish reject message");
-            return;
-        }
-        try {
-            this.pubSubIPCEventStreamAgent.publish(getShadowPublishTopic(rejectRequest, SHADOW_PUBLISH_REJECTED_TOPIC),
-                    payload, SERVICE_NAME);
-            logger.atTrace()
-                    .setEventType(rejectRequest.getPublishOperation().getLogEventType())
-                    .kv(LOG_THING_NAME_KEY, rejectRequest.getThingName())
-                    .kv(LOG_SHADOW_NAME_KEY, rejectRequest.getShadowName())
-                    .log("Successfully published reject message");
-        } catch (InvalidArgumentsError e) {
-            logger.atError().cause(e)
-                    .kv(LOG_THING_NAME_KEY, rejectRequest.getThingName())
-                    .kv(LOG_SHADOW_NAME_KEY, rejectRequest.getShadowName())
-                    .setEventType(rejectRequest.getPublishOperation().getLogEventType())
-                    .log("Unable to publish rejected message");
-        }
+    public void reject(PubSubRequest rejectRequest) {
+        handlePubSubMessagePblish(rejectRequest, SHADOW_PUBLISH_REJECTED_TOPIC);
     }
 
     /**
@@ -87,8 +52,8 @@ public class PubSubClientWrapper {
      *
      * @param acceptRequest The request object containing the accepted information.
      */
-    public void accept(AcceptRequest acceptRequest) {
-        handleAcceptedMessage(acceptRequest, SHADOW_PUBLISH_ACCEPTED_TOPIC);
+    public void accept(PubSubRequest acceptRequest) {
+        handlePubSubMessagePblish(acceptRequest, SHADOW_PUBLISH_ACCEPTED_TOPIC);
     }
 
 
@@ -98,8 +63,8 @@ public class PubSubClientWrapper {
      *
      * @param acceptRequest The request object containing the delta information.
      */
-    public void delta(AcceptRequest acceptRequest) {
-        handleAcceptedMessage(acceptRequest, SHADOW_PUBLISH_DELTA_TOPIC);
+    public void delta(PubSubRequest acceptRequest) {
+        handlePubSubMessagePblish(acceptRequest, SHADOW_PUBLISH_DELTA_TOPIC);
     }
 
     /**
@@ -108,31 +73,31 @@ public class PubSubClientWrapper {
      *
      * @param acceptRequest The request object containing the documents information.
      */
-    public void documents(AcceptRequest acceptRequest) {
-        handleAcceptedMessage(acceptRequest, SHADOW_PUBLISH_DOCUMENTS_TOPIC);
+    public void documents(PubSubRequest acceptRequest) {
+        handlePubSubMessagePblish(acceptRequest, SHADOW_PUBLISH_DOCUMENTS_TOPIC);
     }
 
     /**
      * Publish the message using PubSub agent when a desired operation for a shadow has been accepted.
      *
-     * @param acceptRequest     The request object containing the accepted information.
+     * @param pubSubRequest     The request object containing the accepted information.
      * @param shadowTopicFormat The format for the shadow topic on which to publish the message
      */
-    private void handleAcceptedMessage(AcceptRequest acceptRequest, String shadowTopicFormat) {
+    private void handlePubSubMessagePblish(PubSubRequest pubSubRequest, String shadowTopicFormat) {
         try {
-            this.pubSubIPCEventStreamAgent.publish(getShadowPublishTopic(acceptRequest, shadowTopicFormat),
-                    acceptRequest.getPayload(), SERVICE_NAME);
+            this.pubSubIPCEventStreamAgent.publish(getShadowPublishTopic(pubSubRequest, shadowTopicFormat),
+                    pubSubRequest.getPayload(), SERVICE_NAME);
             logger.atTrace()
-                    .setEventType(acceptRequest.getPublishOperation().getLogEventType())
-                    .kv(LOG_THING_NAME_KEY, acceptRequest.getThingName())
-                    .kv(LOG_SHADOW_NAME_KEY, acceptRequest.getShadowName())
-                    .log("Successfully published accept message");
+                    .setEventType(pubSubRequest.getPublishOperation().getLogEventType())
+                    .kv(LOG_THING_NAME_KEY, pubSubRequest.getThingName())
+                    .kv(LOG_SHADOW_NAME_KEY, pubSubRequest.getShadowName())
+                    .log("Successfully published PubSub message");
         } catch (InvalidArgumentsError e) {
             logger.atError().cause(e)
-                    .kv(LOG_THING_NAME_KEY, acceptRequest.getThingName())
-                    .kv(LOG_SHADOW_NAME_KEY, acceptRequest.getShadowName())
-                    .setEventType(acceptRequest.getPublishOperation().getLogEventType())
-                    .log("Unable to publish accepted message");
+                    .kv(LOG_THING_NAME_KEY, pubSubRequest.getThingName())
+                    .kv(LOG_SHADOW_NAME_KEY, pubSubRequest.getShadowName())
+                    .setEventType(pubSubRequest.getPublishOperation().getLogEventType())
+                    .log("Unable to publish PubSub message");
         }
     }
 
@@ -143,7 +108,7 @@ public class PubSubClientWrapper {
      * @param topic      The shadow publish topic to be added onto the topic prefix and operation
      * @return the full topic prefix for the shadow name for the publish topic.
      */
-    private String getShadowPublishTopic(IPCRequest ipcRequest, String topic) {
+    private String getShadowPublishTopic(PubSubRequest ipcRequest, String topic) {
         String shadowTopicPrefix = ipcRequest.getShadowTopicPrefix();
         String publishTopicOp = ipcRequest.getPublishOperation().getOp();
         return shadowTopicPrefix + publishTopicOp + topic;
