@@ -68,6 +68,7 @@ public class ShadowStateMetadata {
      * @param state The state node in the shadow document.
      * @return The updated metadata node for the patch.
      */
+    @SuppressWarnings("PMD.NullAssignment")
     public JsonNode update(JsonNode patch, ShadowState state) {
         // Create the patch metadata tree. This will transform nulls to metadata nodes.
         final JsonNode metadataPatch = createMetadataPatch(patch);
@@ -81,13 +82,13 @@ public class ShadowStateMetadata {
 
         // Merge in the desired metadata
         final JsonNode patchDesired = metadataPatch.get(SHADOW_DOCUMENT_STATE_DESIRED);
-        if (!JsonUtil.isNullOrMissing(patchDesired)) {
+        if (!isNullOrMissing(patchDesired)) {
             desired = nullIfEmpty(merge(state.getDesired(), desired, patchDesired));
         }
 
         // Merge in the reported metadata
         final JsonNode patchReported = metadataPatch.get(SHADOW_DOCUMENT_STATE_REPORTED);
-        if (!JsonUtil.isNullOrMissing(patchReported)) {
+        if (!isNullOrMissing(patchReported)) {
             reported = nullIfEmpty(merge(state.getReported(), reported, patchReported));
         }
 
@@ -97,7 +98,7 @@ public class ShadowStateMetadata {
     private JsonNode createMetadataPatch(final JsonNode source) {
         if (source.isValueNode()) {
             ObjectNode node = JsonUtil.OBJECT_MAPPER.createObjectNode();
-            node.set(Constants.SHADOW_DOCUMENT_TIMESTAMP, new LongNode(this.clock.instant().getEpochSecond()));
+            node.set(SHADOW_DOCUMENT_TIMESTAMP, new LongNode(this.clock.instant().getEpochSecond()));
             return node;
         }
 
@@ -123,12 +124,12 @@ public class ShadowStateMetadata {
 
     private JsonNode merge(final JsonNode state, final JsonNode metadata, final JsonNode patch) {
         // If the state is null then there should be no metadata
-        if (JsonUtil.isNullOrMissing(state)) {
+        if (isNullOrMissing(state)) {
             return null;
         }
 
         //if the metadata node is null, then lets create an empty one so we can merge into it
-        final JsonNode mergeNode = metadata != null ? metadata : JsonUtil.OBJECT_MAPPER.createObjectNode();
+        final JsonNode mergeNode = metadata == null ? JsonUtil.OBJECT_MAPPER.createObjectNode() : metadata;
 
         merge((ObjectNode) state, (ObjectNode) mergeNode, (ObjectNode) patch);
         return mergeNode;

@@ -18,7 +18,7 @@ import static com.aws.greengrass.shadowmanager.util.JsonUtil.isNullOrMissing;
 /**
  * Handles merge of two JsonNode objects.
  */
-public class JsonMerger {
+public final class JsonMerger {
     private JsonMerger() {
     }
 
@@ -118,10 +118,10 @@ public class JsonMerger {
             if (value.isObject()) {
                 final ObjectNode child = createMergeTree((ObjectNode) value);
                 // If the child contains non-null elements, add it to the source.
-                if (child != null) {
-                    result.set(field, child);
-                } else {
+                if (child == null) {
                     isNullNodePresent = true;
+                } else {
+                    result.set(field, child);
                 }
                 continue;
             }

@@ -90,6 +90,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
      * @throws ServiceError          if database error occurs
      */
     @Override
+    @SuppressWarnings("PMD.PreserveStackTrace")
     public UpdateThingShadowResponse handleRequest(UpdateThingShadowRequest request) {
         return translateExceptions(() -> {
             // TODO: Sync this entire function possibly with delete handler as well.
@@ -235,6 +236,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
      * @param e          The Exception thrown
      * @throws ServiceError always
      */
+    @SuppressWarnings("PMD.AvoidUncheckedExceptionsInSignatures")
     private void throwServiceError(String thingName, String shadowName, Exception e)
             throws ServiceError {
         logger.atError()

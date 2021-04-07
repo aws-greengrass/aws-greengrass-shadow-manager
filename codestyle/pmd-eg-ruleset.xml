@@ -50,6 +50,8 @@
         <exclude name="ExcessiveMethodLength"/>
         <exclude name="ExcessiveImports"/>
         <exclude name="TooManyFields"/>
+        <exclude name="AvoidUncheckedExceptionsInSignatures"/>
+        <exclude name="NullAssignment"/>
     </rule>
     <rule ref="category/java/errorprone.xml">
         <exclude name="DataflowAnomalyAnalysis"/>

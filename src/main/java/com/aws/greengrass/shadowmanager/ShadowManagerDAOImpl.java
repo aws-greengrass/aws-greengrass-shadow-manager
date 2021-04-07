@@ -65,11 +65,12 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
                 preparedStatement -> {
                     preparedStatement.setString(1, thingName);
                     preparedStatement.setString(2, shadowName);
-                    ResultSet resultSet = preparedStatement.executeQuery();
-                    if (resultSet.next()) {
-                        return Optional.ofNullable(resultSet.getBytes(DOCUMENT));
+                    try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                        if (resultSet.next()) {
+                            return Optional.ofNullable(resultSet.getBytes(DOCUMENT));
+                        }
+                        return Optional.empty();
                     }
-                    return Optional.empty();
                 });
     }
 
@@ -126,18 +127,20 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      * @param limit Maximum number of Named Shadows to retrieve.
      * @return A limited list of named shadows matching the specified thingName
      */
+    @Override
     public List<String> listNamedShadowsForThing(String thingName, int offset, int limit) {
         return execute("SELECT shadowName from documents WHERE thingName = ? AND shadowName != '' LIMIT ? OFFSET ? ",
                 preparedStatement -> {
                     preparedStatement.setString(1, thingName);
                     preparedStatement.setInt(2, limit);
                     preparedStatement.setInt(3, offset);
-                    ResultSet resultSet = preparedStatement.executeQuery();
-                    List<String> namedShadowList = new ArrayList<>();
-                    while (resultSet.next()) {
-                        namedShadowList.add(resultSet.getString(1));
+                    try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                        List<String> namedShadowList = new ArrayList<>();
+                        while (resultSet.next()) {
+                            namedShadowList.add(resultSet.getString(1));
+                        }
+                        return namedShadowList;
                     }
-                    return namedShadowList;
                 });
     }
 

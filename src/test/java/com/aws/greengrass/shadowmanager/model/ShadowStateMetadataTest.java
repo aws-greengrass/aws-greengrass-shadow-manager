@@ -38,10 +38,10 @@ class ShadowStateMetadataTest {
     @Mock
     Instant mockInstant;
 
-    private final String desiredPatchString = "{\"desired\": {\"id\": 100, \"SomeObject\": {\"SomeChild1\": \"SomeValue\", \"SomeChild2\": {\"SomeChild3\": true}}}}";
-    private final String reportedPatchString = "{\"reported\": {\"id\": 100, \"SomeObject\": {\"SomeChild1\": \"SomeValue\", \"SomeChild2\": {\"SomeChild3\": true}}}}";
-    private final String patchMetadataString = "{\"id\": 12345, \"SomeObject\": {\"SomeChild1\": 12345, \"SomeChild2\": {\"SomeChild3\": 12345}}}";
-    private final long timestamp = 1617731792L;
+    private final static String desiredPatchString = "{\"desired\": {\"id\": 100, \"SomeObject\": {\"SomeChild1\": \"SomeValue\", \"SomeChild2\": {\"SomeChild3\": true}}}}";
+    private final static String reportedPatchString = "{\"reported\": {\"id\": 100, \"SomeObject\": {\"SomeChild1\": \"SomeValue\", \"SomeChild2\": {\"SomeChild3\": true}}}}";
+    private final static String patchMetadataString = "{\"id\": 12345, \"SomeObject\": {\"SomeChild1\": 12345, \"SomeChild2\": {\"SomeChild3\": 12345}}}";
+    private final static long timestamp = 1617731792L;
 
     @BeforeEach
     void setup() {

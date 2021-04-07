@@ -38,6 +38,7 @@ class JsonMergerTest {
     private final static String PATCH_NODE_WITH_ARRAY_VALUE_NODE_STRING = "[\"SomeValue3\", \"SomeValue4\"]";
     private static JsonNode sourceNodeWithArray;
 
+    @SuppressWarnings("PMD.UnusedPrivateMethod")
     private static Stream<Arguments> mergeTestInput() {
         return Stream.of(
                 Arguments.of("GIVEN patch with new node, THEN add new field in source node", SOURCE_NODE_STRING, PATCH_NODE_WITH_NEW_FIELD_STRING, MERGED_NODE_WITH_NEW_FIELD_STRING),

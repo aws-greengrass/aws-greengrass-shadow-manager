@@ -89,6 +89,7 @@ public class DeleteThingShadowIPCHandler extends GeneratedAbstractDeleteThingSha
      * @throws ServiceError          if database error occurs
      */
     @Override
+    @SuppressWarnings("PMD.PreserveStackTrace")
     public DeleteThingShadowResponse handleRequest(DeleteThingShadowRequest request) {
         return translateExceptions(() -> {
             String thingName = request.getThingName();

@@ -6,10 +6,6 @@
 package com.aws.greengrass.shadowmanager.model;
 
 public final class Constants {
-    private Constants() {
-
-    }
-
     public static final String SHADOW_RESOURCE_TYPE = "shadow";
     public static final String SHADOW_RESOURCE_JOINER = "shadow";
     public static final String SHADOW_MANAGER_NAME = "aws.greengrass.ShadowManager";
@@ -50,6 +46,9 @@ public final class Constants {
     public static final String CIPHER_TRANSFORMATION = "AES/CBC/PKCS5Padding";
     public static final String ENCRYPTION_ALGORITHM = "AES";
     public static final String SECRET_KEY_ALGORITHM = "PBKDF2WithHmacSHA256";
-    public static final int PBE_KEY_ITERATION_COUNT = 65536;
+    public static final int PBE_KEY_ITERATION_COUNT = 65_536;
     public static final int PBE_KEY_LENGTH = 256;
+
+    private Constants() {
+    }
 }

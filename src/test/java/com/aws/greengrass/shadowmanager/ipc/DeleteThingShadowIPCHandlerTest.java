@@ -112,28 +112,29 @@ class DeleteThingShadowIPCHandlerTest {
         DeleteThingShadowResponse expectedResponse = new DeleteThingShadowResponse();
         expectedResponse.setPayload(new byte[0]);
 
-        DeleteThingShadowIPCHandler deleteThingShadowIPCHandler = new DeleteThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper);
-        when(mockDao.deleteShadowThing(any(), any())).thenReturn(Optional.of(allByteData));
+        try (DeleteThingShadowIPCHandler deleteThingShadowIPCHandler = new DeleteThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper)) {
+            when(mockDao.deleteShadowThing(any(), any())).thenReturn(Optional.of(allByteData));
 
-        DeleteThingShadowResponse actualResponse = deleteThingShadowIPCHandler.handleRequest(request);
-        assertThat(actualResponse, is(equalTo(expectedResponse)));
-        verify(mockPubSubClientWrapper, times(1)).accept(acceptRequestCaptor.capture());
-        assertThat(acceptRequestCaptor.getValue(), is(notNullValue()));
+            DeleteThingShadowResponse actualResponse = deleteThingShadowIPCHandler.handleRequest(request);
+            assertThat(actualResponse, is(equalTo(expectedResponse)));
+            verify(mockPubSubClientWrapper, times(1)).accept(acceptRequestCaptor.capture());
+            assertThat(acceptRequestCaptor.getValue(), is(notNullValue()));
 
-        Optional<JsonNode> acceptedJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getValue().getPayload());
-        assertThat("Retrieved acceptedJson", acceptedJson.isPresent(), is(true));
-        assertThat("acceptedJson has timestamp", acceptedJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(equalTo(true)));
-        ((ObjectNode) acceptedJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
+            Optional<JsonNode> acceptedJson = JsonUtil.getPayloadJson(acceptRequestCaptor.getValue().getPayload());
+            assertThat("Retrieved acceptedJson", acceptedJson.isPresent(), is(true));
+            assertThat("acceptedJson has timestamp", acceptedJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(equalTo(true)));
+            ((ObjectNode) acceptedJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
 
-        // IPCRequest does not accept null value for shadowName
-        if (shadowName != null) {
-            assertThat(acceptRequestCaptor.getValue().getShadowName(), is(equalTo(shadowName)));
+            // IPCRequest does not accept null value for shadowName
+            if (shadowName != null) {
+                assertThat(acceptRequestCaptor.getValue().getShadowName(), is(equalTo(shadowName)));
+            }
+
+            assertThat("Expected shadow document version", acceptedJson.get().get(SHADOW_DOCUMENT_VERSION), is(equalTo(shadowDocumentJson.get().get(SHADOW_DOCUMENT_VERSION))));
+            assertThat(acceptRequestCaptor.getValue().getThingName(), is(equalTo(THING_NAME)));
+            assertThat("Expected operation", acceptRequestCaptor.getValue().getPublishOperation(), is(Operation.DELETE_SHADOW));
+            assertThat("Expected log code", acceptRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(LogEvents.DELETE_THING_SHADOW.code()));
         }
-
-        assertThat("Expected shadow document version", acceptedJson.get().get(SHADOW_DOCUMENT_VERSION), is(equalTo(shadowDocumentJson.get().get(SHADOW_DOCUMENT_VERSION))));
-        assertThat(acceptRequestCaptor.getValue().getThingName(), is(equalTo(THING_NAME)));
-        assertThat("Expected operation", acceptRequestCaptor.getValue().getPublishOperation(), is(Operation.DELETE_SHADOW));
-        assertThat("Expected log code", acceptRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(LogEvents.DELETE_THING_SHADOW.code()));
     }
 
     @Test
@@ -144,22 +145,23 @@ class DeleteThingShadowIPCHandlerTest {
         request.setShadowName(SHADOW_NAME);
 
         when(mockDao.deleteShadowThing(any(), any())).thenReturn(Optional.empty());
-        DeleteThingShadowIPCHandler deleteThingShadowIPCHandler = new DeleteThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper);
-        ResourceNotFoundError thrown = assertThrows(ResourceNotFoundError.class, () -> deleteThingShadowIPCHandler.handleRequest(request));
-        assertThat(thrown.getMessage(), is(equalTo("No shadow found")));
+        try (DeleteThingShadowIPCHandler deleteThingShadowIPCHandler = new DeleteThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper)) {
+            ResourceNotFoundError thrown = assertThrows(ResourceNotFoundError.class, () -> deleteThingShadowIPCHandler.handleRequest(request));
+            assertThat(thrown.getMessage(), is(equalTo("No shadow found")));
 
-        verify(mockPubSubClientWrapper, times(1))
-                .reject(rejectRequestCaptor.capture());
+            verify(mockPubSubClientWrapper, times(1))
+                    .reject(rejectRequestCaptor.capture());
 
-        assertThat(rejectRequestCaptor.getValue(), is(notNullValue()));
-        assertThat(rejectRequestCaptor.getValue().getShadowName(), is(equalTo(SHADOW_NAME)));
-        assertThat("Expected operation", rejectRequestCaptor.getValue().getPublishOperation(), is(Operation.DELETE_SHADOW));
-        assertThat("Expected log code", rejectRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(LogEvents.DELETE_THING_SHADOW.code()));
+            assertThat(rejectRequestCaptor.getValue(), is(notNullValue()));
+            assertThat(rejectRequestCaptor.getValue().getShadowName(), is(equalTo(SHADOW_NAME)));
+            assertThat("Expected operation", rejectRequestCaptor.getValue().getPublishOperation(), is(Operation.DELETE_SHADOW));
+            assertThat("Expected log code", rejectRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(LogEvents.DELETE_THING_SHADOW.code()));
 
-        ErrorMessage errorMessage = rejectRequestCaptor.getValue().getErrorMessage();
-        assertThat(errorMessage.getTimestamp(), is(not(equalTo(Instant.EPOCH.toEpochMilli()))));
-        assertThat(errorMessage.getErrorCode(), is(404));
-        assertThat(errorMessage.getMessage(), startsWith("No shadow exists"));
+            ErrorMessage errorMessage = rejectRequestCaptor.getValue().getErrorMessage();
+            assertThat(errorMessage.getTimestamp(), is(not(equalTo(Instant.EPOCH.toEpochMilli()))));
+            assertThat(errorMessage.getErrorCode(), is(404));
+            assertThat(errorMessage.getMessage(), startsWith("No shadow exists"));
+        }
     }
 
     @Test
@@ -170,22 +172,23 @@ class DeleteThingShadowIPCHandlerTest {
         request.setShadowName(SHADOW_NAME);
 
         doThrow(new ShadowManagerDataException(new Exception(SAMPLE_EXCEPTION_MESSAGE))).when(mockDao).deleteShadowThing(any(), any());
-        DeleteThingShadowIPCHandler deleteThingShadowIPCHandler = new DeleteThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper);
-        ServiceError thrown = assertThrows(ServiceError.class, () -> deleteThingShadowIPCHandler.handleRequest(request));
-        assertThat(thrown.getMessage(), containsString(SAMPLE_EXCEPTION_MESSAGE));
+        try (DeleteThingShadowIPCHandler deleteThingShadowIPCHandler = new DeleteThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper)) {
+            ServiceError thrown = assertThrows(ServiceError.class, () -> deleteThingShadowIPCHandler.handleRequest(request));
+            assertThat(thrown.getMessage(), containsString(SAMPLE_EXCEPTION_MESSAGE));
 
-        verify(mockPubSubClientWrapper, times(1))
-                .reject(rejectRequestCaptor.capture());
+            verify(mockPubSubClientWrapper, times(1))
+                    .reject(rejectRequestCaptor.capture());
 
-        assertThat(rejectRequestCaptor.getValue(), is(notNullValue()));
-        assertThat(rejectRequestCaptor.getValue().getShadowName(), is(equalTo(SHADOW_NAME)));
-        assertThat("Expected operation", rejectRequestCaptor.getValue().getPublishOperation(), is(Operation.DELETE_SHADOW));
-        assertThat("Expected log code", rejectRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(LogEvents.DELETE_THING_SHADOW.code()));
+            assertThat(rejectRequestCaptor.getValue(), is(notNullValue()));
+            assertThat(rejectRequestCaptor.getValue().getShadowName(), is(equalTo(SHADOW_NAME)));
+            assertThat("Expected operation", rejectRequestCaptor.getValue().getPublishOperation(), is(Operation.DELETE_SHADOW));
+            assertThat("Expected log code", rejectRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(LogEvents.DELETE_THING_SHADOW.code()));
 
-        ErrorMessage errorMessage = rejectRequestCaptor.getValue().getErrorMessage();
-        assertThat(errorMessage.getTimestamp(), is(not(equalTo(Instant.EPOCH.toEpochMilli()))));
-        assertThat(errorMessage.getErrorCode(), is(500));
-        assertThat(errorMessage.getMessage(), startsWith("Internal service failure"));
+            ErrorMessage errorMessage = rejectRequestCaptor.getValue().getErrorMessage();
+            assertThat(errorMessage.getTimestamp(), is(not(equalTo(Instant.EPOCH.toEpochMilli()))));
+            assertThat(errorMessage.getErrorCode(), is(500));
+            assertThat(errorMessage.getMessage(), startsWith("Internal service failure"));
+        }
     }
 
     @Test
@@ -196,20 +199,21 @@ class DeleteThingShadowIPCHandlerTest {
         request.setShadowName(SHADOW_NAME);
         doThrow(new AuthorizationException(SAMPLE_EXCEPTION_MESSAGE)).when(mockAuthorizationHandlerWrapper).doAuthorization(any(), any(), any());
 
-        DeleteThingShadowIPCHandler deleteThingShadowIPCHandler = new DeleteThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper);
-        UnauthorizedError thrown = assertThrows(UnauthorizedError.class, () -> deleteThingShadowIPCHandler.handleRequest(request));
-        assertThat(thrown.getMessage(), is(equalTo(SAMPLE_EXCEPTION_MESSAGE)));
+        try (DeleteThingShadowIPCHandler deleteThingShadowIPCHandler = new DeleteThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper)) {
+            UnauthorizedError thrown = assertThrows(UnauthorizedError.class, () -> deleteThingShadowIPCHandler.handleRequest(request));
+            assertThat(thrown.getMessage(), is(equalTo(SAMPLE_EXCEPTION_MESSAGE)));
 
-        verify(mockPubSubClientWrapper, times(1)).reject(rejectRequestCaptor.capture());
+            verify(mockPubSubClientWrapper, times(1)).reject(rejectRequestCaptor.capture());
 
-        assertThat(rejectRequestCaptor.getValue(), is(notNullValue()));
-        assertThat(rejectRequestCaptor.getValue().getShadowName(), is(equalTo(SHADOW_NAME)));
-        assertThat("Expected operation", rejectRequestCaptor.getValue().getPublishOperation(), is(Operation.DELETE_SHADOW));
-        assertThat("Expected log code", rejectRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(LogEvents.DELETE_THING_SHADOW.code()));
+            assertThat(rejectRequestCaptor.getValue(), is(notNullValue()));
+            assertThat(rejectRequestCaptor.getValue().getShadowName(), is(equalTo(SHADOW_NAME)));
+            assertThat("Expected operation", rejectRequestCaptor.getValue().getPublishOperation(), is(Operation.DELETE_SHADOW));
+            assertThat("Expected log code", rejectRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(LogEvents.DELETE_THING_SHADOW.code()));
 
-        ErrorMessage errorMessage = rejectRequestCaptor.getValue().getErrorMessage();
-        assertThat(errorMessage.getErrorCode(), is(401));
-        assertThat(errorMessage.getMessage(), startsWith("Unauthorized"));
+            ErrorMessage errorMessage = rejectRequestCaptor.getValue().getErrorMessage();
+            assertThat(errorMessage.getErrorCode(), is(401));
+            assertThat(errorMessage.getMessage(), startsWith("Unauthorized"));
+        }
     }
 
     @ParameterizedTest
@@ -220,33 +224,36 @@ class DeleteThingShadowIPCHandlerTest {
         request.setThingName(thingName);
         request.setShadowName(shadowName);
 
-        DeleteThingShadowIPCHandler deleteThingShadowIPCHandler = new DeleteThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper);
-        InvalidArgumentsError thrown = assertThrows(InvalidArgumentsError.class, () -> deleteThingShadowIPCHandler.handleRequest(request));
-        assertThat(thrown.getMessage(), either(startsWith("ShadowName")).or(startsWith("ThingName")));
+        try (DeleteThingShadowIPCHandler deleteThingShadowIPCHandler = new DeleteThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper)) {
+            InvalidArgumentsError thrown = assertThrows(InvalidArgumentsError.class, () -> deleteThingShadowIPCHandler.handleRequest(request));
+            assertThat(thrown.getMessage(), either(startsWith("ShadowName")).or(startsWith("ThingName")));
 
-        verify(mockPubSubClientWrapper, times(1))
-                .reject(rejectRequestCaptor.capture());
+            verify(mockPubSubClientWrapper, times(1))
+                    .reject(rejectRequestCaptor.capture());
 
-        assertThat(rejectRequestCaptor.getValue(), is(notNullValue()));
-        assertThat(rejectRequestCaptor.getValue().getShadowName(), is(equalTo(shadowName)));
-        assertThat("Expected operation found", rejectRequestCaptor.getValue().getPublishOperation(), is(Operation.DELETE_SHADOW));
-        assertThat("Expected log code", rejectRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(LogEvents.DELETE_THING_SHADOW.code()));
+            assertThat(rejectRequestCaptor.getValue(), is(notNullValue()));
+            assertThat(rejectRequestCaptor.getValue().getShadowName(), is(equalTo(shadowName)));
+            assertThat("Expected operation found", rejectRequestCaptor.getValue().getPublishOperation(), is(Operation.DELETE_SHADOW));
+            assertThat("Expected log code", rejectRequestCaptor.getValue().getPublishOperation().getLogEventType(), is(LogEvents.DELETE_THING_SHADOW.code()));
 
-        ErrorMessage errorMessage = rejectRequestCaptor.getValue().getErrorMessage();
-        assertThat(errorMessage.getTimestamp(), is(not(equalTo(Instant.EPOCH.toEpochMilli()))));
-        assertThat(errorMessage.getErrorCode(), is(400));
-        assertThat(errorMessage.getMessage(), either(startsWith("ShadowName")).or(startsWith("ThingName")));
+            ErrorMessage errorMessage = rejectRequestCaptor.getValue().getErrorMessage();
+            assertThat(errorMessage.getTimestamp(), is(not(equalTo(Instant.EPOCH.toEpochMilli()))));
+            assertThat(errorMessage.getErrorCode(), is(400));
+            assertThat(errorMessage.getMessage(), either(startsWith("ShadowName")).or(startsWith("ThingName")));
+        }
     }
 
     @Test
     void GIVEN_delete_thing_shadow_ipc_handler_WHEN_handle_stream_event_THEN_nothing_happens() {
-        DeleteThingShadowIPCHandler deleteThingShadowIPCHandler = new DeleteThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper);
-        assertDoesNotThrow(() -> deleteThingShadowIPCHandler.handleStreamEvent(mock(EventStreamJsonMessage.class)));
+        try (DeleteThingShadowIPCHandler deleteThingShadowIPCHandler = new DeleteThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper)) {
+            assertDoesNotThrow(() -> deleteThingShadowIPCHandler.handleStreamEvent(mock(EventStreamJsonMessage.class)));
+        }
     }
 
     @Test
     void GIVEN_delete_thing_shadow_ipc_handler_WHEN_stream_closes_THEN_nothing_happens() {
-        DeleteThingShadowIPCHandler deleteThingShadowIPCHandler = new DeleteThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper);
-        assertDoesNotThrow(deleteThingShadowIPCHandler::onStreamClosed);
+        try (DeleteThingShadowIPCHandler deleteThingShadowIPCHandler = new DeleteThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper)) {
+            assertDoesNotThrow(deleteThingShadowIPCHandler::onStreamClosed);
+        }
     }
 }
