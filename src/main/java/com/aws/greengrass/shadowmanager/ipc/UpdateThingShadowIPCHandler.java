@@ -5,10 +5,10 @@
 
 package com.aws.greengrass.shadowmanager.ipc;
 
-import com.aws.greengrass.authorization.AuthorizationHandler;
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
+import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
@@ -16,8 +16,10 @@ import com.aws.greengrass.shadowmanager.ipc.model.AcceptRequest;
 import com.aws.greengrass.shadowmanager.ipc.model.Operation;
 import com.aws.greengrass.shadowmanager.ipc.model.RejectRequest;
 import com.aws.greengrass.shadowmanager.model.ErrorMessage;
+import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.model.ResponseMessageBuilder;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
+import com.aws.greengrass.shadowmanager.model.ShadowRequest;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.util.Pair;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -49,24 +51,24 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
     private final String serviceName;
 
     private final ShadowManagerDAO dao;
-    private final AuthorizationHandler authorizationHandler;
+    private final AuthorizationHandlerWrapper authorizationHandlerWrapper;
     private final PubSubClientWrapper pubSubClientWrapper;
 
     /**
      * IPC Handler class for responding to UpdateThingShadow requests.
      *
-     * @param context              topics passed by the Nucleus
-     * @param dao                  Local shadow database management
-     * @param authorizationHandler The authorization handler
-     * @param pubSubClientWrapper  The PubSub client wrapper
+     * @param context                     topics passed by the Nucleus
+     * @param dao                         Local shadow database management
+     * @param authorizationHandlerWrapper The authorization handler wrapper
+     * @param pubSubClientWrapper         The PubSub client wrapper
      */
     public UpdateThingShadowIPCHandler(
             OperationContinuationHandlerContext context,
             ShadowManagerDAO dao,
-            AuthorizationHandler authorizationHandler,
+            AuthorizationHandlerWrapper authorizationHandlerWrapper,
             PubSubClientWrapper pubSubClientWrapper) {
         super(context);
-        this.authorizationHandler = authorizationHandler;
+        this.authorizationHandlerWrapper = authorizationHandlerWrapper;
         this.dao = dao;
         this.serviceName = context.getAuthenticationData().getIdentityLabel();
         this.pubSubClientWrapper = pubSubClientWrapper;
@@ -101,14 +103,12 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                         .kv(LOG_SHADOW_NAME_KEY, shadowName)
                         .log();
 
-                // Validate that the thing name is valid and the component has proper authorization to perform
-                // the shadow update.
-                IPCUtil.validateThingNameAndDoAuthorization(authorizationHandler, UPDATE_THING_SHADOW,
-                        serviceName, thingName, shadowName);
+                ShadowRequest shadowRequest = new ShadowRequest(thingName, shadowName);
+                Validator.validateShadowRequest(shadowRequest);
                 if (updatedDocumentRequestBytes == null || updatedDocumentRequestBytes.length == 0) {
-                    throw new InvalidRequestParametersException("Missing update payload",
-                            ErrorMessage.FORBIDDEN_MESSAGE);
+                    throw new InvalidRequestParametersException(ErrorMessage.createPayloadMissingMessage());
                 }
+                authorizationHandlerWrapper.doAuthorization(UPDATE_THING_SHADOW, serviceName, shadowRequest);
 
                 // Get the current document from the DAO if present and convert it into a ShadowDocument object.
                 byte[] currentDocumentBytes = dao.getShadowThing(thingName, shadowName).orElse(new byte[0]);
@@ -122,7 +122,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                 JsonUtil.validatePayload(currentDocument, updatedDocumentRequestBytes);
             } catch (AuthorizationException e) {
                 logger.atWarn()
-                        .setEventType(IPCUtil.LogEvents.UPDATE_THING_SHADOW.code())
+                        .setEventType(LogEvents.UPDATE_THING_SHADOW.code())
                         .setCause(e)
                         .kv(LOG_THING_NAME_KEY, thingName)
                         .kv(LOG_SHADOW_NAME_KEY, shadowName)
@@ -134,7 +134,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                 throw new UnauthorizedError(e.getMessage());
             } catch (ConflictError e) {
                 logger.atWarn()
-                        .setEventType(IPCUtil.LogEvents.UPDATE_THING_SHADOW.code())
+                        .setEventType(LogEvents.UPDATE_THING_SHADOW.code())
                         .setCause(e)
                         .kv(LOG_THING_NAME_KEY, thingName)
                         .kv(LOG_SHADOW_NAME_KEY, shadowName)
@@ -146,7 +146,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                 throw e;
             } catch (InvalidRequestParametersException e) {
                 logger.atWarn()
-                        .setEventType(IPCUtil.LogEvents.UPDATE_THING_SHADOW.code())
+                        .setEventType(LogEvents.UPDATE_THING_SHADOW.code())
                         .setCause(e)
                         .kv(LOG_THING_NAME_KEY, thingName)
                         .kv(LOG_SHADOW_NAME_KEY, shadowName)
@@ -177,7 +177,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                             ServiceError error = new ServiceError("Unexpected error occurred in trying to "
                                     + "update shadow thing.");
                             logger.atError()
-                                    .setEventType(IPCUtil.LogEvents.UPDATE_THING_SHADOW.code())
+                                    .setEventType(LogEvents.UPDATE_THING_SHADOW.code())
                                     .kv(LOG_THING_NAME_KEY, thingName)
                                     .kv(LOG_SHADOW_NAME_KEY, shadowName)
                                     .setCause(error)
@@ -238,7 +238,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
     private void throwServiceError(String thingName, String shadowName, Exception e)
             throws ServiceError {
         logger.atError()
-                .setEventType(IPCUtil.LogEvents.UPDATE_THING_SHADOW.code())
+                .setEventType(LogEvents.UPDATE_THING_SHADOW.code())
                 .setCause(e)
                 .kv(LOG_THING_NAME_KEY, thingName)
                 .kv(LOG_SHADOW_NAME_KEY, shadowName)
@@ -288,7 +288,6 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                 .build());
 
     }
-
 
     @Override
     public void handleStreamEvent(EventStreamJsonMessage streamRequestEvent) {
