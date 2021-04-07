@@ -56,6 +56,19 @@ public class ShadowDocument {
     }
 
     /**
+     * Constructor for creating new shadow document from an existing shadow document.
+     *
+     * @param shadowDocument The shadow document to create from.
+     */
+    public ShadowDocument(ShadowDocument shadowDocument) {
+        this(shadowDocument.getState() == null ? null : shadowDocument.getState().deepCopy(),
+                shadowDocument.getMetadata() == null ? null : shadowDocument.getMetadata().deepCopy(),
+                shadowDocument.getVersion());
+        // Incrementing the version here since we are creating a new version of the shadow document.
+        this.version = this.version == null ? 0 : this.version + 1;
+    }
+
+    /**
      * Constructor for creating new shadow document.
      *
      * @param state    The state of the shadow document.
@@ -88,19 +101,13 @@ public class ShadowDocument {
      * @param updateDocumentRequest The JSON containing the shadow document update request.
      * @return the new updated shadow document.
      */
-    public ShadowDocument createNewMergedDocument(JsonNode updateDocumentRequest) {
-        ShadowDocument updatedShadowDocument = new ShadowDocument(
-                this.getState() == null ? null : this.getState().deepCopy(),
-                this.getMetadata() == null ? null : this.getMetadata().deepCopy(),
-                this.getVersion() == null ? 0 : this.getVersion() + 1);
+    public Pair<JsonNode, JsonNode> update(JsonNode updateDocumentRequest) {
         JsonNode updatedStateNode = updateDocumentRequest.get(SHADOW_DOCUMENT_STATE);
 
-        updatedShadowDocument.getState().update(updatedStateNode);
-        if (updatedShadowDocument.getMetadata() != null) {
-            updatedShadowDocument.getMetadata().update(updatedStateNode, updatedShadowDocument.getState());
-        }
+        this.state.update(updatedStateNode);
+        JsonNode patchMetadata = this.metadata.update(updatedStateNode, this.state);
 
-        return updatedShadowDocument;
+        return new Pair<>(updatedStateNode, patchMetadata);
     }
 
     /**
@@ -130,7 +137,6 @@ public class ShadowDocument {
         if (delta == null) {
             return Optional.empty();
         }
-        //TODO: Add the metadata node here as well and return that.
         final JsonNode deltaMetadata = metadata.getDeltaMetadata(delta);
         return Optional.of(new Pair<>(delta, deltaMetadata));
     }

@@ -39,7 +39,6 @@ import java.util.Optional;
 import static com.aws.greengrass.ipc.common.ExceptionUtil.translateExceptions;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
-import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE;
 import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.UPDATE_THING_SHADOW;
 
 /**
@@ -166,7 +165,8 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                         .orElseThrow(() -> new InvalidRequestParametersException(ErrorMessage
                         .createInvalidPayloadJsonMessage("Update shadow request payload must be an Object")));
                 // Generate the new merged document based on the update shadow patch payload.
-                ShadowDocument updatedDocument = currentDocument.createNewMergedDocument(updateDocumentRequest);
+                ShadowDocument updatedDocument = new ShadowDocument(currentDocument);
+                final Pair<JsonNode, JsonNode> patchStateMetadataPair = updatedDocument.update(updateDocumentRequest);
 
                 // Get the client token if present in the update shadow request.
                 Optional<String> clientToken = JsonUtil.getClientToken(updateDocumentRequest);
@@ -190,6 +190,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                             return error;
                         });
 
+
                 // Publish the message on the delta topic over PubSub if applicable.
                 publishDeltaMessage(thingName, shadowName, clientToken, updatedDocument);
 
@@ -202,9 +203,8 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                         .withVersion(updatedDocument.getVersion())
                         .withClientToken(clientToken)
                         .withTimestamp(Instant.now())
-                        .withState(updateDocumentRequest.get(SHADOW_DOCUMENT_STATE))
-                        //TODO: Handle metadata
-                        //.withMetadata(updatedDocument.getMetadata())
+                        .withState(patchStateMetadataPair.getLeft())
+                        .withMetadata(patchStateMetadataPair.getRight())
                         .build();
                 byte[] responseNodeBytes = JsonUtil.getPayloadBytes(responseNode);
 
@@ -257,11 +257,11 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
         // Only send the delta if there is any difference in the desired and reported states.
         if (deltaMetaDataPair.isPresent()) {
             JsonNode responseMessage = ResponseMessageBuilder.builder()
-                    .withClientToken(clientToken)
+                    .withVersion(updatedDocument.getVersion())
                     .withTimestamp(Instant.now())
                     .withState(deltaMetaDataPair.get().getLeft())
                     .withMetadata(deltaMetaDataPair.get().getRight())
-                    .withVersion(updatedDocument.getVersion())
+                    .withClientToken(clientToken)
                     .build();
 
             pubSubClientWrapper.delta(AcceptRequest.builder().thingName(thingName)
@@ -276,10 +276,10 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                                          ShadowDocument sourceDocument, ShadowDocument updatedDocument)
             throws IOException {
         JsonNode responseMessage = ResponseMessageBuilder.builder()
-                .withClientToken(clientToken)
-                .withTimestamp(Instant.now())
                 .withPrevious(sourceDocument.isNewDocument() ? null : sourceDocument.toJson())
                 .withCurrent(updatedDocument.toJson())
+                .withClientToken(clientToken)
+                .withTimestamp(Instant.now())
                 .build();
         // Send the current document on the documents topic after successfully updating the shadow document.
         pubSubClientWrapper.documents(AcceptRequest.builder().thingName(thingName).shadowName(shadowName)
