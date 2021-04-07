@@ -102,7 +102,7 @@ public final class JsonMerger {
      * @return null if all the nodes in the node are null; Else a merged object node.
      */
     private static ObjectNode createMergeTree(final ObjectNode node) {
-        final ObjectNode result = JsonUtil.createObjectNode();
+        final ObjectNode result = JsonUtil.OBJECT_MAPPER.createObjectNode();
         final Iterator<String> fieldIter = node.fieldNames();
 
         boolean isNullNodePresent = false;

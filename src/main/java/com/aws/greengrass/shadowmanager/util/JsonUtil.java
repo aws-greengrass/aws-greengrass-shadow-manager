@@ -134,15 +134,6 @@ public final class JsonUtil {
     }
 
     /**
-     * Creates an Object node using the static Object Mapper.
-     *
-     * @return an empty object node.
-     */
-    public static ObjectNode createObjectNode() {
-        return OBJECT_MAPPER.createObjectNode();
-    }
-
-    /**
      * Validates that the state node depth is no deeper than the max depth for shadows (6).
      *
      * @param stateJson The state node to validate
@@ -266,7 +257,7 @@ public final class JsonUtil {
     }
 
     private static ObjectNode calculateDelta(final ObjectNode original, final ObjectNode updated) {
-        final ObjectNode result = JsonUtil.createObjectNode();
+        final ObjectNode result = OBJECT_MAPPER.createObjectNode();
         // Iterate over the updated shadow document and compare the values to the original shadow document.
         final Iterator<String> fields = updated.fieldNames();
 

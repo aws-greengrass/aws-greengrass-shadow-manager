@@ -21,6 +21,7 @@ import com.aws.greengrass.shadowmanager.model.ResponseMessageBuilder;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.ShadowRequest;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
+import com.aws.greengrass.util.Pair;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -41,7 +42,6 @@ import java.util.Optional;
 import static com.aws.greengrass.ipc.common.ExceptionUtil.translateExceptions;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
-import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE;
 import static com.aws.greengrass.shadowmanager.util.JsonUtil.isNullOrMissing;
 import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.UPDATE_THING_SHADOW;
 
@@ -92,7 +92,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
      * @throws ServiceError          if database error occurs
      */
     @Override
-    @SuppressWarnings("PMD.PreserveStackTrace")
+    @SuppressWarnings({"PMD.PreserveStackTrace", "PMD.PrematureDeclaration"})
     public UpdateThingShadowResponse handleRequest(UpdateThingShadowRequest request) {
         return translateExceptions(() -> {
             // TODO: Sync this entire function possibly with delete handler as well.
@@ -177,7 +177,8 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
 
             try {
                 // Generate the new merged document based on the update shadow patch payload.
-                ShadowDocument updatedDocument = currentDocument.createNewMergedDocument(updateDocumentRequest);
+                ShadowDocument updatedDocument = new ShadowDocument(currentDocument);
+                final Pair<JsonNode, JsonNode> patchStateMetadataPair = updatedDocument.update(updateDocumentRequest);
 
                 // Update the new document in the DAO.
                 Optional<byte[]> result = dao.updateShadowThing(thingName, shadowName,
@@ -195,6 +196,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                             ErrorMessage.createInternalServiceErrorMessage());
                     throw error;
                 }
+
                 // Publish the message on the delta topic over PubSub if applicable.
                 publishDeltaMessage(thingName, shadowName, clientToken, updatedDocument);
 
@@ -207,9 +209,8 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                         .withVersion(updatedDocument.getVersion())
                         .withClientToken(clientToken)
                         .withTimestamp(Instant.now())
-                        .withState(updateDocumentRequest.get(SHADOW_DOCUMENT_STATE))
-                        //TODO: Handle metadata
-                        //.withMetadata(updatedDocument.getMetadata())
+                        .withState(patchStateMetadataPair.getLeft())
+                        .withMetadata(patchStateMetadataPair.getRight())
                         .build();
                 byte[] responseNodeBytes = JsonUtil.getPayloadBytes(responseNode);
 
@@ -289,14 +290,15 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
     private void publishDeltaMessage(String thingName, String shadowName, Optional<String> clientToken,
                                      ShadowDocument updatedDocument)
             throws IOException {
-        Optional<JsonNode> delta = updatedDocument.getDelta();
+        Optional<Pair<JsonNode, JsonNode>> deltaMetaDataPair = updatedDocument.getDelta();
         // Only send the delta if there is any difference in the desired and reported states.
-        if (delta.isPresent()) {
+        if (deltaMetaDataPair.isPresent()) {
             JsonNode responseMessage = ResponseMessageBuilder.builder()
-                    .withClientToken(clientToken)
-                    .withTimestamp(Instant.now())
-                    .withState(delta.get())
                     .withVersion(updatedDocument.getVersion())
+                    .withTimestamp(Instant.now())
+                    .withState(deltaMetaDataPair.get().getLeft())
+                    .withMetadata(deltaMetaDataPair.get().getRight())
+                    .withClientToken(clientToken)
                     .build();
 
             pubSubClientWrapper.delta(PubSubRequest.builder().thingName(thingName)
@@ -311,10 +313,10 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                                          ShadowDocument sourceDocument, ShadowDocument updatedDocument)
             throws IOException {
         JsonNode responseMessage = ResponseMessageBuilder.builder()
-                .withClientToken(clientToken)
-                .withTimestamp(Instant.now())
                 .withPrevious(sourceDocument.isNewDocument() ? null : sourceDocument.toJson())
                 .withCurrent(updatedDocument.toJson())
+                .withClientToken(clientToken)
+                .withTimestamp(Instant.now())
                 .build();
         // Send the current document on the documents topic after successfully updating the shadow document.
         pubSubClientWrapper.documents(PubSubRequest.builder().thingName(thingName).shadowName(shadowName)
