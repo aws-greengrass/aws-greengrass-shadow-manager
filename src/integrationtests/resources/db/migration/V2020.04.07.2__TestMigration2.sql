@@ -1,0 +1,5 @@
+DROP TABLE bar;
+
+CREATE TABLE baz (
+    baz VARCHAR(255) NOT NULL
+);
