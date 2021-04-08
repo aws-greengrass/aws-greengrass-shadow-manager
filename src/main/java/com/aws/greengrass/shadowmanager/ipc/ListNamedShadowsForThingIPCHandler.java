@@ -24,6 +24,7 @@ import software.amazon.awssdk.aws.greengrass.model.UnauthorizedError;
 import software.amazon.awssdk.eventstreamrpc.OperationContinuationHandlerContext;
 import software.amazon.awssdk.eventstreamrpc.model.EventStreamJsonMessage;
 
+import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.spec.KeySpec;
 import java.time.Instant;
@@ -191,7 +192,8 @@ public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNam
         try {
             String secret = clientId + thingName;
             Cipher cipher = createCipher(secret, thingName, Cipher.DECRYPT_MODE);
-            String offsetString = new String(cipher.doFinal(Base64.getDecoder().decode(nextToken)));
+            String offsetString = new String(cipher.doFinal(Base64.getDecoder().decode(nextToken)),
+                    StandardCharsets.UTF_8);
             return Integer.parseInt(offsetString);
         } catch (BadPaddingException | IllegalBlockSizeException e) {
             throw new IllegalArgumentException("Invalid nextToken argument", e);
@@ -210,7 +212,7 @@ public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNam
         String secret = clientId + thingName;
         Cipher cipher = createCipher(secret, thingName, Cipher.ENCRYPT_MODE);
         return Base64.getEncoder()
-                .encodeToString(cipher.doFinal(String.valueOf(offset).getBytes()));
+                .encodeToString(cipher.doFinal(String.valueOf(offset).getBytes(StandardCharsets.UTF_8)));
     }
 
     /**
@@ -224,8 +226,8 @@ public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNam
      */
     private static Cipher createCipher(String secret, String salt, int cipherEncryptionMode)
             throws GeneralSecurityException {
-        KeySpec keySpec = new PBEKeySpec(secret.toCharArray(), salt.getBytes(), PBE_KEY_ITERATION_COUNT,
-                PBE_KEY_LENGTH);
+        KeySpec keySpec = new PBEKeySpec(secret.toCharArray(), salt.getBytes(StandardCharsets.UTF_8),
+                PBE_KEY_ITERATION_COUNT, PBE_KEY_LENGTH);
         SecretKeyFactory secretKeyFactory = SecretKeyFactory.getInstance(SECRET_KEY_ALGORITHM);
         SecretKey secretKey = secretKeyFactory.generateSecret(keySpec);
         SecretKeySpec secretKeySpec = new SecretKeySpec(secretKey.getEncoded(), ENCRYPTION_ALGORITHM);

@@ -6,6 +6,7 @@
 package com.aws.greengrass.shadowmanager;
 
 import com.aws.greengrass.lifecyclemanager.Kernel;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import org.flywaydb.core.Flyway;
 import org.h2.jdbcx.JdbcDataSource;
 
@@ -41,7 +42,7 @@ public class ShadowManagerDatabase implements Closeable {
                 String.format(DATABASE_FORMAT, kernel.getNucleusPaths().workPath().resolve(SERVICE_NAME)));
     }
 
-    public Connection connection() {
+    public synchronized Connection connection() {
         return connection;
     }
 
@@ -62,6 +63,7 @@ public class ShadowManagerDatabase implements Closeable {
     }
 
     @Override
+    @SuppressFBWarnings(value = "UWF_FIELD_NOT_INITIALIZED_IN_CONSTRUCTOR", justification = "We check for null.")
     public synchronized void close() throws IOException {
         if (Objects.nonNull(connection)) {
             try {
