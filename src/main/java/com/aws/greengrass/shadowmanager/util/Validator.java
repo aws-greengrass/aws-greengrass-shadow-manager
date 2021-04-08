@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package com.aws.greengrass.shadowmanager.ipc;
+package com.aws.greengrass.shadowmanager.util;
 
 import com.aws.greengrass.shadowmanager.exception.InvalidConfigurationException;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
@@ -34,7 +34,7 @@ public final class Validator {
      *
      * @param shadowRequest The shadow request object containing the thingName and shadowName
      */
-    static void validateShadowRequest(ShadowRequest shadowRequest) {
+    public static void validateShadowRequest(ShadowRequest shadowRequest) {
         String thingName = shadowRequest.getThingName();
         if (Utils.isEmpty(thingName)) {
             throw new InvalidRequestParametersException(ErrorMessage.createInvalidThingNameMessage(

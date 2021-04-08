@@ -6,7 +6,7 @@
 package com.aws.greengrass.shadowmanager.model.configuration;
 
 import com.aws.greengrass.shadowmanager.exception.InvalidConfigurationException;
-import com.aws.greengrass.shadowmanager.ipc.Validator;
+import com.aws.greengrass.shadowmanager.util.Validator;
 import com.aws.greengrass.util.Coerce;
 import com.aws.greengrass.util.SerializerFactory;
 import com.fasterxml.jackson.annotation.JsonProperty;

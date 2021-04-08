@@ -12,7 +12,7 @@ import com.aws.greengrass.config.WhatHappened;
 import com.aws.greengrass.deployment.DeviceConfiguration;
 import com.aws.greengrass.shadowmanager.exception.InvalidConfigurationException;
 import com.aws.greengrass.shadowmanager.ipc.PubSubClientWrapper;
-import com.aws.greengrass.shadowmanager.ipc.Validator;
+import com.aws.greengrass.shadowmanager.util.Validator;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.testcommons.testutilities.GGServiceTestUtil;
 import com.fasterxml.jackson.databind.exc.MismatchedInputException;
