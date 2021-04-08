@@ -11,7 +11,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.Instant;
+import java.io.Serializable;
 
 /**
  * Class that manages error messages to send when a Shadow Operation is rejected.
@@ -20,10 +20,11 @@ import java.time.Instant;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class ErrorMessage {
+public class ErrorMessage implements Serializable {
+    private static final long serialVersionUID = -1488980916089225328L;
+
     private int errorCode;
     private String message;
-    private long timestamp;
 
     public static final ErrorMessage INVALID_VERSION_MESSAGE =
             ErrorMessage.builder().errorCode(400).message("Invalid version").build();
@@ -48,8 +49,7 @@ public class ErrorMessage {
      * @return the ErrorMessage object for thing Not Found exception.
      */
     public static ErrorMessage createInvalidPayloadJsonMessage(String errorMessages) {
-       return ErrorMessage.builder().errorCode(400).timestamp(Instant.now().toEpochMilli())
-                .message(String.format("Invalid JSON%n%s", errorMessages)).build();
+        return ErrorMessage.builder().errorCode(400).message(String.format("Invalid JSON%n%s", errorMessages)).build();
     }
 
     /**
@@ -59,8 +59,7 @@ public class ErrorMessage {
      * @return the ErrorMessage object for InvalidRequestParametersException.
      */
     public static ErrorMessage createInvalidThingNameMessage(String errorMessage) {
-       return ErrorMessage.builder().errorCode(400).timestamp(Instant.now().toEpochMilli())
-                .message(errorMessage).build();
+        return ErrorMessage.builder().errorCode(400).message(errorMessage).build();
     }
 
     /**
@@ -70,8 +69,7 @@ public class ErrorMessage {
      * @return the ErrorMessage object for InvalidRequestParametersException.
      */
     public static ErrorMessage createInvalidShadowNameMessage(String errorMessage) {
-        return ErrorMessage.builder().errorCode(400).timestamp(Instant.now().toEpochMilli())
-                .message(errorMessage).build();
+        return ErrorMessage.builder().errorCode(400).message(errorMessage).build();
     }
 
     /**
@@ -82,7 +80,7 @@ public class ErrorMessage {
      */
     public static ErrorMessage createShadowNotFoundMessage(String shadowName) {
         shadowName = Utils.isEmpty(shadowName) ? "Unnamed Shadow" : shadowName;
-        return ErrorMessage.builder().errorCode(404).timestamp(Instant.now().toEpochMilli())
+        return ErrorMessage.builder().errorCode(404)
                 .message(String.format("No shadow exists with name: %s", shadowName)).build();
     }
 
@@ -92,8 +90,7 @@ public class ErrorMessage {
      * @return the ErrorMessage object for InvalidRequestParametersException.
      */
     public static ErrorMessage createPayloadMissingMessage() {
-        return ErrorMessage.builder().errorCode(400).timestamp(Instant.now().toEpochMilli())
-                .message("Missing update payload").build();
+        return ErrorMessage.builder().errorCode(400).message("Missing update payload").build();
     }
 
     /**
@@ -103,8 +100,7 @@ public class ErrorMessage {
      * @return the ErrorMessage object for Version Conflict exception.
      */
     public static ErrorMessage createPayloadTooLargeMessage() {
-        return ErrorMessage.builder().errorCode(413).timestamp(Instant.now().toEpochMilli())
-                .message("The payload exceeds the maximum size allowed").build();
+        return ErrorMessage.builder().errorCode(413).message("The payload exceeds the maximum size allowed").build();
     }
 
     /**
@@ -114,8 +110,7 @@ public class ErrorMessage {
      * @return the ErrorMessage object for Version Conflict exception.
      */
     public static ErrorMessage createVersionConflictMessage() {
-        return ErrorMessage.builder().errorCode(409).timestamp(Instant.now().toEpochMilli())
-                .message("Version conflict").build();
+        return ErrorMessage.builder().errorCode(409).message("Version conflict").build();
     }
 
     /**
@@ -124,7 +119,6 @@ public class ErrorMessage {
      * @return the ErrorMessage object for Internal Service Failure exception.
      */
     public static ErrorMessage createInternalServiceErrorMessage() {
-        return ErrorMessage.builder().errorCode(500).timestamp(Instant.now().toEpochMilli())
-                .message("Internal service failure").build();
+        return ErrorMessage.builder().errorCode(500).message("Internal service failure").build();
     }
 }

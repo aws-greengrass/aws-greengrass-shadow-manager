@@ -95,7 +95,7 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
             String thingName = request.getThingName();
             String shadowName = request.getShadowName();
             //TODO: Add payload to GetThingShadowRequest
-            byte[] payload = null;
+            byte[] payload = new byte[0];
             Optional<String> clientToken = Optional.empty();
 
             try {

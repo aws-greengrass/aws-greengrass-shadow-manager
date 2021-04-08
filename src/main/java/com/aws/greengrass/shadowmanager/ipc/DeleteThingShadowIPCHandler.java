@@ -96,7 +96,7 @@ public class DeleteThingShadowIPCHandler extends GeneratedAbstractDeleteThingSha
             String shadowName = request.getShadowName();
             //TODO: Add payload to DeleteThingShadowRequest and then validate the version of the document the customer
             //    wants to delete and pass the client token in the response
-            byte[] payload = null;
+            byte[] payload = new byte[0];
             Optional<String> clientToken = Optional.empty();
 
             try {
