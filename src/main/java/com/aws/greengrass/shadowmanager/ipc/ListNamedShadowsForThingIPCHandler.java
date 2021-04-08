@@ -14,6 +14,7 @@ import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersExcept
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.model.ShadowRequest;
+import com.aws.greengrass.shadowmanager.util.Validator;
 import software.amazon.awssdk.aws.greengrass.GeneratedAbstractListNamedShadowsForThingOperationHandler;
 import software.amazon.awssdk.aws.greengrass.model.InvalidArgumentsError;
 import software.amazon.awssdk.aws.greengrass.model.ListNamedShadowsForThingRequest;
