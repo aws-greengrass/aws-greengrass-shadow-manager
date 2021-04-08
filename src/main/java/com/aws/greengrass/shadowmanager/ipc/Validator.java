@@ -77,14 +77,45 @@ public final class Validator {
      *                                       max size (30 MB).
      */
     public static void validateMaxShadowSize(int newMaxShadowSize) throws InvalidConfigurationException {
-        if (MAX_SHADOW_DOCUMENT_SIZE < newMaxShadowSize || newMaxShadowSize < 0) {
+        if (MAX_SHADOW_DOCUMENT_SIZE < newMaxShadowSize || newMaxShadowSize <= 0) {
             throw new InvalidConfigurationException(String.format(
-                    "Maximum shadow size provided %d exceeds the default maximum shadow size of %d", newMaxShadowSize,
+                    "Maximum shadow size provided %d is either less than 0 "
+                            + "or exceeds default maximum shadow size of %d",
+                    newMaxShadowSize,
                     MAX_SHADOW_DOCUMENT_SIZE));
         }
     }
 
     public static void setMaxShadowDocumentSize(int newMaxShadowSize) {
         maxShadowDocumentSize = newMaxShadowSize;
+    }
+
+    /**
+     * Validates the maximum outbound sync updates per second is within the appropriate limits.
+     *
+     * @param newMaxOutboundSyncUpdatesPerSecond The new max outbound sync updates per second
+     * @throws InvalidConfigurationException if the new outbound sync updates per second is less than 0.
+     */
+    public static void validateOutboundSyncUpdatesPerSecond(int newMaxOutboundSyncUpdatesPerSecond) {
+        if (newMaxOutboundSyncUpdatesPerSecond <= 0) {
+            throw new InvalidConfigurationException(String.format(
+                    "Maximum outbound sync update per second provided %d is invalid. It should be greater than 0.",
+                    newMaxOutboundSyncUpdatesPerSecond));
+        }
+    }
+
+    /**
+     * Validates the maximum disk utilization is within the appropriate limits.
+     *
+     * @param newMaxDiskUtilization The new max disk utilization
+     * @throws InvalidConfigurationException if the new disk utilization is less than 0.
+     */
+    public static void validateMaxDiskUtilization(int newMaxDiskUtilization) {
+        if (newMaxDiskUtilization <= 0) {
+            throw new InvalidConfigurationException(String.format(
+                    "Maximum disk utilization provided %d is invalid. It should be greater than 0.",
+                    newMaxDiskUtilization));
+        }
+
     }
 }

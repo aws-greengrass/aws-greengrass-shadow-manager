@@ -6,6 +6,7 @@
 package com.aws.greengrass.shadowmanager.model.configuration;
 
 import com.aws.greengrass.shadowmanager.exception.InvalidConfigurationException;
+import com.aws.greengrass.shadowmanager.ipc.Validator;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.util.Coerce;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -45,14 +46,17 @@ public class ShadowSyncConfiguration {
      */
     public static ShadowSyncConfiguration processConfiguration(Map<String, Object> configTopicsPojo, String thingName) {
         List<ThingShadowSyncConfiguration> syncConfigurationList = new ArrayList<>();
+        int maxOutboundSyncUpdatesPerSecond = DEFAULT_MAX_OUTBOUND_SYNC_UPDATES_PS;
         processNucleusThingConfiguration(configTopicsPojo, thingName, syncConfigurationList);
         processOtherThingConfigurations(configTopicsPojo, syncConfigurationList);
 
-        //TODO: Do we do a validation here to check for the AWS region and base the TPS on that?
-        final int maxOutboundSyncUpdatesPerSecond = Optional.ofNullable(
-                configTopicsPojo.get(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC))
-                .map(Coerce::toInt)
-                .orElse(DEFAULT_MAX_OUTBOUND_SYNC_UPDATES_PS);
+        if (configTopicsPojo.containsKey(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC)) {
+            int newMaxOutboundSyncUpdatesPerSecond = Coerce.toInt(configTopicsPojo
+                    .get(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC));
+            Validator.validateOutboundSyncUpdatesPerSecond(newMaxOutboundSyncUpdatesPerSecond);
+            maxOutboundSyncUpdatesPerSecond = newMaxOutboundSyncUpdatesPerSecond;
+        }
+
         final boolean provideSyncStatus = Optional.ofNullable(
                 configTopicsPojo.get(CONFIGURATION_PROVIDE_SYNC_STATUS_TOPIC))
                 .map(Coerce::toBoolean)
@@ -94,23 +98,28 @@ public class ShadowSyncConfiguration {
         configTopicsPojo.computeIfPresent(CONFIGURATION_NUCLEUS_THING_TOPIC, (ignored, nucleusThingConfigObject) -> {
             if (nucleusThingConfigObject instanceof Map) {
                 Map<String, Object> nucleusThingConfig = (Map) nucleusThingConfigObject;
-                ThingShadowSyncConfiguration.ThingShadowSyncConfigurationBuilder builder = ThingShadowSyncConfiguration
+                ThingShadowSyncConfiguration syncConfiguration = ThingShadowSyncConfiguration
                         .builder()
-                        .thingName(thingName);
-                nucleusThingConfig.forEach((configFieldName, configFieldValue) -> {
-                    switch (configFieldName) {
+                        .isNucleusThing(true)
+                        .thingName(thingName)
+                        .build();
+                for (Map.Entry<String,Object> configObjectEntry : nucleusThingConfig.entrySet()) {
+                    switch (configObjectEntry.getKey()) {
                         case CONFIGURATION_CLASSIC_SHADOW_TOPIC:
-                            builder.syncClassicShadow(Coerce.toBoolean(configFieldValue));
+                            syncConfiguration = syncConfiguration.toBuilder()
+                                    .syncClassicShadow(Coerce.toBoolean(configObjectEntry.getValue())).build();
                             break;
                         case CONFIGURATION_NAMED_SHADOWS_TOPIC:
-                            builder.syncNamedShadows(Coerce.toStringList(configFieldValue));
+                            syncConfiguration = syncConfiguration.toBuilder()
+                                    .syncNamedShadows(Coerce.toStringList(configObjectEntry.getValue()))
+                                    .build();
                             break;
                         default:
                             throw new InvalidConfigurationException(String.format("Unexpected value in %s: %s",
-                                    CONFIGURATION_NUCLEUS_THING_TOPIC, configFieldName));
+                                    CONFIGURATION_NUCLEUS_THING_TOPIC, configObjectEntry.getKey()));
                     }
-                });
-                syncConfigurationList.add(builder.build());
+                }
+                syncConfigurationList.add(syncConfiguration);
             } else {
                 throw new InvalidConfigurationException(String.format("Unexpected type in %s: %s",
                         CONFIGURATION_SHADOW_DOCUMENTS_TOPIC, nucleusThingConfigObject.getClass().getTypeName()));
