@@ -15,6 +15,7 @@ import lombok.Getter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_CLASSIC_SHADOW_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC;
@@ -44,21 +45,18 @@ public class ShadowSyncConfiguration {
      */
     public static ShadowSyncConfiguration processConfiguration(Map<String, Object> configTopicsPojo, String thingName) {
         List<ThingShadowSyncConfiguration> syncConfigurationList = new ArrayList<>();
-        boolean provideSyncStatus = DEFAULT_PROVIDE_SYNC_STATUS;
-        int maxOutboundSyncUpdatesPerSecond = DEFAULT_MAX_OUTBOUND_SYNC_UPDATES_PS;
-
         processNucleusThingConfiguration(configTopicsPojo, thingName, syncConfigurationList);
         processOtherThingConfigurations(configTopicsPojo, syncConfigurationList);
 
-        if (configTopicsPojo.containsKey(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC)) {
-            //TODO: Do we do a validation here to check for the AWS region and base the TPS on that?
-            maxOutboundSyncUpdatesPerSecond = Coerce.toInt(configTopicsPojo
-                    .get(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC));
-        }
-
-        if (configTopicsPojo.containsKey(CONFIGURATION_PROVIDE_SYNC_STATUS_TOPIC)) {
-            provideSyncStatus = Coerce.toBoolean(configTopicsPojo.get(CONFIGURATION_PROVIDE_SYNC_STATUS_TOPIC));
-        }
+        //TODO: Do we do a validation here to check for the AWS region and base the TPS on that?
+        final int maxOutboundSyncUpdatesPerSecond = Optional.ofNullable(
+                configTopicsPojo.get(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC))
+                .map(Coerce::toInt)
+                .orElse(DEFAULT_MAX_OUTBOUND_SYNC_UPDATES_PS);
+        final boolean provideSyncStatus = Optional.ofNullable(
+                configTopicsPojo.get(CONFIGURATION_PROVIDE_SYNC_STATUS_TOPIC))
+                .map(Coerce::toBoolean)
+                .orElse(DEFAULT_PROVIDE_SYNC_STATUS);
 
         return ShadowSyncConfiguration.builder()
                 .syncConfigurationList(syncConfigurationList)
@@ -69,9 +67,9 @@ public class ShadowSyncConfiguration {
 
     private static void processOtherThingConfigurations(Map<String, Object> configTopicsPojo,
                                                         List<ThingShadowSyncConfiguration> syncConfigurationList) {
-        configTopicsPojo.computeIfPresent(CONFIGURATION_SHADOW_DOCUMENTS_TOPIC, (s, o) -> {
-            if (o instanceof ArrayList) {
-                List<Object> shadowDocumentsToSyncList = (ArrayList) o;
+        configTopicsPojo.computeIfPresent(CONFIGURATION_SHADOW_DOCUMENTS_TOPIC, (ignored, shadowDocumentsObject) -> {
+            if (shadowDocumentsObject instanceof ArrayList) {
+                List<Object> shadowDocumentsToSyncList = (List) shadowDocumentsObject;
                 shadowDocumentsToSyncList.forEach(shadowDocumentsToSync -> {
                     if (shadowDocumentsToSync instanceof Map) {
                         try {
@@ -85,39 +83,39 @@ public class ShadowSyncConfiguration {
                 });
             } else {
                 throw new InvalidConfigurationException(String.format("Unexpected type in %s: %s",
-                        CONFIGURATION_SHADOW_DOCUMENTS_TOPIC, o.getClass().getTypeName()));
+                        CONFIGURATION_SHADOW_DOCUMENTS_TOPIC, shadowDocumentsObject.getClass().getTypeName()));
             }
-            return o;
+            return shadowDocumentsObject;
         });
     }
 
     private static void processNucleusThingConfiguration(Map<String, Object> configTopicsPojo, String thingName,
                                                          List<ThingShadowSyncConfiguration> syncConfigurationList) {
-        configTopicsPojo.computeIfPresent(CONFIGURATION_NUCLEUS_THING_TOPIC, (s, o) -> {
-            if (o instanceof Map) {
-                Map<String, Object> nucleusThingConfig = (Map) o;
+        configTopicsPojo.computeIfPresent(CONFIGURATION_NUCLEUS_THING_TOPIC, (ignored, nucleusThingConfigObject) -> {
+            if (nucleusThingConfigObject instanceof Map) {
+                Map<String, Object> nucleusThingConfig = (Map) nucleusThingConfigObject;
                 ThingShadowSyncConfiguration.ThingShadowSyncConfigurationBuilder builder = ThingShadowSyncConfiguration
                         .builder()
                         .thingName(thingName);
-                nucleusThingConfig.forEach((s1, o1) -> {
-                    switch (s1) {
+                nucleusThingConfig.forEach((configFieldName, configFieldValue) -> {
+                    switch (configFieldName) {
                         case CONFIGURATION_CLASSIC_SHADOW_TOPIC:
-                            builder.syncClassicShadow(Coerce.toBoolean(o1));
+                            builder.syncClassicShadow(Coerce.toBoolean(configFieldValue));
                             break;
                         case CONFIGURATION_NAMED_SHADOWS_TOPIC:
-                            builder.syncNamedShadows(Coerce.toStringList(o1));
+                            builder.syncNamedShadows(Coerce.toStringList(configFieldValue));
                             break;
                         default:
                             throw new InvalidConfigurationException(String.format("Unexpected value in %s: %s",
-                                    CONFIGURATION_NUCLEUS_THING_TOPIC, s1));
+                                    CONFIGURATION_NUCLEUS_THING_TOPIC, configFieldName));
                     }
                 });
                 syncConfigurationList.add(builder.build());
             } else {
                 throw new InvalidConfigurationException(String.format("Unexpected type in %s: %s",
-                        CONFIGURATION_SHADOW_DOCUMENTS_TOPIC, o.getClass().getTypeName()));
+                        CONFIGURATION_SHADOW_DOCUMENTS_TOPIC, nucleusThingConfigObject.getClass().getTypeName()));
             }
-            return o;
+            return nucleusThingConfigObject;
         });
     }
 }

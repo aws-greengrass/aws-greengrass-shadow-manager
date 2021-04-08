@@ -79,7 +79,7 @@ public final class Validator {
     public static void validateMaxShadowSize(int newMaxShadowSize) throws InvalidConfigurationException {
         if (MAX_SHADOW_DOCUMENT_SIZE < newMaxShadowSize || newMaxShadowSize < 0) {
             throw new InvalidConfigurationException(String.format(
-                    "Maximum shadow size provided %s exceeds the default maximum shadow size of %s", newMaxShadowSize,
+                    "Maximum shadow size provided %d exceeds the default maximum shadow size of %d", newMaxShadowSize,
                     MAX_SHADOW_DOCUMENT_SIZE));
         }
     }
