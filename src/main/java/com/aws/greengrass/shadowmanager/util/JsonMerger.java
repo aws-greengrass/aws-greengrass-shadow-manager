@@ -10,6 +10,7 @@ import com.aws.greengrass.shadowmanager.model.ErrorMessage;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 import java.util.Iterator;
 
@@ -31,6 +32,7 @@ public final class JsonMerger {
      * @param patch  The patch JSON.
      * @throws InvalidRequestParametersException If the source and patch node are of different types.
      */
+    @SuppressFBWarnings(value = "BC_UNCONFIRMED_CAST", justification = "We do check the type before cast.")
     public static void merge(JsonNode source, final JsonNode patch) throws InvalidRequestParametersException {
         // If both nodes are objects then do a recursive patch
         if (source.isObject() && patch.isObject()) {

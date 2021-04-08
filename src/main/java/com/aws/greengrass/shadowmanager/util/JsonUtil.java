@@ -20,6 +20,7 @@ import com.github.fge.jsonschema.core.exceptions.ProcessingException;
 import com.github.fge.jsonschema.core.report.ProcessingReport;
 import com.github.fge.jsonschema.main.JsonSchema;
 import com.github.fge.jsonschema.main.JsonSchemaFactory;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import software.amazon.awssdk.aws.greengrass.model.ConflictError;
 
 import java.io.IOException;
@@ -233,6 +234,7 @@ public final class JsonUtil {
      * @param desired  The desired JSON node.
      * @return the delta node containing the difference between the reported and desired.
      */
+    @SuppressFBWarnings(value = "BC_UNCONFIRMED_CAST", justification = "We do check the type before cast.")
     public static JsonNode calculateDelta(JsonNode reported, JsonNode desired) {
         // If original and updated shadow documents are both objects then recursively diff
         if (reported.isObject() && desired.isObject()) {
