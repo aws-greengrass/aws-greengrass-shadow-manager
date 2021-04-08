@@ -7,8 +7,8 @@ package com.aws.greengrass.shadowmanager.model.configuration;
 
 import com.aws.greengrass.shadowmanager.exception.InvalidConfigurationException;
 import com.aws.greengrass.shadowmanager.ipc.Validator;
-import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.util.Coerce;
+import com.aws.greengrass.util.SerializerFactory;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Getter;
@@ -77,7 +77,8 @@ public class ShadowSyncConfiguration {
                 shadowDocumentsToSyncList.forEach(shadowDocumentsToSync -> {
                     if (shadowDocumentsToSync instanceof Map) {
                         try {
-                            ThingShadowSyncConfiguration syncConfiguration = JsonUtil.OBJECT_MAPPER
+                            ThingShadowSyncConfiguration syncConfiguration = SerializerFactory
+                                    .getFailSafeJsonObjectMapper()
                                     .convertValue(shadowDocumentsToSync, ThingShadowSyncConfiguration.class);
                             syncConfigurationList.add(syncConfiguration);
                         } catch (IllegalArgumentException e) {
@@ -115,8 +116,8 @@ public class ShadowSyncConfiguration {
                                     .build();
                             break;
                         default:
-                            throw new InvalidConfigurationException(String.format("Unexpected value in %s: %s",
-                                    CONFIGURATION_NUCLEUS_THING_TOPIC, configObjectEntry.getKey()));
+                            // Do nothing here since we want to be lenient with unknown fields.
+                            break;
                     }
                 }
                 syncConfigurationList.add(syncConfiguration);
