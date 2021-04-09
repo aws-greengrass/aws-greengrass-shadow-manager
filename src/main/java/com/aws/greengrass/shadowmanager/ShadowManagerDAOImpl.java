@@ -40,15 +40,17 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      */
     @Override
     public Optional<byte[]> createShadowThing(String thingName, String shadowName, byte[] initialDocument) {
-        return execute("INSERT INTO documents VALUES (?, ?, ?)", preparedStatement -> {
-            preparedStatement.setString(1, thingName);
-            preparedStatement.setString(2, shadowName);
-            preparedStatement.setBytes(3, initialDocument);
-            int result = preparedStatement.executeUpdate();
-            if (result == 1) {
-                return Optional.ofNullable(initialDocument);
-            }
-            return Optional.empty();
+        return execute("INSERT INTO documents (thingName, shadowName, document) VALUES (?, ?, ?)",
+                preparedStatement -> {
+                    preparedStatement.setString(1, thingName);
+                    preparedStatement.setString(2, shadowName);
+                    preparedStatement.setBytes(3, initialDocument);
+
+                    int result = preparedStatement.executeUpdate();
+                    if (result == 1) {
+                        return Optional.ofNullable(initialDocument);
+                    }
+                    return Optional.empty();
         });
     }
 
@@ -107,7 +109,8 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      */
     @Override
     public Optional<byte[]> updateShadowThing(String thingName, String shadowName, byte[] newDocument) {
-        return execute("MERGE INTO documents KEY (thingName, shadowName) VALUES (?, ?, ?)",
+        return execute("MERGE INTO documents(thingName, shadowName, document) KEY (thingName, shadowName)"
+                        + " VALUES (?, ?, ?)",
                 preparedStatement -> {
                     preparedStatement.setString(1, thingName);
                     preparedStatement.setString(2, shadowName);

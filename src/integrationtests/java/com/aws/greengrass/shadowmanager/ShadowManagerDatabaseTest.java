@@ -13,12 +13,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -26,6 +28,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalToIgnoringCase;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasItems;
+import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -76,17 +79,47 @@ class ShadowManagerDatabaseTest extends GGServiceTestUtil {
     }
 
     @Test
+    void GIVEN_data_WHEN_restart_THEN_data_still_exists() throws Exception {
+        ShadowManagerDatabase shadowManagerDatabase = initializeShadowManagerDatabase();
+        ShadowManagerDAOImpl dao = new ShadowManagerDAOImpl(shadowManagerDatabase);
+
+        // GIVEN
+        String doc = "{\"foo\": \"bar\"}";
+        dao.updateShadowThing("foo", "bar", doc.getBytes(StandardCharsets.UTF_8));
+        Optional<byte[]> data = dao.getShadowThing("foo", "bar");
+
+        assertThat(data.isPresent(), is(true));
+        assertThat(new String(data.get(), StandardCharsets.UTF_8), is(doc));
+
+        // WHEN
+        kernel.shutdown();
+        kernel = new Kernel();
+        shadowManagerDatabase = initializeShadowManagerDatabase();
+
+        // THEN
+        dao = new ShadowManagerDAOImpl(shadowManagerDatabase);
+        data = dao.getShadowThing("foo", "bar");
+        assertThat(data.isPresent(), is(true));
+        assertThat(new String(data.get(), StandardCharsets.UTF_8), is(doc));
+    }
+
+    @Test
     void GIVEN_nucleus_WHEN_install_THEN_shadow_manager_database_installs_and_starts_successfully() throws Exception {
         ShadowManagerDatabase shadowManagerDatabase = initializeShadowManagerDatabase();
         assertNotNull(shadowManagerDatabase.connection());
 
         List<String> tables = loadTables(shadowManagerDatabase.connection());
+        // flyway installed
+        assertThat(tables, hasItem(equalToIgnoringCase("flyway_schema_history")));
+
         // expected tables
         assertThat(tables, hasItems(equalToIgnoringCase("documents"),
                 equalToIgnoringCase("sync")));
+
         // tables loaded by migrations provided as test resources
         assertThat(tables, hasItems(equalToIgnoringCase("foo"),
                 equalToIgnoringCase("baz")));
+
         // table removed from migration
         assertThat(tables, not(hasItem(equalToIgnoringCase("bar"))));
     }
