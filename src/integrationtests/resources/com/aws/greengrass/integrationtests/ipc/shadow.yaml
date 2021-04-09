@@ -1,0 +1,38 @@
+---
+services:
+  aws.greengrass.Nucleus:
+    configuration:
+      runWithDefault:
+        posixUser: nobody
+
+  main:
+    dependencies:
+      - DoAll
+  DoAll:
+    lifecycle:
+      run:
+        windows:
+          powershell -command sleep 1
+        posix:
+          sleep 1
+    dependencies:
+      - aws.greengrass.ShadowManager
+    configuration:
+      accessControl:
+        aws.greengrass.ShadowManager:
+          policyId1:
+            policyDescription: access to shadow
+            operations:
+              - 'aws.greengrass#GetThingShadow'
+              - 'aws.greengrass#UpdateThingShadow'
+              - 'aws.greengrass#DeleteThingShadow'
+              - 'aws.greengrass#ListNamedShadowsForThing'
+            resources:
+              - '*'
+        aws.greengrass.ipc.pubsub:
+          policyId2:
+            policyDescription: access to pubsub topics
+            operations:
+              - 'aws.greengrass#SubscribeToTopic'
+            resources:
+              - '*'

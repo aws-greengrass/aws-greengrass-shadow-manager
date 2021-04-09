@@ -9,7 +9,6 @@ import com.aws.greengrass.util.Utils;
 import lombok.Getter;
 
 import java.util.Optional;
-import javax.validation.constraints.NotNull;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.CLASSIC_SHADOW_IDENTIFIER;
 import static com.aws.greengrass.shadowmanager.model.Constants.CLASSIC_SHADOW_TOPIC_PREFIX;
@@ -20,7 +19,6 @@ import static com.aws.greengrass.shadowmanager.model.Constants.NAMED_SHADOW_TOPI
  */
 @Getter
 public class ShadowRequest {
-    @NotNull
     String thingName;
     String shadowName;
 

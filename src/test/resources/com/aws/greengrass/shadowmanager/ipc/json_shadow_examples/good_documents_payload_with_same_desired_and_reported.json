@@ -10,7 +10,7 @@
         "SomeKey": "SomeValue"
       }
     },
-    "version": 0
+    "version": 1
   },
   "current": {
     "state": {
@@ -31,7 +31,7 @@
         "SomeKey": "SomeValue"
       }
     },
-    "version": 1
+    "version": 2
   },
   "clientToken": "device"
 }

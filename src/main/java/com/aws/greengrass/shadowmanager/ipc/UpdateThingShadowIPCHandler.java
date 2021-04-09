@@ -112,7 +112,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                 ShadowRequest shadowRequest = new ShadowRequest(thingName, shadowName);
                 Validator.validateShadowRequest(shadowRequest);
                 if (updatedDocumentRequestBytes == null || updatedDocumentRequestBytes.length == 0) {
-                    throw new InvalidRequestParametersException(ErrorMessage.createPayloadMissingMessage());
+                    throw new InvalidRequestParametersException(ErrorMessage.PAYLOAD_MISSING_MESSAGE);
                 }
                 authorizationHandlerWrapper.doAuthorization(UPDATE_THING_SHADOW, serviceName, shadowRequest);
 
@@ -130,8 +130,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                 // parameters error for payload too large.
                 //TODO: get the max doc size from config.
                 if (updatedDocumentRequestBytes.length > Constants.DEFAULT_DOCUMENT_SIZE) {
-                    ErrorMessage errorMessage = ErrorMessage.createPayloadTooLargeMessage();
-                    throw new InvalidRequestParametersException(errorMessage);
+                    throw new InvalidRequestParametersException(ErrorMessage.PAYLOAD_TOO_LARGE_MESSAGE);
                 }
                 updateDocumentRequest = JsonUtil.getPayloadJson(updatedDocumentRequestBytes)
                         .filter(d -> !isNullOrMissing(d))
@@ -161,7 +160,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                         .kv(LOG_THING_NAME_KEY, thingName)
                         .kv(LOG_SHADOW_NAME_KEY, shadowName)
                         .log("Conflicting version in shadow update message");
-                publishErrorMessage(thingName, shadowName, clientToken, ErrorMessage.createVersionConflictMessage());
+                publishErrorMessage(thingName, shadowName, clientToken, ErrorMessage.VERSION_CONFLICT_MESSAGE);
                 throw e;
             } catch (InvalidRequestParametersException e) {
                 logger.atWarn()
@@ -194,7 +193,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                             .setCause(error)
                             .log();
                     publishErrorMessage(thingName, shadowName, clientToken,
-                            ErrorMessage.createInternalServiceErrorMessage());
+                            ErrorMessage.INTERNAL_SERVICE_FAILURE_MESSAGE);
                     throw error;
                 }
 
@@ -251,7 +250,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                 .kv(LOG_THING_NAME_KEY, thingName)
                 .kv(LOG_SHADOW_NAME_KEY, shadowName)
                 .log("Could not process UpdateThingShadow Request due to internal service error");
-        publishErrorMessage(thingName, shadowName, clientToken, ErrorMessage.createInternalServiceErrorMessage());
+        publishErrorMessage(thingName, shadowName, clientToken, ErrorMessage.INTERNAL_SERVICE_FAILURE_MESSAGE);
         throw new ServiceError(e.getMessage());
     }
 

@@ -154,8 +154,13 @@ public class ShadowStateMetadata {
 
             // If the patch is an array, we can replace the original with the patch.
             if (patchFieldNode.isArray()) {
-                ((ArrayNode) metadataFieldNode).removeAll();
+                if (isNullOrMissing(metadataFieldNode)) {
+                    metadataFieldNode = JsonUtil.OBJECT_MAPPER.createArrayNode();
+                } else {
+                    ((ArrayNode) metadataFieldNode).removeAll();
+                }
                 ((ArrayNode) metadataFieldNode).addAll((ArrayNode) patchFieldNode);
+                metadata.set(patchFieldName, metadataFieldNode);
                 continue;
             }
 

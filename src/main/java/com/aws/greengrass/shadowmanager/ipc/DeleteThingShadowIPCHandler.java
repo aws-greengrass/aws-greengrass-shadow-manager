@@ -176,8 +176,7 @@ public class DeleteThingShadowIPCHandler extends GeneratedAbstractDeleteThingSha
                         .kv(LOG_THING_NAME_KEY, thingName)
                         .kv(LOG_SHADOW_NAME_KEY, shadowName)
                         .log("Could not process UpdateThingShadow Request due to internal service error");
-                publishErrorMessage(thingName, shadowName, clientToken,
-                        ErrorMessage.createInternalServiceErrorMessage());
+                publishErrorMessage(thingName, shadowName, clientToken, ErrorMessage.INTERNAL_SERVICE_FAILURE_MESSAGE);
                 throw new ServiceError(e.getMessage());
             }
         });

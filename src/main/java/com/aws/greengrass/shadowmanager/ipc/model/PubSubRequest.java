@@ -9,8 +9,6 @@ import com.aws.greengrass.shadowmanager.model.ShadowRequest;
 import lombok.Builder;
 import lombok.Getter;
 
-import javax.validation.constraints.NotNull;
-
 /**
  * Class to store information needed for publishing message over local PubSub.
  */
@@ -28,7 +26,7 @@ public class PubSubRequest extends ShadowRequest {
      * @param publishOperation The Operation type to be performed on the shadow
      */
     @Builder
-    public PubSubRequest(@NotNull String thingName, String shadowName, Operation publishOperation, byte[] payload) {
+    public PubSubRequest(String thingName, String shadowName, Operation publishOperation, byte[] payload) {
         super(thingName, shadowName);
         this.publishOperation = publishOperation;
         this.payload = payload;
