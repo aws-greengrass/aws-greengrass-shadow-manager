@@ -4,7 +4,7 @@ CREATE TABLE documents (
     document TEXT,
     version NUMBER DEFAULT 1,
     deleted BIT DEFAULT 0,
-    updateTime TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updateTime NUMBER,
     PRIMARY KEY (thingName, shadowName)
 );
 
@@ -14,7 +14,7 @@ CREATE TABLE sync (
     cloudDocument TEXT,
     cloudVersion NUMBER,
     cloudDeleted BIT,
-    cloudUpdateTime TIMESTAMP WITH TIME ZONE,
-    lastSyncTime TIMESTAMP WITH TIME ZONE,
+    cloudUpdateTime NUMBER,
+    lastSyncTime NUMBER,
     PRIMARY KEY (thingName, shadowName)
 );

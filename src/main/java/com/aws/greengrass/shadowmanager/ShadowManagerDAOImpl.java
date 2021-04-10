@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Optional;
 import javax.inject.Inject;
 
+// TODO: record UTC epoch seconds when updating/deleting shadow
 public class ShadowManagerDAOImpl implements ShadowManagerDAO {
     private final ShadowManagerDatabase database;
     private static final String DOCUMENT = "document";
@@ -45,7 +46,6 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
                     preparedStatement.setString(1, thingName);
                     preparedStatement.setString(2, shadowName);
                     preparedStatement.setBytes(3, initialDocument);
-
                     int result = preparedStatement.executeUpdate();
                     if (result == 1) {
                         return Optional.ofNullable(initialDocument);
@@ -85,6 +85,10 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      */
     @Override
     public Optional<byte[]> deleteShadowThing(String thingName, String shadowName) {
+        // TODO: This should function as a soft delete so version can be retained
+        // To be consistent with cloud, subsequent updates to the shadow should not start from version 0
+        // https://docs.aws.amazon.com/iot/latest/developerguide/device-shadow-data-flow.html
+
         return getShadowThing(thingName, shadowName)
                 .flatMap(shadowDocument ->
                         execute("DELETE FROM documents WHERE thingName = ? AND shadowName = ?",
