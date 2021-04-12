@@ -1,9 +1,11 @@
-package com.aws.greengrass.shadowmanager;
+package com.aws.greengrass.integrationtests;
 
 import com.aws.greengrass.dependency.State;
 import com.aws.greengrass.lifecyclemanager.GlobalStateChangeListener;
 import com.aws.greengrass.lifecyclemanager.GreengrassService;
 import com.aws.greengrass.lifecyclemanager.Kernel;
+import com.aws.greengrass.shadowmanager.ShadowManager;
+import com.aws.greengrass.shadowmanager.ShadowManagerDatabase;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.testcommons.testutilities.GGServiceTestUtil;
 import org.junit.jupiter.api.AfterEach;

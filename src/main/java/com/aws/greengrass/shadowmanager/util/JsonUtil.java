@@ -31,7 +31,6 @@ import java.util.StringJoiner;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_CLIENT_TOKEN;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_VERSION;
-import static com.aws.greengrass.shadowmanager.model.Constants.STATE_NODE_REQUIRED_PARAM_ERROR_MESSAGE;
 
 public final class JsonUtil {
     public static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -81,12 +80,12 @@ public final class JsonUtil {
                     return;
                 }
                 throw new InvalidRequestParametersException(ErrorMessage
-                        .createInvalidPayloadJsonMessage(STATE_NODE_REQUIRED_PARAM_ERROR_MESSAGE));
+                        .createInvalidPayloadJsonMessage(getAllValidationErrors(report)));
             }
             throw new InvalidRequestParametersException(ErrorMessage
                     .createInvalidPayloadJsonMessage(getAllValidationErrors(report)));
         } catch (ProcessingException e) {
-            throw new InvalidRequestParametersException(ErrorMessage.createInternalServiceErrorMessage());
+            throw new InvalidRequestParametersException(ErrorMessage.INTERNAL_SERVICE_FAILURE_MESSAGE);
         }
     }
 
@@ -184,17 +183,21 @@ public final class JsonUtil {
         JsonNode stateJson = updatedDocument.get(SHADOW_DOCUMENT_STATE);
         JsonUtil.validatePayloadStateDepth(stateJson);
 
+        JsonNode updateVersion = updatedDocument.get(SHADOW_DOCUMENT_VERSION);
+        // If there is no version node in the update, then return since we don't need to check for conflicts.
+        if (isNullOrMissing(updateVersion)) {
+            return;
+        }
         // If there is no current version document, then this is the first version of the document and we only need
         // to en sure that if there is a version in the update request, it is 0.
-        JsonNode updateVersion = updatedDocument.get(SHADOW_DOCUMENT_VERSION);
         if (sourceDocument.isNewDocument()) {
-            if (!isNullOrMissing(updateVersion) && updateVersion.asInt() != 0) {
+            if (updateVersion.asInt() != 0) {
                 throw new InvalidRequestParametersException(ErrorMessage.INVALID_VERSION_MESSAGE);
             }
             return;
         }
-        if (sourceDocument.getVersion() + 1 != updateVersion.asInt()) {
-            throw new ConflictError(ErrorMessage.INVALID_VERSION_MESSAGE.getMessage());
+        if (sourceDocument.getVersion() != updateVersion.asInt()) {
+            throw new ConflictError(ErrorMessage.VERSION_CONFLICT_MESSAGE.getMessage());
         }
     }
 

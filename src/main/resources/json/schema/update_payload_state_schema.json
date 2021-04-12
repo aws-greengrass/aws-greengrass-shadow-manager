@@ -6,27 +6,15 @@
   "properties": {
     "reported": {
       "description": "The shadow document state reported by the components.",
-      "type": "object"
+      "type": ["object", "null"]
     },
     "desired": {
       "description": "The desired change in the shadow document state by the components. ",
-      "type": "object"
+      "type": ["object", "null"]
     },
     "delta": {
       "description": "The difference between the desired and reported nodes in the shadow documents.",
       "type": "object"
     }
-  },
-  "oneOf": [
-    {
-      "required": [
-        "reported"
-      ]
-    },
-    {
-      "required": [
-        "desired"
-      ]
-    }
-  ]
+  }
 }

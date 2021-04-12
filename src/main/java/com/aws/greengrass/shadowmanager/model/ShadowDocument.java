@@ -105,7 +105,7 @@ public class ShadowDocument {
         this.state.update(updatedStateNode);
         JsonNode patchMetadata = this.metadata.update(updatedStateNode, this.state);
         // Incrementing the version here since we are creating a new version of the shadow document.
-        this.version = this.version == null ? 0 : this.version + 1;
+        this.version = this.version == null ? 1 : this.version + 1;
 
         return new Pair<>(updatedStateNode, patchMetadata);
     }

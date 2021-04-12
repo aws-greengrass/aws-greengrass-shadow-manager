@@ -131,8 +131,7 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
 
                 ObjectNode responseNode = ResponseMessageBuilder.builder()
                         .withState(currentShadowDocument.getState().toJsonWithDelta())
-                        //TODO: Update the metadata when implemented.
-                        //.withMetadata()
+                        .withMetadata(currentShadowDocument.getMetadata().toJson())
                         .withVersion(currentShadowDocument.getVersion())
                         .withClientToken(clientToken)
                         .withTimestamp(Instant.now()).build();
@@ -172,8 +171,7 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
                         .kv(LOG_THING_NAME_KEY, thingName)
                         .kv(LOG_SHADOW_NAME_KEY, shadowName)
                         .log("Could not process UpdateThingShadow Request due to internal service error");
-                publishErrorMessage(thingName, shadowName, clientToken,
-                        ErrorMessage.createInternalServiceErrorMessage());
+                publishErrorMessage(thingName, shadowName, clientToken, ErrorMessage.INTERNAL_SERVICE_FAILURE_MESSAGE);
                 throw new ServiceError(e.getMessage());
             }
         });

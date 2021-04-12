@@ -26,8 +26,6 @@ public final class Constants {
     public static final String SHADOW_DOCUMENT_STATE_DELTA = "delta";
     public static final String SHADOW_DOCUMENT_STATE_PREVIOUS = "previous";
     public static final String SHADOW_DOCUMENT_STATE_CURRENT = "current";
-    public static final String STATE_NODE_REQUIRED_PARAM_ERROR_MESSAGE = "State node needs to have to either reported "
-            + "or desired node.";
     public static final int DEFAULT_DOCUMENT_STATE_DEPTH = 6;
     public static final int DEFAULT_DOCUMENT_SIZE = 8 * 1024;
     public static final int MAX_SHADOW_DOCUMENT_SIZE = 30 * 1024;

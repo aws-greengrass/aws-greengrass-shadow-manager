@@ -3,13 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package com.aws.greengrass.shadowmanager;
+package com.aws.greengrass.integrationtests;
 
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
 import com.aws.greengrass.dependency.State;
 import com.aws.greengrass.lifecyclemanager.GreengrassService;
 import com.aws.greengrass.lifecyclemanager.GlobalStateChangeListener;
 import com.aws.greengrass.lifecyclemanager.Kernel;
+import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
+import com.aws.greengrass.shadowmanager.ShadowManager;
+import com.aws.greengrass.shadowmanager.ShadowManagerDAOImpl;
+import com.aws.greengrass.shadowmanager.ShadowManagerDatabase;
 import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.testcommons.testutilities.GGServiceTestUtil;

@@ -30,7 +30,7 @@
         <shadowmanagerjar.name>aws.greengrass.ShadowManager</shadowmanagerjar.name>
 
         <h2.version>1.4.200</h2.version>
-        <nucleus.version>2.0.0-SNAPSHOT</nucleus.version>
+        <nucleus.version>2.1.0-SNAPSHOT</nucleus.version>
         <junit.version>5.6.2</junit.version>
         <mockito.version>3.2.4</mockito.version>
         <lombok.version>1.18.10</lombok.version>
@@ -353,12 +353,12 @@
                                         <limit>
                                             <counter>INSTRUCTION</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.93</minimum>
+                                            <minimum>0.87</minimum>
                                         </limit>
                                         <limit>
                                             <counter>BRANCH</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.84</minimum>
+                                            <minimum>0.83</minimum>
                                         </limit>
                                     </limits>
                                 </rule>
@@ -380,12 +380,12 @@
                                         <limit>
                                             <counter>INSTRUCTION</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.50</minimum>
+                                            <minimum>0.72</minimum>
                                         </limit>
                                         <limit>
                                             <counter>BRANCH</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.50</minimum>
+                                            <minimum>0.61</minimum>
                                         </limit>
                                     </limits>
                                 </rule>
@@ -492,7 +492,7 @@
         <dependency>
             <groupId>com.aws.greengrass</groupId>
             <artifactId>nucleus</artifactId>
-            <version>2.0.0-SNAPSHOT</version>
+            <version>2.1.0-SNAPSHOT</version>
             <scope>provided</scope>
         </dependency>
         <!-- https://mvnrepository.com/artifact/org.flywaydb/flyway-core -->
@@ -522,7 +522,7 @@
         <dependency>
             <groupId>com.aws.greengrass</groupId>
             <artifactId>nucleus</artifactId>
-            <version>2.0.0-SNAPSHOT</version>
+            <version>2.1.0-SNAPSHOT</version>
             <type>test-jar</type>
             <scope>test</scope>
         </dependency>

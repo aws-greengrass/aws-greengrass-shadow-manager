@@ -3,9 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package com.aws.greengrass.shadowmanager;
+package com.aws.greengrass.integrationtests;
 
 import com.aws.greengrass.lifecyclemanager.Kernel;
+import com.aws.greengrass.shadowmanager.ShadowManagerDAOImpl;
+import com.aws.greengrass.shadowmanager.ShadowManagerDatabase;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

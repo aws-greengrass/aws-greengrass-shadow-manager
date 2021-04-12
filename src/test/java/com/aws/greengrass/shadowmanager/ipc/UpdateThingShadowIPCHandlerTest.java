@@ -162,7 +162,7 @@ class UpdateThingShadowIPCHandlerTest {
 
             Optional<JsonNode> expectedAcceptedJson = JsonUtil.getPayloadJson(updateRequest);
             assertThat("Retrieved expectedAcceptedJson", expectedAcceptedJson.isPresent(), is(true));
-            ((ObjectNode) expectedAcceptedJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(1));
+            ((ObjectNode) expectedAcceptedJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(2));
 
             assertThat(updatedDocumentJson.get(), is(equalTo(expectedAcceptedJson.get())));
 
@@ -235,7 +235,7 @@ class UpdateThingShadowIPCHandlerTest {
 
             Optional<JsonNode> expectedAcceptedJson = JsonUtil.getPayloadJson(updateRequest);
             assertThat("Retrieved expectedAcceptedJson", expectedAcceptedJson.isPresent(), is(true));
-            ((ObjectNode) expectedAcceptedJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(1));
+            ((ObjectNode) expectedAcceptedJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(2));
 
             assertThat(updatedDocumentJson.get(), is(equalTo(expectedAcceptedJson.get())));
 
@@ -306,7 +306,7 @@ class UpdateThingShadowIPCHandlerTest {
 
             Optional<JsonNode> expectedAcceptedJson = JsonUtil.getPayloadJson(updateRequest);
             assertThat("Retrieved expectedAcceptedJson", expectedAcceptedJson.isPresent(), is(true));
-            ((ObjectNode) expectedAcceptedJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(1));
+            ((ObjectNode) expectedAcceptedJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(2));
 
             assertThat(updatedDocumentJson.get(), is(equalTo(expectedAcceptedJson.get())));
 
@@ -359,7 +359,7 @@ class UpdateThingShadowIPCHandlerTest {
 
         Optional<JsonNode> expectedAcceptedJson = JsonUtil.getPayloadJson(updateRequest);
         assertThat("Found expectedAcceptedJson", expectedAcceptedJson.isPresent(), is(true));
-        ((ObjectNode) expectedAcceptedJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(1));
+        ((ObjectNode) expectedAcceptedJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(2));
         Optional<JsonNode> expectedDeltaJson = JsonUtil.getPayloadJson(deltaPayload);
         assertThat("Found expectedDeltaJson", expectedDeltaJson.isPresent(), is(true));
         Optional<JsonNode> expectedDocumentsJson = JsonUtil.getPayloadJson(documentsPayload);
@@ -449,7 +449,7 @@ class UpdateThingShadowIPCHandlerTest {
 
             Optional<JsonNode> expectedAcceptedJson = JsonUtil.getPayloadJson(updateRequest);
             assertTrue(expectedAcceptedJson.isPresent());
-            ((ObjectNode) expectedAcceptedJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(0));
+            ((ObjectNode) expectedAcceptedJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(1));
 
             assertThat(updatedDocumentJson.get(), is(expectedAcceptedJson.get()));
 
@@ -461,7 +461,7 @@ class UpdateThingShadowIPCHandlerTest {
             Optional<JsonNode> expectedDeltaJson = JsonUtil.getPayloadJson(deltaPayload);
             assertThat("Found expectedDeltaJson", expectedDeltaJson.isPresent(), is(true));
             ((ObjectNode) expectedDeltaJson.get().get(SHADOW_DOCUMENT_STATE).get("color")).set("r", new IntNode(255));
-            ((ObjectNode) expectedDeltaJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(0));
+            ((ObjectNode) expectedDeltaJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(1));
             Optional<JsonNode> expectedDocumentsJson = JsonUtil.getPayloadJson(documentsPayload);
             assertThat("Found expectedDocumentsJson", expectedDocumentsJson.isPresent(), is(true));
 
@@ -738,7 +738,7 @@ class UpdateThingShadowIPCHandlerTest {
         try (UpdateThingShadowIPCHandler updateThingShadowIPCHandler = new UpdateThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper)) {
 
             ConflictError thrown = assertThrows(ConflictError.class, () -> updateThingShadowIPCHandler.handleRequest(request));
-            assertThat(thrown.getMessage().trim(), is(equalTo("Invalid version")));
+            assertThat(thrown.getMessage().trim(), is(equalTo("Version conflict")));
 
             verify(mockPubSubClientWrapper, times(1))
                     .reject(pubSubRequestCaptor.capture());
@@ -761,16 +761,6 @@ class UpdateThingShadowIPCHandlerTest {
         byte[] initialDocument = getJsonFromResource(RESOURCE_DIRECTORY_NAME + GOOD_INITIAL_DOCUMENT_FILE_NAME);
         byte[] badUpdateRequest = getJsonFromResource(RESOURCE_DIRECTORY_NAME + "bad_update_document_with_state_node_as_value_node.json");
         String expectedErrorString = "Invalid JSON\nInvalid state. instance type (string) does not match any allowed primitive type (allowed: [\"object\"])";
-        int expectedErrorCode = 400;
-        assertInvalidArgumentsErrorFromPayloadUpdate(initialDocument, badUpdateRequest, expectedErrorString, expectedErrorCode, context);
-    }
-
-    @Test
-    void GIVEN_bad_update_with_state_node_as_empty_node_WHEN_handle_request_THEN_throw_invalid_argument_error_and_send_message_on_rejected_topic(ExtensionContext context)
-            throws IOException, URISyntaxException {
-        byte[] initialDocument = getJsonFromResource(RESOURCE_DIRECTORY_NAME + GOOD_INITIAL_DOCUMENT_FILE_NAME);
-        byte[] badUpdateRequest = getJsonFromResource(RESOURCE_DIRECTORY_NAME + "bad_update_document_with_state_node_as_empty_node.json");
-        String expectedErrorString = "Invalid JSON\nState node needs to have to either reported or desired node.";
         int expectedErrorCode = 400;
         assertInvalidArgumentsErrorFromPayloadUpdate(initialDocument, badUpdateRequest, expectedErrorString, expectedErrorCode, context);
     }
