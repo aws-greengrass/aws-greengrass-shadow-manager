@@ -49,6 +49,7 @@ import static com.aws.greengrass.shadowmanager.TestUtils.TEST_SERVICE;
 import static com.aws.greengrass.shadowmanager.TestUtils.THING_NAME;
 import static com.aws.greengrass.shadowmanager.model.Constants.ERROR_CODE_FIELD_NAME;
 import static com.aws.greengrass.shadowmanager.model.Constants.ERROR_MESSAGE_FIELD_NAME;
+import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_METADATA;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_TIMESTAMP;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -121,6 +122,8 @@ class GetThingShadowIPCHandlerTest {
             assertThat("Retrieved document", retrievedDocument.isPresent(), is(true));
             assertThat("retrievedDocument has timestamp", retrievedDocument.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
             ((ObjectNode) retrievedDocument.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
+            assertThat("retrievedDocument has metadata", retrievedDocument.get().has(SHADOW_DOCUMENT_METADATA), is(true));
+            ((ObjectNode) retrievedDocument.get()).remove(SHADOW_DOCUMENT_METADATA);
             assertThat("retrievedDocument matches expected payload", retrievedDocument.get(), is(equalTo(payloadJson.get())));
 
             verify(mockPubSubClientWrapper, times(1)).accept(pubSubRequestCaptor.capture());
@@ -130,6 +133,8 @@ class GetThingShadowIPCHandlerTest {
             assertThat("Accepted json", acceptedJson.isPresent(), is(true));
             assertThat("acceptedJson has timestamp", acceptedJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
             ((ObjectNode) acceptedJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
+            assertThat("retrievedDocument has metadata", acceptedJson.get().has(SHADOW_DOCUMENT_METADATA), is(true));
+            ((ObjectNode) acceptedJson.get()).remove(SHADOW_DOCUMENT_METADATA);
 
             // IPCRequest does not accept null value for shadowName
             if (shadowName != null) {
@@ -173,6 +178,8 @@ class GetThingShadowIPCHandlerTest {
             assertThat("Retrieved document", retrievedDocument.isPresent(), is(true));
             assertThat("retrievedDocument has timestamp", retrievedDocument.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
             ((ObjectNode) retrievedDocument.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
+            assertThat("retrievedDocument has metadata", retrievedDocument.get().has(SHADOW_DOCUMENT_METADATA), is(true));
+            ((ObjectNode) retrievedDocument.get()).remove(SHADOW_DOCUMENT_METADATA);
             assertThat("retrievedDocument matches expected document", retrievedDocument.get(), is(equalTo(documentJson.get())));
             
             verify(mockPubSubClientWrapper, times(1)).accept(pubSubRequestCaptor.capture());
@@ -182,6 +189,8 @@ class GetThingShadowIPCHandlerTest {
             Optional<JsonNode> acceptedJson = JsonUtil.getPayloadJson(pubSubRequestCaptor.getValue().getPayload());
             assertThat("Accepted json", acceptedJson.isPresent(), is(true));
             assertThat("acceptedJson has timestamp", acceptedJson.get().has(SHADOW_DOCUMENT_TIMESTAMP), is(true));
+            assertThat("retrievedDocument has metadata", acceptedJson.get().has(SHADOW_DOCUMENT_METADATA), is(true));
+            ((ObjectNode) acceptedJson.get()).remove(SHADOW_DOCUMENT_METADATA);
             ((ObjectNode) acceptedJson.get()).remove(SHADOW_DOCUMENT_TIMESTAMP);
 
             // IPCRequest does not accept null value for shadowName

@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Optional;
 import javax.inject.Inject;
 
+// TODO: record UTC epoch seconds when updating/deleting shadow
 public class ShadowManagerDAOImpl implements ShadowManagerDAO {
     private final ShadowManagerDatabase database;
     private static final String DOCUMENT = "document";
@@ -40,15 +41,16 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      */
     @Override
     public Optional<byte[]> createShadowThing(String thingName, String shadowName, byte[] initialDocument) {
-        return execute("INSERT INTO documents VALUES (?, ?, ?)", preparedStatement -> {
-            preparedStatement.setString(1, thingName);
-            preparedStatement.setString(2, shadowName);
-            preparedStatement.setBytes(3, initialDocument);
-            int result = preparedStatement.executeUpdate();
-            if (result == 1) {
-                return Optional.ofNullable(initialDocument);
-            }
-            return Optional.empty();
+        return execute("INSERT INTO documents (thingName, shadowName, document) VALUES (?, ?, ?)",
+                preparedStatement -> {
+                    preparedStatement.setString(1, thingName);
+                    preparedStatement.setString(2, shadowName);
+                    preparedStatement.setBytes(3, initialDocument);
+                    int result = preparedStatement.executeUpdate();
+                    if (result == 1) {
+                        return Optional.ofNullable(initialDocument);
+                    }
+                    return Optional.empty();
         });
     }
 
@@ -83,6 +85,10 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      */
     @Override
     public Optional<byte[]> deleteShadowThing(String thingName, String shadowName) {
+        // TODO: This should function as a soft delete so version can be retained
+        // To be consistent with cloud, subsequent updates to the shadow should not start from version 0
+        // https://docs.aws.amazon.com/iot/latest/developerguide/device-shadow-data-flow.html
+
         return getShadowThing(thingName, shadowName)
                 .flatMap(shadowDocument ->
                         execute("DELETE FROM documents WHERE thingName = ? AND shadowName = ?",
@@ -107,7 +113,8 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      */
     @Override
     public Optional<byte[]> updateShadowThing(String thingName, String shadowName, byte[] newDocument) {
-        return execute("MERGE INTO documents KEY (thingName, shadowName) VALUES (?, ?, ?)",
+        return execute("MERGE INTO documents(thingName, shadowName, document) KEY (thingName, shadowName)"
+                        + " VALUES (?, ?, ?)",
                 preparedStatement -> {
                     preparedStatement.setString(1, thingName);
                     preparedStatement.setString(2, shadowName);

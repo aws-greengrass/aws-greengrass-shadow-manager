@@ -120,7 +120,7 @@ class PubSubClientWrapperTest {
         JsonNode errorResponse = ResponseMessageBuilder.builder()
                 .withTimestamp(Instant.now())
                 .withClientToken(Optional.empty())
-                .withError(ErrorMessage.createInternalServiceErrorMessage()).build();
+                .withError(ErrorMessage.INTERNAL_SERVICE_FAILURE_MESSAGE).build();
 
         pubSubClientWrapper.reject(PubSubRequest.builder().shadowName(SHADOW_NAME).thingName(THING_NAME)
                 .payload(JsonUtil.getPayloadBytes(errorResponse))
@@ -188,7 +188,7 @@ class PubSubClientWrapperTest {
         JsonNode errorResponse = ResponseMessageBuilder.builder()
                 .withTimestamp(Instant.now())
                 .withClientToken(Optional.empty())
-                .withError(ErrorMessage.createInternalServiceErrorMessage()).build();
+                .withError(ErrorMessage.INTERNAL_SERVICE_FAILURE_MESSAGE).build();
 
         pubSubClientWrapper.reject(PubSubRequest.builder().shadowName(SHADOW_NAME).thingName(THING_NAME)
                 .payload(JsonUtil.getPayloadBytes(errorResponse))

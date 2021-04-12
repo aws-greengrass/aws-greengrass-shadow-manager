@@ -20,6 +20,7 @@ import com.aws.greengrass.shadowmanager.model.ResponseMessageBuilder;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.ShadowRequest;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
+import com.aws.greengrass.shadowmanager.util.Validator;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import software.amazon.awssdk.aws.greengrass.GeneratedAbstractDeleteThingShadowOperationHandler;
@@ -175,8 +176,7 @@ public class DeleteThingShadowIPCHandler extends GeneratedAbstractDeleteThingSha
                         .kv(LOG_THING_NAME_KEY, thingName)
                         .kv(LOG_SHADOW_NAME_KEY, shadowName)
                         .log("Could not process UpdateThingShadow Request due to internal service error");
-                publishErrorMessage(thingName, shadowName, clientToken,
-                        ErrorMessage.createInternalServiceErrorMessage());
+                publishErrorMessage(thingName, shadowName, clientToken, ErrorMessage.INTERNAL_SERVICE_FAILURE_MESSAGE);
                 throw new ServiceError(e.getMessage());
             }
         });

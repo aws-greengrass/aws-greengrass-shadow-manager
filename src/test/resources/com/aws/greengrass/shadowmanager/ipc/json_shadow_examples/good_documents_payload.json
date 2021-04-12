@@ -10,10 +10,10 @@
         "SomeKey":"SomeValue"
       }
     },
-    "version":0
+    "version":1
   },
   "current":{
-    "version":1,
+    "version":2,
     "state":{
       "desired":{
         "color":{

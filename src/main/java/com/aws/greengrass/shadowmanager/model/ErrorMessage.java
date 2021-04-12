@@ -42,6 +42,18 @@ public class ErrorMessage implements Serializable {
     public static final ErrorMessage UNAUTHORIZED_MESSAGE =
             ErrorMessage.builder().errorCode(401).message("Unauthorized").build();
 
+    public static final ErrorMessage PAYLOAD_MISSING_MESSAGE =
+                    ErrorMessage.builder().errorCode(400).message("Missing update payload").build();
+
+    public static final ErrorMessage PAYLOAD_TOO_LARGE_MESSAGE =
+            ErrorMessage.builder().errorCode(413).message("The payload exceeds the maximum size allowed").build();
+
+    public static final ErrorMessage VERSION_CONFLICT_MESSAGE =
+            ErrorMessage.builder().errorCode(409).message("Version conflict").build();
+
+    public static final ErrorMessage INTERNAL_SERVICE_FAILURE_MESSAGE =
+            ErrorMessage.builder().errorCode(500).message("Internal service failure").build();
+
     /**
      * Creates the error message when the payload JSON is not valid.
      *
@@ -82,43 +94,5 @@ public class ErrorMessage implements Serializable {
         shadowName = Utils.isEmpty(shadowName) ? "Unnamed Shadow" : shadowName;
         return ErrorMessage.builder().errorCode(404)
                 .message(String.format("No shadow exists with name: %s", shadowName)).build();
-    }
-
-    /**
-     * Creates the error message when the payload is missing from an update request.
-     *
-     * @return the ErrorMessage object for InvalidRequestParametersException.
-     */
-    public static ErrorMessage createPayloadMissingMessage() {
-        return ErrorMessage.builder().errorCode(400).message("Missing update payload").build();
-    }
-
-    /**
-     * Creates the error message when there is a version conflict in the request. The version of the
-     * update should be exactly one higher than the last received update.
-     *
-     * @return the ErrorMessage object for Version Conflict exception.
-     */
-    public static ErrorMessage createPayloadTooLargeMessage() {
-        return ErrorMessage.builder().errorCode(413).message("The payload exceeds the maximum size allowed").build();
-    }
-
-    /**
-     * Creates the error message when there is a version conflict in the request. The version of the
-     * update should be exactly one higher than the last received update.
-     *
-     * @return the ErrorMessage object for Version Conflict exception.
-     */
-    public static ErrorMessage createVersionConflictMessage() {
-        return ErrorMessage.builder().errorCode(409).message("Version conflict").build();
-    }
-
-    /**
-     * Creates the error message when there is an internal server error.
-     *
-     * @return the ErrorMessage object for Internal Service Failure exception.
-     */
-    public static ErrorMessage createInternalServiceErrorMessage() {
-        return ErrorMessage.builder().errorCode(500).message("Internal service failure").build();
     }
 }
