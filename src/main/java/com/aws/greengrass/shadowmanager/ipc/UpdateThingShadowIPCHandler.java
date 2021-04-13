@@ -182,7 +182,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
 
                 // Update the new document in the DAO.
                 Optional<byte[]> result = dao.updateShadowThing(thingName, shadowName,
-                        JsonUtil.getPayloadBytes(updatedDocument.toJson()));
+                        JsonUtil.getPayloadBytes(updatedDocument.toJson()), updatedDocument.getVersion());
                 if (!result.isPresent()) {
                     ServiceError error = new ServiceError("Unexpected error occurred in trying to "
                             + "update shadow thing.");

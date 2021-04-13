@@ -5,6 +5,7 @@ import com.aws.greengrass.lifecyclemanager.GlobalStateChangeListener;
 import com.aws.greengrass.lifecyclemanager.GreengrassService;
 import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.shadowmanager.ShadowManager;
+import com.aws.greengrass.shadowmanager.ShadowManagerDAOImpl;
 import com.aws.greengrass.shadowmanager.ShadowManagerDatabase;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.testcommons.testutilities.GGServiceTestUtil;
@@ -87,7 +88,7 @@ class ShadowManagerDatabaseTest extends GGServiceTestUtil {
 
         // GIVEN
         String doc = "{\"foo\": \"bar\"}";
-        dao.updateShadowThing("foo", "bar", doc.getBytes(StandardCharsets.UTF_8));
+        dao.updateShadowThing("foo", "bar", doc.getBytes(StandardCharsets.UTF_8), 1);
         Optional<byte[]> data = dao.getShadowThing("foo", "bar");
 
         assertThat(data.isPresent(), is(true));

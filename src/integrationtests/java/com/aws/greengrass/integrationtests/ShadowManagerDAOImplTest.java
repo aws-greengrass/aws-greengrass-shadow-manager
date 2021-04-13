@@ -83,13 +83,13 @@ class ShadowManagerDAOImplTest {
     }
 
     private void createNamedShadow() {
-        Optional<byte[]> result = dao.createShadowThing(THING_NAME, SHADOW_NAME, BASE_DOCUMENT);
+        Optional<byte[]> result = dao.updateShadowThing(THING_NAME, SHADOW_NAME, BASE_DOCUMENT, 1);
         assertThat("Created named shadow", result.isPresent(), is(true));
         assertThat(result.get(), is(equalTo(BASE_DOCUMENT)));
     }
 
     private void createClassicShadow() {
-        Optional<byte[]> result = dao.createShadowThing(THING_NAME, CLASSIC_SHADOW_IDENTIFIER, NO_SHADOW_NAME_BASE_DOCUMENT);
+        Optional<byte[]> result = dao.updateShadowThing(THING_NAME, CLASSIC_SHADOW_IDENTIFIER, NO_SHADOW_NAME_BASE_DOCUMENT, 1);
         assertThat("Created classic shadow", result.isPresent(), is(true));
         assertThat(result.get(), is(equalTo(NO_SHADOW_NAME_BASE_DOCUMENT)));
     }
@@ -142,7 +142,7 @@ class ShadowManagerDAOImplTest {
     void GIVEN_named_and_classic_shadow_WHEN_update_shadow_thing_THEN_correct_shadow_updated(String shadowName, String ignoredShadowName, byte[] ignoredPayload) throws Exception {
         createNamedShadow();
         createClassicShadow();
-        Optional<byte[]> result = dao.updateShadowThing(THING_NAME, shadowName, UPDATED_DOCUMENT); //NOPMD
+        Optional<byte[]> result = dao.updateShadowThing(THING_NAME, shadowName, UPDATED_DOCUMENT, 1); //NOPMD
         assertThat("Updated shadow", result.isPresent(), is(true));
         assertThat(result.get(), is(equalTo(UPDATED_DOCUMENT)));
 
@@ -159,7 +159,7 @@ class ShadowManagerDAOImplTest {
 
     @Test
     void GIVEN_no_shadow_WHEN_update_shadow_thing_THEN_shadow_created() throws Exception {
-        Optional<byte[]> result = dao.updateShadowThing(THING_NAME, SHADOW_NAME, UPDATED_DOCUMENT);
+        Optional<byte[]> result = dao.updateShadowThing(THING_NAME, SHADOW_NAME, UPDATED_DOCUMENT, 1);
         assertThat("Shadow created", result.isPresent(), is(true));
         assertThat(result.get(), is(equalTo(UPDATED_DOCUMENT)));
     }
@@ -167,7 +167,7 @@ class ShadowManagerDAOImplTest {
     @Test
     void GIVEN_multiple_named_shadows_for_thing_WHEN_list_named_shadows_for_thing_THEN_return_named_shadow_list() throws Exception {
         for (String shadowName : SHADOW_NAME_LIST) {
-            dao.updateShadowThing(THING_NAME, shadowName, UPDATED_DOCUMENT);
+            dao.updateShadowThing(THING_NAME, shadowName, UPDATED_DOCUMENT, 1);
         }
 
         List<String> listShadowResults = dao.listNamedShadowsForThing(THING_NAME, DEFAULT_OFFSET, DEFAULT_LIMIT);
@@ -179,9 +179,9 @@ class ShadowManagerDAOImplTest {
     @Test
     void GIVEN_classic_and_named_shadows_WHEN_list_named_shadows_for_thing_THEN_return_list_does_not_include_classic_shadow() throws Exception {
         for (String shadowName : SHADOW_NAME_LIST) {
-            dao.updateShadowThing(THING_NAME, shadowName, UPDATED_DOCUMENT);
+            dao.updateShadowThing(THING_NAME, shadowName, UPDATED_DOCUMENT, 1);
         }
-        dao.updateShadowThing(THING_NAME, CLASSIC_SHADOW_IDENTIFIER, UPDATED_DOCUMENT);
+        dao.updateShadowThing(THING_NAME, CLASSIC_SHADOW_IDENTIFIER, UPDATED_DOCUMENT, 1);
 
         List<String> listShadowResults = dao.listNamedShadowsForThing(THING_NAME, DEFAULT_OFFSET, SHADOW_NAME_LIST.size());
         assertThat(listShadowResults, is(notNullValue()));
@@ -193,7 +193,7 @@ class ShadowManagerDAOImplTest {
     @Test
     void GIVEN_offset_and_limit_WHEN_list_named_shadows_for_thing_THEN_return_named_shadow_subset() throws Exception {
         for (String shadowName : SHADOW_NAME_LIST) {
-            dao.updateShadowThing(THING_NAME, shadowName, UPDATED_DOCUMENT);
+            dao.updateShadowThing(THING_NAME, shadowName, UPDATED_DOCUMENT, 1);
         }
 
         int offset = 1;
@@ -221,10 +221,10 @@ class ShadowManagerDAOImplTest {
     @MethodSource("validListTestParameters")
     void GIVEN_valid_edge_inputs_WHEN_list_named_shadows_for_thing_THEN_return_valid_results(String thingName, int offset, int pageSize) throws Exception {
         for (String shadowName : SHADOW_NAME_LIST) {
-            dao.updateShadowThing(THING_NAME, shadowName, UPDATED_DOCUMENT);
+            dao.updateShadowThing(THING_NAME, shadowName, UPDATED_DOCUMENT, 1);
         }
 
-        dao.updateShadowThing(CLASSIC_SHADOW_THING, CLASSIC_SHADOW_IDENTIFIER, UPDATED_DOCUMENT);
+        dao.updateShadowThing(CLASSIC_SHADOW_THING, CLASSIC_SHADOW_IDENTIFIER, UPDATED_DOCUMENT, 1);
 
         List<String> listShadowResults = dao.listNamedShadowsForThing(thingName, offset, pageSize);
         assertThat(listShadowResults, is(notNullValue()));

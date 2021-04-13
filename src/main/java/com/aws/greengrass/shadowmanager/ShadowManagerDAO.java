@@ -5,22 +5,16 @@
 
 package com.aws.greengrass.shadowmanager;
 
+import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
+
 import java.util.List;
 import java.util.Optional;
 
 public interface ShadowManagerDAO {
     /**
-     * Attempts to create a shadow document from the local shadow storage.
-     * @param thingName Name of the Thing for the shadow topic prefix.
-     * @param shadowName Name of shadow topic prefix for thing.
-     * @param initialDocument The initial shadow document.
-     * @return The shadow document inserted into the local shadow store
-     */
-    Optional<byte[]> createShadowThing(String thingName, String shadowName, byte[] initialDocument);
-
-    /**
      * Attempts to obtain a shadow document from the local shadow storage.
-     * @param thingName Name of the Thing for the shadow topic prefix.
+     *
+     * @param thingName  Name of the Thing for the shadow topic prefix.
      * @param shadowName Name of shadow topic prefix for thing.
      * @return The queried shadow from the local shadow store
      */
@@ -28,7 +22,8 @@ public interface ShadowManagerDAO {
 
     /**
      * Attempts to delete a shadow document from the local shadow storage.
-     * @param thingName Name of the Thing for the shadow topic prefix.
+     *
+     * @param thingName  Name of the Thing for the shadow topic prefix.
      * @param shadowName Name of shadow topic prefix for thing.
      * @return The deleted shadow from the local shadow store
      */
@@ -36,20 +31,51 @@ public interface ShadowManagerDAO {
 
     /**
      * Attempts to update a shadow document from the local shadow storage.
-     * @param thingName Name of the Thing for the shadow topic prefix.
-     * @param shadowName Name of shadow topic prefix for thing.
+     *
+     * @param thingName   Name of the Thing for the shadow topic prefix.
+     * @param shadowName  Name of shadow topic prefix for thing.
      * @param newDocument The new shadow document.
-     * @return Optional
+     * @param version     The new version of the shadow document.
+     * @return Optional containing the new shadow document if update is successful; Else an empty optional
      */
-    Optional<byte[]> updateShadowThing(String thingName, String shadowName, byte[] newDocument);
+    Optional<byte[]> updateShadowThing(String thingName, String shadowName, byte[] newDocument, long version);
 
     /**
      * Attempts to retrieve list of named shadows for a specified thing from the local shadow storage.
+     *
      * @param thingName Name of the Thing to check Named Shadows.
-     * @param offset Number of Named Shadows to bypass.
-     * @param limit Maximum number of Named Shadows to retrieve.
+     * @param offset    Number of Named Shadows to bypass.
+     * @param limit     Maximum number of Named Shadows to retrieve.
      * @return A limited list of named shadows matching the specified thingName
      */
     List<String> listNamedShadowsForThing(String thingName, int offset, int limit);
 
+    /**
+     * Attempts to update the sync information for a particular thing's shadow.
+     *
+     * @param request The update shadow sync information request containing the necessary information to update.
+     * @return true if the update is successful; Else false.
+     */
+    boolean updateSyncInformation(SyncInformation request);
+
+    /**
+     * Attempts to obtain a shadow sync information for a particular thing's shadow.
+     *
+     * @param thingName  Name of the Thing for the shadow topic prefix.
+     * @param shadowName Name of shadow topic prefix for thing.
+     * @return The queried shadow sync information from the local shadow store
+     */
+    Optional<SyncInformation> getShadowSyncInformation(String thingName, String shadowName);
+
+    /**
+     * Attempts to delete the cloud shadow document in the sync table.
+     *
+     * @param thingName       Name of the Thing for the shadow topic prefix.
+     * @param shadowName      Name of shadow topic prefix for thing.
+     * @param cloudUpdateTime The time the cloud shadow was deleted.
+     * @param cloudVersion    The version of the cloud shadow.
+     * @return true if the cloud document (soft) delete was successful or not.
+     */
+    boolean deleteCloudDocumentInformationInSync(String thingName, String shadowName, long cloudUpdateTime,
+                                                 long cloudVersion);
 }
