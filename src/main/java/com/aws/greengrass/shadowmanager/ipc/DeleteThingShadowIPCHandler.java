@@ -9,6 +9,7 @@ import com.aws.greengrass.authorization.exceptions.AuthorizationException;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
+import com.aws.greengrass.shadowmanager.ShadowManager;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
@@ -99,87 +100,102 @@ public class DeleteThingShadowIPCHandler extends GeneratedAbstractDeleteThingSha
             //    wants to delete and pass the client token in the response
             byte[] payload = new byte[0];
             Optional<String> clientToken = Optional.empty();
+            logger.atTrace("ipc-update-thing-shadow-request").log();
 
+            ShadowRequest shadowRequest = new ShadowRequest(thingName, shadowName);
             try {
-                logger.atTrace("ipc-update-thing-shadow-request").log();
-
-                ShadowRequest shadowRequest = new ShadowRequest(thingName, shadowName);
                 Validator.validateShadowRequest(shadowRequest);
-                authorizationHandlerWrapper.doAuthorization(DELETE_THING_SHADOW, serviceName, shadowRequest);
+            } catch (InvalidRequestParametersException e) {
+                handleInvalidRequestParametersException(thingName, shadowName, clientToken, e);
+            }
 
-                // Get the Client Token if present in the payload.
-                Optional<JsonNode> payloadJson = JsonUtil.getPayloadJson(payload);
-                clientToken = payloadJson.flatMap(JsonUtil::getClientToken);
+            synchronized (ShadowManager.getThingShadowLock(shadowRequest)) {
+                try {
 
-                Optional<byte[]> result = dao.deleteShadowThing(thingName, shadowName);
-                if (!result.isPresent()) {
-                    ResourceNotFoundError rnf = new ResourceNotFoundError("No shadow found");
-                    rnf.setResourceType(SHADOW_RESOURCE_TYPE);
-                    logger.atWarn()
-                            .setEventType(LogEvents.DELETE_THING_SHADOW.code())
-                            .setCause(rnf)
+                    authorizationHandlerWrapper.doAuthorization(DELETE_THING_SHADOW, serviceName, shadowRequest);
+                    // Get the Client Token if present in the payload.
+                    Optional<JsonNode> payloadJson = JsonUtil.getPayloadJson(payload);
+                    clientToken = payloadJson.flatMap(JsonUtil::getClientToken);
+
+                    Optional<byte[]> result = dao.deleteShadowThing(thingName, shadowName);
+                    if (!result.isPresent()) {
+                        ResourceNotFoundError rnf = new ResourceNotFoundError("No shadow found");
+                        rnf.setResourceType(SHADOW_RESOURCE_TYPE);
+                        logger.atWarn()
+                                .setEventType(LogEvents.DELETE_THING_SHADOW.code())
+                                .setCause(rnf)
+                                .kv(LOG_THING_NAME_KEY, thingName)
+                                .kv(LOG_SHADOW_NAME_KEY, shadowName)
+                                .log("Unable to process delete shadow since shadow does not exist");
+                        publishErrorMessage(thingName, shadowName, clientToken,
+                                ErrorMessage.createShadowNotFoundMessage(shadowName));
+                        throw rnf;
+                    }
+                    logger.atDebug()
                             .kv(LOG_THING_NAME_KEY, thingName)
                             .kv(LOG_SHADOW_NAME_KEY, shadowName)
-                            .log("Unable to process delete shadow since shadow does not exist");
+                            .log("Successfully delete shadow");
+
+                    ShadowDocument deletedShadowDocument = new ShadowDocument(result.get());
+                    JsonNode responseNode = ResponseMessageBuilder.builder()
+                            .withVersion(deletedShadowDocument.getVersion())
+                            .withClientToken(clientToken)
+                            .withTimestamp(Instant.now())
+                            .build();
+                    pubSubClientWrapper.accept(PubSubRequest.builder()
+                            .thingName(thingName)
+                            .shadowName(shadowName)
+                            .payload(JsonUtil.getPayloadBytes(responseNode))
+                            .publishOperation(Operation.DELETE_SHADOW)
+                            .build());
+                    DeleteThingShadowResponse response = new DeleteThingShadowResponse();
+                    /*
+                     After a successful delete, the payload expected over the synchronous operation is an empty response
+                     Reference:
+                     https://docs.aws.amazon.com/iot/latest/developerguide/device-shadow-rest-api.html
+                     #API_DeleteThingShadow
+                    */
+                    response.setPayload(new byte[0]);
+                    return response;
+
+                } catch (AuthorizationException e) {
+                    logger.atWarn()
+                            .setEventType(LogEvents.DELETE_THING_SHADOW.code())
+                            .setCause(e)
+                            .kv(LOG_THING_NAME_KEY, thingName)
+                            .kv(LOG_SHADOW_NAME_KEY, shadowName)
+                            .log("Not authorized to update shadow");
+                    publishErrorMessage(thingName, shadowName, clientToken, ErrorMessage.UNAUTHORIZED_MESSAGE);
+                    throw new UnauthorizedError(e.getMessage());
+                } catch (InvalidRequestParametersException e) {
+                    handleInvalidRequestParametersException(thingName, shadowName, clientToken, e);
+                } catch (ShadowManagerDataException | IOException e) {
+                    logger.atError()
+                            .setEventType(LogEvents.DELETE_THING_SHADOW.code())
+                            .setCause(e)
+                            .kv(LOG_THING_NAME_KEY, thingName)
+                            .kv(LOG_SHADOW_NAME_KEY, shadowName)
+                            .log("Could not process UpdateThingShadow Request due to internal service error");
                     publishErrorMessage(thingName, shadowName, clientToken,
-                            ErrorMessage.createShadowNotFoundMessage(shadowName));
-                    throw rnf;
+                            ErrorMessage.INTERNAL_SERVICE_FAILURE_MESSAGE);
+                    throw new ServiceError(e.getMessage());
                 }
-                logger.atDebug()
-                        .kv(LOG_THING_NAME_KEY, thingName)
-                        .kv(LOG_SHADOW_NAME_KEY, shadowName)
-                        .log("Successfully delete shadow");
-
-                ShadowDocument deletedShadowDocument = new ShadowDocument(result.get());
-                JsonNode responseNode = ResponseMessageBuilder.builder()
-                        .withVersion(deletedShadowDocument.getVersion())
-                        .withClientToken(clientToken)
-                        .withTimestamp(Instant.now())
-                        .build();
-                pubSubClientWrapper.accept(PubSubRequest.builder()
-                        .thingName(thingName)
-                        .shadowName(shadowName)
-                        .payload(JsonUtil.getPayloadBytes(responseNode))
-                        .publishOperation(Operation.DELETE_SHADOW)
-                        .build());
-                DeleteThingShadowResponse response = new DeleteThingShadowResponse();
-                /*
-                 After a successful delete, the payload expected over the synchronous operation is an empty response
-                 Reference:
-                 https://docs.aws.amazon.com/iot/latest/developerguide/device-shadow-rest-api.html#API_DeleteThingShadow
-                */
-                response.setPayload(new byte[0]);
-                return response;
-
-            } catch (AuthorizationException e) {
-                logger.atWarn()
-                        .setEventType(LogEvents.DELETE_THING_SHADOW.code())
-                        .setCause(e)
-                        .kv(LOG_THING_NAME_KEY, thingName)
-                        .kv(LOG_SHADOW_NAME_KEY, shadowName)
-                        .log("Not authorized to update shadow");
-                publishErrorMessage(thingName, shadowName, clientToken, ErrorMessage.UNAUTHORIZED_MESSAGE);
-                throw new UnauthorizedError(e.getMessage());
-            } catch (InvalidRequestParametersException e) {
-                logger.atWarn()
-                        .setEventType(LogEvents.DELETE_THING_SHADOW.code())
-                        .setCause(e)
-                        .kv(LOG_THING_NAME_KEY, thingName)
-                        .kv(LOG_SHADOW_NAME_KEY, shadowName)
-                        .log();
-                publishErrorMessage(thingName, shadowName, clientToken, e.getErrorMessage());
-                throw new InvalidArgumentsError(e.getMessage());
-            } catch (ShadowManagerDataException | IOException e) {
-                logger.atError()
-                        .setEventType(LogEvents.DELETE_THING_SHADOW.code())
-                        .setCause(e)
-                        .kv(LOG_THING_NAME_KEY, thingName)
-                        .kv(LOG_SHADOW_NAME_KEY, shadowName)
-                        .log("Could not process UpdateThingShadow Request due to internal service error");
-                publishErrorMessage(thingName, shadowName, clientToken, ErrorMessage.INTERNAL_SERVICE_FAILURE_MESSAGE);
-                throw new ServiceError(e.getMessage());
             }
+            return null;
         });
+    }
+
+    private void handleInvalidRequestParametersException(String thingName, String shadowName,
+                                                         Optional<String> clientToken,
+                                                         InvalidRequestParametersException e) {
+        logger.atWarn()
+                .setEventType(LogEvents.DELETE_THING_SHADOW.code())
+                .setCause(e)
+                .kv(LOG_THING_NAME_KEY, thingName)
+                .kv(LOG_SHADOW_NAME_KEY, shadowName)
+                .log();
+        publishErrorMessage(thingName, shadowName, clientToken, e.getErrorMessage());
+        throw new InvalidArgumentsError(e.getMessage());
     }
 
     /**

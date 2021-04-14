@@ -21,6 +21,7 @@ import com.aws.greengrass.shadowmanager.ipc.ListNamedShadowsForThingIPCHandler;
 import com.aws.greengrass.shadowmanager.ipc.PubSubClientWrapper;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowIPCHandler;
 import com.aws.greengrass.shadowmanager.model.LogEvents;
+import com.aws.greengrass.shadowmanager.model.ShadowRequest;
 import com.aws.greengrass.shadowmanager.model.configuration.ShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
@@ -39,6 +40,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import javax.inject.Inject;
 
 import static com.aws.greengrass.componentmanager.KernelConfigResolver.CONFIGURATION_CONFIG_KEY;
@@ -57,6 +59,7 @@ public class ShadowManager extends PluginService {
     public static final String SERVICE_NAME = "aws.greengrass.ShadowManager";
     private static final List<String> SHADOW_AUTHORIZATION_OPCODES = Arrays.asList(GET_THING_SHADOW,
             UPDATE_THING_SHADOW, LIST_NAMED_SHADOWS_FOR_THING, DELETE_THING_SHADOW, "*");
+    private static final Map<String, Map<String, Object>> thingLocksMap = new ConcurrentHashMap<>();
 
     private final ShadowManagerDAO dao;
     private final ShadowManagerDatabase database;
@@ -209,5 +212,19 @@ public class ShadowManager extends PluginService {
                     .setCause(e)
                     .log("Failed to close out shadow database");
         }
+    }
+
+    /**
+     * Gets the static lock object for a thing's shadow which will be used to synchronize the operations being
+     * performed on a particular shadow.
+     *
+     * @param shadowRequest  The thing name.
+     * @return the static lock object for a thing's shadow.
+     */
+    public static synchronized Object getThingShadowLock(ShadowRequest shadowRequest) {
+        thingLocksMap.computeIfAbsent(shadowRequest.getThingName(), thingName -> new ConcurrentHashMap<>());
+        thingLocksMap.get(shadowRequest.getThingName()).computeIfAbsent(shadowRequest.getShadowName(),
+                shadowName -> new Object());
+        return thingLocksMap.get(shadowRequest.getThingName()).get(shadowRequest.getShadowName());
     }
 }
