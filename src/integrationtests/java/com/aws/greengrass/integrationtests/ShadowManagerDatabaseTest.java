@@ -7,6 +7,7 @@ import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.shadowmanager.ShadowManager;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAOImpl;
 import com.aws.greengrass.shadowmanager.ShadowManagerDatabase;
+import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.testcommons.testutilities.GGServiceTestUtil;
 import org.junit.jupiter.api.AfterEach;
@@ -87,12 +88,12 @@ class ShadowManagerDatabaseTest extends GGServiceTestUtil {
         ShadowManagerDAOImpl dao = new ShadowManagerDAOImpl(shadowManagerDatabase);
 
         // GIVEN
-        String doc = "{\"foo\": \"bar\"}";
-        dao.updateShadowThing("foo", "bar", doc.getBytes(StandardCharsets.UTF_8), 1);
-        Optional<byte[]> data = dao.getShadowThing("foo", "bar");
+        byte[] doc = "{\"version\": 1, \"state\": {\"reported\": {\"name\": \"The Beatles\"}}}".getBytes(StandardCharsets.UTF_8);
+        dao.updateShadowThing("foo", "bar", doc, 1);
+        Optional<ShadowDocument> data = dao.getShadowThing("foo", "bar");
 
         assertThat(data.isPresent(), is(true));
-        assertThat(new String(data.get(), StandardCharsets.UTF_8), is(doc));
+        assertThat(data.get().toJson(true), is(new ShadowDocument(doc).toJson(true)));
 
         // WHEN
         kernel.shutdown();
@@ -103,7 +104,7 @@ class ShadowManagerDatabaseTest extends GGServiceTestUtil {
         dao = new ShadowManagerDAOImpl(shadowManagerDatabase);
         data = dao.getShadowThing("foo", "bar");
         assertThat(data.isPresent(), is(true));
-        assertThat(new String(data.get(), StandardCharsets.UTF_8), is(doc));
+        assertThat(data.get().toJson(true), is(new ShadowDocument(doc).toJson(true)));
     }
 
     @Test

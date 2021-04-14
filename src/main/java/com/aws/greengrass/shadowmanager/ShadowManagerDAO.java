@@ -5,6 +5,7 @@
 
 package com.aws.greengrass.shadowmanager;
 
+import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 
 import java.util.List;
@@ -18,7 +19,7 @@ public interface ShadowManagerDAO {
      * @param shadowName Name of shadow topic prefix for thing.
      * @return The queried shadow from the local shadow store
      */
-    Optional<byte[]> getShadowThing(String thingName, String shadowName);
+    Optional<ShadowDocument> getShadowThing(String thingName, String shadowName);
 
     /**
      * Attempts to delete a shadow document from the local shadow storage.
@@ -27,7 +28,7 @@ public interface ShadowManagerDAO {
      * @param shadowName Name of shadow topic prefix for thing.
      * @return The deleted shadow from the local shadow store
      */
-    Optional<byte[]> deleteShadowThing(String thingName, String shadowName);
+    Optional<ShadowDocument> deleteShadowThing(String thingName, String shadowName);
 
     /**
      * Attempts to update a shadow document from the local shadow storage.

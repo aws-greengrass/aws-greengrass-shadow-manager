@@ -48,11 +48,28 @@ public class ShadowDocument {
      * @throws IOException if there was an issue while deserializing the shadow byte array.
      */
     public ShadowDocument(byte[] documentBytes) throws IOException {
-        if (documentBytes.length == 0) {
+        if (documentBytes == null || documentBytes.length == 0) {
+            setFields(null, null, null);
             return;
         }
         ShadowDocument shadowDocument = JsonUtil.OBJECT_MAPPER.readValue(documentBytes, ShadowDocument.class);
         setFields(shadowDocument.getState(), shadowDocument.getMetadata(), shadowDocument.getVersion());
+    }
+
+    /**
+     * Constructor to create a new shadow document from a byte array.
+     *
+     * @param documentBytes the byte array containing the shadow information.
+     * @param version       The shadow document version.
+     * @throws IOException if there was an issue while deserializing the shadow byte array.
+     */
+    public ShadowDocument(byte[] documentBytes, long version) throws IOException {
+        if (documentBytes == null || documentBytes.length == 0) {
+            setFields(null, null, null);
+            return;
+        }
+        ShadowDocument shadowDocument = JsonUtil.OBJECT_MAPPER.readValue(documentBytes, ShadowDocument.class);
+        setFields(shadowDocument.getState(), shadowDocument.getMetadata(), version);
     }
 
     /**
@@ -113,15 +130,18 @@ public class ShadowDocument {
     /**
      * Converts the class to its JSON representation.
      *
+     * @param withVersion whether or not to add the version node to the JSON.
      * @return a JSON node containing the shadow document.
      */
-    public JsonNode toJson() {
+    public JsonNode toJson(boolean withVersion) {
         final ObjectNode result = JsonUtil.OBJECT_MAPPER.createObjectNode();
         result.set(SHADOW_DOCUMENT_STATE, this.state.toJson());
         if (this.metadata != null) {
             result.set(SHADOW_DOCUMENT_METADATA, this.metadata.toJson());
         }
-        result.set(SHADOW_DOCUMENT_VERSION, new LongNode(this.version));
+        if (withVersion) {
+            result.set(SHADOW_DOCUMENT_VERSION, new LongNode(this.version));
+        }
 
         return result;
     }

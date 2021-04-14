@@ -117,8 +117,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                 authorizationHandlerWrapper.doAuthorization(UPDATE_THING_SHADOW, serviceName, shadowRequest);
 
                 // Get the current document from the DAO if present and convert it into a ShadowDocument object.
-                byte[] currentDocumentBytes = dao.getShadowThing(thingName, shadowName).orElse(new byte[0]);
-                currentDocument = new ShadowDocument(currentDocumentBytes);
+                currentDocument = dao.getShadowThing(thingName, shadowName).orElse(new ShadowDocument());
 
                 // Validate the payload sent in the update shadow request. Validates the following:
                 // 1.The payload schema to ensure that the JSON has the correct schema.
@@ -182,7 +181,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
 
                 // Update the new document in the DAO.
                 Optional<byte[]> result = dao.updateShadowThing(thingName, shadowName,
-                        JsonUtil.getPayloadBytes(updatedDocument.toJson()), updatedDocument.getVersion());
+                        JsonUtil.getPayloadBytes(updatedDocument.toJson(false)), updatedDocument.getVersion());
                 if (!result.isPresent()) {
                     ServiceError error = new ServiceError("Unexpected error occurred in trying to "
                             + "update shadow thing.");
@@ -313,8 +312,8 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                                          ShadowDocument sourceDocument, ShadowDocument updatedDocument)
             throws IOException {
         JsonNode responseMessage = ResponseMessageBuilder.builder()
-                .withPrevious(sourceDocument.isNewDocument() ? null : sourceDocument.toJson())
-                .withCurrent(updatedDocument.toJson())
+                .withPrevious(sourceDocument.isNewDocument() ? null : sourceDocument.toJson(true))
+                .withCurrent(updatedDocument.toJson(true))
                 .withClientToken(clientToken)
                 .withTimestamp(Instant.now())
                 .build();

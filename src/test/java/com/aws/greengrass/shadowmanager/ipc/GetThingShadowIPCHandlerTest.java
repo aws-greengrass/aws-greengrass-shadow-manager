@@ -8,6 +8,7 @@ package com.aws.greengrass.shadowmanager.ipc;
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
 import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
 import com.aws.greengrass.shadowmanager.ipc.model.PubSubRequest;
+import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
@@ -116,7 +117,7 @@ class GetThingShadowIPCHandlerTest {
         expectedResponse.setPayload(allByteData);
         
         try (GetThingShadowIPCHandler getThingShadowIPCHandler = new GetThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper)) {
-            when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(allByteData));
+            when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(new ShadowDocument(allByteData)));
             GetThingShadowResponse actualResponse = getThingShadowIPCHandler.handleRequest(request);
             Optional<JsonNode> retrievedDocument = JsonUtil.getPayloadJson(actualResponse.getPayload());
             assertThat("Retrieved document", retrievedDocument.isPresent(), is(true));
@@ -171,7 +172,7 @@ class GetThingShadowIPCHandlerTest {
         expectedResponse.setPayload(documentByteData);
 
         try (GetThingShadowIPCHandler getThingShadowIPCHandler = new GetThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper)) {
-            when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(documentByteData));
+            when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(new ShadowDocument(documentByteData)));
             GetThingShadowResponse actualResponse = getThingShadowIPCHandler.handleRequest(request);
 
             Optional<JsonNode> retrievedDocument = JsonUtil.getPayloadJson(actualResponse.getPayload());
