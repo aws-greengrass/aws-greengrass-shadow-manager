@@ -26,4 +26,8 @@
             <Package name="software.amazon.awssdk.http.apache.internal.conn"/>
         </Or>
     </Match>
+    <!-- TODO: Remove once SyncHandler implemented -->
+    <Match>
+        <Package name="~com.aws.greengrass.shadowmanager.sync.*"/>
+    </Match>
 </FindBugsFilter>

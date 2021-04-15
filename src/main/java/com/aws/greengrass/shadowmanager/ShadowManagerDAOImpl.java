@@ -169,8 +169,8 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
     /**
      * Attempts to obtain the shadow sync information for a particular thing's shadow.
      *
-     * @param thingName  Name of the Thing for the shadow topic prefix.
-     * @param shadowName Name of shadow topic prefix for thing.
+     * @param thingName  Name of the Thing.
+     * @param shadowName Name of shadow.
      * @return The queried shadow sync information from the local shadow store
      */
     @Override
@@ -201,26 +201,20 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
     /**
      * Attempts to delete the cloud shadow document in the sync table.
      *
-     * @param thingName       Name of the Thing for the shadow topic prefix.
-     * @param shadowName      Name of shadow topic prefix for thing.
-     * @param cloudUpdateTime The time the cloud shadow was deleted.
-     * @param cloudVersion    The version of the cloud shadow.
+     * @param thingName       Name of the Thing.
+     * @param shadowName      Name of shadow.
      * @return true if the cloud document (soft) delete was successful or not.
      */
     @Override
-    public boolean deleteCloudDocumentInformationInSync(String thingName, String shadowName, long cloudUpdateTime,
-                                                        long cloudVersion) {
-        // To be consistent with cloud, subsequent updates to the shadow should not start from version 0
-        // https://docs.aws.amazon.com/iot/latest/developerguide/device-shadow-data-flow.html
+    public boolean deleteSyncInformation(String thingName, String shadowName) {
+        return execute("DELETE FROM sync WHERE thingName = ? AND shadowName = ?",
+                preparedStatement -> {
+                    preparedStatement.setString(1, thingName);
+                    preparedStatement.setString(2, shadowName);
+                    int result = preparedStatement.executeUpdate();
+                    return result == 1;
+                });
 
-        return updateSyncInformation(SyncInformation.builder()
-                .cloudDeleted(true)
-                .cloudUpdateTime(cloudUpdateTime)
-                .cloudDocument(null)
-                .cloudVersion(cloudVersion)
-                .shadowName(shadowName)
-                .thingName(thingName)
-                .build());
     }
 
     private <T> T execute(String sql, SQLExecution<T> thunk) {
