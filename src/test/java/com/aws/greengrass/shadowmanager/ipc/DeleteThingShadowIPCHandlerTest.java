@@ -14,6 +14,7 @@ import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersExcept
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.ipc.model.Operation;
 import com.aws.greengrass.shadowmanager.model.LogEvents;
+import com.aws.greengrass.shadowmanager.util.ShadowWriteSynchronizeHelper;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -63,6 +64,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -88,6 +90,9 @@ class DeleteThingShadowIPCHandlerTest {
     @Mock
     PubSubClientWrapper mockPubSubClientWrapper;
 
+    @Mock
+    ShadowWriteSynchronizeHelper mockSynchronizeHelper;
+
     @Captor
     ArgumentCaptor<PubSubRequest> pubSubRequestCaptor;
 
@@ -96,6 +101,7 @@ class DeleteThingShadowIPCHandlerTest {
         when(mockContext.getContinuation()).thenReturn(mock(ServerConnectionContinuation.class));
         when(mockContext.getAuthenticationData()).thenReturn(mockAuthenticationData);
         when(mockAuthenticationData.getIdentityLabel()).thenReturn(TEST_SERVICE);
+        lenient().when(mockSynchronizeHelper.getThingShadowLock(any())).thenReturn(Object.class);
     }
 
     @ParameterizedTest
@@ -113,7 +119,7 @@ class DeleteThingShadowIPCHandlerTest {
         DeleteThingShadowResponse expectedResponse = new DeleteThingShadowResponse();
         expectedResponse.setPayload(new byte[0]);
 
-        try (DeleteThingShadowIPCHandler deleteThingShadowIPCHandler = new DeleteThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper)) {
+        try (DeleteThingShadowIPCHandler deleteThingShadowIPCHandler = new DeleteThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockSynchronizeHelper)) {
             when(mockDao.deleteShadowThing(any(), any())).thenReturn(Optional.of(allByteData));
             
             DeleteThingShadowResponse actualResponse = deleteThingShadowIPCHandler.handleRequest(request);
@@ -147,7 +153,7 @@ class DeleteThingShadowIPCHandlerTest {
 
         when(mockDao.deleteShadowThing(any(), any())).thenReturn(Optional.empty());
 
-        try (DeleteThingShadowIPCHandler deleteThingShadowIPCHandler = new DeleteThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper)) {
+        try (DeleteThingShadowIPCHandler deleteThingShadowIPCHandler = new DeleteThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockSynchronizeHelper)) {
             ResourceNotFoundError thrown = assertThrows(ResourceNotFoundError.class, () -> deleteThingShadowIPCHandler.handleRequest(request));
             assertThat(thrown.getMessage(), is(equalTo("No shadow found")));
 
@@ -176,7 +182,7 @@ class DeleteThingShadowIPCHandlerTest {
 
         doThrow(new ShadowManagerDataException(new Exception(SAMPLE_EXCEPTION_MESSAGE))).when(mockDao).deleteShadowThing(any(), any());
 
-        try (DeleteThingShadowIPCHandler deleteThingShadowIPCHandler = new DeleteThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper)) {
+        try (DeleteThingShadowIPCHandler deleteThingShadowIPCHandler = new DeleteThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockSynchronizeHelper)) {
             ServiceError thrown = assertThrows(ServiceError.class, () -> deleteThingShadowIPCHandler.handleRequest(request));
             assertThat(thrown.getMessage(), containsString(SAMPLE_EXCEPTION_MESSAGE));
 
@@ -203,7 +209,7 @@ class DeleteThingShadowIPCHandlerTest {
         request.setShadowName(SHADOW_NAME);
         doThrow(new AuthorizationException(SAMPLE_EXCEPTION_MESSAGE)).when(mockAuthorizationHandlerWrapper).doAuthorization(any(), any(), any());
 
-        try (DeleteThingShadowIPCHandler deleteThingShadowIPCHandler = new DeleteThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper)) {
+        try (DeleteThingShadowIPCHandler deleteThingShadowIPCHandler = new DeleteThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockSynchronizeHelper)) {
             UnauthorizedError thrown = assertThrows(UnauthorizedError.class, () -> deleteThingShadowIPCHandler.handleRequest(request));
             assertThat(thrown.getMessage(), is(equalTo(SAMPLE_EXCEPTION_MESSAGE)));
 
@@ -229,7 +235,7 @@ class DeleteThingShadowIPCHandlerTest {
         request.setThingName(thingName);
         request.setShadowName(shadowName);
 
-        try (DeleteThingShadowIPCHandler deleteThingShadowIPCHandler = new DeleteThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper)) {
+        try (DeleteThingShadowIPCHandler deleteThingShadowIPCHandler = new DeleteThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockSynchronizeHelper)) {
             InvalidArgumentsError thrown = assertThrows(InvalidArgumentsError.class, () -> deleteThingShadowIPCHandler.handleRequest(request));
             assertThat(thrown.getMessage(), either(startsWith("ShadowName")).or(startsWith("ThingName")));
 
@@ -250,14 +256,14 @@ class DeleteThingShadowIPCHandlerTest {
 
     @Test
     void GIVEN_delete_thing_shadow_ipc_handler_WHEN_handle_stream_event_THEN_nothing_happens() {
-        try (DeleteThingShadowIPCHandler deleteThingShadowIPCHandler = new DeleteThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper)) {
+        try (DeleteThingShadowIPCHandler deleteThingShadowIPCHandler = new DeleteThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockSynchronizeHelper)) {
             assertDoesNotThrow(() -> deleteThingShadowIPCHandler.handleStreamEvent(mock(EventStreamJsonMessage.class)));
         }
     }
 
     @Test
     void GIVEN_delete_thing_shadow_ipc_handler_WHEN_stream_closes_THEN_nothing_happens() {
-        try (DeleteThingShadowIPCHandler deleteThingShadowIPCHandler = new DeleteThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper)) {
+        try (DeleteThingShadowIPCHandler deleteThingShadowIPCHandler = new DeleteThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockSynchronizeHelper)) {
             assertDoesNotThrow(deleteThingShadowIPCHandler::onStreamClosed);
         }
     }

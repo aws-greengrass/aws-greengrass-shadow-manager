@@ -25,6 +25,7 @@ import com.aws.greengrass.shadowmanager.model.ShadowRequest;
 import com.aws.greengrass.shadowmanager.model.configuration.ShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
+import com.aws.greengrass.shadowmanager.util.ShadowWriteSynchronizeHelper;
 import com.aws.greengrass.shadowmanager.util.Validator;
 import com.aws.greengrass.util.Coerce;
 import com.github.fge.jsonschema.core.exceptions.ProcessingException;
@@ -59,7 +60,6 @@ public class ShadowManager extends PluginService {
     public static final String SERVICE_NAME = "aws.greengrass.ShadowManager";
     private static final List<String> SHADOW_AUTHORIZATION_OPCODES = Arrays.asList(GET_THING_SHADOW,
             UPDATE_THING_SHADOW, LIST_NAMED_SHADOWS_FOR_THING, DELETE_THING_SHADOW, "*");
-    private static final Map<String, Map<String, Object>> thingLocksMap = new ConcurrentHashMap<>();
 
     private final ShadowManagerDAO dao;
     private final ShadowManagerDatabase database;
@@ -69,6 +69,7 @@ public class ShadowManager extends PluginService {
     //TODO: Move this to sync handler?
     @Getter(AccessLevel.PACKAGE)
     private ShadowSyncConfiguration syncConfiguration;
+    private ShadowWriteSynchronizeHelper synchronizeHelper;
 
     @Inject
     private GreengrassCoreIPCService greengrassCoreIPCService;
@@ -82,6 +83,7 @@ public class ShadowManager extends PluginService {
      * @param dao                         Local shadow database management
      * @param authorizationHandlerWrapper The authorization handler wrapper
      * @param pubSubClientWrapper         The PubSub client wrapper
+     * @param synchronizeHelper           The shadow write operation synchronizer helper.
      * @param deviceConfiguration         {@link DeviceConfiguration}
      */
     @Inject
@@ -91,13 +93,15 @@ public class ShadowManager extends PluginService {
             ShadowManagerDAOImpl dao,
             AuthorizationHandlerWrapper authorizationHandlerWrapper,
             PubSubClientWrapper pubSubClientWrapper,
-            DeviceConfiguration deviceConfiguration) {
+            DeviceConfiguration deviceConfiguration,
+            ShadowWriteSynchronizeHelper synchronizeHelper) {
         super(topics);
         this.database = database;
         this.authorizationHandlerWrapper = authorizationHandlerWrapper;
         this.dao = dao;
         this.pubSubClientWrapper = pubSubClientWrapper;
         this.deviceConfiguration = deviceConfiguration;
+        this.synchronizeHelper = synchronizeHelper;
         this.deviceThingNameWatcher = this::handleDeviceThingNameChange;
     }
 
@@ -114,9 +118,9 @@ public class ShadowManager extends PluginService {
         greengrassCoreIPCService.setGetThingShadowHandler(context -> new GetThingShadowIPCHandler(context,
                 dao, authorizationHandlerWrapper, pubSubClientWrapper));
         greengrassCoreIPCService.setDeleteThingShadowHandler(context -> new DeleteThingShadowIPCHandler(context,
-                dao, authorizationHandlerWrapper, pubSubClientWrapper));
+                dao, authorizationHandlerWrapper, pubSubClientWrapper, synchronizeHelper));
         greengrassCoreIPCService.setUpdateThingShadowHandler(context -> new UpdateThingShadowIPCHandler(context,
-                dao, authorizationHandlerWrapper, pubSubClientWrapper));
+                dao, authorizationHandlerWrapper, pubSubClientWrapper, synchronizeHelper));
         greengrassCoreIPCService.setListNamedShadowsForThingHandler(context -> new ListNamedShadowsForThingIPCHandler(
                 context, dao, authorizationHandlerWrapper));
     }
@@ -212,19 +216,5 @@ public class ShadowManager extends PluginService {
                     .setCause(e)
                     .log("Failed to close out shadow database");
         }
-    }
-
-    /**
-     * Gets the static lock object for a thing's shadow which will be used to synchronize the operations being
-     * performed on a particular shadow.
-     *
-     * @param shadowRequest  The thing name.
-     * @return the static lock object for a thing's shadow.
-     */
-    public static synchronized Object getThingShadowLock(ShadowRequest shadowRequest) {
-        thingLocksMap.computeIfAbsent(shadowRequest.getThingName(), thingName -> new ConcurrentHashMap<>());
-        thingLocksMap.get(shadowRequest.getThingName()).computeIfAbsent(shadowRequest.getShadowName(),
-                shadowName -> new Object());
-        return thingLocksMap.get(shadowRequest.getThingName()).get(shadowRequest.getShadowName());
     }
 }

@@ -9,7 +9,6 @@ import com.aws.greengrass.authorization.exceptions.AuthorizationException;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
-import com.aws.greengrass.shadowmanager.ShadowManager;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
@@ -22,6 +21,7 @@ import com.aws.greengrass.shadowmanager.model.ResponseMessageBuilder;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.ShadowRequest;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
+import com.aws.greengrass.shadowmanager.util.ShadowWriteSynchronizeHelper;
 import com.aws.greengrass.shadowmanager.util.Validator;
 import com.aws.greengrass.util.Pair;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -57,25 +57,28 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
     private final ShadowManagerDAO dao;
     private final AuthorizationHandlerWrapper authorizationHandlerWrapper;
     private final PubSubClientWrapper pubSubClientWrapper;
+    private final ShadowWriteSynchronizeHelper synchronizeHelper;
 
     /**
      * IPC Handler class for responding to UpdateThingShadow requests.
-     *
-     * @param context                     topics passed by the Nucleus
+     *  @param context                     topics passed by the Nucleus
      * @param dao                         Local shadow database management
      * @param authorizationHandlerWrapper The authorization handler wrapper
      * @param pubSubClientWrapper         The PubSub client wrapper
+     * @param synchronizeHelper
      */
     public UpdateThingShadowIPCHandler(
             OperationContinuationHandlerContext context,
             ShadowManagerDAO dao,
             AuthorizationHandlerWrapper authorizationHandlerWrapper,
-            PubSubClientWrapper pubSubClientWrapper) {
+            PubSubClientWrapper pubSubClientWrapper,
+            ShadowWriteSynchronizeHelper synchronizeHelper) {
         super(context);
         this.authorizationHandlerWrapper = authorizationHandlerWrapper;
         this.dao = dao;
         this.serviceName = context.getAuthenticationData().getIdentityLabel();
         this.pubSubClientWrapper = pubSubClientWrapper;
+        this.synchronizeHelper = synchronizeHelper;
     }
 
     @Override
@@ -115,7 +118,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                 throwInvalidArgumentsError(thingName, shadowName, clientToken, e);
             }
 
-            synchronized (ShadowManager.getThingShadowLock(shadowRequest)) {
+            synchronized (synchronizeHelper.getThingShadowLock(shadowRequest)) {
                 try {
 
                     if (updatedDocumentRequestBytes == null || updatedDocumentRequestBytes.length == 0) {

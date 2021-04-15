@@ -57,4 +57,13 @@ public class ShadowRequest {
         return String.format(NAMED_SHADOW_TOPIC_PREFIX, thingName, shadowName);
     }
 
+    /**
+     * Forms either the classic or named shadow topic prefix.
+     *
+     * @return The shadow topic prefix
+     */
+    public String computeShadowLockKey() {
+        return String.format("%s-%s", thingName, shadowName);
+    }
+
 }
