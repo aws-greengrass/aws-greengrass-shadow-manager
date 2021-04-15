@@ -109,8 +109,8 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
                 Validator.validateShadowRequest(shadowRequest);
                 authorizationHandlerWrapper.doAuthorization(GET_THING_SHADOW, serviceName, shadowRequest);
 
-                Optional<byte[]> currentDocumentBytes = dao.getShadowThing(thingName, shadowName);
-                if (!currentDocumentBytes.isPresent()) {
+                Optional<ShadowDocument> currentShadowDocument = dao.getShadowThing(thingName, shadowName);
+                if (!currentShadowDocument.isPresent()) {
                     ResourceNotFoundError rnf = new ResourceNotFoundError("No shadow found");
                     rnf.setResourceType(SHADOW_RESOURCE_TYPE);
                     logger.atWarn()
@@ -123,16 +123,15 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
                             ErrorMessage.createShadowNotFoundMessage(shadowName));
                     throw rnf;
                 }
-                ShadowDocument currentShadowDocument = new ShadowDocument(currentDocumentBytes.get());
 
                 // Get the Client Token if present in the payload.
                 Optional<JsonNode> payloadJson = JsonUtil.getPayloadJson(payload);
                 clientToken = payloadJson.flatMap(JsonUtil::getClientToken);
 
                 ObjectNode responseNode = ResponseMessageBuilder.builder()
-                        .withState(currentShadowDocument.getState().toJsonWithDelta())
-                        .withMetadata(currentShadowDocument.getMetadata().toJson())
-                        .withVersion(currentShadowDocument.getVersion())
+                        .withState(currentShadowDocument.get().getState().toJsonWithDelta())
+                        .withMetadata(currentShadowDocument.get().getMetadata().toJson())
+                        .withVersion(currentShadowDocument.get().getVersion())
                         .withClientToken(clientToken)
                         .withTimestamp(Instant.now()).build();
 

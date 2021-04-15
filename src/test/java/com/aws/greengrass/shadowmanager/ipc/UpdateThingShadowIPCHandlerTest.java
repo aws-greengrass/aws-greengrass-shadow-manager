@@ -8,6 +8,7 @@ package com.aws.greengrass.shadowmanager.ipc;
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
 import com.aws.greengrass.shadowmanager.ipc.model.PubSubRequest;
 import com.aws.greengrass.shadowmanager.model.Constants;
+import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
@@ -71,6 +72,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -158,8 +160,8 @@ class UpdateThingShadowIPCHandlerTest {
         expectedResponse.setPayload(updateDocument);
 
         try (UpdateThingShadowIPCHandler updateThingShadowIPCHandler = new UpdateThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockSynchronizeHelper)) {
-            when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(initialDocument));
-            when(mockDao.updateShadowThing(any(), any(), any())).thenReturn(Optional.of(updateDocument));
+            when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(new ShadowDocument(initialDocument)));
+            when(mockDao.updateShadowThing(any(), any(), any(), anyLong())).thenReturn(Optional.of(updateDocument));
 
             UpdateThingShadowResponse actualResponse = updateThingShadowIPCHandler.handleRequest(request);
             Optional<JsonNode> updatedDocumentJson = JsonUtil.getPayloadJson(actualResponse.getPayload());
@@ -231,8 +233,8 @@ class UpdateThingShadowIPCHandlerTest {
         expectedResponse.setPayload(updateDocument);
 
         try (UpdateThingShadowIPCHandler updateThingShadowIPCHandler = new UpdateThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockSynchronizeHelper)) {
-            when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(initialDocument));
-            when(mockDao.updateShadowThing(any(), any(), any())).thenReturn(Optional.of(updateDocument));
+            when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(new ShadowDocument(initialDocument)));
+            when(mockDao.updateShadowThing(any(), any(), any(), anyLong())).thenReturn(Optional.of(updateDocument));
 
             UpdateThingShadowResponse actualResponse = updateThingShadowIPCHandler.handleRequest(request);
             Optional<JsonNode> updatedDocumentJson = JsonUtil.getPayloadJson(actualResponse.getPayload());
@@ -302,8 +304,8 @@ class UpdateThingShadowIPCHandlerTest {
         expectedResponse.setPayload(updateDocument);
 
         try (UpdateThingShadowIPCHandler updateThingShadowIPCHandler = new UpdateThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockSynchronizeHelper)) {
-            when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(initialDocument));
-            when(mockDao.updateShadowThing(any(), any(), any())).thenReturn(Optional.of(updateDocument));
+            when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(new ShadowDocument(initialDocument)));
+            when(mockDao.updateShadowThing(any(), any(), any(), anyLong())).thenReturn(Optional.of(updateDocument));
 
             UpdateThingShadowResponse actualResponse = updateThingShadowIPCHandler.handleRequest(request);
             Optional<JsonNode> updatedDocumentJson = JsonUtil.getPayloadJson(actualResponse.getPayload());
@@ -380,8 +382,8 @@ class UpdateThingShadowIPCHandlerTest {
         expectedResponse.setPayload(updateDocument);
 
         try (UpdateThingShadowIPCHandler updateThingShadowIPCHandler = new UpdateThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockSynchronizeHelper)) {
-            when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(initialDocument));
-            when(mockDao.updateShadowThing(any(), any(), any())).thenReturn(Optional.of(updateDocument));
+            when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(new ShadowDocument(initialDocument)));
+            when(mockDao.updateShadowThing(any(), any(), any(), anyLong())).thenReturn(Optional.of(updateDocument));
 
             UpdateThingShadowResponse actualResponse = updateThingShadowIPCHandler.handleRequest(request);
             Optional<JsonNode> updatedDocumentJson = JsonUtil.getPayloadJson(actualResponse.getPayload());
@@ -446,7 +448,7 @@ class UpdateThingShadowIPCHandlerTest {
         
         try (UpdateThingShadowIPCHandler updateThingShadowIPCHandler = new UpdateThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockSynchronizeHelper)) {
             when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.empty());
-            when(mockDao.updateShadowThing(any(), any(), any())).thenReturn(Optional.of(updateDocument));
+            when(mockDao.updateShadowThing(any(), any(), any(), anyLong())).thenReturn(Optional.of(updateDocument));
 
             UpdateThingShadowResponse actualResponse = updateThingShadowIPCHandler.handleRequest(request);
             Optional<JsonNode> updatedDocumentJson = JsonUtil.getPayloadJson(actualResponse.getPayload());
@@ -511,8 +513,8 @@ class UpdateThingShadowIPCHandlerTest {
         request.setPayload(updateRequest);
 
         try (UpdateThingShadowIPCHandler updateThingShadowIPCHandler = new UpdateThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockSynchronizeHelper)) {
-            when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(initialDocument));
-            doThrow(new ShadowManagerDataException(new Exception(SAMPLE_EXCEPTION_MESSAGE))).when(mockDao).updateShadowThing(any(), any(), any());
+            when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(new ShadowDocument(initialDocument)));
+            doThrow(new ShadowManagerDataException(new Exception(SAMPLE_EXCEPTION_MESSAGE))).when(mockDao).updateShadowThing(any(), any(), any(), anyLong());
             ServiceError thrown = assertThrows(ServiceError.class, () -> updateThingShadowIPCHandler.handleRequest(request));
             assertThat(thrown.getMessage(), containsString(SAMPLE_EXCEPTION_MESSAGE));
 
@@ -650,8 +652,8 @@ class UpdateThingShadowIPCHandlerTest {
         request.setPayload(updateRequest);
 
         try (UpdateThingShadowIPCHandler updateThingShadowIPCHandler = new UpdateThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockSynchronizeHelper)) {
-            when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(initialDocument));
-            when(mockDao.updateShadowThing(any(), any(), any())).thenReturn(Optional.empty());
+            when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(new ShadowDocument(initialDocument)));
+            when(mockDao.updateShadowThing(any(), any(), any(), anyLong())).thenReturn(Optional.empty());
 
             ServiceError thrown = assertThrows(ServiceError.class, () -> updateThingShadowIPCHandler.handleRequest(request));
             assertThat(thrown.getMessage(), startsWith("Unexpected error"));
@@ -680,7 +682,7 @@ class UpdateThingShadowIPCHandlerTest {
         request.setPayload(badUpdateRequest);
 
         if (initialDocument != null) {
-            when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(initialDocument));
+            when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(new ShadowDocument(initialDocument)));
         }
 
         try (UpdateThingShadowIPCHandler updateThingShadowIPCHandler = new UpdateThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockSynchronizeHelper)) {
@@ -739,7 +741,7 @@ class UpdateThingShadowIPCHandlerTest {
         request.setShadowName(SHADOW_NAME);
         request.setPayload(badUpdateRequest);
 
-        when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(initialDocument));
+        when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(new ShadowDocument(initialDocument)));
 
         try (UpdateThingShadowIPCHandler updateThingShadowIPCHandler = new UpdateThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockSynchronizeHelper)) {
 

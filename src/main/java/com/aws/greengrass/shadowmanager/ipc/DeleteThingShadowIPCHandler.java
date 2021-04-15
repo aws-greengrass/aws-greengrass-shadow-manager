@@ -121,8 +121,8 @@ public class DeleteThingShadowIPCHandler extends GeneratedAbstractDeleteThingSha
                     Optional<JsonNode> payloadJson = JsonUtil.getPayloadJson(payload);
                     clientToken = payloadJson.flatMap(JsonUtil::getClientToken);
 
-                    Optional<byte[]> result = dao.deleteShadowThing(thingName, shadowName);
-                    if (!result.isPresent()) {
+                    Optional<ShadowDocument> deletedShadowDocument = dao.deleteShadowThing(thingName, shadowName);
+                    if (!deletedShadowDocument.isPresent()) {
                         ResourceNotFoundError rnf = new ResourceNotFoundError("No shadow found");
                         rnf.setResourceType(SHADOW_RESOURCE_TYPE);
                         logger.atWarn()
@@ -140,9 +140,8 @@ public class DeleteThingShadowIPCHandler extends GeneratedAbstractDeleteThingSha
                             .kv(LOG_SHADOW_NAME_KEY, shadowName)
                             .log("Successfully delete shadow");
 
-                    ShadowDocument deletedShadowDocument = new ShadowDocument(result.get());
                     JsonNode responseNode = ResponseMessageBuilder.builder()
-                            .withVersion(deletedShadowDocument.getVersion())
+                            .withVersion(deletedShadowDocument.get().getVersion())
                             .withClientToken(clientToken)
                             .withTimestamp(Instant.now())
                             .build();
