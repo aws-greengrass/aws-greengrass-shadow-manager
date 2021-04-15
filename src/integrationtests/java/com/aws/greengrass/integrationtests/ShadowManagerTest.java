@@ -15,8 +15,10 @@ import com.aws.greengrass.shadowmanager.ShadowManager;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAOImpl;
 import com.aws.greengrass.shadowmanager.ShadowManagerDatabase;
 import com.aws.greengrass.shadowmanager.model.LogEvents;
+import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.testcommons.testutilities.GGServiceTestUtil;
+import com.aws.greengrass.util.Pair;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,12 +30,32 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.nio.file.Path;
 import java.sql.SQLException;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import static com.aws.greengrass.componentmanager.KernelConfigResolver.CONFIGURATION_CONFIG_KEY;
 import static com.aws.greengrass.shadowmanager.TestUtils.SAMPLE_EXCEPTION_MESSAGE;
+import static com.aws.greengrass.shadowmanager.TestUtils.THING_NAME;
+import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_CLASSIC_SHADOW_TOPIC;
+import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_NAMED_SHADOWS_TOPIC;
+import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SHADOW_DOCUMENTS_TOPIC;
+import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SYNCHRONIZATION_TOPIC;
+import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_THING_NAME_TOPIC;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.arrayContainingInAnyOrder;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.not;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
@@ -43,8 +65,11 @@ import static org.mockito.Mockito.verify;
 class ShadowManagerTest extends GGServiceTestUtil {
     private static final long TEST_TIME_OUT_SEC = 30L;
     private static final String DEFAULT_CONFIG = "config.yaml";
+    private static final byte[] BASE_DOCUMENT = "{\"version\": 1, \"state\": {\"reported\": {\"name\": \"The Beatles\"}}}".getBytes();
+    public static final String THING_NAME2 = "testThingName2";
 
     private Kernel kernel;
+    private ShadowManager shadowManager;
     private GlobalStateChangeListener listener;
 
     @TempDir
@@ -69,19 +94,22 @@ class ShadowManagerTest extends GGServiceTestUtil {
         kernel.shutdown();
     }
 
-    private void startNucleusWithConfig(String configFile, State expectedState) throws InterruptedException {
+    private void startNucleusWithConfig(String configFile, State expectedState, boolean mockDatabase) throws InterruptedException {
         CountDownLatch shadowManagerRunning = new CountDownLatch(1);
         kernel.parseArgs("-r", rootDir.toAbsolutePath().toString(), "-i",
                 getClass().getResource(configFile).toString());
         listener = (GreengrassService service, State was, State newState) -> {
             if (service.getName().equals(ShadowManager.SERVICE_NAME) && service.getState().equals(expectedState)) {
                 shadowManagerRunning.countDown();
+                shadowManager = (ShadowManager) service;
             }
         };
         kernel.getContext().addGlobalStateChangeListener(listener);
-        kernel.getContext().put(ShadowManagerDatabase.class, mockShadowManagerDatabase);
-        kernel.getContext().put(ShadowManagerDAOImpl.class, mockShadowManagerDAOImpl);
-        kernel.getContext().put(AuthorizationHandlerWrapper.class, mockAuthorizationHandlerWrapper);
+        if (mockDatabase) {
+            kernel.getContext().put(ShadowManagerDatabase.class, mockShadowManagerDatabase);
+            kernel.getContext().put(ShadowManagerDAOImpl.class, mockShadowManagerDAOImpl);
+            kernel.getContext().put(AuthorizationHandlerWrapper.class, mockAuthorizationHandlerWrapper);
+        }
         kernel.launch();
 
         assertTrue(shadowManagerRunning.await(TEST_TIME_OUT_SEC, TimeUnit.SECONDS));
@@ -89,7 +117,7 @@ class ShadowManagerTest extends GGServiceTestUtil {
 
     @Test
     void GIVEN_Greengrass_with_shadow_manager_WHEN_start_nucleus_THEN_shadow_manager_starts_successfully() throws Exception {
-        startNucleusWithConfig(DEFAULT_CONFIG, State.RUNNING);
+        startNucleusWithConfig(DEFAULT_CONFIG, State.RUNNING, false);
     }
 
     @Test
@@ -97,12 +125,12 @@ class ShadowManagerTest extends GGServiceTestUtil {
         ignoreExceptionOfType(context, SQLException.class);
 
         doThrow(SQLException.class).when(mockShadowManagerDatabase).install();
-        startNucleusWithConfig(DEFAULT_CONFIG, State.ERRORED);
+        startNucleusWithConfig(DEFAULT_CONFIG, State.ERRORED, true);
     }
 
     @Test
     void GIVEN_Greengrass_with_shadow_manager_WHEN_nucleus_shutdown_THEN_shadow_manager_database_closes() throws Exception {
-        startNucleusWithConfig(DEFAULT_CONFIG, State.RUNNING);
+        startNucleusWithConfig(DEFAULT_CONFIG, State.RUNNING, true);
         kernel.shutdown();
         verify(mockShadowManagerDatabase, atLeastOnce()).close();
     }
@@ -113,7 +141,7 @@ class ShadowManagerTest extends GGServiceTestUtil {
         doThrow(new AuthorizationException(SAMPLE_EXCEPTION_MESSAGE)).when(mockAuthorizationHandlerWrapper).registerComponent(any(), any());
 
         // Failing to register component does not break ShadowManager
-        assertDoesNotThrow(() -> startNucleusWithConfig(DEFAULT_CONFIG, State.RUNNING));
+        assertDoesNotThrow(() -> startNucleusWithConfig(DEFAULT_CONFIG, State.RUNNING, true));
     }
 
     @Test
@@ -121,5 +149,56 @@ class ShadowManagerTest extends GGServiceTestUtil {
         for(LogEvents logEvent : LogEvents.values()) {
             assertFalse(logEvent.code().isEmpty());
         }
+    }
+
+    private void createThingShadowSyncInfo(ShadowManagerDAOImpl impl, String thingName) {
+        long epochMinus60Seconds = Instant.now().minusSeconds(60).getEpochSecond();
+        for (int i = 0; i < 5; i++) {
+            SyncInformation syncInformation = SyncInformation.builder()
+                    .thingName(thingName)
+                    .shadowName("Shadow-" + i)
+                    .cloudDeleted(false)
+                    .cloudVersion(1)
+                    .cloudUpdateTime(epochMinus60Seconds)
+                    .cloudDocument(BASE_DOCUMENT)
+                    .build();
+            assertTrue(impl.updateSyncInformation(syncInformation));
+        }
+    }
+
+    @Test
+    void GIVEN_existing_sync_information_WHEN_config_updates_THEN_removed_sync_information_for_removed_shadows() throws Exception {
+        startNucleusWithConfig(DEFAULT_CONFIG, State.RUNNING, false);
+        ShadowManagerDAOImpl impl = kernel.getContext().get(ShadowManagerDAOImpl.class);
+        createThingShadowSyncInfo(impl, THING_NAME);
+        createThingShadowSyncInfo(impl, THING_NAME2);
+
+        List<Map<String, Object>> shadowDocumentsList = new ArrayList<>();
+        Map<String, Object> thingAMap = new HashMap<>();
+        thingAMap.put(CONFIGURATION_THING_NAME_TOPIC, THING_NAME);
+        thingAMap.put(CONFIGURATION_CLASSIC_SHADOW_TOPIC, false);
+        thingAMap.put(CONFIGURATION_NAMED_SHADOWS_TOPIC, Arrays.asList("Shadow-0", "Shadow-1"));
+        Map<String, Object> thingBMap = new HashMap<>();
+        thingBMap.put(CONFIGURATION_THING_NAME_TOPIC, THING_NAME2);
+        thingBMap.put(CONFIGURATION_NAMED_SHADOWS_TOPIC, Arrays.asList("Shadow-0", "Shadow-5"));
+        shadowDocumentsList.add(thingAMap);
+        shadowDocumentsList.add(thingBMap);
+        shadowManager.getConfig().lookupTopics(CONFIGURATION_CONFIG_KEY).lookupTopics(CONFIGURATION_SYNCHRONIZATION_TOPIC)
+                .replaceAndWait(Collections.singletonMap(CONFIGURATION_SHADOW_DOCUMENTS_TOPIC, shadowDocumentsList));
+
+        List<Pair<String, String>> allSyncedShadowNames = impl.getAllSyncedShadowNames();
+        assertThat(allSyncedShadowNames.toArray(), is(arrayContainingInAnyOrder(
+                new Pair<>(THING_NAME, "Shadow-0"),
+                new Pair<>(THING_NAME, "Shadow-1"),
+                new Pair<>(THING_NAME2, "Shadow-0"))));
+
+        assertThat(allSyncedShadowNames.toArray(), is(not(arrayContainingInAnyOrder(
+                new Pair<>(THING_NAME, "Shadow-2"),
+                new Pair<>(THING_NAME, "Shadow-3"),
+                new Pair<>(THING_NAME, "Shadow-4"),
+                new Pair<>(THING_NAME2, "Shadow-1"),
+                new Pair<>(THING_NAME2, "Shadow-2"),
+                new Pair<>(THING_NAME2, "Shadow-3"),
+                new Pair<>(THING_NAME2, "Shadow-4")))));
     }
 }

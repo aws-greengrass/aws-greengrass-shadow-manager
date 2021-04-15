@@ -9,6 +9,7 @@ import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
+import com.aws.greengrass.util.Pair;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,6 +30,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.arrayContaining;
+import static org.hamcrest.Matchers.arrayContainingInAnyOrder;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.lessThanOrEqualTo;
@@ -481,5 +483,55 @@ class ShadowManagerDAOImplTest {
         ShadowManagerDAOImpl impl = new ShadowManagerDAOImpl(mockDatabase);
         assertThrows(ShadowManagerDataException.class, () -> impl.deleteSyncInformation(THING_NAME, SHADOW_NAME));
         assertDeleteShadowSyncMocks();
+    }
+
+    @Test
+    void GIVEN_existing_shadow_WHEN_getAllSyncedShadowNames_THEN_deletes_shadow_document() throws SQLException {
+        AtomicInteger count = new AtomicInteger(0);
+        when(mockResultSet.next()).thenAnswer(invocationOnMock -> {
+            count.set(count.get() + 1);
+            return count.get() <= 10;
+        });
+        AtomicInteger currentValueCounter = new AtomicInteger(0);
+        when(mockResultSet.getString(1)).thenAnswer(invocationOnMock -> {
+            currentValueCounter.set(currentValueCounter.get() + 1);
+            return "SomeThing-" + currentValueCounter.get();
+        });
+        AtomicInteger currentValueCounter2 = new AtomicInteger(0);
+        when(mockResultSet.getString(2)).thenAnswer(invocationOnMock -> {
+            currentValueCounter2.set(currentValueCounter2.get() + 1);
+            return "SomeShadow-" + currentValueCounter2.get();
+        });
+        when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+        ShadowManagerDAOImpl impl = new ShadowManagerDAOImpl(mockDatabase);
+        List<Pair<String, String>> allSyncedShadowNames = impl.getAllSyncedShadowNames();
+        assertThat(allSyncedShadowNames.toArray(), is(arrayContainingInAnyOrder(
+                new Pair<>("SomeThing-1", "SomeShadow-1"),
+                new Pair<>("SomeThing-2", "SomeShadow-2"),
+                new Pair<>("SomeThing-3", "SomeShadow-3"),
+                new Pair<>("SomeThing-4", "SomeShadow-4"),
+                new Pair<>("SomeThing-5", "SomeShadow-5"),
+                new Pair<>("SomeThing-6", "SomeShadow-6"),
+                new Pair<>("SomeThing-7", "SomeShadow-7"),
+                new Pair<>("SomeThing-8", "SomeShadow-8"),
+                new Pair<>("SomeThing-9", "SomeShadow-9"),
+                new Pair<>("SomeThing-10", "SomeShadow-10"))));
+
+    }
+
+    @Test
+    void GIVEN_existing_shadow_WHEN_getAllSyncedShadowNames_and_h2_returns_0_rows_deleted_THEN_returns_empty_optional() throws SQLException {
+        when(mockResultSet.next()).thenReturn(false);
+        when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+        ShadowManagerDAOImpl impl = new ShadowManagerDAOImpl(mockDatabase);
+        List<Pair<String, String>> allSyncedShadowNames = impl.getAllSyncedShadowNames();
+        assertThat(allSyncedShadowNames.size(), is(0));
+    }
+
+    @Test
+    void GIVEN_existing_shadow_WHEN_getAllSyncedShadowNames_and_h2_throws_SQL_exception_THEN_ShadowManagerDataException_is_thrown() throws SQLException {
+        when(mockPreparedStatement.executeQuery()).thenThrow(SQLException.class);
+        ShadowManagerDAOImpl impl = new ShadowManagerDAOImpl(mockDatabase);
+        assertThrows(ShadowManagerDataException.class, impl::getAllSyncedShadowNames);
     }
 }
