@@ -154,12 +154,20 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.8.1</version>
-                <configuration>
-                    <source>8</source>
-                    <target>8</target>
-                </configuration>
-            </plugin>
-            <plugin>
+                <executions>
+                    <execution>
+                        <phase>compile</phase>
+                        <goals><goal>compile</goal></goals>
+                        <id>test-resource-compile</id>
+                        <configuration>
+                            <compileSourceRoots><compileSourceRoot>
+                                src/integrationtests/resources/
+                            </compileSourceRoot></compileSourceRoots>
+                            <outputDirectory>target/test-resource-classes</outputDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>            <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-pmd-plugin</artifactId>
                 <version>3.13.0</version>
@@ -272,6 +280,7 @@
                                 <include>**/integrationtests/**</include>
                             </includes>
                             <groups>${groups}</groups>
+                            <excludedGroups>${excludedGroups}</excludedGroups>
                         </configuration>
                     </execution>
                 </executions>
@@ -391,55 +400,6 @@
                                 </rule>
                             </rules>
                         </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.3</version>
-                <configuration>
-                    <source>1.8</source>
-                    <target>1.8</target>
-                </configuration>
-            </plugin>
-            <plugin>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <version>3.0.0-M5</version>
-                <configuration>
-                    <trimStackTrace>false</trimStackTrace>
-                    <argLine>${surefire.argLine} -Xms1m</argLine>
-                    <properties>
-                        <configurationParameters>
-                            junit.jupiter.execution.timeout.default = 5m
-                        </configurationParameters>
-                    </properties>
-                </configuration>
-            </plugin>
-            <plugin>
-                <artifactId>maven-checkstyle-plugin</artifactId>
-                <version>3.1.0</version>
-                <dependencies>
-                    <dependency>
-                        <groupId>com.puppycrawl.tools</groupId>
-                        <artifactId>checkstyle</artifactId>
-                        <version>8.29</version>
-                    </dependency>
-                </dependencies>
-                <configuration>
-                    <logViolationsToConsole>true</logViolationsToConsole>
-                    <configLocation>codestyle/checkstyle.xml</configLocation>
-                    <violationSeverity>warning</violationSeverity>
-                    <maxAllowedViolations>0</maxAllowedViolations>
-                    <skip>${skipTests}</skip>
-                </configuration>
-                <executions>
-                    <execution>
-                        <id>validate</id>
-                        <phase>validate</phase>
-                        <goals>
-                            <goal>check</goal>
-                        </goals>
                     </execution>
                 </executions>
             </plugin>

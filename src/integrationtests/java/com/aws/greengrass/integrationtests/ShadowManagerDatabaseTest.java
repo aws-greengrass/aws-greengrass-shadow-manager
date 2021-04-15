@@ -88,7 +88,7 @@ class ShadowManagerDatabaseTest extends GGServiceTestUtil {
 
         // GIVEN
         String doc = "{\"foo\": \"bar\"}";
-        dao.updateShadowThing("foo", "bar", doc.getBytes(StandardCharsets.UTF_8));
+        dao.updateShadowThing("foo", "bar", doc.getBytes(StandardCharsets.UTF_8), 1);
         Optional<byte[]> data = dao.getShadowThing("foo", "bar");
 
         assertThat(data.isPresent(), is(true));
