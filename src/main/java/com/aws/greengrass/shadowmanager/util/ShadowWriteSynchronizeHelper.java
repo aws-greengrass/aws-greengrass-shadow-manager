@@ -24,7 +24,7 @@ public class ShadowWriteSynchronizeHelper {
      * @return the static lock object for a thing's shadow.
      */
     public synchronized Object getThingShadowLock(ShadowRequest shadowRequest) {
-        thingLocksMap.computeIfAbsent(shadowRequest.computeShadowLockKey(), key -> new ConcurrentHashMap<>());
+        thingLocksMap.computeIfAbsent(shadowRequest.computeShadowLockKey(), key -> new Object());
         return thingLocksMap.get(shadowRequest.computeShadowLockKey());
     }
 }

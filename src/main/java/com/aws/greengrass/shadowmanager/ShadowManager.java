@@ -21,7 +21,6 @@ import com.aws.greengrass.shadowmanager.ipc.ListNamedShadowsForThingIPCHandler;
 import com.aws.greengrass.shadowmanager.ipc.PubSubClientWrapper;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowIPCHandler;
 import com.aws.greengrass.shadowmanager.model.LogEvents;
-import com.aws.greengrass.shadowmanager.model.ShadowRequest;
 import com.aws.greengrass.shadowmanager.model.configuration.ShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
@@ -41,7 +40,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 import javax.inject.Inject;
 
 import static com.aws.greengrass.componentmanager.KernelConfigResolver.CONFIGURATION_CONFIG_KEY;
@@ -66,10 +64,10 @@ public class ShadowManager extends PluginService {
     private final AuthorizationHandlerWrapper authorizationHandlerWrapper;
     private final PubSubClientWrapper pubSubClientWrapper;
     private final DeviceConfiguration deviceConfiguration;
+    private final ShadowWriteSynchronizeHelper synchronizeHelper;
     //TODO: Move this to sync handler?
     @Getter(AccessLevel.PACKAGE)
     private ShadowSyncConfiguration syncConfiguration;
-    private ShadowWriteSynchronizeHelper synchronizeHelper;
 
     @Inject
     private GreengrassCoreIPCService greengrassCoreIPCService;

@@ -61,11 +61,12 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
 
     /**
      * IPC Handler class for responding to UpdateThingShadow requests.
-     *  @param context                     topics passed by the Nucleus
+     *
+     * @param context                     topics passed by the Nucleus
      * @param dao                         Local shadow database management
      * @param authorizationHandlerWrapper The authorization handler wrapper
      * @param pubSubClientWrapper         The PubSub client wrapper
-     * @param synchronizeHelper
+     * @param synchronizeHelper           The shadow write operation synchronizer helper.
      */
     public UpdateThingShadowIPCHandler(
             OperationContinuationHandlerContext context,

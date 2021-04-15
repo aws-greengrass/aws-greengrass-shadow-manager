@@ -63,7 +63,7 @@ public class ShadowRequest {
      * @return The shadow topic prefix
      */
     public String computeShadowLockKey() {
-        return String.format("%s-%s", thingName, shadowName);
+        return String.format("%s|%s", thingName, shadowName);
     }
 
 }
