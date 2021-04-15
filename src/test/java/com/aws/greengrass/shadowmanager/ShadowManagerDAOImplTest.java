@@ -31,7 +31,6 @@ import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.hamcrest.Matchers.notNullValue;
-import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -156,18 +155,16 @@ class ShadowManagerDAOImplTest {
         assertThat(longArgumentCaptor.getAllValues().get(2), is(greaterThanOrEqualTo(epochNow)));
     }
 
-    private void assertDeleteShadowSyncStatementMocks(long epochNow) {
-        assertThat(stringArgumentCaptor.getAllValues().size(), is(2));
-        assertThat(longArgumentCaptor.getAllValues().size(), is(3));
-        assertThat(bytesArgumentCaptor.getValue(), is(nullValue()));
-        assertThat(booleanArgumentCaptor.getValue(), is(notNullValue()));
 
-        assertThat(booleanArgumentCaptor.getValue(), is(true));
+    private void assertDeleteShadowSyncMocks() {
+        assertThat(stringArgumentCaptor.getAllValues().size(), is(2));
         assertThat(stringArgumentCaptor.getAllValues().get(0), is(THING_NAME));
         assertThat(stringArgumentCaptor.getAllValues().get(1), is(SHADOW_NAME));
-        assertThat(longArgumentCaptor.getAllValues().get(0), is(2L));
-        assertThat(longArgumentCaptor.getAllValues().get(1), is(lessThanOrEqualTo(epochNow)));
-        assertThat(longArgumentCaptor.getAllValues().get(2), is(greaterThanOrEqualTo(epochNow)));
+    }
+
+    private void setupDeleteShadowSyncMocks() throws SQLException {
+        doNothing().when(mockPreparedStatement).setString(eq(1), stringArgumentCaptor.capture());
+        doNothing().when(mockPreparedStatement).setString(eq(2), stringArgumentCaptor.capture());
     }
 
     private void setupUpdateShadowSyncStatementMocks() throws SQLException {
@@ -452,39 +449,33 @@ class ShadowManagerDAOImplTest {
 
     @Test
     void GIVEN_existing_shadow_WHEN_deleteCloudDocumentInformationInSync_THEN_deletes_shadow_document() throws SQLException {
-        long epochNow = Instant.now().getEpochSecond();
-        long epochMinus60Seconds = Instant.now().minusSeconds(60).getEpochSecond();
-        setupUpdateShadowSyncStatementMocks();
+        setupDeleteShadowSyncMocks();
 
         when(mockPreparedStatement.executeUpdate()).thenReturn(1);
         ShadowManagerDAOImpl impl = new ShadowManagerDAOImpl(mockDatabase);
-        assertTrue(impl.deleteCloudDocumentInformationInSync(THING_NAME, SHADOW_NAME, epochMinus60Seconds, 2));
+        assertTrue(impl.deleteSyncInformation(THING_NAME, SHADOW_NAME));
 
-        assertDeleteShadowSyncStatementMocks(epochNow);
+        assertDeleteShadowSyncMocks();
     }
 
     @Test
     void GIVEN_existing_shadow_WHEN_deleteCloudDocumentInformationInSync_and_h2_returns_0_rows_deleted_THEN_returns_empty_optional() throws SQLException {
-        long epochNow = Instant.now().getEpochSecond();
-        long epochMinus60Seconds = Instant.now().minusSeconds(60).getEpochSecond();
-        setupUpdateShadowSyncStatementMocks();
+        setupDeleteShadowSyncMocks();
 
         when(mockPreparedStatement.executeUpdate()).thenReturn(0);
         ShadowManagerDAOImpl impl = new ShadowManagerDAOImpl(mockDatabase);
-        assertFalse(impl.deleteCloudDocumentInformationInSync(THING_NAME, SHADOW_NAME, epochMinus60Seconds, 2));
+        assertFalse(impl.deleteSyncInformation(THING_NAME, SHADOW_NAME));
 
-        assertDeleteShadowSyncStatementMocks(epochNow);
+        assertDeleteShadowSyncMocks();
     }
 
     @Test
     void GIVEN_existing_shadow_WHEN_deleteCloudDocumentInformationInSync_and_h2_throws_SQL_exception_THEN_ShadowManagerDataException_is_thrown() throws SQLException {
-        long epochNow = Instant.now().getEpochSecond();
-        long epochMinus60Seconds = Instant.now().minusSeconds(60).getEpochSecond();
-        setupUpdateShadowSyncStatementMocks();
+        setupDeleteShadowSyncMocks();
 
         when(mockPreparedStatement.executeUpdate()).thenThrow(SQLException.class);
         ShadowManagerDAOImpl impl = new ShadowManagerDAOImpl(mockDatabase);
-        assertThrows(ShadowManagerDataException.class, () -> impl.deleteCloudDocumentInformationInSync(THING_NAME, SHADOW_NAME, epochMinus60Seconds, 2));
-        assertDeleteShadowSyncStatementMocks(epochNow);
+        assertThrows(ShadowManagerDataException.class, () -> impl.deleteSyncInformation(THING_NAME, SHADOW_NAME));
+        assertDeleteShadowSyncMocks();
     }
 }

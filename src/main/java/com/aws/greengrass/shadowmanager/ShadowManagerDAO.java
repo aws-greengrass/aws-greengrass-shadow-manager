@@ -72,10 +72,7 @@ public interface ShadowManagerDAO {
      *
      * @param thingName       Name of the Thing for the shadow topic prefix.
      * @param shadowName      Name of shadow topic prefix for thing.
-     * @param cloudUpdateTime The time the cloud shadow was deleted.
-     * @param cloudVersion    The version of the cloud shadow.
      * @return true if the cloud document (soft) delete was successful or not.
      */
-    boolean deleteCloudDocumentInformationInSync(String thingName, String shadowName, long cloudUpdateTime,
-                                                 long cloudVersion);
+    boolean deleteSyncInformation(String thingName, String shadowName);
 }
