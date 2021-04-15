@@ -6,6 +6,7 @@
 package com.aws.greengrass.shadowmanager;
 
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
+import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,6 +17,7 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.io.IOException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -42,7 +44,7 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 class ShadowManagerDAOImplTest {
-    private static final byte[] BASE_DOCUMENT = "{\"id\": 1, \"name\": \"The Beatles\"}".getBytes();
+    private static final byte[] BASE_DOCUMENT = "{\"version\": 1, \"state\": {\"reported\": {\"name\": \"The Beatles\"}}}".getBytes();
     private static final String THING_NAME = "thingName";
     private static final String SHADOW_NAME = "shadowName";
 
@@ -155,7 +157,6 @@ class ShadowManagerDAOImplTest {
         assertThat(longArgumentCaptor.getAllValues().get(2), is(greaterThanOrEqualTo(epochNow)));
     }
 
-
     private void assertDeleteShadowSyncMocks() {
         assertThat(stringArgumentCaptor.getAllValues().size(), is(2));
         assertThat(stringArgumentCaptor.getAllValues().get(0), is(THING_NAME));
@@ -222,16 +223,16 @@ class ShadowManagerDAOImplTest {
     }
 
     @Test
-    void GIVEN_existing_shadow_WHEN_getShadowThing_THEN_returns_shadow_document() throws SQLException {
+    void GIVEN_existing_shadow_WHEN_getShadowThing_THEN_returns_shadow_document() throws SQLException, IOException {
         setupGetShadowStatementMocks();
         when(mockResultSet.next()).thenReturn(true);
-        when(mockResultSet.getBytes("document")).thenReturn(BASE_DOCUMENT);
+        when(mockResultSet.getBytes(1)).thenReturn(BASE_DOCUMENT);
+        when(mockResultSet.getLong(2)).thenReturn(1L);
         when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
         ShadowManagerDAOImpl impl = new ShadowManagerDAOImpl(mockDatabase);
-        Optional<byte[]> updatedShadow = impl.getShadowThing(THING_NAME, SHADOW_NAME);
+        Optional<ShadowDocument> updatedShadow = impl.getShadowThing(THING_NAME, SHADOW_NAME);
         assertThat(updatedShadow, is(notNullValue()));
-        assertThat(updatedShadow.get(), is(BASE_DOCUMENT));
-
+        assertThat(updatedShadow.get().toJson(true), is(new ShadowDocument(BASE_DOCUMENT).toJson(true)));
         assertGetShadowStatementMocks();
     }
 
@@ -241,7 +242,7 @@ class ShadowManagerDAOImplTest {
         when(mockResultSet.next()).thenReturn(false);
         when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
         ShadowManagerDAOImpl impl = new ShadowManagerDAOImpl(mockDatabase);
-        Optional<byte[]> updatedShadow = impl.getShadowThing(THING_NAME, SHADOW_NAME);
+        Optional<ShadowDocument> updatedShadow = impl.getShadowThing(THING_NAME, SHADOW_NAME);
         assertThat(updatedShadow, is(Optional.empty()));
         assertGetShadowStatementMocks();
     }
@@ -257,17 +258,18 @@ class ShadowManagerDAOImplTest {
     }
 
     @Test
-    void GIVEN_existing_shadow_WHEN_deleteShadowThing_THEN_deletes_shadow_document() throws SQLException {
+    void GIVEN_existing_shadow_WHEN_deleteShadowThing_THEN_deletes_shadow_document() throws SQLException, IOException {
         long epochNow = Instant.now().getEpochSecond();
         setupDeleteShadowStatementMocks();
         when(mockResultSet.next()).thenReturn(true);
-        when(mockResultSet.getBytes("document")).thenReturn(BASE_DOCUMENT);
+        when(mockResultSet.getBytes(1)).thenReturn(BASE_DOCUMENT);
+        when(mockResultSet.getLong(2)).thenReturn(1L);
         when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
         when(mockPreparedStatement.executeUpdate()).thenReturn(1);
         ShadowManagerDAOImpl impl = new ShadowManagerDAOImpl(mockDatabase);
-        Optional<byte[]> updatedShadow = impl.deleteShadowThing(THING_NAME, SHADOW_NAME);
+        Optional<ShadowDocument> updatedShadow = impl.deleteShadowThing(THING_NAME, SHADOW_NAME);
         assertThat(updatedShadow, is(notNullValue()));
-        assertThat(updatedShadow.get(), is(BASE_DOCUMENT));
+        assertThat(updatedShadow.get().toJson(true), is(new ShadowDocument(BASE_DOCUMENT).toJson(true)));
 
         assertDeleteShadowStatementMocks(epochNow);
     }
@@ -277,11 +279,12 @@ class ShadowManagerDAOImplTest {
         long epochNow = Instant.now().getEpochSecond();
         setupDeleteShadowStatementMocks();
         when(mockResultSet.next()).thenReturn(true);
-        when(mockResultSet.getBytes("document")).thenReturn(BASE_DOCUMENT);
+        when(mockResultSet.getBytes(1)).thenReturn(BASE_DOCUMENT);
+        when(mockResultSet.getLong(2)).thenReturn(1L);
         when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
         when(mockPreparedStatement.executeUpdate()).thenReturn(0);
         ShadowManagerDAOImpl impl = new ShadowManagerDAOImpl(mockDatabase);
-        Optional<byte[]> updatedShadow = impl.deleteShadowThing(THING_NAME, SHADOW_NAME);
+        Optional<ShadowDocument> updatedShadow = impl.deleteShadowThing(THING_NAME, SHADOW_NAME);
         assertThat(updatedShadow, is(Optional.empty()));
 
         assertDeleteShadowStatementMocks(epochNow);
@@ -293,7 +296,8 @@ class ShadowManagerDAOImplTest {
         setupDeleteShadowStatementMocks();
 
         when(mockResultSet.next()).thenReturn(true);
-        when(mockResultSet.getBytes("document")).thenReturn(BASE_DOCUMENT);
+        when(mockResultSet.getBytes(1)).thenReturn(BASE_DOCUMENT);
+        when(mockResultSet.getLong(2)).thenReturn(1L);
         when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
         when(mockPreparedStatement.executeUpdate()).thenThrow(SQLException.class);
         ShadowManagerDAOImpl impl = new ShadowManagerDAOImpl(mockDatabase);

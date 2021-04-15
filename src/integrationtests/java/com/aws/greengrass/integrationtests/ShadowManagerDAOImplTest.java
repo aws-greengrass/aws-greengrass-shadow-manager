@@ -8,6 +8,7 @@ package com.aws.greengrass.integrationtests;
 import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAOImpl;
 import com.aws.greengrass.shadowmanager.ShadowManagerDatabase;
+import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,9 +39,9 @@ class ShadowManagerDAOImplTest {
 
     private static final String MISSING_THING_NAME = "missingTestThing";
     private static final String CLASSIC_SHADOW_THING = "classicThing";
-    private static final byte[] BASE_DOCUMENT = "{\"id\": 1, \"name\": \"The Beatles\"}".getBytes();
-    private static final byte[] NO_SHADOW_NAME_BASE_DOCUMENT = "{\"id\": 2, \"name\": \"The Beach Boys\"}".getBytes();
-    private static final byte[] UPDATED_DOCUMENT = "{\"id\": 1, \"name\": \"New Name\"}".getBytes();
+    private static final byte[] BASE_DOCUMENT = "{\"version\": 1, \"state\": {\"reported\": {\"name\": \"The Beatles\"}}}".getBytes();
+    private static final byte[] NO_SHADOW_NAME_BASE_DOCUMENT = "{\"version\": 1, \"state\": {\"reported\": {\"name\": \"The Beach Boys\"}}}".getBytes();
+    private static final byte[] UPDATED_DOCUMENT = "{\"version\": 1, \"state\": {\"reported\": {\"name\": \"New Name\"}}}".getBytes();
     private static final List<String> SHADOW_NAME_LIST = Arrays.asList("alpha", "bravo", "charlie", "delta");
     private static final int DEFAULT_OFFSET = 0;
     private static final int DEFAULT_LIMIT = 25;
@@ -99,14 +100,14 @@ class ShadowManagerDAOImplTest {
     void GIVEN_named_and_classic_shadow_WHEN_get_shadow_thing_THEN_return_correct_payload(String shadowName, byte[] expectedPayload) throws Exception {
         createNamedShadow();
         createClassicShadow();
-        Optional<byte[]> result = dao.getShadowThing(THING_NAME, shadowName); // NOPMD
+        Optional<ShadowDocument> result = dao.getShadowThing(THING_NAME, shadowName); // NOPMD
         assertThat("Retrieved shadow", result.isPresent(), is(true));
-        assertThat(result.get(), is(equalTo(expectedPayload)));
+        assertThat(result.get().toJson(true), is(equalTo(new ShadowDocument(expectedPayload).toJson(true))));
     }
 
     @Test
     void GIVEN_no_shadow_WHEN_get_shadow_thing_THEN_return_nothing() throws Exception {
-        Optional<byte[]> result = dao.getShadowThing(MISSING_THING_NAME, SHADOW_NAME);
+        Optional<ShadowDocument> result = dao.getShadowThing(MISSING_THING_NAME, SHADOW_NAME);
         assertThat("No shadow found", result.isPresent(), is(false));
     }
 
@@ -115,17 +116,20 @@ class ShadowManagerDAOImplTest {
     void GIVEN_named_and_classic_shadow_WHEN_delete_shadow_thing_THEN_shadow_deleted(String shadowName, byte[] expectedPayload) throws Exception {
         createNamedShadow();
         createClassicShadow();
-        Optional<byte[]> result = dao.deleteShadowThing(THING_NAME, shadowName); //NOPMD
+        Optional<ShadowDocument> result = dao.deleteShadowThing(THING_NAME, shadowName); //NOPMD
         assertThat("Correct payload returned", result.isPresent(), is(true));
-        assertThat(result.get(), is(equalTo(expectedPayload)));
+        assertThat(result.get().toJson(true), is(equalTo(new ShadowDocument(expectedPayload).toJson(true))));
 
-        Optional<byte[]> getResults = dao.getShadowThing(THING_NAME, shadowName);
-        assertThat("Could not GET deleted shadow", getResults.isPresent(), is(false));
+        Optional<ShadowDocument> getResults = dao.getShadowThing(THING_NAME, shadowName);
+        assertThat("Should get the shadow document but should be empty.", getResults.isPresent(), is(true));
+        assertThat(getResults.get().getState(), is(notNullValue()));
+        assertThat(getResults.get().getState().getDesired(), is(nullValue()));
+        assertThat(getResults.get().getState().getReported(), is(nullValue()));
     }
 
     @Test
     void GIVEN_no_shadow_WHEN_delete_shadow_thing_THEN_return_nothing() throws Exception {
-        Optional<byte[]> result = dao.deleteShadowThing(THING_NAME, SHADOW_NAME);
+        Optional<ShadowDocument> result = dao.deleteShadowThing(THING_NAME, SHADOW_NAME);
         assertThat("No shadow found", result.isPresent(), is(false));
     }
 
@@ -147,14 +151,14 @@ class ShadowManagerDAOImplTest {
         assertThat(result.get(), is(equalTo(UPDATED_DOCUMENT)));
 
         // Verify we can get the new document
-        result = dao.getShadowThing(THING_NAME, shadowName);
-        assertThat("Can GET updated shadow", result.isPresent(), is(true));
-        assertThat(result.get(), is(equalTo(UPDATED_DOCUMENT)));
+        Optional<ShadowDocument> shadowDocument = dao.getShadowThing(THING_NAME, shadowName);
+        assertThat("Can GET updated shadow", shadowDocument.isPresent(), is(true));
+        assertThat(shadowDocument.get().toJson(true), is(equalTo(new ShadowDocument(UPDATED_DOCUMENT).toJson(true))));
 
         // Verify that the original shadow with shadowName has not been updated
-        result = dao.getShadowThing(THING_NAME, ignoredShadowName);
-        assertThat("Can GET other shadow that was not updated", result.isPresent(), is(true));
-        assertThat("Other shadow not updated", result.get(), is(equalTo(ignoredPayload)));
+        shadowDocument = dao.getShadowThing(THING_NAME, ignoredShadowName);
+        assertThat("Can GET other shadow that was not updated", shadowDocument.isPresent(), is(true));
+        assertThat("Other shadow not updated", shadowDocument.get().toJson(true), is(equalTo(new ShadowDocument(ignoredPayload).toJson(true))));
     }
 
     @Test

@@ -7,8 +7,10 @@ package com.aws.greengrass.shadowmanager;
 
 
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
+import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 
+import java.io.IOException;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -21,7 +23,6 @@ import javax.inject.Inject;
 // TODO: record UTC epoch seconds when updating/deleting shadow
 public class ShadowManagerDAOImpl implements ShadowManagerDAO {
     private final ShadowManagerDatabase database;
-    private static final String DOCUMENT = "document";
 
     @FunctionalInterface
     private interface SQLExecution<T> {
@@ -41,19 +42,23 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      * @return The queried shadow from the local shadow store
      */
     @Override
-    public Optional<byte[]> getShadowThing(String thingName, String shadowName) {
-        return execute("SELECT document, version, deleted, updateTime FROM documents "
-                        + "WHERE thingName = ? AND shadowName = ?",
-                preparedStatement -> {
-                    preparedStatement.setString(1, thingName);
-                    preparedStatement.setString(2, shadowName);
-                    try (ResultSet resultSet = preparedStatement.executeQuery()) {
-                        if (resultSet.next()) {
-                            return Optional.ofNullable(resultSet.getBytes(DOCUMENT));
-                        }
-                        return Optional.empty();
-                    }
-                });
+    public Optional<ShadowDocument> getShadowThing(String thingName, String shadowName) {
+        String sql = "SELECT document, version, deleted, updateTime FROM documents  WHERE thingName = ? "
+                + "AND shadowName = ?";
+        try (PreparedStatement preparedStatement = database.connection().prepareStatement(sql)) {
+            preparedStatement.setString(1, thingName);
+            preparedStatement.setString(2, shadowName);
+            try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                if (resultSet.next()) {
+                    ShadowDocument document = new ShadowDocument(resultSet.getBytes(1),
+                            resultSet.getLong(2));
+                    return Optional.of(document);
+                }
+                return Optional.empty();
+            }
+        } catch (SQLException | IOException e) {
+            throw new ShadowManagerDataException(e);
+        }
     }
 
     /**
@@ -64,7 +69,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      * @return The deleted shadow from the local shadow store
      */
     @Override
-    public Optional<byte[]> deleteShadowThing(String thingName, String shadowName) {
+    public Optional<ShadowDocument> deleteShadowThing(String thingName, String shadowName) {
         // To be consistent with cloud, subsequent updates to the shadow should not start from version 0
         // https://docs.aws.amazon.com/iot/latest/developerguide/device-shadow-data-flow.html
 

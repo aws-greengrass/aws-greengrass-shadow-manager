@@ -8,6 +8,7 @@ package com.aws.greengrass.shadowmanager.ipc;
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
 import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
 import com.aws.greengrass.shadowmanager.ipc.model.PubSubRequest;
+import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
@@ -114,8 +115,8 @@ class DeleteThingShadowIPCHandlerTest {
         expectedResponse.setPayload(new byte[0]);
 
         try (DeleteThingShadowIPCHandler deleteThingShadowIPCHandler = new DeleteThingShadowIPCHandler(mockContext, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper)) {
-            when(mockDao.deleteShadowThing(any(), any())).thenReturn(Optional.of(allByteData));
-            
+            when(mockDao.deleteShadowThing(any(), any())).thenReturn(Optional.of(new ShadowDocument(allByteData)));
+
             DeleteThingShadowResponse actualResponse = deleteThingShadowIPCHandler.handleRequest(request);
             assertThat(actualResponse, is(equalTo(expectedResponse)));
             verify(mockPubSubClientWrapper, times(1)).accept(pubSubRequestCaptor.capture());
