@@ -24,6 +24,7 @@ import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.model.configuration.ShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
+import com.aws.greengrass.shadowmanager.util.ShadowWriteSynchronizeHelper;
 import com.aws.greengrass.shadowmanager.util.Validator;
 import com.aws.greengrass.util.Coerce;
 import com.github.fge.jsonschema.core.exceptions.ProcessingException;
@@ -63,6 +64,7 @@ public class ShadowManager extends PluginService {
     private final AuthorizationHandlerWrapper authorizationHandlerWrapper;
     private final PubSubClientWrapper pubSubClientWrapper;
     private final DeviceConfiguration deviceConfiguration;
+    private final ShadowWriteSynchronizeHelper synchronizeHelper;
     //TODO: Move this to sync handler?
     @Getter(AccessLevel.PACKAGE)
     private ShadowSyncConfiguration syncConfiguration;
@@ -79,6 +81,7 @@ public class ShadowManager extends PluginService {
      * @param dao                         Local shadow database management
      * @param authorizationHandlerWrapper The authorization handler wrapper
      * @param pubSubClientWrapper         The PubSub client wrapper
+     * @param synchronizeHelper           The shadow write operation synchronizer helper.
      * @param deviceConfiguration         {@link DeviceConfiguration}
      */
     @Inject
@@ -88,13 +91,15 @@ public class ShadowManager extends PluginService {
             ShadowManagerDAOImpl dao,
             AuthorizationHandlerWrapper authorizationHandlerWrapper,
             PubSubClientWrapper pubSubClientWrapper,
-            DeviceConfiguration deviceConfiguration) {
+            DeviceConfiguration deviceConfiguration,
+            ShadowWriteSynchronizeHelper synchronizeHelper) {
         super(topics);
         this.database = database;
         this.authorizationHandlerWrapper = authorizationHandlerWrapper;
         this.dao = dao;
         this.pubSubClientWrapper = pubSubClientWrapper;
         this.deviceConfiguration = deviceConfiguration;
+        this.synchronizeHelper = synchronizeHelper;
         this.deviceThingNameWatcher = this::handleDeviceThingNameChange;
     }
 
@@ -111,9 +116,9 @@ public class ShadowManager extends PluginService {
         greengrassCoreIPCService.setGetThingShadowHandler(context -> new GetThingShadowIPCHandler(context,
                 dao, authorizationHandlerWrapper, pubSubClientWrapper));
         greengrassCoreIPCService.setDeleteThingShadowHandler(context -> new DeleteThingShadowIPCHandler(context,
-                dao, authorizationHandlerWrapper, pubSubClientWrapper));
+                dao, authorizationHandlerWrapper, pubSubClientWrapper, synchronizeHelper));
         greengrassCoreIPCService.setUpdateThingShadowHandler(context -> new UpdateThingShadowIPCHandler(context,
-                dao, authorizationHandlerWrapper, pubSubClientWrapper));
+                dao, authorizationHandlerWrapper, pubSubClientWrapper, synchronizeHelper));
         greengrassCoreIPCService.setListNamedShadowsForThingHandler(context -> new ListNamedShadowsForThingIPCHandler(
                 context, dao, authorizationHandlerWrapper));
     }

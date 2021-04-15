@@ -12,6 +12,7 @@ import com.aws.greengrass.config.WhatHappened;
 import com.aws.greengrass.deployment.DeviceConfiguration;
 import com.aws.greengrass.shadowmanager.exception.InvalidConfigurationException;
 import com.aws.greengrass.shadowmanager.ipc.PubSubClientWrapper;
+import com.aws.greengrass.shadowmanager.util.ShadowWriteSynchronizeHelper;
 import com.aws.greengrass.shadowmanager.util.Validator;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.testcommons.testutilities.GGServiceTestUtil;
@@ -77,6 +78,8 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
     private PubSubClientWrapper mockPubSubClientWrapper;
     @Mock
     private DeviceConfiguration mockDeviceConfiguration;
+    @Mock
+    ShadowWriteSynchronizeHelper mockSynchronizeHelper;
     @Captor
     private ArgumentCaptor<Integer> intObjectCaptor;
 
@@ -98,7 +101,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
                 .thenReturn(maxDocSizeTopic);
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
                 .thenReturn(mock(Topics.class));
-        ShadowManager shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockDeviceConfiguration);
+        ShadowManager shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockDeviceConfiguration, mockSynchronizeHelper);
         shadowManager.install();
         assertFalse(shadowManager.isErrored());
         verify(mockDatabase, times(1)).setMaxDiskUtilization(intObjectCaptor.capture());
@@ -118,7 +121,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
                 .thenReturn(maxDocSizeTopic);
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
                 .thenReturn(mock(Topics.class));
-        ShadowManager shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockDeviceConfiguration);
+        ShadowManager shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockDeviceConfiguration, mockSynchronizeHelper);
         shadowManager.install();
         assertTrue(shadowManager.isErrored());
     }
@@ -134,7 +137,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
                 .thenReturn(maxDocSizeTopic);
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
                 .thenReturn(mock(Topics.class));
-        ShadowManager shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockDeviceConfiguration);
+        ShadowManager shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockDeviceConfiguration, mockSynchronizeHelper);
         shadowManager.install();
 
         assertFalse(shadowManager.isErrored());
@@ -153,7 +156,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
                 .thenReturn(maxDocSizeTopic);
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
                 .thenReturn(mock(Topics.class));
-        ShadowManager shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockDeviceConfiguration);
+        ShadowManager shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockDeviceConfiguration, mockSynchronizeHelper);
         shadowManager.install();
         assertTrue(shadowManager.isErrored());
     }
@@ -189,7 +192,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
                 .thenReturn(configTopics);
         when(mockDeviceConfiguration.getThingName()).thenReturn(thingNameTopic);
-        ShadowManager shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockDeviceConfiguration);
+        ShadowManager shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockDeviceConfiguration, mockSynchronizeHelper);
         shadowManager.install();
 
         verify(thingNameTopic, times(1)).subscribeGeneric(any());
@@ -242,7 +245,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
                 .thenReturn(configTopics);
         when(mockDeviceConfiguration.getThingName()).thenReturn(thingNameTopic);
-        ShadowManager shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockDeviceConfiguration);
+        ShadowManager shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockDeviceConfiguration, mockSynchronizeHelper);
         shadowManager.install();
 
         verify(thingNameTopic, times(1)).subscribeGeneric(any());
@@ -283,7 +286,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
                 .thenReturn(configTopics);
         when(mockDeviceConfiguration.getThingName()).thenReturn(thingNameTopic);
-        ShadowManager shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockDeviceConfiguration);
+        ShadowManager shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockDeviceConfiguration, mockSynchronizeHelper);
         shadowManager.install();
 
         assertFalse(shadowManager.isErrored());
@@ -334,7 +337,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
                 .thenReturn(configTopics);
         when(mockDeviceConfiguration.getThingName()).thenReturn(thingNameTopic);
-        ShadowManager shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockDeviceConfiguration);
+        ShadowManager shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockDeviceConfiguration, mockSynchronizeHelper);
         shadowManager.install();
         assertTrue(shadowManager.isErrored());
     }
@@ -361,7 +364,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
                 .thenReturn(maxDocSizeTopic);
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
                 .thenReturn(configTopics);
-        ShadowManager shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockDeviceConfiguration);
+        ShadowManager shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockDeviceConfiguration, mockSynchronizeHelper);
         shadowManager.install();
         assertTrue(shadowManager.isErrored());
     }
@@ -384,7 +387,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
                 .thenReturn(maxDocSizeTopic);
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
                 .thenReturn(configTopics);
-        ShadowManager shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockDeviceConfiguration);
+        ShadowManager shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockDeviceConfiguration, mockSynchronizeHelper);
         shadowManager.install();
         assertTrue(shadowManager.isErrored());
     }
@@ -405,7 +408,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
                 .thenReturn(maxDocSizeTopic);
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
                 .thenReturn(configTopics);
-        ShadowManager shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockDeviceConfiguration);
+        ShadowManager shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockDeviceConfiguration, mockSynchronizeHelper);
         shadowManager.install();
         assertTrue(shadowManager.isErrored());
     }
