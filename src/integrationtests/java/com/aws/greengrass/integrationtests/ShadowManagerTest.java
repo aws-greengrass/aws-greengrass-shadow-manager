@@ -50,9 +50,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SYN
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_THING_NAME_TOPIC;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.arrayContainingInAnyOrder;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -186,19 +184,10 @@ class ShadowManagerTest extends GGServiceTestUtil {
         shadowManager.getConfig().lookupTopics(CONFIGURATION_CONFIG_KEY).lookupTopics(CONFIGURATION_SYNCHRONIZATION_TOPIC)
                 .replaceAndWait(Collections.singletonMap(CONFIGURATION_SHADOW_DOCUMENTS_TOPIC, shadowDocumentsList));
 
-        List<Pair<String, String>> allSyncedShadowNames = impl.getAllSyncedShadowNames();
-        assertThat(allSyncedShadowNames.toArray(), is(arrayContainingInAnyOrder(
+        List<Pair<String, String>> allSyncedShadowNames = impl.listSyncedShadows();
+        assertThat(allSyncedShadowNames, containsInAnyOrder(
                 new Pair<>(THING_NAME, "Shadow-0"),
                 new Pair<>(THING_NAME, "Shadow-1"),
-                new Pair<>(THING_NAME2, "Shadow-0"))));
-
-        assertThat(allSyncedShadowNames.toArray(), is(not(arrayContainingInAnyOrder(
-                new Pair<>(THING_NAME, "Shadow-2"),
-                new Pair<>(THING_NAME, "Shadow-3"),
-                new Pair<>(THING_NAME, "Shadow-4"),
-                new Pair<>(THING_NAME2, "Shadow-1"),
-                new Pair<>(THING_NAME2, "Shadow-2"),
-                new Pair<>(THING_NAME2, "Shadow-3"),
-                new Pair<>(THING_NAME2, "Shadow-4")))));
+                new Pair<>(THING_NAME2, "Shadow-0")));
     }
 }

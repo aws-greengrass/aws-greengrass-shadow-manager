@@ -193,7 +193,7 @@ public class ShadowManager extends PluginService {
 
     private void deleteRemovedSyncInformation() {
         List<Pair<String, String>> removedShadowList = new ArrayList<>();
-        this.dao.getAllSyncedShadowNames().forEach(shadowThingPair -> {
+        this.dao.listSyncedShadows().forEach(shadowThingPair -> {
             // Let's assume the shadow was removed from being synced.
             boolean present = false;
 

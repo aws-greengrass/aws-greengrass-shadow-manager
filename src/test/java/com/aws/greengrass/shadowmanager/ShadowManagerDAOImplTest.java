@@ -30,7 +30,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.arrayContaining;
-import static org.hamcrest.Matchers.arrayContainingInAnyOrder;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.lessThanOrEqualTo;
@@ -504,8 +504,8 @@ class ShadowManagerDAOImplTest {
         });
         when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
         ShadowManagerDAOImpl impl = new ShadowManagerDAOImpl(mockDatabase);
-        List<Pair<String, String>> allSyncedShadowNames = impl.getAllSyncedShadowNames();
-        assertThat(allSyncedShadowNames.toArray(), is(arrayContainingInAnyOrder(
+        List<Pair<String, String>> allSyncedShadowNames = impl.listSyncedShadows();
+        assertThat(allSyncedShadowNames, containsInAnyOrder(
                 new Pair<>("SomeThing-1", "SomeShadow-1"),
                 new Pair<>("SomeThing-2", "SomeShadow-2"),
                 new Pair<>("SomeThing-3", "SomeShadow-3"),
@@ -515,7 +515,7 @@ class ShadowManagerDAOImplTest {
                 new Pair<>("SomeThing-7", "SomeShadow-7"),
                 new Pair<>("SomeThing-8", "SomeShadow-8"),
                 new Pair<>("SomeThing-9", "SomeShadow-9"),
-                new Pair<>("SomeThing-10", "SomeShadow-10"))));
+                new Pair<>("SomeThing-10", "SomeShadow-10")));
 
     }
 
@@ -524,7 +524,7 @@ class ShadowManagerDAOImplTest {
         when(mockResultSet.next()).thenReturn(false);
         when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
         ShadowManagerDAOImpl impl = new ShadowManagerDAOImpl(mockDatabase);
-        List<Pair<String, String>> allSyncedShadowNames = impl.getAllSyncedShadowNames();
+        List<Pair<String, String>> allSyncedShadowNames = impl.listSyncedShadows();
         assertThat(allSyncedShadowNames.size(), is(0));
     }
 
@@ -532,6 +532,6 @@ class ShadowManagerDAOImplTest {
     void GIVEN_existing_shadow_WHEN_getAllSyncedShadowNames_and_h2_throws_SQL_exception_THEN_ShadowManagerDataException_is_thrown() throws SQLException {
         when(mockPreparedStatement.executeQuery()).thenThrow(SQLException.class);
         ShadowManagerDAOImpl impl = new ShadowManagerDAOImpl(mockDatabase);
-        assertThrows(ShadowManagerDataException.class, impl::getAllSyncedShadowNames);
+        assertThrows(ShadowManagerDataException.class, impl::listSyncedShadows);
     }
 }

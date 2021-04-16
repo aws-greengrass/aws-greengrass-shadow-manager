@@ -204,7 +204,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      * @return The queried synced shadow names list.
      */
     @Override
-    public List<Pair<String, String>> getAllSyncedShadowNames() {
+    public List<Pair<String, String>> listSyncedShadows() {
         return execute("SELECT thingName, shadowName FROM sync ",
                 preparedStatement -> {
                     try (ResultSet resultSet = preparedStatement.executeQuery()) {

@@ -74,7 +74,7 @@ public interface ShadowManagerDAO {
      *
      * @return The queried synced shadow names list.
      */
-    List<Pair<String, String>> getAllSyncedShadowNames();
+    List<Pair<String, String>> listSyncedShadows();
 
     /**
      * Attempts to delete the cloud shadow document in the sync table.
