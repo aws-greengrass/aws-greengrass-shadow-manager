@@ -9,22 +9,18 @@ import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.SyncException;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowIPCHandler;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowIPCHandler;
-import com.aws.greengrass.shadowmanager.model.ShadowRequest;
 import lombok.NonNull;
 
 /**
  * Sync request handling a full sync request for a particular shadow.
  */
-public class FullShadowSyncRequest extends ShadowRequest implements SyncRequest {
-    @NonNull
-    ShadowManagerDAO dao;
+public class FullShadowSyncRequest extends BaseSyncRequest {
 
     @NonNull
     UpdateThingShadowIPCHandler updateThingShadowIPCHandler;
 
     @NonNull
     DeleteThingShadowIPCHandler deleteThingShadowIPCHandler;
-
 
     /**
      * Ctr for FullShadowSyncRequest.
@@ -40,8 +36,7 @@ public class FullShadowSyncRequest extends ShadowRequest implements SyncRequest 
                                  ShadowManagerDAO dao,
                                  UpdateThingShadowIPCHandler updateThingShadowIPCHandler,
                                  DeleteThingShadowIPCHandler deleteThingShadowIPCHandler) {
-        super(thingName, shadowName);
-        this.dao = dao;
+        super(thingName, shadowName, dao);
         this.updateThingShadowIPCHandler = updateThingShadowIPCHandler;
         this.deleteThingShadowIPCHandler = deleteThingShadowIPCHandler;
     }
