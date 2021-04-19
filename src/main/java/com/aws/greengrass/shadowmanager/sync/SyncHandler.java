@@ -83,81 +83,52 @@ public class SyncHandler {
     }
 
     /**
-     * Pushes a cloud update sync request to the sync request queue.
+     * Pushes an update sync request to the request queue to update shadow in the cloud after a local shadow has
+     * been successfully updated.
      * TODO: implement message queue data structure to push SyncRequest
      *
-     * @param thingName      The thing name associated with the sync shadow update
-     * @param shadowName     The shadow name associated with the sync shadow update
-     * @param version        The version of the specific sync shadow update
-     * @param updateTime     The update time of the specific sync shadow update
-     * @param updateDocument The update document from the cloud
+     * @param thingName  The thing name associated with the sync shadow update
+     * @param shadowName The shadow name associated with the sync shadow update
      */
-    public void pushCloudUpdateSyncRequest(String thingName, String shadowName, int version, Instant updateTime,
-                                           String updateDocument) {
-        CloudUpdateSyncRequest cloudUpdateSyncRequest = new CloudUpdateSyncRequest(thingName,
-                shadowName,
-                updateDocument,
-                updateTime,
-                version,
-                this.dao,
+    public void pushCloudUpdateSyncRequest(String thingName, String shadowName) {
+        CloudUpdateSyncRequest cloudUpdateSyncRequest = new CloudUpdateSyncRequest(thingName, shadowName, this.dao);
+    }
+
+    /**
+     * Pushes an update sync request to the request queue to update local shadow after a cloud shadow has
+     * been successfully updated.
+     * TODO: implement message queue data structure to push SyncRequest
+     *
+     * @param thingName  The thing name associated with the sync shadow update
+     * @param shadowName The shadow name associated with the sync shadow update
+     */
+    public void pushLocalUpdateSyncRequest(String thingName, String shadowName) {
+        LocalUpdateSyncRequest localUpdateSyncRequest = new LocalUpdateSyncRequest(thingName, shadowName, this.dao,
                 this.updateThingShadowIPCHandler);
     }
 
     /**
-     * Adds local update sync request to the request queue.
+     * Pushes a delete sync request in the request queue to delete a shadow in the cloud after a local shadow has
+     * been successfully deleted.
      * TODO: implement message queue data structure to push SyncRequest
      *
-     * @param thingName      The thing name associated with the sync shadow update
-     * @param shadowName     The shadow name associated with the sync shadow update
-     * @param version        The version of the specific sync shadow update
-     * @param updateTime     The update time of the specific sync shadow update
-     * @param updateDocument The update document from the local shadow update
+     * @param thingName  The thing name associated with the sync shadow update
+     * @param shadowName The shadow name associated with the sync shadow update
      */
-    public void pushLocalUpdateSyncRequest(String thingName, String shadowName, int version, Instant updateTime,
-                                           String updateDocument) {
-        LocalUpdateSyncRequest localUpdateSyncRequest = new LocalUpdateSyncRequest(thingName,
-                shadowName,
-                updateDocument,
-                updateTime,
-                version,
-                this.dao,
-                this.updateThingShadowIPCHandler);
+    public void pushCloudDeleteSyncRequest(String thingName, String shadowName) {
+        CloudDeleteSyncRequest cloudDeleteSyncRequest = new CloudDeleteSyncRequest(thingName, shadowName, this.dao);
     }
 
     /**
-     * Adds cloud delete sync request to the request queue.
+     * Pushes a delete sync request in the request queue to delete a local shadow after a cloud shadow has
+     * been successfully deleted.
      * TODO: implement message queue data structure to push SyncRequest
      *
-     * @param thingName      The thing name associated with the sync shadow update
-     * @param shadowName     The shadow name associated with the sync shadow update
-     * @param version        The version of the specific sync shadow update
-     * @param updateTime     The update time of the specific sync shadow update
+     * @param thingName  The thing name associated with the sync shadow update
+     * @param shadowName The shadow name associated with the sync shadow update
      */
-    public void pushCloudDeleteSyncRequest(String thingName, String shadowName, int version, Instant updateTime) {
-        CloudDeleteSyncRequest cloudDeleteSyncRequest = new CloudDeleteSyncRequest(thingName,
-                shadowName,
-                updateTime,
-                version,
-                this.dao,
+    public void pushLocalDeleteSyncRequest(String thingName, String shadowName) {
+        LocalDeleteSyncRequest localDeleteSyncRequest = new LocalDeleteSyncRequest(thingName, shadowName, this.dao,
                 this.deleteThingShadowIPCHandler);
     }
-
-    /**
-     * Adds local delete sync request to the request queue.
-     * TODO: implement message queue data structure to push SyncRequest
-     *
-     * @param thingName      The thing name associated with the sync shadow update
-     * @param shadowName     The shadow name associated with the sync shadow update
-     * @param version        The version of the specific sync shadow update
-     * @param updateTime     The update time of the specific sync shadow update
-     */
-    public void pushLocalDeleteSyncRequest(String thingName, String shadowName, int version, Instant updateTime) {
-        LocalDeleteSyncRequest localDeleteSyncRequest = new LocalDeleteSyncRequest(thingName,
-                shadowName,
-                updateTime,
-                version,
-                this.dao,
-                this.deleteThingShadowIPCHandler);
-    }
-
 }
