@@ -27,6 +27,7 @@ public class SyncHandler {
     private final ShadowManagerDAO dao;
     private final UpdateThingShadowIPCHandler updateThingShadowIPCHandler;
     private final DeleteThingShadowIPCHandler deleteThingShadowIPCHandler;
+    private final ShadowHttpClient shadowHttpClient;
 
 
     /**
@@ -35,14 +36,17 @@ public class SyncHandler {
      * @param dao                         Local shadow database management
      * @param updateThingShadowIPCHandler Reference to the UpdateThingShadow IPC Handler
      * @param deleteThingShadowIPCHandler Reference to the DeleteThingShadow IPC Handler
+     * @param shadowHttpClient            The HTTP client to make shadow operations on the cloud.
      */
     @Inject
     SyncHandler(ShadowManagerDAO dao,
                 UpdateThingShadowIPCHandler updateThingShadowIPCHandler,
-                DeleteThingShadowIPCHandler deleteThingShadowIPCHandler) {
+                DeleteThingShadowIPCHandler deleteThingShadowIPCHandler,
+                ShadowHttpClient shadowHttpClient) {
         this.dao = dao;
         this.updateThingShadowIPCHandler = updateThingShadowIPCHandler;
         this.deleteThingShadowIPCHandler = deleteThingShadowIPCHandler;
+        this.shadowHttpClient = shadowHttpClient;
     }
 
     /**
@@ -87,11 +91,13 @@ public class SyncHandler {
      * been successfully updated.
      * TODO: implement message queue data structure to push SyncRequest
      *
-     * @param thingName  The thing name associated with the sync shadow update
-     * @param shadowName The shadow name associated with the sync shadow update
+     * @param thingName      The thing name associated with the sync shadow update
+     * @param shadowName     The shadow name associated with the sync shadow update
+     * @param updateDocument The update shadow request
      */
-    public void pushCloudUpdateSyncRequest(String thingName, String shadowName) {
-        CloudUpdateSyncRequest cloudUpdateSyncRequest = new CloudUpdateSyncRequest(thingName, shadowName, this.dao);
+    public void pushCloudUpdateSyncRequest(String thingName, String shadowName, byte[] updateDocument) {
+        CloudUpdateSyncRequest cloudUpdateSyncRequest = new CloudUpdateSyncRequest(thingName, shadowName,
+                updateDocument, this.dao, this.shadowHttpClient);
     }
 
     /**
@@ -116,7 +122,8 @@ public class SyncHandler {
      * @param shadowName The shadow name associated with the sync shadow update
      */
     public void pushCloudDeleteSyncRequest(String thingName, String shadowName) {
-        CloudDeleteSyncRequest cloudDeleteSyncRequest = new CloudDeleteSyncRequest(thingName, shadowName, this.dao);
+        CloudDeleteSyncRequest cloudDeleteSyncRequest = new CloudDeleteSyncRequest(thingName, shadowName, this.dao,
+                this.shadowHttpClient);
     }
 
     /**

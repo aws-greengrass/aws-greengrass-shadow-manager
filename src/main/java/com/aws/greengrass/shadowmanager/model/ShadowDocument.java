@@ -160,4 +160,18 @@ public class ShadowDocument {
         final JsonNode deltaMetadata = metadata.getDeltaMetadata(delta);
         return Optional.of(new Pair<>(delta, deltaMetadata));
     }
+
+
+    /**
+     * Converts the class to its JSON representation.
+     *
+     * @return a JSON node containing the shadow document.
+     */
+    public JsonNode getVersionJson() {
+        final ObjectNode result = JsonUtil.OBJECT_MAPPER.createObjectNode();
+        result.set(SHADOW_DOCUMENT_VERSION, new LongNode(this.version));
+
+        return result;
+    }
+
 }
