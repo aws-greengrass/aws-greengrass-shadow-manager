@@ -12,10 +12,14 @@ public final class Constants {
     public static final String SHADOW_PUBLISH_REJECTED_TOPIC = "/rejected";
     public static final String SHADOW_PUBLISH_DELTA_TOPIC = "/delta";
     public static final String SHADOW_PUBLISH_DOCUMENTS_TOPIC = "/documents";
+    public static final String SHADOW_UPDATE_SUBSCRIPTION_TOPIC = "/update/accepted";
+    public static final String SHADOW_DELETE_SUBSCRIPTION_TOPIC = "/delete/accepted";
     public static final String NAMED_SHADOW_TOPIC_PREFIX = "$aws/things/%s/shadow/name/%s";
     public static final String CLASSIC_SHADOW_TOPIC_PREFIX = "$aws/things/%s/shadow";
+    public static final String SHADOW_PREFIX_REGEX = "\\$aws\\/things\\/(.*)\\/shadow(\\/name\\/(.*))?\\/";
     public static final String LOG_THING_NAME_KEY = "thing name";
     public static final String LOG_SHADOW_NAME_KEY = "shadow name";
+    public static final String LOG_TOPIC = "topic";
     public static final String SHADOW_DOCUMENT_VERSION = "version";
     public static final String SHADOW_DOCUMENT_TIMESTAMP = "timestamp";
     public static final String SHADOW_DOCUMENT_CLIENT_TOKEN = "clientToken";

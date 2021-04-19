@@ -96,12 +96,13 @@ public class SyncHandler {
      * been successfully updated.
      * TODO: implement message queue data structure to push SyncRequest
      *
-     * @param thingName  The thing name associated with the sync shadow update
-     * @param shadowName The shadow name associated with the sync shadow update
+     * @param thingName      The thing name associated with the sync shadow update
+     * @param shadowName     The shadow name associated with the sync shadow update
+     * @param updateDocument Update document to be applied to local shadow
      */
-    public void pushLocalUpdateSyncRequest(String thingName, String shadowName) {
-        LocalUpdateSyncRequest localUpdateSyncRequest = new LocalUpdateSyncRequest(thingName, shadowName, this.dao,
-                this.shadowManager.getUpdateThingShadowRequestHandler());
+    public void pushLocalUpdateSyncRequest(String thingName, String shadowName, byte[] updateDocument) {
+        LocalUpdateSyncRequest localUpdateSyncRequest = new LocalUpdateSyncRequest(thingName, shadowName,
+                updateDocument, this.dao, this.shadowManager.getUpdateThingShadowRequestHandler());
     }
 
     /**
