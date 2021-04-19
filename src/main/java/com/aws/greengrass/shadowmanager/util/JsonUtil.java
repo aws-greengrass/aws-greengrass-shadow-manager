@@ -219,9 +219,8 @@ public final class JsonUtil {
      *
      * @param payload the JSON payload.
      * @return an empty Optional if the token is not existent; Else returns the client token.
-     * @throws InvalidRequestParametersException if the client token is null
      */
-    public static Optional<String> getClientToken(final JsonNode payload) throws InvalidRequestParametersException {
+    public static Optional<String> getClientToken(final JsonNode payload) {
         if (!payload.has(SHADOW_DOCUMENT_CLIENT_TOKEN)) {
             return Optional.empty();
         }

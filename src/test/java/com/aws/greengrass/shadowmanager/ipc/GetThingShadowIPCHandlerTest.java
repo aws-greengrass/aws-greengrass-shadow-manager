@@ -71,8 +71,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-//TODO: Change the names of the tests to be in the correct format.
-//TODO: Use Hamcrest assertions
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 class GetThingShadowIPCHandlerTest {
 

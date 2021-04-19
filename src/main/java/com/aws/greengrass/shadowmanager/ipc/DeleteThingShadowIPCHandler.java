@@ -19,6 +19,7 @@ import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.model.ResponseMessageBuilder;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.ShadowRequest;
+import com.aws.greengrass.shadowmanager.sync.SyncHandler;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.shadowmanager.util.ShadowWriteSynchronizeHelper;
 import com.aws.greengrass.shadowmanager.util.Validator;
@@ -55,6 +56,7 @@ public class DeleteThingShadowIPCHandler extends GeneratedAbstractDeleteThingSha
     private final AuthorizationHandlerWrapper authorizationHandlerWrapper;
     private final PubSubClientWrapper pubSubClientWrapper;
     private final ShadowWriteSynchronizeHelper synchronizeHelper;
+    private final SyncHandler syncHandler;
 
     /**
      * IPC Handler class for responding to DeleteThingShadow requests.
@@ -64,18 +66,21 @@ public class DeleteThingShadowIPCHandler extends GeneratedAbstractDeleteThingSha
      * @param authorizationHandlerWrapper The authorization handler wrapper
      * @param pubSubClientWrapper         The PubSub client wrapper
      * @param synchronizeHelper           The shadow write operation synchronizer helper.
+     * @param syncHandler                 The handler class to perform shadow sync operations.
      */
     public DeleteThingShadowIPCHandler(
             OperationContinuationHandlerContext context,
             ShadowManagerDAO dao,
             AuthorizationHandlerWrapper authorizationHandlerWrapper,
             PubSubClientWrapper pubSubClientWrapper,
-            ShadowWriteSynchronizeHelper synchronizeHelper) {
+            ShadowWriteSynchronizeHelper synchronizeHelper,
+            SyncHandler syncHandler) {
         super(context);
         this.authorizationHandlerWrapper = authorizationHandlerWrapper;
         this.dao = dao;
         this.pubSubClientWrapper = pubSubClientWrapper;
         this.synchronizeHelper = synchronizeHelper;
+        this.syncHandler = syncHandler;
         this.serviceName = context.getAuthenticationData().getIdentityLabel();
     }
 
@@ -159,6 +164,7 @@ public class DeleteThingShadowIPCHandler extends GeneratedAbstractDeleteThingSha
                      #API_DeleteThingShadow
                     */
                     response.setPayload(new byte[0]);
+                    this.syncHandler.pushCloudDeleteSyncRequest(thingName, shadowName);
                     return response;
 
                 } catch (AuthorizationException e) {
