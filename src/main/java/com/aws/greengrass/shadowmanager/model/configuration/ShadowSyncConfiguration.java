@@ -30,6 +30,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_PROVIDE_S
 @Builder
 @Getter
 public class ShadowSyncConfiguration {
+    //TODO: Convert this into a map for optimized lookup. Key = thingName|shadowName
     private final List<ThingShadowSyncConfiguration> syncConfigurationList;
     @JsonProperty(CONFIGURATION_PROVIDE_SYNC_STATUS_TOPIC)
     private final boolean provideSyncStatus;

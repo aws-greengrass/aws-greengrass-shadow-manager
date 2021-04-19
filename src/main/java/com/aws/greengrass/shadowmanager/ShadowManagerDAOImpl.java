@@ -9,6 +9,7 @@ package com.aws.greengrass.shadowmanager;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
+import com.aws.greengrass.util.Pair;
 
 import java.io.IOException;
 import java.sql.PreparedStatement;
@@ -197,12 +198,32 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
                 });
     }
 
+    /**
+     * Attempts to obtain a list of all synced shadow names.
+     *
+     * @return The queried synced shadow names list.
+     */
+    @Override
+    public List<Pair<String, String>> listSyncedShadows() {
+        return execute("SELECT thingName, shadowName FROM sync ",
+                preparedStatement -> {
+                    try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                        List<Pair<String, String>> syncedShadowList = new ArrayList<>();
+                        while (resultSet.next()) {
+                            syncedShadowList.add(new Pair<>(resultSet.getString(1),
+                                    resultSet.getString(2)));
+                        }
+                        return syncedShadowList;
+                    }
+                });
+    }
+
 
     /**
      * Attempts to delete the cloud shadow document in the sync table.
      *
-     * @param thingName       Name of the Thing.
-     * @param shadowName      Name of shadow.
+     * @param thingName  Name of the Thing.
+     * @param shadowName Name of shadow.
      * @return true if the cloud document (soft) delete was successful or not.
      */
     @Override

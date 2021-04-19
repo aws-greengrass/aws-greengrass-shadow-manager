@@ -9,6 +9,7 @@ import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAOImpl;
 import com.aws.greengrass.shadowmanager.ShadowManagerDatabase;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
+import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,6 +25,7 @@ import javax.inject.Inject;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.sql.SQLException;
+import java.time.Instant;
 import java.util.*;
 import java.util.stream.Stream;
 
@@ -32,6 +34,8 @@ import static com.aws.greengrass.shadowmanager.TestUtils.THING_NAME;
 import static com.aws.greengrass.shadowmanager.model.Constants.CLASSIC_SHADOW_IDENTIFIER;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
@@ -244,5 +248,55 @@ class ShadowManagerDAOImplTest {
         if (offset < 0 || pageSize < 0) {
             assertThat("Original results remained the same", listShadowResults, is(equalTo(SHADOW_NAME_LIST)));
         }
+    }
+
+    static Stream<Arguments> validUpdateSyncInformationTests() {
+        return Stream.of(
+                arguments(BASE_DOCUMENT, 1, false),
+                arguments(null, 2, true),
+                arguments(UPDATED_DOCUMENT, 3, false)
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("validUpdateSyncInformationTests")
+    void GIVEN_valid_sync_information_WHEN_update_and_get_THEN_successfully_updates_and_gets_sync_information(byte[] cloudDocument, long cloudVersion, boolean cloudDeleted) {
+        long epochMinus60Seconds = Instant.now().minusSeconds(60).getEpochSecond();
+        SyncInformation syncInformation = SyncInformation.builder()
+                .thingName(THING_NAME)
+                .shadowName(SHADOW_NAME)
+                .cloudDeleted(cloudDeleted)
+                .cloudVersion(cloudVersion)
+                .cloudUpdateTime(epochMinus60Seconds)
+                .cloudDocument(cloudDocument)
+                .build();
+        assertTrue(dao.updateSyncInformation(syncInformation));
+
+        Optional<SyncInformation> shadowSyncInformation = dao.getShadowSyncInformation(THING_NAME, SHADOW_NAME);
+        assertThat(shadowSyncInformation, is(not(Optional.empty())));
+        assertThat(shadowSyncInformation.get(), is(syncInformation));
+    }
+
+    @ParameterizedTest
+    @MethodSource("validUpdateSyncInformationTests")
+    void GIVEN_valid_sync_information_WHEN_update_delete_and_get_THEN_successfully_updates_and_deletes_sync_information(byte[] cloudDocument, long cloudVersion, boolean cloudDeleted) {
+        long epochMinus60Seconds = Instant.now().minusSeconds(60).getEpochSecond();
+        SyncInformation syncInformation = SyncInformation.builder()
+                .thingName(THING_NAME)
+                .shadowName(SHADOW_NAME)
+                .cloudDeleted(cloudDeleted)
+                .cloudVersion(cloudVersion)
+                .cloudUpdateTime(epochMinus60Seconds)
+                .cloudDocument(cloudDocument)
+                .build();
+        assertTrue(dao.updateSyncInformation(syncInformation));
+
+        assertTrue(dao.deleteSyncInformation(THING_NAME, SHADOW_NAME));
+
+        Optional<SyncInformation> shadowSyncInformation = dao.getShadowSyncInformation(THING_NAME, SHADOW_NAME);
+        assertThat(shadowSyncInformation, is(Optional.empty()));
+
+
+        assertFalse(dao.deleteSyncInformation(THING_NAME, SHADOW_NAME));
     }
 }

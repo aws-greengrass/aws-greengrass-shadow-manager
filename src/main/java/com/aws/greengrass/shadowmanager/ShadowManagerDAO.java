@@ -7,6 +7,7 @@ package com.aws.greengrass.shadowmanager;
 
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
+import com.aws.greengrass.util.Pair;
 
 import java.util.List;
 import java.util.Optional;
@@ -67,6 +68,13 @@ public interface ShadowManagerDAO {
      * @return The queried shadow sync information from the local shadow store
      */
     Optional<SyncInformation> getShadowSyncInformation(String thingName, String shadowName);
+
+    /**
+     * Attempts to obtain a list of all synced shadow names.
+     *
+     * @return The queried synced shadow names list.
+     */
+    List<Pair<String, String>> listSyncedShadows();
 
     /**
      * Attempts to delete the cloud shadow document in the sync table.
