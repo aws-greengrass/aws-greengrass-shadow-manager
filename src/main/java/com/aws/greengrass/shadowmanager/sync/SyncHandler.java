@@ -6,6 +6,7 @@
 package com.aws.greengrass.shadowmanager.sync;
 
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
+import com.aws.greengrass.shadowmanager.ShadowManagerDAOImpl;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowIPCHandler;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowIPCHandler;
 import com.aws.greengrass.shadowmanager.sync.model.CloudDeleteSyncRequest;
@@ -26,7 +27,8 @@ public class SyncHandler {
     private final ShadowManagerDAO dao;
     private final UpdateThingShadowIPCHandler updateThingShadowIPCHandler;
     private final DeleteThingShadowIPCHandler deleteThingShadowIPCHandler;
-    private final IotDataPlaneClientFactory clientFactory;
+    @Inject
+    private IotDataPlaneClientFactory clientFactory;
 
 
     /**
@@ -35,10 +37,24 @@ public class SyncHandler {
      * @param dao                         Local shadow database management
      * @param updateThingShadowIPCHandler Reference to the UpdateThingShadow IPC Handler
      * @param deleteThingShadowIPCHandler Reference to the DeleteThingShadow IPC Handler
+     */
+    public SyncHandler(ShadowManagerDAO dao,
+                       UpdateThingShadowIPCHandler updateThingShadowIPCHandler,
+                       DeleteThingShadowIPCHandler deleteThingShadowIPCHandler) {
+        this.dao = dao;
+        this.updateThingShadowIPCHandler = updateThingShadowIPCHandler;
+        this.deleteThingShadowIPCHandler = deleteThingShadowIPCHandler;
+    }
+
+    /**
+     * Ctr for SyncHandler for unit testing.
+     *
+     * @param dao                         Local shadow database management
+     * @param updateThingShadowIPCHandler Reference to the UpdateThingShadow IPC Handler
+     * @param deleteThingShadowIPCHandler Reference to the DeleteThingShadow IPC Handler
      * @param clientFactory               The IoT data plane client factory to make shadow operations on the cloud.
      */
-    @Inject
-    SyncHandler(ShadowManagerDAO dao,
+    public SyncHandler(ShadowManagerDAOImpl dao,
                 UpdateThingShadowIPCHandler updateThingShadowIPCHandler,
                 DeleteThingShadowIPCHandler deleteThingShadowIPCHandler,
                 IotDataPlaneClientFactory clientFactory) {

@@ -43,6 +43,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.inject.Inject;
 
 import static com.aws.greengrass.componentmanager.KernelConfigResolver.CONFIGURATION_CONFIG_KEY;
@@ -68,10 +69,12 @@ public class ShadowManager extends PluginService {
     private final PubSubClientWrapper pubSubClientWrapper;
     private final DeviceConfiguration deviceConfiguration;
     private final ShadowWriteSynchronizeHelper synchronizeHelper;
-    private final SyncHandler syncHandler;
+    private SyncHandler syncHandler;
     //TODO: Move this to sync handler?
     @Getter(AccessLevel.PACKAGE)
     private ShadowSyncConfiguration syncConfiguration;
+    private final AtomicReference<DeleteThingShadowIPCHandler> deleteThingShadowIPCHandler = new AtomicReference<>();
+    private final AtomicReference<UpdateThingShadowIPCHandler> updateThingShadowIPCHandler = new AtomicReference<>();
 
     @Inject
     private GreengrassCoreIPCService greengrassCoreIPCService;
@@ -87,7 +90,6 @@ public class ShadowManager extends PluginService {
      * @param pubSubClientWrapper         The PubSub client wrapper
      * @param synchronizeHelper           The shadow write operation synchronizer helper.
      * @param deviceConfiguration         {@link DeviceConfiguration}
-     * @param syncHandler                 The handler class to perform shadow sync operations.
      */
     @Inject
     public ShadowManager(
@@ -97,8 +99,7 @@ public class ShadowManager extends PluginService {
             AuthorizationHandlerWrapper authorizationHandlerWrapper,
             PubSubClientWrapper pubSubClientWrapper,
             DeviceConfiguration deviceConfiguration,
-            ShadowWriteSynchronizeHelper synchronizeHelper,
-            SyncHandler syncHandler) {
+            ShadowWriteSynchronizeHelper synchronizeHelper) {
         super(topics);
         this.database = database;
         this.authorizationHandlerWrapper = authorizationHandlerWrapper;
@@ -106,7 +107,6 @@ public class ShadowManager extends PluginService {
         this.pubSubClientWrapper = pubSubClientWrapper;
         this.deviceConfiguration = deviceConfiguration;
         this.synchronizeHelper = synchronizeHelper;
-        this.syncHandler = syncHandler;
         this.deviceThingNameWatcher = this::handleDeviceThingNameChange;
     }
 
@@ -122,10 +122,18 @@ public class ShadowManager extends PluginService {
 
         greengrassCoreIPCService.setGetThingShadowHandler(context -> new GetThingShadowIPCHandler(context,
                 dao, authorizationHandlerWrapper, pubSubClientWrapper));
-        greengrassCoreIPCService.setDeleteThingShadowHandler(context -> new DeleteThingShadowIPCHandler(context,
-                dao, authorizationHandlerWrapper, pubSubClientWrapper, synchronizeHelper, syncHandler));
-        greengrassCoreIPCService.setUpdateThingShadowHandler(context -> new UpdateThingShadowIPCHandler(context,
-                dao, authorizationHandlerWrapper, pubSubClientWrapper, synchronizeHelper, syncHandler));
+        greengrassCoreIPCService.setDeleteThingShadowHandler(context -> {
+            DeleteThingShadowIPCHandler ipcHandler = new DeleteThingShadowIPCHandler(context,
+                    dao, authorizationHandlerWrapper, pubSubClientWrapper, synchronizeHelper, syncHandler);
+            deleteThingShadowIPCHandler.set(ipcHandler);
+            return ipcHandler;
+        });
+        greengrassCoreIPCService.setUpdateThingShadowHandler(context -> {
+            UpdateThingShadowIPCHandler ipcHandler = new UpdateThingShadowIPCHandler(context,
+                    dao, authorizationHandlerWrapper, pubSubClientWrapper, synchronizeHelper, syncHandler);
+            updateThingShadowIPCHandler.set(ipcHandler);
+            return ipcHandler;
+        });
         greengrassCoreIPCService.setListNamedShadowsForThingHandler(context -> new ListNamedShadowsForThingIPCHandler(
                 context, dao, authorizationHandlerWrapper));
     }
@@ -241,6 +249,8 @@ public class ShadowManager extends PluginService {
         try {
             // Register IPC and Authorization
             registerHandlers();
+            this.syncHandler = new SyncHandler(dao, updateThingShadowIPCHandler.get(),
+                    deleteThingShadowIPCHandler.get());
 
             reportState(State.RUNNING);
         } catch (Exception e) {
