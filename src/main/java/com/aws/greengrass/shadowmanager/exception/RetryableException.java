@@ -13,12 +13,12 @@ import java.time.Instant;
 public class RetryableException extends Exception {
     private static final long serialVersionUID = -1488980916089225328L;
 
+    //TODO: remove this warning.
+    @SuppressWarnings("PMD.UnusedPrivateField")
     private final Instant lastExceptionTime;
-    private final int httpStatusCode;
 
-    public RetryableException(String message, int httpStatusCode) {
-        super(message);
+    public RetryableException(Throwable e) {
+        super(e);
         this.lastExceptionTime = Instant.now();
-        this.httpStatusCode = httpStatusCode;
     }
 }

@@ -11,11 +11,7 @@ package com.aws.greengrass.shadowmanager.exception;
 public class SkipSyncRequestException extends Exception {
     private static final long serialVersionUID = -1488980916089225328L;
 
-    public SkipSyncRequestException(String message) {
-        super(message);
-    }
-
-    public SkipSyncRequestException(String message, Throwable cause) {
-        super(message, cause);
+    public SkipSyncRequestException(Throwable t) {
+        super(t);
     }
 }

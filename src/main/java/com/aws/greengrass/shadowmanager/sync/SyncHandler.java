@@ -14,7 +14,6 @@ import com.aws.greengrass.shadowmanager.sync.model.FullShadowSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.LocalDeleteSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.LocalUpdateSyncRequest;
 
-import java.time.Instant;
 import javax.inject.Inject;
 
 /**
@@ -27,7 +26,7 @@ public class SyncHandler {
     private final ShadowManagerDAO dao;
     private final UpdateThingShadowIPCHandler updateThingShadowIPCHandler;
     private final DeleteThingShadowIPCHandler deleteThingShadowIPCHandler;
-    private final ShadowHttpClient shadowHttpClient;
+    private final IotDataPlaneClientFactory clientFactory;
 
 
     /**
@@ -36,17 +35,17 @@ public class SyncHandler {
      * @param dao                         Local shadow database management
      * @param updateThingShadowIPCHandler Reference to the UpdateThingShadow IPC Handler
      * @param deleteThingShadowIPCHandler Reference to the DeleteThingShadow IPC Handler
-     * @param shadowHttpClient            The HTTP client to make shadow operations on the cloud.
+     * @param clientFactory               The IoT data plane client factory to make shadow operations on the cloud.
      */
     @Inject
     SyncHandler(ShadowManagerDAO dao,
                 UpdateThingShadowIPCHandler updateThingShadowIPCHandler,
                 DeleteThingShadowIPCHandler deleteThingShadowIPCHandler,
-                ShadowHttpClient shadowHttpClient) {
+                IotDataPlaneClientFactory clientFactory) {
         this.dao = dao;
         this.updateThingShadowIPCHandler = updateThingShadowIPCHandler;
         this.deleteThingShadowIPCHandler = deleteThingShadowIPCHandler;
-        this.shadowHttpClient = shadowHttpClient;
+        this.clientFactory = clientFactory;
     }
 
     /**
@@ -97,7 +96,7 @@ public class SyncHandler {
      */
     public void pushCloudUpdateSyncRequest(String thingName, String shadowName, byte[] updateDocument) {
         CloudUpdateSyncRequest cloudUpdateSyncRequest = new CloudUpdateSyncRequest(thingName, shadowName,
-                updateDocument, this.dao, this.shadowHttpClient);
+                updateDocument, this.dao, this.clientFactory);
     }
 
     /**
@@ -123,7 +122,7 @@ public class SyncHandler {
      */
     public void pushCloudDeleteSyncRequest(String thingName, String shadowName) {
         CloudDeleteSyncRequest cloudDeleteSyncRequest = new CloudDeleteSyncRequest(thingName, shadowName, this.dao,
-                this.shadowHttpClient);
+                this.clientFactory);
     }
 
     /**

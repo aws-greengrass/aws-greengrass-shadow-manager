@@ -61,10 +61,7 @@ public final class Constants {
     public static final String CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC = "maxOutboundSyncUpdatesPerSecond";
     public static final String CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC = "shadowDocumentSizeLimitBytes";
     public static final String CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC = "maxDiskUtilizationMegaBytes";
-    public static final String HEADER_CONTENT_TYPE_KEY = "content-type";
-    public static final String HEADER_CONTENT_TYPE_VALUE = "application/json";
-    public static final int TOO_MANY_REQUESTS_ERROR_CODE = 429;
-    public static final int THROTTLED_REQUEST_WAIT_TIME_SECONDS = 60;
+
     private Constants() {
     }
 }

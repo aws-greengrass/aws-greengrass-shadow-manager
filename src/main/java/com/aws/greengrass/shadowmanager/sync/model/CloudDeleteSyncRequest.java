@@ -9,9 +9,8 @@ import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.exception.SyncException;
-import com.aws.greengrass.shadowmanager.sync.ShadowHttpClient;
+import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientFactory;
 import lombok.NonNull;
-import software.amazon.awssdk.aws.greengrass.model.ConflictError;
 
 /**
  * Sync request to delete shadow in the cloud.
@@ -19,22 +18,22 @@ import software.amazon.awssdk.aws.greengrass.model.ConflictError;
 public class CloudDeleteSyncRequest extends BaseSyncRequest {
 
     @NonNull
-    ShadowHttpClient shadowHttpClient;
+    IotDataPlaneClientFactory clientFactory;
 
     /**
      * Ctr for CloudDeleteSyncRequest.
      *
-     * @param thingName        The thing name associated with the sync shadow update
-     * @param shadowName       The shadow name associated with the sync shadow update
-     * @param dao              Local shadow database management
-     * @param shadowHttpClient The HTTP client to make shadow operations on the cloud.
+     * @param thingName     The thing name associated with the sync shadow update
+     * @param shadowName    The shadow name associated with the sync shadow update
+     * @param dao           Local shadow database management
+     * @param clientFactory The IoT data plane client factory to make shadow operations on the cloud.
      */
     public CloudDeleteSyncRequest(String thingName,
                                   String shadowName,
                                   ShadowManagerDAO dao,
-                                  ShadowHttpClient shadowHttpClient) {
+                                  IotDataPlaneClientFactory clientFactory) {
         super(thingName, shadowName, dao);
-        this.shadowHttpClient = shadowHttpClient;
+        this.clientFactory = clientFactory;
     }
 
 
@@ -48,6 +47,5 @@ public class CloudDeleteSyncRequest extends BaseSyncRequest {
      */
     @Override
     public void execute() throws SyncException, RetryableException, SkipSyncRequestException {
-
     }
 }
