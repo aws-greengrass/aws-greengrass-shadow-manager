@@ -15,7 +15,9 @@ public enum LogEvents {
     GET_THING_SHADOW("handle-get-thing-shadow"),
     UPDATE_THING_SHADOW("handle-update-thing-shadow"),
     DELETE_THING_SHADOW("handle-delete-thing-shadow"),
-    LIST_NAMED_SHADOWS("handle-list-named-shadows-for-thing");
+    LIST_NAMED_SHADOWS("handle-list-named-shadows-for-thing"),
+    MQTT_CLIENT_SUBSCRIPTION_ERROR("mqtt-client-subscription-error"),
+    LOCAL_UPDATE_SYNC_REQUEST("local-update-sync-request");
 
     String code;
 

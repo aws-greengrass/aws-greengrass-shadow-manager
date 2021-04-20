@@ -10,7 +10,7 @@ import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.mqttclient.MqttClient;
 import com.aws.greengrass.mqttclient.SubscribeRequest;
 import com.aws.greengrass.mqttclient.UnsubscribeRequest;
-import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
+import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.model.ShadowRequest;
 import software.amazon.awssdk.crt.mqtt.MqttMessage;
 
@@ -25,35 +25,31 @@ import javax.inject.Inject;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DELETE_SUBSCRIPTION_TOPIC;
-import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_PREFIX_REGEX;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_UPDATE_SUBSCRIPTION_TOPIC;
 
 /**
  * Class to subscribe to IoT Core Shadow topics.
  */
-public class MQTTClient {
-    private static final Logger logger = LogManager.getLogger(MQTTClient.class);
+public class CloudDataClient {
+    private static final Logger logger = LogManager.getLogger(CloudDataClient.class);
     private final SyncHandler syncHandler;
-    private final ShadowManagerDAO dao;
     private final MqttClient mqttClient;
     private final Set<String> subscribedUpdateShadowTopics = new HashSet<>();
     private final Set<String> subscribedDeleteShadowTopics = new HashSet<>();
-    private final Pattern shadowPattern = Pattern.compile(SHADOW_PREFIX_REGEX);
+    private final Pattern shadowPattern = Pattern.compile("\\$aws\\/things\\/(.*)\\/shadow(\\/name\\/(.*))?\\/");
+    private final int MAX_SUBSCRIPTION_RETRIES = 3;
 
     /**
-     * Ctr for MQTTClient.
+     * Ctr for CloudDataClient.
      *
      * @param syncHandler Reference to the SyncHandler
      * @param mqttClient  MQTT client to connect to IoT Core
-     * @param dao         Local shadow database management
      */
     @Inject
-    public MQTTClient(SyncHandler syncHandler,
-                      MqttClient mqttClient,
-                      ShadowManagerDAO dao) {
+    public CloudDataClient(SyncHandler syncHandler,
+                           MqttClient mqttClient) {
         this.syncHandler = syncHandler;
         this.mqttClient = mqttClient;
-        this.dao = dao;
     }
 
     /**
@@ -90,10 +86,17 @@ public class MQTTClient {
         topicsToRemove.removeAll(newTopics);
         topicsToRemove.forEach(s -> {
             try {
-                unsubscribeFromShadow(s, callback);
-                currentTopics.remove(s);
-            } catch (InterruptedException | ExecutionException | TimeoutException e) {
+                if (unsubscribeToShadow(s, callback)) {
+                    currentTopics.remove(s);
+                } else {
+                    logger.atError()
+                            .setEventType(LogEvents.MQTT_CLIENT_SUBSCRIPTION_ERROR.code())
+                            .kv(LOG_TOPIC, s)
+                            .log("Max unsubscription retries reached. Failed to unsubscribe to topic.");
+                }
+            } catch (InterruptedException | ExecutionException e) {
                 logger.atError()
+                        .setEventType(LogEvents.MQTT_CLIENT_SUBSCRIPTION_ERROR.code())
                         .kv(LOG_TOPIC, s)
                         .setCause(e)
                         .log("Failed to unsubscribe to cloud topic");
@@ -104,10 +107,20 @@ public class MQTTClient {
         topicsToSubscribe.removeAll(currentTopics);
         topicsToSubscribe.forEach(s -> {
             try {
-                subscribeToShadows(s, callback);
-                currentTopics.add(s);
-            } catch (InterruptedException | ExecutionException | TimeoutException e) {
+                if (subscribeToShadow(s, callback)) {
+                    currentTopics.add(s);
+                } else {
+                    logger.atError()
+                            .setEventType(LogEvents.MQTT_CLIENT_SUBSCRIPTION_ERROR.code())
+                            .kv(LOG_TOPIC, s)
+                            .log("Max subscription retries reached. Failed to subscribe to topic.");
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+
+            } catch (ExecutionException e) {
                 logger.atError()
+                        .setEventType(LogEvents.MQTT_CLIENT_SUBSCRIPTION_ERROR.code())
                         .kv(LOG_TOPIC, s)
                         .setCause(e)
                         .log("Failed to subscribe to cloud topic");
@@ -115,29 +128,34 @@ public class MQTTClient {
         });
     }
 
-
     /**
-     * Unsubscribes from all topics.
+     * Unsubscribes from all subscribed shadow topics.
      */
     public synchronized void clearSubscriptions() {
-        subscribedUpdateShadowTopics.forEach(s -> {
-            try {
-                unsubscribeFromShadow(s, this::handleUpdate);
-                subscribedUpdateShadowTopics.remove(s);
-            } catch (InterruptedException | ExecutionException | TimeoutException e) {
-                logger.atError()
-                        .kv(LOG_TOPIC, s)
-                        .setCause(e)
-                        .log("Failed to unsubscribe from cloud topic");
-            }
-        });
+        unsubscribeToShadows(subscribedUpdateShadowTopics, this::handleUpdate);
+        unsubscribeToShadows(subscribedDeleteShadowTopics, this::handleDelete);
+    }
 
-        subscribedDeleteShadowTopics.forEach(s -> {
+    /**
+     * Unsubscribes to a given list of subscription topics.
+     *
+     * @param subscriptionList List of subscriptions to unsubscribe to
+     * @param callback         Callback function applied to set of subscriptions
+     */
+    private void unsubscribeToShadows(Set<String> subscriptionList, Consumer<MqttMessage> callback) {
+        subscriptionList.forEach(s -> {
             try {
-                unsubscribeFromShadow(s, this::handleDelete);
-                subscribedDeleteShadowTopics.remove(s);
-            } catch (InterruptedException | ExecutionException | TimeoutException e) {
+                if (unsubscribeToShadow(s, callback)) {
+                    subscriptionList.remove(s);
+                } else {
+                    logger.atError()
+                            .setEventType(LogEvents.MQTT_CLIENT_SUBSCRIPTION_ERROR.code())
+                            .kv(LOG_TOPIC, s)
+                            .log("Max unsubscription retries reached. Failed to unsubscribe to topic.");
+                }
+            } catch (InterruptedException | ExecutionException e) {
                 logger.atError()
+                        .setEventType(LogEvents.MQTT_CLIENT_SUBSCRIPTION_ERROR.code())
                         .kv(LOG_TOPIC, s)
                         .setCause(e)
                         .log("Failed to unsubscribe from cloud topic");
@@ -146,31 +164,53 @@ public class MQTTClient {
     }
 
     /**
-     * Subscribes to a specific shadow MQTT topic.
+     * Subscribes to a shadow topic.
      *
-     * @param topic    MQTT topic to subscribe to
-     * @param callback callback function to handle messages from topic
+     * @param topic    MQTT message from shadow topic
+     * @param callback Callback function applied to specific topic
+     * @return Whether the subscribe request succeeded
      */
-    private void subscribeToShadows(String topic, Consumer<MqttMessage> callback)
-            throws InterruptedException, ExecutionException, TimeoutException {
-        mqttClient.subscribe(SubscribeRequest.builder()
-                .topic(topic)
-                .callback(callback)
-                .build());
+    private boolean subscribeToShadow(String topic, Consumer<MqttMessage> callback)
+            throws InterruptedException, ExecutionException {
+        for (int i = 0; i < MAX_SUBSCRIPTION_RETRIES; i++){
+            try {
+                mqttClient.subscribe(SubscribeRequest.builder().topic(topic).callback(callback).build());
+                return true;
+            } catch (TimeoutException e) {
+                logger.atWarn()
+                        .setEventType(LogEvents.MQTT_CLIENT_SUBSCRIPTION_ERROR.code())
+                        .kv(LOG_TOPIC, topic)
+                        .setCause(e)
+                        .log("Timeout occurred when subscribing to shadow topic.");
+            }
+        }
+
+        return false;
     }
 
     /**
-     * Unsubscribes to a specific shadow MQTT topic.
+     * Unsubscribes to a shadow topic.
      *
-     * @param topic    MQTT topic to subscribe to
-     * @param callback callback function to handle messages from topic
+     * @param topic    MQTT message from shadow topic
+     * @param callback Callback function applied to specific topic
+     * @return Whether the unsubscribes request succeeded
      */
-    private void unsubscribeFromShadow(String topic, Consumer<MqttMessage> callback)
-            throws InterruptedException, ExecutionException, TimeoutException {
-        mqttClient.unsubscribe(UnsubscribeRequest.builder()
-                .topic(topic)
-                .callback(callback)
-                .build());
+    private boolean unsubscribeToShadow(String topic, Consumer<MqttMessage> callback)
+            throws InterruptedException, ExecutionException {
+        for (int i = 0; i < MAX_SUBSCRIPTION_RETRIES; i++){
+            try {
+                mqttClient.unsubscribe(UnsubscribeRequest.builder().topic(topic).callback(callback).build());
+                return true;
+            } catch (TimeoutException e) {
+                logger.atWarn()
+                        .setEventType(LogEvents.MQTT_CLIENT_SUBSCRIPTION_ERROR.code())
+                        .kv(LOG_TOPIC, topic)
+                        .setCause(e)
+                        .log("Timeout occurred when unsubscribing to shadow topic.");
+            }
+        }
+
+        return false;
     }
 
     /**
