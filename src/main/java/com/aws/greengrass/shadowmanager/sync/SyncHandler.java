@@ -14,7 +14,6 @@ import com.aws.greengrass.shadowmanager.sync.model.FullShadowSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.LocalDeleteSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.LocalUpdateSyncRequest;
 
-import java.time.Instant;
 import javax.inject.Inject;
 
 /**
