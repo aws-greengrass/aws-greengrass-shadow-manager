@@ -125,10 +125,7 @@ class ShadowManagerDAOImplTest {
         assertThat(result.get().toJson(true), is(equalTo(new ShadowDocument(expectedPayload).toJson(true))));
 
         Optional<ShadowDocument> getResults = dao.getShadowThing(THING_NAME, shadowName);
-        assertThat("Should get the shadow document but should be empty.", getResults.isPresent(), is(true));
-        assertThat(getResults.get().getState(), is(notNullValue()));
-        assertThat(getResults.get().getState().getDesired(), is(nullValue()));
-        assertThat(getResults.get().getState().getReported(), is(nullValue()));
+        assertThat("Should not get the shadow document.", getResults.isPresent(), is(false));
     }
 
     @Test

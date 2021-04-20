@@ -44,8 +44,8 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      */
     @Override
     public Optional<ShadowDocument> getShadowThing(String thingName, String shadowName) {
-        String sql = "SELECT document, version, deleted, updateTime FROM documents  WHERE thingName = ? "
-                + "AND shadowName = ?";
+        String sql = "SELECT document, version, updateTime FROM documents  WHERE deleted = 0 AND "
+                + "thingName = ? AND shadowName = ?";
         try (PreparedStatement preparedStatement = database.connection().prepareStatement(sql)) {
             preparedStatement.setString(1, thingName);
             preparedStatement.setString(2, shadowName);
@@ -128,7 +128,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      */
     @Override
     public List<String> listNamedShadowsForThing(String thingName, int offset, int limit) {
-        return execute("SELECT shadowName from documents WHERE thingName = ? AND shadowName != ''"
+        return execute("SELECT shadowName from documents WHERE deleted = 0 AND thingName = ? AND shadowName != ''"
                         + " LIMIT ? OFFSET ? ",
                 preparedStatement -> {
                     preparedStatement.setString(1, thingName);
