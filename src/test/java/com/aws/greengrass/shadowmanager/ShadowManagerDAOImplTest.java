@@ -146,7 +146,7 @@ class ShadowManagerDAOImplTest {
 
     private void assertUpdateShadowSyncStatementMocks(long epochNow) {
         assertThat(stringArgumentCaptor.getAllValues().size(), is(2));
-        assertThat(longArgumentCaptor.getAllValues().size(), is(3));
+        assertThat(longArgumentCaptor.getAllValues().size(), is(4));
         assertThat(bytesArgumentCaptor.getValue(), is(notNullValue()));
         assertThat(booleanArgumentCaptor.getValue(), is(notNullValue()));
 
@@ -157,6 +157,7 @@ class ShadowManagerDAOImplTest {
         assertThat(longArgumentCaptor.getAllValues().get(0), is(2L));
         assertThat(longArgumentCaptor.getAllValues().get(1), is(lessThanOrEqualTo(epochNow)));
         assertThat(longArgumentCaptor.getAllValues().get(2), is(greaterThanOrEqualTo(epochNow)));
+        assertThat(longArgumentCaptor.getAllValues().get(3), is(5L));
     }
 
     private void assertDeleteShadowSyncMocks() {
@@ -178,6 +179,7 @@ class ShadowManagerDAOImplTest {
         doNothing().when(mockPreparedStatement).setBoolean(eq(5), booleanArgumentCaptor.capture());
         doNothing().when(mockPreparedStatement).setLong(eq(6), longArgumentCaptor.capture());
         doNothing().when(mockPreparedStatement).setLong(eq(7), longArgumentCaptor.capture());
+        doNothing().when(mockPreparedStatement).setLong(eq(8), longArgumentCaptor.capture());
     }
 
     @BeforeEach
@@ -364,6 +366,7 @@ class ShadowManagerDAOImplTest {
                 .cloudUpdateTime(Instant.now().minusSeconds(60).getEpochSecond())
                 .cloudVersion(2)
                 .cloudDocument(BASE_DOCUMENT)
+                .localVersion(5)
                 .build()));
 
         assertUpdateShadowSyncStatementMocks(epochNow);
@@ -381,6 +384,7 @@ class ShadowManagerDAOImplTest {
                 .shadowName(SHADOW_NAME)
                 .cloudUpdateTime(Instant.now().minusSeconds(60).getEpochSecond())
                 .cloudVersion(2)
+                .localVersion(5)
                 .cloudDocument(BASE_DOCUMENT)
                 .build()));
 
@@ -400,6 +404,7 @@ class ShadowManagerDAOImplTest {
                 .cloudUpdateTime(Instant.now().minusSeconds(60).getEpochSecond())
                 .cloudVersion(2)
                 .cloudDocument(BASE_DOCUMENT)
+                .localVersion(5)
                 .build()));
         assertUpdateShadowSyncStatementMocks(epochNow);
     }
@@ -414,6 +419,7 @@ class ShadowManagerDAOImplTest {
         when(mockResultSet.getLong(3)).thenReturn(epochMinus60Seconds);
         when(mockResultSet.getLong(4)).thenReturn(epochNow);
         when(mockResultSet.getBoolean(5)).thenReturn(true);
+        when(mockResultSet.getLong(6)).thenReturn(5L);
         when(mockResultSet.next()).thenReturn(true);
         when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
 
@@ -425,6 +431,7 @@ class ShadowManagerDAOImplTest {
         assertThat(shadowSyncInformation.get().getCloudUpdateTime(), is(epochMinus60Seconds));
         assertThat(shadowSyncInformation.get().getLastSyncTime(), is(epochNow));
         assertThat(shadowSyncInformation.get().getCloudVersion(), is(2L));
+        assertThat(shadowSyncInformation.get().getLocalVersion(), is(5L));
         assertThat(shadowSyncInformation.get().getShadowName(), is(SHADOW_NAME));
         assertThat(shadowSyncInformation.get().getThingName(), is(THING_NAME));
         assertGetShadowStatementMocks();
