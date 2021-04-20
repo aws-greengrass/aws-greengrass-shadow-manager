@@ -118,7 +118,9 @@ public class IotDataPlaneClientFactory {
             iotDataPlaneClientBuilder.endpointOverride(URI.create(getIotCoreDataPlaneEndpoint(iotDataEndpoint)));
             iotDataPlaneClientBuilder.region(Region.of(region));
         }
-        this.iotDataPlaneClient.close();
+        if (this.iotDataPlaneClient != null) {
+            this.iotDataPlaneClient.close();
+        }
         this.iotDataPlaneClient = iotDataPlaneClientBuilder.build();
     }
 }
