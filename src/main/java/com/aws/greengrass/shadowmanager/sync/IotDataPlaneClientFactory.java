@@ -39,7 +39,6 @@ import javax.inject.Inject;
 
 import static com.aws.greengrass.deployment.DeviceConfiguration.DEVICE_PARAM_AWS_REGION;
 import static com.aws.greengrass.deployment.DeviceConfiguration.DEVICE_PARAM_CERTIFICATE_FILE_PATH;
-import static com.aws.greengrass.deployment.DeviceConfiguration.DEVICE_PARAM_GG_DATA_PLANE_PORT;
 import static com.aws.greengrass.deployment.DeviceConfiguration.DEVICE_PARAM_IOT_DATA_ENDPOINT;
 import static com.aws.greengrass.deployment.DeviceConfiguration.DEVICE_PARAM_PRIVATE_KEY_PATH;
 import static com.aws.greengrass.deployment.DeviceConfiguration.DEVICE_PARAM_ROOT_CA_PATH;
@@ -68,7 +67,6 @@ public class IotDataPlaneClientFactory {
         deviceConfiguration.onAnyChange((what, node) -> {
             if (validString(node, DEVICE_PARAM_AWS_REGION) || validPath(node, DEVICE_PARAM_ROOT_CA_PATH) || validPath(
                     node, DEVICE_PARAM_CERTIFICATE_FILE_PATH) || validPath(node, DEVICE_PARAM_PRIVATE_KEY_PATH)
-                    || validString(node, DEVICE_PARAM_GG_DATA_PLANE_PORT)
                     || validString(node, DEVICE_PARAM_IOT_DATA_ENDPOINT)) {
                 configureClient(deviceConfiguration);
             }
@@ -120,6 +118,7 @@ public class IotDataPlaneClientFactory {
             iotDataPlaneClientBuilder.endpointOverride(URI.create(getIotCoreDataPlaneEndpoint(iotDataEndpoint)));
             iotDataPlaneClientBuilder.region(Region.of(region));
         }
+        this.iotDataPlaneClient.close();
         this.iotDataPlaneClient = iotDataPlaneClientBuilder.build();
     }
 }
