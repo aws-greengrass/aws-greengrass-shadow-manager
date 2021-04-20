@@ -39,6 +39,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KE
 public class CloudUpdateSyncRequest extends BaseSyncRequest {
     private static final Logger logger = LogManager.getLogger(CloudUpdateSyncRequest.class);
 
+    @NonNull
     byte[] updateDocument;
 
     @NonNull
@@ -62,7 +63,6 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
         this.updateDocument = updateDocument;
         this.clientFactory = clientFactory;
     }
-
 
     /**
      * Executes a cloud shadow update after a successful local shadow update.

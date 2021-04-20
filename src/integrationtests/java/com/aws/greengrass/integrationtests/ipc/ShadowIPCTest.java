@@ -574,4 +574,25 @@ class ShadowIPCTest {
             acceptedConsumer.getLeft().get(TIMEOUT_FOR_PUBSUB_SECONDS, TimeUnit.SECONDS);
         }
     }
+
+    @Test
+    @Order(9)
+    void GIVEN_shadow_client_WHEN_get_shadow_with_deleted_shadow_and_subscribed_to_rejected_THEN_fails_and_receives_correct_message_over_pubsub(ExtensionContext context) throws Exception {
+        try(EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
+            ignoreExceptionUltimateCauseOfType(context, InvalidRequestParametersException.class);
+            ignoreExceptionUltimateCauseOfType(context, InvalidArgumentsError.class);
+            ignoreExceptionUltimateCauseOfType(context, ResourceNotFoundError.class);
+
+            GreengrassCoreIPCClient ipcClient = new GreengrassCoreIPCClient(connection);
+
+            GetThingShadowRequest getShadowRequest = new GetThingShadowRequest();
+            getShadowRequest.setThingName(MOCK_THING_NAME);
+            getShadowRequest.setShadowName(SHADOW_NAME_1);
+
+            ExecutionException executionException = assertThrows(ExecutionException.class, () -> ipcClient.getThingShadow(getShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS));
+                assertTrue(executionException.getCause() instanceof ResourceNotFoundError);
+                ResourceNotFoundError thrown = (ResourceNotFoundError) executionException.getCause();
+                assertThat(thrown.getMessage(), is("No shadow found"));
+            }
+        }
 }

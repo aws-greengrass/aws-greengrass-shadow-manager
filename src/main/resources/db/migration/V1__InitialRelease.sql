@@ -12,6 +12,7 @@ CREATE TABLE sync (
     thingName VARCHAR(255) NOT NULL,
     shadowName VARCHAR(255) NOT NULL,
     cloudDocument TEXT,
+    localVersion NUMBER,
     cloudVersion NUMBER,
     cloudDeleted BIT,
     cloudUpdateTime NUMBER,

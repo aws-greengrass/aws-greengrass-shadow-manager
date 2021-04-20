@@ -133,16 +133,6 @@ class CloudDeleteSyncRequestTest {
     @ValueSource(classes = {ThrottlingException.class, ServiceUnavailableException.class, InternalFailureException.class})
     void GIVEN_bad_cloud_delete_request_WHEN_execute_and_updateShadow_throws_retryable_error_THEN_does_not_update_cloud_shadow_and_sync_information(Class clazz, ExtensionContext context) throws IOException {
         ignoreExceptionOfType(context, clazz);
-        long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
-        when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder()
-                .cloudUpdateTime(epochSecondsMinus60)
-                .thingName(THING_NAME)
-                .shadowName(SHADOW_NAME)
-                .cloudDeleted(false)
-                .cloudDocument(BASE_DOCUMENT)
-                .cloudVersion(1L)
-                .lastSyncTime(epochSecondsMinus60)
-                .build()));
         when(mockIotDataPlaneClient.deleteThingShadow(any(DeleteThingShadowRequest.class))).thenThrow(clazz);
         CloudDeleteSyncRequest request = new CloudDeleteSyncRequest(THING_NAME, SHADOW_NAME, mockDao, mockClientFactory);
 
@@ -150,7 +140,7 @@ class CloudDeleteSyncRequestTest {
         assertThat(thrown.getCause(), is(instanceOf(clazz)));
 
         verify(mockClientFactory, times(1)).getIotDataPlaneClient();
-        verify(mockDao, times(1)).getShadowSyncInformation(anyString(), anyString());
+        verify(mockDao, times(0)).getShadowSyncInformation(anyString(), anyString());
         verify(mockDao, times(0)).updateSyncInformation(any());
         verify(mockIotDataPlaneClient, times(1)).deleteThingShadow(any(DeleteThingShadowRequest.class));
     }
@@ -160,16 +150,6 @@ class CloudDeleteSyncRequestTest {
             MethodNotAllowedException.class, UnsupportedDocumentEncodingException.class, AwsServiceException.class, SdkClientException.class})
     void GIVEN_bad_cloud_delete_request_WHEN_execute_and_updateShadow_throws_skipable_error_THEN_does_not_update_cloud_shadow_and_sync_information(Class clazz, ExtensionContext context) throws IOException {
         ignoreExceptionOfType(context, clazz);
-        long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
-        when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder()
-                .cloudUpdateTime(epochSecondsMinus60)
-                .thingName(THING_NAME)
-                .shadowName(SHADOW_NAME)
-                .cloudDeleted(false)
-                .cloudDocument(BASE_DOCUMENT)
-                .cloudVersion(1L)
-                .lastSyncTime(epochSecondsMinus60)
-                .build()));
         when(mockIotDataPlaneClient.deleteThingShadow(any(DeleteThingShadowRequest.class))).thenThrow(clazz);
         CloudDeleteSyncRequest request = new CloudDeleteSyncRequest(THING_NAME, SHADOW_NAME, mockDao, mockClientFactory);
 
@@ -177,7 +157,7 @@ class CloudDeleteSyncRequestTest {
         assertThat(thrown.getCause(), is(instanceOf(clazz)));
 
         verify(mockClientFactory, times(1)).getIotDataPlaneClient();
-        verify(mockDao, times(1)).getShadowSyncInformation(anyString(), anyString());
+        verify(mockDao, times(0)).getShadowSyncInformation(anyString(), anyString());
         verify(mockDao, times(0)).updateSyncInformation(any());
         verify(mockIotDataPlaneClient, times(1)).deleteThingShadow(any(DeleteThingShadowRequest.class));
     }

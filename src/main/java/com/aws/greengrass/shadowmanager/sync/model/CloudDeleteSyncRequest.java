@@ -53,7 +53,6 @@ public class CloudDeleteSyncRequest extends BaseSyncRequest {
         this.clientFactory = clientFactory;
     }
 
-
     /**
      * Executes a cloud shadow delete after a successful local shadow delete.
      *

@@ -125,10 +125,7 @@ class ShadowManagerDAOImplTest {
         assertThat(result.get().toJson(true), is(equalTo(new ShadowDocument(expectedPayload).toJson(true))));
 
         Optional<ShadowDocument> getResults = dao.getShadowThing(THING_NAME, shadowName);
-        assertThat("Should get the shadow document but should be empty.", getResults.isPresent(), is(true));
-        assertThat(getResults.get().getState(), is(notNullValue()));
-        assertThat(getResults.get().getState().getDesired(), is(nullValue()));
-        assertThat(getResults.get().getState().getReported(), is(nullValue()));
+        assertThat("Should not get the shadow document.", getResults.isPresent(), is(false));
     }
 
     @Test
@@ -213,6 +210,23 @@ class ShadowManagerDAOImplTest {
         assertThat(listShadowResults, is(equalTo(expected_paginated_list)));
     }
 
+    @Test
+    void GIVEN_one_deleted_shadow_WHEN_list_named_shadows_for_thing_THEN_return_non_deleted_named_shadow() throws IOException {
+        for (String shadowName : SHADOW_NAME_LIST) {
+            dao.updateShadowThing(THING_NAME, shadowName, UPDATED_DOCUMENT, 1);
+        }
+
+        Optional<ShadowDocument> result = dao.deleteShadowThing(THING_NAME, "charlie"); //NOPMD
+        assertThat("Correct payload returned", result.isPresent(), is(true));
+        assertThat(result.get().toJson(true), is(equalTo(new ShadowDocument(UPDATED_DOCUMENT).toJson(true))));
+
+        List<String> listShadowResults = dao.listNamedShadowsForThing(THING_NAME, DEFAULT_OFFSET, SHADOW_NAME_LIST.size());
+        List<String> expected_list = Arrays.asList("alpha", "bravo", "delta");
+        assertThat(listShadowResults, is(notNullValue()));
+        assertThat(listShadowResults, is(not(empty())));
+        assertThat(listShadowResults, is(equalTo(expected_list)));
+    }
+
     static Stream<Arguments> validListTestParameters() {
         return Stream.of(
                 arguments(THING_NAME, 0, 5),   // limit greater than number of named shadows
@@ -252,15 +266,15 @@ class ShadowManagerDAOImplTest {
 
     static Stream<Arguments> validUpdateSyncInformationTests() {
         return Stream.of(
-                arguments(BASE_DOCUMENT, 1, false),
-                arguments(null, 2, true),
-                arguments(UPDATED_DOCUMENT, 3, false)
+                arguments(BASE_DOCUMENT, 1, false, 5),
+                arguments(null, 2, true, 6),
+                arguments(UPDATED_DOCUMENT, 3, false, 7 )
         );
     }
 
     @ParameterizedTest
     @MethodSource("validUpdateSyncInformationTests")
-    void GIVEN_valid_sync_information_WHEN_update_and_get_THEN_successfully_updates_and_gets_sync_information(byte[] cloudDocument, long cloudVersion, boolean cloudDeleted) {
+    void GIVEN_valid_sync_information_WHEN_update_and_get_THEN_successfully_updates_and_gets_sync_information(byte[] cloudDocument, long cloudVersion, boolean cloudDeleted, long localVersion) {
         long epochMinus60Seconds = Instant.now().minusSeconds(60).getEpochSecond();
         SyncInformation syncInformation = SyncInformation.builder()
                 .thingName(THING_NAME)
@@ -269,6 +283,7 @@ class ShadowManagerDAOImplTest {
                 .cloudVersion(cloudVersion)
                 .cloudUpdateTime(epochMinus60Seconds)
                 .cloudDocument(cloudDocument)
+                .localVersion(localVersion)
                 .build();
         assertTrue(dao.updateSyncInformation(syncInformation));
 
@@ -279,7 +294,7 @@ class ShadowManagerDAOImplTest {
 
     @ParameterizedTest
     @MethodSource("validUpdateSyncInformationTests")
-    void GIVEN_valid_sync_information_WHEN_update_delete_and_get_THEN_successfully_updates_and_deletes_sync_information(byte[] cloudDocument, long cloudVersion, boolean cloudDeleted) {
+    void GIVEN_valid_sync_information_WHEN_update_delete_and_get_THEN_successfully_updates_and_deletes_sync_information(byte[] cloudDocument, long cloudVersion, boolean cloudDeleted, long localVersion) {
         long epochMinus60Seconds = Instant.now().minusSeconds(60).getEpochSecond();
         SyncInformation syncInformation = SyncInformation.builder()
                 .thingName(THING_NAME)
@@ -288,6 +303,7 @@ class ShadowManagerDAOImplTest {
                 .cloudVersion(cloudVersion)
                 .cloudUpdateTime(epochMinus60Seconds)
                 .cloudDocument(cloudDocument)
+                .localVersion(localVersion)
                 .build();
         assertTrue(dao.updateSyncInformation(syncInformation));
 
