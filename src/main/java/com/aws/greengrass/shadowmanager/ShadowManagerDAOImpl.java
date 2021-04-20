@@ -241,6 +241,29 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
 
     }
 
+    /**
+     * Attempts to get the shadow document version.
+     *
+     * @param thingName       Name of the Thing for the shadow topic prefix.
+     * @param shadowName      Name of shadow topic prefix for thing.
+     * @return 1 if the shadow document does not exists; Else the correct version.
+     */
+    @Override
+    public Optional<Long> getShadowDocumentVersion(String thingName, String shadowName) {
+        return execute("SELECT version FROM documents WHERE thingName = ? AND shadowName = ?",
+                preparedStatement -> {
+                    preparedStatement.setString(1, thingName);
+                    preparedStatement.setString(2, shadowName);
+                    try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                        if (resultSet.next()) {
+                            return Optional.of(resultSet.getLong(1));
+                        }
+                    }
+                    return Optional.empty();
+                });
+
+    }
+
     private <T> T execute(String sql, SQLExecution<T> thunk) {
         try (PreparedStatement statement = database.connection().prepareStatement(sql)) {
             return thunk.apply(statement);

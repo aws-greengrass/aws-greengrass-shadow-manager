@@ -170,7 +170,7 @@ public final class JsonUtil {
      * it's correctness, the depth of the state node to ensure it is within the boundaries and the version of the
      * payload.
      *
-     * @param sourceDocument       The current version of the shadow document.
+     * @param sourceDocument  The current version of the shadow document.
      * @param updatedDocument The updated version of the shadow document sent in the request.
      * @throws ConflictError                     when the version number sent in the update request is not exactly one
      *                                           higher than the current shadow version

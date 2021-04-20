@@ -84,4 +84,13 @@ public interface ShadowManagerDAO {
      * @return true if the cloud document (soft) delete was successful or not.
      */
     boolean deleteSyncInformation(String thingName, String shadowName);
+
+    /**
+     * Attempts to get the shadow document version.
+     *
+     * @param thingName       Name of the Thing for the shadow topic prefix.
+     * @param shadowName      Name of shadow topic prefix for thing.
+     * @return 1 if the shadow document does not exists; Else the correct version.
+     */
+    Optional<Long> getShadowDocumentVersion(String thingName, String shadowName);
 }
