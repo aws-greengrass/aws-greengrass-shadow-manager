@@ -210,6 +210,23 @@ class ShadowManagerDAOImplTest {
         assertThat(listShadowResults, is(equalTo(expected_paginated_list)));
     }
 
+    @Test
+    void GIVEN_one_deleted_shadow_WHEN_list_named_shadows_for_thing_THEN_return_non_deleted_named_shadow() throws IOException {
+        for (String shadowName : SHADOW_NAME_LIST) {
+            dao.updateShadowThing(THING_NAME, shadowName, UPDATED_DOCUMENT, 1);
+        }
+
+        Optional<ShadowDocument> result = dao.deleteShadowThing(THING_NAME, "charlie"); //NOPMD
+        assertThat("Correct payload returned", result.isPresent(), is(true));
+        assertThat(result.get().toJson(true), is(equalTo(new ShadowDocument(UPDATED_DOCUMENT).toJson(true))));
+
+        List<String> listShadowResults = dao.listNamedShadowsForThing(THING_NAME, DEFAULT_OFFSET, SHADOW_NAME_LIST.size());
+        List<String> expected_list = Arrays.asList("alpha", "bravo", "delta");
+        assertThat(listShadowResults, is(notNullValue()));
+        assertThat(listShadowResults, is(not(empty())));
+        assertThat(listShadowResults, is(equalTo(expected_list)));
+    }
+
     static Stream<Arguments> validListTestParameters() {
         return Stream.of(
                 arguments(THING_NAME, 0, 5),   // limit greater than number of named shadows
