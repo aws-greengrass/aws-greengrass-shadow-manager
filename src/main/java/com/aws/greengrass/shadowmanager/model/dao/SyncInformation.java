@@ -18,6 +18,7 @@ public class SyncInformation {
     private String thingName;
     private String shadowName;
     private byte[] cloudDocument;
+    private long localVersion;
     private long cloudVersion;
     private long cloudUpdateTime;
     @Builder.Default

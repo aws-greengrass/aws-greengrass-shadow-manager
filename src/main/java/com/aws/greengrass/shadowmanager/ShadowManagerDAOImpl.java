@@ -153,7 +153,8 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
     @Override
     public boolean updateSyncInformation(final SyncInformation request) {
         return execute("MERGE INTO sync(thingName, shadowName, cloudDocument, cloudVersion, cloudDeleted, "
-                        + "cloudUpdateTime, lastSyncTime) KEY (thingName, shadowName) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        + "cloudUpdateTime, lastSyncTime, localVersion) KEY (thingName, shadowName) "
+                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 preparedStatement -> {
                     preparedStatement.setString(1, request.getThingName());
                     preparedStatement.setString(2, request.getShadowName());
@@ -162,6 +163,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
                     preparedStatement.setBoolean(5, request.isCloudDeleted());
                     preparedStatement.setLong(6, request.getCloudUpdateTime());
                     preparedStatement.setLong(7, request.getLastSyncTime());
+                    preparedStatement.setLong(8, request.getLocalVersion());
                     int result = preparedStatement.executeUpdate();
                     return result == 1;
                 });
@@ -176,8 +178,8 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      */
     @Override
     public Optional<SyncInformation> getShadowSyncInformation(String thingName, String shadowName) {
-        return execute("SELECT cloudDocument, cloudVersion, cloudUpdateTime, lastSyncTime, cloudDeleted FROM sync "
-                        + "WHERE thingName = ? AND shadowName = ?",
+        return execute("SELECT cloudDocument, cloudVersion, cloudUpdateTime, lastSyncTime, cloudDeleted, "
+                        + "localVersion FROM sync WHERE thingName = ? AND shadowName = ?",
                 preparedStatement -> {
                     preparedStatement.setString(1, thingName);
                     preparedStatement.setString(2, shadowName);
@@ -189,6 +191,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
                                     .cloudUpdateTime(resultSet.getLong(3))
                                     .lastSyncTime(resultSet.getLong(4))
                                     .cloudDeleted(resultSet.getBoolean(5))
+                                    .localVersion(resultSet.getLong(6))
                                     .shadowName(shadowName)
                                     .thingName(thingName)
                                     .build());
