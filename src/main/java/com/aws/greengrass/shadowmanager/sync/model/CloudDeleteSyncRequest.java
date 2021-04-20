@@ -73,13 +73,13 @@ public class CloudDeleteSyncRequest extends BaseSyncRequest {
             logger.atWarn()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                    .cause(e).log();
+                    .cause(e).log("Could not execute cloud shadow delete request");
             throw new RetryableException(e);
         } catch (SdkServiceException | SdkClientException e) {
-            logger.atWarn()
+            logger.atError()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                    .cause(e).log();
+                    .cause(e).log("Could not execute cloud shadow delete request");
             throw new SkipSyncRequestException(e);
         }
 
