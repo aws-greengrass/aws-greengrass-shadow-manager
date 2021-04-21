@@ -7,8 +7,8 @@ package com.aws.greengrass.shadowmanager.sync.model;
 
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.SyncException;
-import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowIPCHandler;
-import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowIPCHandler;
+import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowRequestHandler;
+import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowRequestHandler;
 import lombok.NonNull;
 
 /**
@@ -17,10 +17,10 @@ import lombok.NonNull;
 public class FullShadowSyncRequest extends BaseSyncRequest {
 
     @NonNull
-    UpdateThingShadowIPCHandler updateThingShadowIPCHandler;
+    UpdateThingShadowRequestHandler updateThingShadowRequestHandler;
 
     @NonNull
-    DeleteThingShadowIPCHandler deleteThingShadowIPCHandler;
+    DeleteThingShadowRequestHandler deleteThingShadowRequestHandler;
 
     /**
      * Ctr for FullShadowSyncRequest.
@@ -28,17 +28,17 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
      * @param thingName                   The thing name associated with the sync shadow update
      * @param shadowName                  The shadow name associated with the sync shadow update
      * @param dao                         Local shadow database management
-     * @param deleteThingShadowIPCHandler Reference to the DeleteThingShadow IPC Handler
-     * @param updateThingShadowIPCHandler Reference to the UpdateThingShadow IPC Handler
+     * @param deleteThingShadowRequestHandler Reference to the DeleteThingShadow IPC Handler
+     * @param updateThingShadowRequestHandler Reference to the UpdateThingShadow IPC Handler
      */
     public FullShadowSyncRequest(String thingName,
                                  String shadowName,
                                  ShadowManagerDAO dao,
-                                 UpdateThingShadowIPCHandler updateThingShadowIPCHandler,
-                                 DeleteThingShadowIPCHandler deleteThingShadowIPCHandler) {
+                                 UpdateThingShadowRequestHandler updateThingShadowRequestHandler,
+                                 DeleteThingShadowRequestHandler deleteThingShadowRequestHandler) {
         super(thingName, shadowName, dao);
-        this.updateThingShadowIPCHandler = updateThingShadowIPCHandler;
-        this.deleteThingShadowIPCHandler = deleteThingShadowIPCHandler;
+        this.updateThingShadowRequestHandler = updateThingShadowRequestHandler;
+        this.deleteThingShadowRequestHandler = deleteThingShadowRequestHandler;
     }
 
     @Override

@@ -5,17 +5,14 @@
 
 package com.aws.greengrass.shadowmanager.sync;
 
+import com.aws.greengrass.shadowmanager.ShadowManager;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAOImpl;
-import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowIPCHandler;
-import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowIPCHandler;
 import com.aws.greengrass.shadowmanager.sync.model.CloudDeleteSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.CloudUpdateSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.FullShadowSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.LocalDeleteSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.LocalUpdateSyncRequest;
-
-import javax.inject.Inject;
 
 /**
  * Class which handles syncing shadows to IoT Shadow Service.
@@ -25,42 +22,20 @@ import javax.inject.Inject;
 public class SyncHandler {
 
     private final ShadowManagerDAO dao;
-    private final UpdateThingShadowIPCHandler updateThingShadowIPCHandler;
-    private final DeleteThingShadowIPCHandler deleteThingShadowIPCHandler;
-    @Inject
-    private IotDataPlaneClientFactory clientFactory;
+    private final ShadowManager shadowManager;
+    private final IotDataPlaneClientFactory clientFactory;
 
-
-    /**
-     * Ctr for SyncHandler.
-     *
-     * @param dao                         Local shadow database management
-     * @param updateThingShadowIPCHandler Reference to the UpdateThingShadow IPC Handler
-     * @param deleteThingShadowIPCHandler Reference to the DeleteThingShadow IPC Handler
-     */
-    public SyncHandler(ShadowManagerDAO dao,
-                       UpdateThingShadowIPCHandler updateThingShadowIPCHandler,
-                       DeleteThingShadowIPCHandler deleteThingShadowIPCHandler) {
-        this.dao = dao;
-        this.updateThingShadowIPCHandler = updateThingShadowIPCHandler;
-        this.deleteThingShadowIPCHandler = deleteThingShadowIPCHandler;
-    }
 
     /**
      * Ctr for SyncHandler for unit testing.
      *
-     * @param dao                         Local shadow database management
-     * @param updateThingShadowIPCHandler Reference to the UpdateThingShadow IPC Handler
-     * @param deleteThingShadowIPCHandler Reference to the DeleteThingShadow IPC Handler
-     * @param clientFactory               The IoT data plane client factory to make shadow operations on the cloud.
+     * @param dao           Local shadow database management.
+     * @param shadowManager The Shadow Manager instance to get the Update/Delete handlers.
+     * @param clientFactory The IoT data plane client factory to make shadow operations on the cloud.
      */
-    public SyncHandler(ShadowManagerDAOImpl dao,
-                UpdateThingShadowIPCHandler updateThingShadowIPCHandler,
-                DeleteThingShadowIPCHandler deleteThingShadowIPCHandler,
-                IotDataPlaneClientFactory clientFactory) {
+    public SyncHandler(ShadowManagerDAOImpl dao, IotDataPlaneClientFactory clientFactory, ShadowManager shadowManager) {
         this.dao = dao;
-        this.updateThingShadowIPCHandler = updateThingShadowIPCHandler;
-        this.deleteThingShadowIPCHandler = deleteThingShadowIPCHandler;
+        this.shadowManager = shadowManager;
         this.clientFactory = clientFactory;
     }
 
@@ -83,8 +58,8 @@ public class SyncHandler {
         FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(thingName,
                 shadowName,
                 this.dao,
-                this.updateThingShadowIPCHandler,
-                this.deleteThingShadowIPCHandler);
+                this.shadowManager.getUpdateThingShadowRequestHandler(),
+                this.shadowManager.getDeleteThingShadowRequestHandler());
     }
 
     /**
@@ -125,7 +100,7 @@ public class SyncHandler {
      */
     public void pushLocalUpdateSyncRequest(String thingName, String shadowName) {
         LocalUpdateSyncRequest localUpdateSyncRequest = new LocalUpdateSyncRequest(thingName, shadowName, this.dao,
-                this.updateThingShadowIPCHandler);
+                this.shadowManager.getUpdateThingShadowRequestHandler());
     }
 
     /**
@@ -151,6 +126,6 @@ public class SyncHandler {
      */
     public void pushLocalDeleteSyncRequest(String thingName, String shadowName) {
         LocalDeleteSyncRequest localDeleteSyncRequest = new LocalDeleteSyncRequest(thingName, shadowName, this.dao,
-                this.deleteThingShadowIPCHandler);
+                this.shadowManager.getDeleteThingShadowRequestHandler());
     }
 }

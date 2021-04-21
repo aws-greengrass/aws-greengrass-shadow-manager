@@ -7,7 +7,7 @@ package com.aws.greengrass.shadowmanager.sync.model;
 
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.SyncException;
-import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowIPCHandler;
+import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowRequestHandler;
 import lombok.NonNull;
 
 /**
@@ -16,7 +16,7 @@ import lombok.NonNull;
 public class LocalDeleteSyncRequest extends BaseSyncRequest {
 
     @NonNull
-    DeleteThingShadowIPCHandler deleteThingShadowIPCHandler;
+    DeleteThingShadowRequestHandler deleteThingShadowRequestHandler;
 
     /**
      * Ctr for LocalDeleteSyncRequest.
@@ -24,14 +24,14 @@ public class LocalDeleteSyncRequest extends BaseSyncRequest {
      * @param thingName                   The thing name associated with the sync shadow update
      * @param shadowName                  The shadow name associated with the sync shadow update
      * @param dao                         Local shadow database management
-     * @param deleteThingShadowIPCHandler Reference to the DeleteThingShadow IPC Handler
+     * @param deleteThingShadowRequestHandler Reference to the DeleteThingShadow IPC Handler
      */
     public LocalDeleteSyncRequest(String thingName,
                                   String shadowName,
                                   ShadowManagerDAO dao,
-                                  DeleteThingShadowIPCHandler deleteThingShadowIPCHandler) {
+                                  DeleteThingShadowRequestHandler deleteThingShadowRequestHandler) {
         super(thingName, shadowName, dao);
-        this.deleteThingShadowIPCHandler = deleteThingShadowIPCHandler;
+        this.deleteThingShadowRequestHandler = deleteThingShadowRequestHandler;
     }
 
     @Override
