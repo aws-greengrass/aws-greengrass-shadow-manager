@@ -45,7 +45,7 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
     private static final Logger logger = LogManager.getLogger(CloudUpdateSyncRequest.class);
 
     @NonNull
-    byte[] updateDocument;
+    JsonNode updateDocument;
 
     @NonNull
     IotDataPlaneClientFactory clientFactory;
@@ -61,7 +61,7 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
      */
     public CloudUpdateSyncRequest(String thingName,
                                   String shadowName,
-                                  byte[] updateDocument,
+                                  JsonNode updateDocument,
                                   ShadowManagerDAO dao,
                                   IotDataPlaneClientFactory clientFactory) {
         super(thingName, shadowName, dao);
@@ -94,7 +94,7 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
             this.clientFactory.getIotDataPlaneClient().updateThingShadow(UpdateThingShadowRequest.builder()
                     .shadowName(getShadowName())
                     .thingName(getThingName())
-                    .payload(SdkBytes.fromByteArray(updateDocument))
+                    .payload(SdkBytes.fromByteArray(JsonUtil.getPayloadBytes(updateDocument)))
                     .build());
         } catch (ConflictException | ThrottlingException | ServiceUnavailableException | InternalFailureException e) {
             logger.atWarn()
@@ -102,7 +102,7 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
                     .cause(e).log("Could not execute cloud shadow delete request");
             throw new RetryableException(e);
-        } catch (SdkServiceException | SdkClientException e) {
+        } catch (SdkServiceException | SdkClientException | IOException e) {
             logger.atError()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
@@ -130,21 +130,13 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
     private long getAndUpdateCloudVersionInRequest() {
         long cloudVersion = 0;
         Optional<SyncInformation> syncInformation = this.dao.getShadowSyncInformation(getThingName(), getShadowName());
+
+        // If the sync information is correct
         if (syncInformation.isPresent()) {
             cloudVersion = syncInformation.get().getCloudVersion();
         }
-        try {
-            Optional<JsonNode> updateDocumentJson = JsonUtil.getPayloadJson(updateDocument);
-            if (updateDocumentJson.isPresent()) {
-                ((ObjectNode)updateDocumentJson.get()).set(SHADOW_DOCUMENT_VERSION, new LongNode(cloudVersion));
-                updateDocument = JsonUtil.getPayloadBytes(updateDocumentJson.get());
-            }
-        } catch (IOException e) {
-            logger.atWarn()
-                    .kv(LOG_THING_NAME_KEY, getThingName())
-                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                    .log("Unable to sync shadow since shadow does not exist");
-        }
+        ((ObjectNode) updateDocument).set(SHADOW_DOCUMENT_VERSION, new LongNode(cloudVersion));
+
         return cloudVersion;
     }
 }

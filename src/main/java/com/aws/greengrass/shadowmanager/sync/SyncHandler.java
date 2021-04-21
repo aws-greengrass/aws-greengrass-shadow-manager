@@ -14,6 +14,7 @@ import com.aws.greengrass.shadowmanager.sync.model.CloudUpdateSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.FullShadowSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.LocalDeleteSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.LocalUpdateSyncRequest;
+import com.fasterxml.jackson.databind.JsonNode;
 
 import javax.inject.Inject;
 
@@ -110,7 +111,7 @@ public class SyncHandler {
      * @param shadowName     The shadow name associated with the sync shadow update
      * @param updateDocument The update shadow request
      */
-    public void pushCloudUpdateSyncRequest(String thingName, String shadowName, byte[] updateDocument) {
+    public void pushCloudUpdateSyncRequest(String thingName, String shadowName, JsonNode updateDocument) {
         CloudUpdateSyncRequest cloudUpdateSyncRequest = new CloudUpdateSyncRequest(thingName, shadowName,
                 updateDocument, this.dao, this.clientFactory);
     }

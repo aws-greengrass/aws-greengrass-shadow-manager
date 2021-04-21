@@ -13,6 +13,7 @@ import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientFactory;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
+import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -60,7 +61,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 class CloudUpdateSyncRequestTest {
     private static final byte[] BASE_DOCUMENT = "{\"version\": 1, \"state\": {\"reported\": {\"name\": \"The Beatles\"}}}".getBytes();
-
+    private JsonNode baseDocumentJson;
     @Mock
     private ShadowManagerDAO mockDao;
     @Mock
@@ -71,9 +72,10 @@ class CloudUpdateSyncRequestTest {
     private ArgumentCaptor<SyncInformation> syncInformationCaptor;
 
     @BeforeEach
-    void setup() {
+    void setup() throws IOException {
         lenient().when(mockClientFactory.getIotDataPlaneClient()).thenReturn(mockIotDataPlaneClient);
         lenient().when(mockDao.updateSyncInformation(syncInformationCaptor.capture())).thenReturn(true);
+        baseDocumentJson = JsonUtil.getPayloadJson(BASE_DOCUMENT).get();
     }
 
     @Test
@@ -92,7 +94,7 @@ class CloudUpdateSyncRequestTest {
                 .lastSyncTime(epochSecondsMinus60)
                 .build()));
 
-        CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, BASE_DOCUMENT, mockDao, mockClientFactory);
+        CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, baseDocumentJson, mockDao, mockClientFactory);
 
         request.execute();
 
@@ -114,7 +116,7 @@ class CloudUpdateSyncRequestTest {
     @Test
     void GIVEN_cloud_update_request_for_non_existent_shadow_WHEN_execute_THEN_does_not_update_cloud_shadow_and_sync_information() throws RetryableException, SkipSyncRequestException, IOException {
         when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.empty());
-        CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, BASE_DOCUMENT, mockDao, mockClientFactory);
+        CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, baseDocumentJson, mockDao, mockClientFactory);
 
         request.execute();
 
@@ -131,7 +133,7 @@ class CloudUpdateSyncRequestTest {
         ShadowDocument shadowDocument = new ShadowDocument(BASE_DOCUMENT);
         when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.of(shadowDocument));
         when(mockIotDataPlaneClient.updateThingShadow(any(UpdateThingShadowRequest.class))).thenThrow(clazz);
-        CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, BASE_DOCUMENT, mockDao, mockClientFactory);
+        CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, baseDocumentJson, mockDao, mockClientFactory);
 
         RetryableException thrown = assertThrows(RetryableException.class, request::execute);
         assertThat(thrown.getCause(), is(instanceOf(clazz)));
@@ -150,7 +152,7 @@ class CloudUpdateSyncRequestTest {
         ShadowDocument shadowDocument = new ShadowDocument(BASE_DOCUMENT);
         when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.of(shadowDocument));
         when(mockIotDataPlaneClient.updateThingShadow(any(UpdateThingShadowRequest.class))).thenThrow(clazz);
-        CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, BASE_DOCUMENT, mockDao, mockClientFactory);
+        CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, baseDocumentJson, mockDao, mockClientFactory);
 
         SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, request::execute);
         assertThat(thrown.getCause(), is(instanceOf(clazz)));

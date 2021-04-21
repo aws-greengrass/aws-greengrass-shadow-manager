@@ -234,7 +234,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                             .kv(LOG_THING_NAME_KEY, thingName)
                             .kv(LOG_SHADOW_NAME_KEY, shadowName)
                             .log("Successfully updated shadow");
-                    this.syncHandler.pushCloudUpdateSyncRequest(thingName, shadowName, updatedDocumentRequestBytes);
+                    this.syncHandler.pushCloudUpdateSyncRequest(thingName, shadowName, updateDocumentRequest);
                     return response;
                 } catch (ShadowManagerDataException | IOException e) {
                     throwServiceError(thingName, shadowName, clientToken, e);
