@@ -108,7 +108,9 @@
                             <excludes>
                                 <exclude>*</exclude>
                                 <exclude>codestyle/**</exclude>
+                                <exclude>src/test/greengrass-nucleus-benchmark/**</exclude>
                                 <exclude>src/*/resources/**</exclude>
+                                <exclude>src/**/vendored/**</exclude>
                             </excludes>
                         </licenseSet>
                     </licenseSets>
@@ -116,6 +118,14 @@
                         <java>JAVA_STYLE</java>
                     </mapping>
                 </configuration>
+                <executions>
+                    <execution>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
@@ -157,17 +167,22 @@
                 <executions>
                     <execution>
                         <phase>compile</phase>
-                        <goals><goal>compile</goal></goals>
+                        <goals>
+                            <goal>compile</goal>
+                        </goals>
                         <id>test-resource-compile</id>
                         <configuration>
-                            <compileSourceRoots><compileSourceRoot>
-                                src/integrationtests/resources/
-                            </compileSourceRoot></compileSourceRoots>
+                            <compileSourceRoots>
+                                <compileSourceRoot>
+                                    src/integrationtests/resources/
+                                </compileSourceRoot>
+                            </compileSourceRoots>
                             <outputDirectory>target/test-resource-classes</outputDirectory>
                         </configuration>
                     </execution>
                 </executions>
-            </plugin>            <plugin>
+            </plugin>
+            <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-pmd-plugin</artifactId>
                 <version>3.13.0</version>

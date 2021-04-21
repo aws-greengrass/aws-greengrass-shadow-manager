@@ -7,7 +7,7 @@ package com.aws.greengrass.shadowmanager.sync.model;
 
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.SyncException;
-import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowIPCHandler;
+import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowRequestHandler;
 import lombok.NonNull;
 
 /**
@@ -16,7 +16,7 @@ import lombok.NonNull;
 public class LocalUpdateSyncRequest extends BaseSyncRequest {
 
     @NonNull
-    UpdateThingShadowIPCHandler updateThingShadowIPCHandler;
+    UpdateThingShadowRequestHandler updateThingShadowRequestHandler;
 
     /**
      * Ctr for LocalUpdateSyncRequest.
@@ -24,14 +24,14 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
      * @param thingName                   The thing name associated with the sync shadow update
      * @param shadowName                  The shadow name associated with the sync shadow update
      * @param dao                         Local shadow database management
-     * @param updateThingShadowIPCHandler Reference to the UpdateThingShadow IPC Handler
+     * @param updateThingShadowRequestHandler Reference to the UpdateThingShadow IPC Handler
      */
     public LocalUpdateSyncRequest(String thingName,
                                   String shadowName,
                                   ShadowManagerDAO dao,
-                                  UpdateThingShadowIPCHandler updateThingShadowIPCHandler) {
+                                  UpdateThingShadowRequestHandler updateThingShadowRequestHandler) {
         super(thingName, shadowName, dao);
-        this.updateThingShadowIPCHandler = updateThingShadowIPCHandler;
+        this.updateThingShadowRequestHandler = updateThingShadowRequestHandler;
     }
 
     @Override

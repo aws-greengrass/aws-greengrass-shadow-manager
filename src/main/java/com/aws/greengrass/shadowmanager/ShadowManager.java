@@ -16,13 +16,16 @@ import com.aws.greengrass.deployment.DeviceConfiguration;
 import com.aws.greengrass.lifecyclemanager.PluginService;
 import com.aws.greengrass.shadowmanager.exception.InvalidConfigurationException;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowIPCHandler;
+import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.ipc.GetThingShadowIPCHandler;
 import com.aws.greengrass.shadowmanager.ipc.ListNamedShadowsForThingIPCHandler;
 import com.aws.greengrass.shadowmanager.ipc.PubSubClientWrapper;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowIPCHandler;
+import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.model.configuration.ShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfiguration;
+import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientFactory;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.shadowmanager.util.ShadowWriteSynchronizeHelper;
@@ -43,7 +46,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicReference;
 import javax.inject.Inject;
 
 import static com.aws.greengrass.componentmanager.KernelConfigResolver.CONFIGURATION_CONFIG_KEY;
@@ -68,13 +70,14 @@ public class ShadowManager extends PluginService {
     private final AuthorizationHandlerWrapper authorizationHandlerWrapper;
     private final PubSubClientWrapper pubSubClientWrapper;
     private final DeviceConfiguration deviceConfiguration;
-    private final ShadowWriteSynchronizeHelper synchronizeHelper;
-    private SyncHandler syncHandler;
+    @Getter
+    private final DeleteThingShadowRequestHandler deleteThingShadowRequestHandler;
+    @Getter
+    private final UpdateThingShadowRequestHandler updateThingShadowRequestHandler;
+    private final SyncHandler syncHandler;
     //TODO: Move this to sync handler?
     @Getter(AccessLevel.PACKAGE)
     private ShadowSyncConfiguration syncConfiguration;
-    private final AtomicReference<DeleteThingShadowIPCHandler> deleteThingShadowIPCHandler = new AtomicReference<>();
-    private final AtomicReference<UpdateThingShadowIPCHandler> updateThingShadowIPCHandler = new AtomicReference<>();
 
     @Inject
     private GreengrassCoreIPCService greengrassCoreIPCService;
@@ -90,6 +93,7 @@ public class ShadowManager extends PluginService {
      * @param pubSubClientWrapper         The PubSub client wrapper
      * @param synchronizeHelper           The shadow write operation synchronizer helper.
      * @param deviceConfiguration         {@link DeviceConfiguration}
+     * @param clientFactory               The IoT data plane client factory to make shadow operations on the cloud.
      */
     @Inject
     public ShadowManager(
@@ -99,14 +103,19 @@ public class ShadowManager extends PluginService {
             AuthorizationHandlerWrapper authorizationHandlerWrapper,
             PubSubClientWrapper pubSubClientWrapper,
             DeviceConfiguration deviceConfiguration,
-            ShadowWriteSynchronizeHelper synchronizeHelper) {
+            ShadowWriteSynchronizeHelper synchronizeHelper,
+            IotDataPlaneClientFactory clientFactory) {
         super(topics);
         this.database = database;
         this.authorizationHandlerWrapper = authorizationHandlerWrapper;
         this.dao = dao;
         this.pubSubClientWrapper = pubSubClientWrapper;
         this.deviceConfiguration = deviceConfiguration;
-        this.synchronizeHelper = synchronizeHelper;
+        this.syncHandler = new SyncHandler(dao, clientFactory, this);
+        this.deleteThingShadowRequestHandler = new DeleteThingShadowRequestHandler(dao, authorizationHandlerWrapper,
+                pubSubClientWrapper, synchronizeHelper, this.syncHandler);
+        this.updateThingShadowRequestHandler = new UpdateThingShadowRequestHandler(dao, authorizationHandlerWrapper,
+                pubSubClientWrapper, synchronizeHelper, this.syncHandler);
         this.deviceThingNameWatcher = this::handleDeviceThingNameChange;
     }
 
@@ -122,18 +131,10 @@ public class ShadowManager extends PluginService {
 
         greengrassCoreIPCService.setGetThingShadowHandler(context -> new GetThingShadowIPCHandler(context,
                 dao, authorizationHandlerWrapper, pubSubClientWrapper));
-        greengrassCoreIPCService.setDeleteThingShadowHandler(context -> {
-            DeleteThingShadowIPCHandler ipcHandler = new DeleteThingShadowIPCHandler(context,
-                    dao, authorizationHandlerWrapper, pubSubClientWrapper, synchronizeHelper, syncHandler);
-            deleteThingShadowIPCHandler.set(ipcHandler);
-            return ipcHandler;
-        });
-        greengrassCoreIPCService.setUpdateThingShadowHandler(context -> {
-            UpdateThingShadowIPCHandler ipcHandler = new UpdateThingShadowIPCHandler(context,
-                    dao, authorizationHandlerWrapper, pubSubClientWrapper, synchronizeHelper, syncHandler);
-            updateThingShadowIPCHandler.set(ipcHandler);
-            return ipcHandler;
-        });
+        greengrassCoreIPCService.setDeleteThingShadowHandler(context -> new DeleteThingShadowIPCHandler(context,
+                deleteThingShadowRequestHandler));
+        greengrassCoreIPCService.setUpdateThingShadowHandler(context -> new UpdateThingShadowIPCHandler(context,
+                updateThingShadowRequestHandler));
         greengrassCoreIPCService.setListNamedShadowsForThingHandler(context -> new ListNamedShadowsForThingIPCHandler(
                 context, dao, authorizationHandlerWrapper));
     }
@@ -249,9 +250,6 @@ public class ShadowManager extends PluginService {
         try {
             // Register IPC and Authorization
             registerHandlers();
-            this.syncHandler = new SyncHandler(dao, updateThingShadowIPCHandler.get(),
-                    deleteThingShadowIPCHandler.get());
-
             reportState(State.RUNNING);
         } catch (Exception e) {
             serviceErrored(e);

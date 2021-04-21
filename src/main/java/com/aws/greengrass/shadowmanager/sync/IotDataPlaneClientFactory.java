@@ -107,16 +107,18 @@ public class IotDataPlaneClientFactory {
                 .httpClient(httpClient.build())
                 .overrideConfiguration(ClientOverrideConfiguration.builder().retryPolicy(retryPolicy).build());
         String region = Coerce.toString(deviceConfiguration.getAWSRegion());
+        String iotDataEndpoint = Coerce.toString(deviceConfiguration.getIotDataEndpoint());
+        // Region and endpoint are both required when updating endpoint config
+        logger.atInfo("initialize-iot-data-client")
+                .kv("service-endpoint", iotDataEndpoint)
+                .kv("service-region", region).log();
 
         if (!Utils.isEmpty(region)) {
-            String iotDataEndpoint = Coerce.toString(deviceConfiguration.getIotDataEndpoint());
-
-            // Region and endpoint are both required when updating endpoint config
-            logger.atInfo("initialize-iot-data-client")
-                    .kv("service-endpoint", iotDataEndpoint)
-                    .kv("service-region", region).log();
-            iotDataPlaneClientBuilder.endpointOverride(URI.create(getIotCoreDataPlaneEndpoint(iotDataEndpoint)));
             iotDataPlaneClientBuilder.region(Region.of(region));
+        }
+
+        if (!Utils.isEmpty(iotDataEndpoint)) {
+            iotDataPlaneClientBuilder.endpointOverride(URI.create(getIotCoreDataPlaneEndpoint(iotDataEndpoint)));
         }
         if (this.iotDataPlaneClient != null) {
             this.iotDataPlaneClient.close();
