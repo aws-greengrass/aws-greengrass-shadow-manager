@@ -17,6 +17,9 @@ import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientFactory;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.LongNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.NonNull;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.core.exception.SdkClientException;
@@ -27,11 +30,13 @@ import software.amazon.awssdk.services.iotdataplane.model.ServiceUnavailableExce
 import software.amazon.awssdk.services.iotdataplane.model.ThrottlingException;
 import software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowRequest;
 
+import java.io.IOException;
 import java.time.Instant;
 import java.util.Optional;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
+import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_VERSION;
 
 /**
  * Sync request to update shadow in the cloud.
@@ -72,6 +77,7 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
      *                                  or if the cloud is throttling the request.
      * @throws SkipSyncRequestException if the update request on the cloud shadow failed for another 400 exception.
      */
+    @SuppressWarnings("PMD.PrematureDeclaration")
     @Override
     public void execute() throws SyncException, RetryableException, SkipSyncRequestException {
         Optional<ShadowDocument> shadowDocument = this.dao.getShadowThing(getThingName(), getShadowName());
@@ -82,9 +88,9 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
                     .log("Unable to sync shadow since shadow does not exist");
             return;
         }
+        long cloudVersion = getAndUpdateCloudVersionInRequest();
 
         try {
-            //TODO: update the version in the payload.
             this.clientFactory.getIotDataPlaneClient().updateThingShadow(UpdateThingShadowRequest.builder()
                     .shadowName(getShadowName())
                     .thingName(getThingName())
@@ -107,7 +113,7 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
         try {
             this.dao.updateSyncInformation(SyncInformation.builder()
                     .cloudDocument(JsonUtil.getPayloadBytes(shadowDocument.get().toJson(false)))
-                    .cloudVersion(shadowDocument.get().getVersion())
+                    .cloudVersion(cloudVersion + 1)
                     .cloudDeleted(false)
                     .shadowName(getShadowName())
                     .thingName(getThingName())
@@ -119,5 +125,26 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
                     .cause(e).log();
         }
+    }
+
+    private long getAndUpdateCloudVersionInRequest() {
+        long cloudVersion = 0;
+        Optional<SyncInformation> syncInformation = this.dao.getShadowSyncInformation(getThingName(), getShadowName());
+        if (syncInformation.isPresent()) {
+            cloudVersion = syncInformation.get().getCloudVersion();
+        }
+        try {
+            Optional<JsonNode> updateDocumentJson = JsonUtil.getPayloadJson(updateDocument);
+            if (updateDocumentJson.isPresent()) {
+                ((ObjectNode)updateDocumentJson.get()).set(SHADOW_DOCUMENT_VERSION, new LongNode(cloudVersion));
+                updateDocument = JsonUtil.getPayloadBytes(updateDocumentJson.get());
+            }
+        } catch (IOException e) {
+            logger.atWarn()
+                    .kv(LOG_THING_NAME_KEY, getThingName())
+                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                    .log("Unable to sync shadow since shadow does not exist");
+        }
+        return cloudVersion;
     }
 }
