@@ -6,6 +6,7 @@
 package com.aws.greengrass.shadowmanager.sync;
 
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
+import com.aws.greengrass.shadowmanager.ShadowManagerDAOImpl;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowIPCHandler;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowIPCHandler;
 import com.aws.greengrass.shadowmanager.sync.model.CloudDeleteSyncRequest;
@@ -13,6 +14,7 @@ import com.aws.greengrass.shadowmanager.sync.model.CloudUpdateSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.FullShadowSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.LocalDeleteSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.LocalUpdateSyncRequest;
+import com.fasterxml.jackson.databind.JsonNode;
 
 import javax.inject.Inject;
 
@@ -26,7 +28,8 @@ public class SyncHandler {
     private final ShadowManagerDAO dao;
     private final UpdateThingShadowIPCHandler updateThingShadowIPCHandler;
     private final DeleteThingShadowIPCHandler deleteThingShadowIPCHandler;
-    private final IotDataPlaneClientFactory clientFactory;
+    @Inject
+    private IotDataPlaneClientFactory clientFactory;
 
 
     /**
@@ -35,10 +38,24 @@ public class SyncHandler {
      * @param dao                         Local shadow database management
      * @param updateThingShadowIPCHandler Reference to the UpdateThingShadow IPC Handler
      * @param deleteThingShadowIPCHandler Reference to the DeleteThingShadow IPC Handler
+     */
+    public SyncHandler(ShadowManagerDAO dao,
+                       UpdateThingShadowIPCHandler updateThingShadowIPCHandler,
+                       DeleteThingShadowIPCHandler deleteThingShadowIPCHandler) {
+        this.dao = dao;
+        this.updateThingShadowIPCHandler = updateThingShadowIPCHandler;
+        this.deleteThingShadowIPCHandler = deleteThingShadowIPCHandler;
+    }
+
+    /**
+     * Ctr for SyncHandler for unit testing.
+     *
+     * @param dao                         Local shadow database management
+     * @param updateThingShadowIPCHandler Reference to the UpdateThingShadow IPC Handler
+     * @param deleteThingShadowIPCHandler Reference to the DeleteThingShadow IPC Handler
      * @param clientFactory               The IoT data plane client factory to make shadow operations on the cloud.
      */
-    @Inject
-    SyncHandler(ShadowManagerDAO dao,
+    public SyncHandler(ShadowManagerDAOImpl dao,
                 UpdateThingShadowIPCHandler updateThingShadowIPCHandler,
                 DeleteThingShadowIPCHandler deleteThingShadowIPCHandler,
                 IotDataPlaneClientFactory clientFactory) {
@@ -94,7 +111,7 @@ public class SyncHandler {
      * @param shadowName     The shadow name associated with the sync shadow update
      * @param updateDocument The update shadow request
      */
-    public void pushCloudUpdateSyncRequest(String thingName, String shadowName, byte[] updateDocument) {
+    public void pushCloudUpdateSyncRequest(String thingName, String shadowName, JsonNode updateDocument) {
         CloudUpdateSyncRequest cloudUpdateSyncRequest = new CloudUpdateSyncRequest(thingName, shadowName,
                 updateDocument, this.dao, this.clientFactory);
     }

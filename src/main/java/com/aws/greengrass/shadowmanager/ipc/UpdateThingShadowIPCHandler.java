@@ -20,6 +20,7 @@ import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.model.ResponseMessageBuilder;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.ShadowRequest;
+import com.aws.greengrass.shadowmanager.sync.SyncHandler;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.shadowmanager.util.ShadowWriteSynchronizeHelper;
 import com.aws.greengrass.shadowmanager.util.Validator;
@@ -58,6 +59,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
     private final AuthorizationHandlerWrapper authorizationHandlerWrapper;
     private final PubSubClientWrapper pubSubClientWrapper;
     private final ShadowWriteSynchronizeHelper synchronizeHelper;
+    private final SyncHandler syncHandler;
 
     /**
      * IPC Handler class for responding to UpdateThingShadow requests.
@@ -67,19 +69,21 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
      * @param authorizationHandlerWrapper The authorization handler wrapper
      * @param pubSubClientWrapper         The PubSub client wrapper
      * @param synchronizeHelper           The shadow write operation synchronizer helper.
+     * @param syncHandler                 The handler class to perform shadow sync operations.
      */
     public UpdateThingShadowIPCHandler(
             OperationContinuationHandlerContext context,
             ShadowManagerDAO dao,
             AuthorizationHandlerWrapper authorizationHandlerWrapper,
             PubSubClientWrapper pubSubClientWrapper,
-            ShadowWriteSynchronizeHelper synchronizeHelper) {
+            ShadowWriteSynchronizeHelper synchronizeHelper, SyncHandler syncHandler) {
         super(context);
         this.authorizationHandlerWrapper = authorizationHandlerWrapper;
         this.dao = dao;
         this.serviceName = context.getAuthenticationData().getIdentityLabel();
         this.pubSubClientWrapper = pubSubClientWrapper;
         this.synchronizeHelper = synchronizeHelper;
+        this.syncHandler = syncHandler;
     }
 
     @Override
@@ -230,6 +234,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
                             .kv(LOG_THING_NAME_KEY, thingName)
                             .kv(LOG_SHADOW_NAME_KEY, shadowName)
                             .log("Successfully updated shadow");
+                    this.syncHandler.pushCloudUpdateSyncRequest(thingName, shadowName, updateDocumentRequest);
                     return response;
                 } catch (ShadowManagerDataException | IOException e) {
                     throwServiceError(thingName, shadowName, clientToken, e);
