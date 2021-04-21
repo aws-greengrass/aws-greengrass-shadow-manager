@@ -34,6 +34,7 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
         super(context);
         this.handler = handler;
         this.serviceName = context.getAuthenticationData().getIdentityLabel();
+
     }
 
     @Override

@@ -250,7 +250,6 @@ public class ShadowManager extends PluginService {
         try {
             // Register IPC and Authorization
             registerHandlers();
-
             reportState(State.RUNNING);
         } catch (Exception e) {
             serviceErrored(e);
