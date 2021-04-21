@@ -129,14 +129,14 @@ public class ShadowManager extends PluginService {
                     .log("Failed to initialize the ShadowManager service with the Authorization module.");
         }
 
-        greengrassCoreIPCService.setGetThingShadowHandler(context -> new GetThingShadowIPCHandler(context,
+        greengrassCoreIPCService.setOperationHandler(GET_THING_SHADOW, context -> new GetThingShadowIPCHandler(context,
                 dao, authorizationHandlerWrapper, pubSubClientWrapper));
-        greengrassCoreIPCService.setDeleteThingShadowHandler(context -> new DeleteThingShadowIPCHandler(context,
-                deleteThingShadowRequestHandler));
-        greengrassCoreIPCService.setUpdateThingShadowHandler(context -> new UpdateThingShadowIPCHandler(context,
-                updateThingShadowRequestHandler));
-        greengrassCoreIPCService.setListNamedShadowsForThingHandler(context -> new ListNamedShadowsForThingIPCHandler(
-                context, dao, authorizationHandlerWrapper));
+        greengrassCoreIPCService.setOperationHandler(DELETE_THING_SHADOW, context ->
+                new DeleteThingShadowIPCHandler(context, deleteThingShadowRequestHandler));
+        greengrassCoreIPCService.setOperationHandler(UPDATE_THING_SHADOW, context ->
+                new UpdateThingShadowIPCHandler(context, updateThingShadowRequestHandler));
+        greengrassCoreIPCService.setOperationHandler(LIST_NAMED_SHADOWS_FOR_THING, context ->
+                new ListNamedShadowsForThingIPCHandler(context, dao, authorizationHandlerWrapper));
     }
 
     void handleDeviceThingNameChange(Object whatHappened, Node changedNode) {
