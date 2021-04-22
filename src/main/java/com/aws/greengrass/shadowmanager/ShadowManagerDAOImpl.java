@@ -152,13 +152,13 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      */
     @Override
     public boolean updateSyncInformation(final SyncInformation request) {
-        return execute("MERGE INTO sync(thingName, shadowName, cloudDocument, cloudVersion, cloudDeleted, "
+        return execute("MERGE INTO sync(thingName, shadowName, lastSyncedDocument, cloudVersion, cloudDeleted, "
                         + "cloudUpdateTime, lastSyncTime, localVersion) KEY (thingName, shadowName) "
                         + "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 preparedStatement -> {
                     preparedStatement.setString(1, request.getThingName());
                     preparedStatement.setString(2, request.getShadowName());
-                    preparedStatement.setBytes(3, request.getCloudDocument());
+                    preparedStatement.setBytes(3, request.getLastSyncedDocument());
                     preparedStatement.setLong(4, request.getCloudVersion());
                     preparedStatement.setBoolean(5, request.isCloudDeleted());
                     preparedStatement.setLong(6, request.getCloudUpdateTime());
@@ -178,7 +178,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      */
     @Override
     public Optional<SyncInformation> getShadowSyncInformation(String thingName, String shadowName) {
-        return execute("SELECT cloudDocument, cloudVersion, cloudUpdateTime, lastSyncTime, cloudDeleted, "
+        return execute("SELECT lastSyncedDocument, cloudVersion, cloudUpdateTime, lastSyncTime, cloudDeleted, "
                         + "localVersion FROM sync WHERE thingName = ? AND shadowName = ?",
                 preparedStatement -> {
                     preparedStatement.setString(1, thingName);
@@ -186,7 +186,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
                     try (ResultSet resultSet = preparedStatement.executeQuery()) {
                         if (resultSet.next()) {
                             return Optional.ofNullable(SyncInformation.builder()
-                                    .cloudDocument(resultSet.getBytes(1))
+                                    .lastSyncedDocument(resultSet.getBytes(1))
                                     .cloudVersion(resultSet.getLong(2))
                                     .cloudUpdateTime(resultSet.getLong(3))
                                     .lastSyncTime(resultSet.getLong(4))

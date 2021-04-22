@@ -365,7 +365,7 @@ class ShadowManagerDAOImplTest {
                 .shadowName(SHADOW_NAME)
                 .cloudUpdateTime(Instant.now().minusSeconds(60).getEpochSecond())
                 .cloudVersion(2)
-                .cloudDocument(BASE_DOCUMENT)
+                .lastSyncedDocument(BASE_DOCUMENT)
                 .localVersion(5)
                 .build()));
 
@@ -385,7 +385,7 @@ class ShadowManagerDAOImplTest {
                 .cloudUpdateTime(Instant.now().minusSeconds(60).getEpochSecond())
                 .cloudVersion(2)
                 .localVersion(5)
-                .cloudDocument(BASE_DOCUMENT)
+                .lastSyncedDocument(BASE_DOCUMENT)
                 .build()));
 
         assertUpdateShadowSyncStatementMocks(epochNow);
@@ -403,7 +403,7 @@ class ShadowManagerDAOImplTest {
                 .shadowName(SHADOW_NAME)
                 .cloudUpdateTime(Instant.now().minusSeconds(60).getEpochSecond())
                 .cloudVersion(2)
-                .cloudDocument(BASE_DOCUMENT)
+                .lastSyncedDocument(BASE_DOCUMENT)
                 .localVersion(5)
                 .build()));
         assertUpdateShadowSyncStatementMocks(epochNow);
@@ -427,7 +427,7 @@ class ShadowManagerDAOImplTest {
         Optional<SyncInformation> shadowSyncInformation = impl.getShadowSyncInformation(THING_NAME, SHADOW_NAME);
 
         assertThat(shadowSyncInformation, is(notNullValue()));
-        assertThat(shadowSyncInformation.get().getCloudDocument(), is(BASE_DOCUMENT));
+        assertThat(shadowSyncInformation.get().getLastSyncedDocument(), is(BASE_DOCUMENT));
         assertThat(shadowSyncInformation.get().getCloudUpdateTime(), is(epochMinus60Seconds));
         assertThat(shadowSyncInformation.get().getLastSyncTime(), is(epochNow));
         assertThat(shadowSyncInformation.get().getCloudVersion(), is(2L));
@@ -461,7 +461,7 @@ class ShadowManagerDAOImplTest {
     }
 
     @Test
-    void GIVEN_existing_shadow_WHEN_deleteCloudDocumentInformationInSync_THEN_deletes_shadow_document() throws SQLException {
+    void GIVEN_existing_shadow_WHEN_deleteSyncInformation_THEN_deletes_shadow_document() throws SQLException {
         setupDeleteShadowSyncMocks();
 
         when(mockPreparedStatement.executeUpdate()).thenReturn(1);
@@ -472,7 +472,7 @@ class ShadowManagerDAOImplTest {
     }
 
     @Test
-    void GIVEN_existing_shadow_WHEN_deleteCloudDocumentInformationInSync_and_h2_returns_0_rows_deleted_THEN_returns_empty_optional() throws SQLException {
+    void GIVEN_existing_shadow_WHEN_deleteSyncInformation_and_h2_returns_0_rows_deleted_THEN_returns_empty_optional() throws SQLException {
         setupDeleteShadowSyncMocks();
 
         when(mockPreparedStatement.executeUpdate()).thenReturn(0);
@@ -483,7 +483,7 @@ class ShadowManagerDAOImplTest {
     }
 
     @Test
-    void GIVEN_existing_shadow_WHEN_deleteCloudDocumentInformationInSync_and_h2_throws_SQL_exception_THEN_ShadowManagerDataException_is_thrown() throws SQLException {
+    void GIVEN_existing_shadow_WHEN_deleteSyncInformation_and_h2_throws_SQL_exception_THEN_ShadowManagerDataException_is_thrown() throws SQLException {
         setupDeleteShadowSyncMocks();
 
         when(mockPreparedStatement.executeUpdate()).thenThrow(SQLException.class);
