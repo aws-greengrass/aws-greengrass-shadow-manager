@@ -7,277 +7,409 @@ package com.aws.greengrass.shadowmanager.sync;
 
 import com.aws.greengrass.shadowmanager.sync.model.SyncRequest;
 
-import java.util.AbstractQueue;
-import java.util.Collection;
-import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.BiFunction;
 import java.util.function.BooleanSupplier;
-import java.util.function.Function;
 
 /**
- * Blocking queue implementation that keeps a single request per shadow. If a request comes in for a shadow, it is
- * merged together with the existing request. Thread safe.
+ * Blocking "queue" implementation that keeps a single request per shadow. If a request comes in for a shadow, it is
+ * merged together with the existing request.
+ * <p/>
+ * This class is thread safe and implements the useful methods of the {@link java.util.concurrent.BlockingQueue}
+ * interface. However, this class intentionally does not implement the interface as it is not a Collection. It is not
+ * iterable as the iterator needs to be synchronized to avoid concurrent modifications. This is not possible with the
+ * current implementation (but storing keys in a separate linked list could be used to solve this).
+ * <p/>
+ * For the simplest blocking use case, threads can call {@link #take()} and they will wait until items are available.
+ * Threads can call {@link #put(SyncRequest)} and they will wait until space is available to insert.
  */
-public class RequestBlockingQueue extends AbstractQueue<SyncRequest> implements BlockingQueue<SyncRequest> {
+public class RequestBlockingQueue {
 
-    private final Function<? super SyncRequest, Object> keyMapper;
-    private final Map<Object, SyncRequest> requests;
-    private final BiFunction<? super SyncRequest, ? super SyncRequest, ? extends SyncRequest> merger;
-    private final BlockingQueue<Object> queue;
+    /**
+     * Default maximum number of queued requests.
+     */
+    static final int MAX_CAPACITY = 1024;
+    private final RequestMerger merger;
+    private final Map<String, SyncRequest> requests;
 
-    // Lock for removing items from the queue - this ensures that drain does not end up waiting forever due to
-    // simultaneous removals
-    private final ReentrantLock takeLock = new ReentrantLock();
+    /**
+     * Lock for ensuring synchronous access to request map.
+     */
+    private final ReentrantLock lock = new ReentrantLock();
+    /**
+     * Condition to signal threads waiting for queue to contain data.
+     */
+    private final Condition notEmpty = lock.newCondition();
+    /**
+     * Condition to signal threads waiting for queue to have space for more data.
+     */
+    private final Condition notFull = lock.newCondition();
+    /**
+     * Capacity of queue.
+     */
+    private final int capacity;
 
-    public RequestBlockingQueue(Function<? super SyncRequest, Object> keyMapper,
-            BiFunction<? super SyncRequest, ? super SyncRequest, ? extends SyncRequest> merger) {
-        this(keyMapper, merger, new ConcurrentHashMap<>(), new LinkedBlockingQueue<>());
+    /**
+     * Create a new instance with a capacity of {@value RequestBlockingQueue#MAX_CAPACITY}.
+     *
+     * @param merger a merger
+     */
+    public RequestBlockingQueue(RequestMerger merger) {
+        this(merger, MAX_CAPACITY);
     }
 
-    RequestBlockingQueue(Function<? super SyncRequest, Object> keyMapper,
-            BiFunction<? super SyncRequest, ? super SyncRequest, ? extends SyncRequest> merger,
-            Map<Object, SyncRequest> requests, BlockingQueue<Object> queue) {
+    /**
+     * Create a new instance with a capacity.
+     *
+     * @param merger   a merger
+     * @param capacity the max capacity
+     */
+    public RequestBlockingQueue(RequestMerger merger, int capacity) {
+        this(merger, capacity, new LinkedHashMap<>());
+    }
+
+    RequestBlockingQueue(RequestMerger merger, int capacity, Map<String, SyncRequest> requests) {
         super();
-        this.keyMapper = keyMapper;
         this.merger = merger;
         this.requests = requests;
-        this.queue = queue;
-
+        this.capacity = capacity;
     }
 
-    @Override
+    /**
+     * Create a key from the request.
+     *
+     * @param value the request.
+     * @return the key.
+     */
+    private String createKey(SyncRequest value) {
+        return value.getThingName() + "|" + value.getShadowName();
+    }
+
+    /**
+     * Add a request to the queue.
+     *
+     * @param value the item to add.
+     */
+    private void enqueue(SyncRequest value) {
+        requests.put(createKey(value), value);
+    }
+
+    /**
+     * Remove a request from the queue.
+     *
+     * @return the removed item
+     */
+    private SyncRequest dequeue() {
+        String key = this.requests.keySet().iterator().next();
+        return this.requests.remove(key);
+    }
+
+    /**
+     * Tell thread to wait until the thread is not full.
+     */
+    private void waitIfFull() throws InterruptedException {
+        while (isFull()) {
+            notFull.await();
+        }
+    }
+
+    /**
+     * Tell thread to wait until the thread is not empty.
+     */
+    private void waitIfEmpty() throws InterruptedException {
+        while (isEmpty()) {
+            notEmpty.await();
+        }
+    }
+
+    /**
+     * Signal waiting threads if the queue is not full.
+     */
+    private void signalIfNotFull() {
+        if (!isFull()) {
+            notFull.signal();
+        }
+    }
+
+    /**
+     * Signal waiting threads if the queue is not empty.
+     */
+    private void signalIfNotEmpty() {
+        if (!isEmpty()) {
+            notEmpty.signal();
+        }
+    }
+
+    /**
+     * While a criteria is true, wait for the time specified.
+     *
+     * @param criteria  the supplied value is the criteria which will cause the current thread to wait
+     * @param condition a condition to wait on. This method assumes the associated lock is held by the current thread
+     * @param timeout   how long to wait, before giving up, in terms of unit
+     * @param unit      how to interpret the timeout
+     * @return true if the timeout has not expired, otherwise false
+     * @throws InterruptedException if the current thread is interrupted while waiting
+     */
+    private boolean await(BooleanSupplier criteria, Condition condition, long timeout, TimeUnit unit)
+            throws InterruptedException {
+        long remaining = unit.toNanos(timeout);
+        while (criteria.getAsBoolean()) {
+            if (remaining <= 0L) {
+                return false;
+            }
+            remaining = condition.awaitNanos(remaining);
+        }
+        return true;
+    }
+
+    /**
+     * Merge the request with an existing request in the queue. This only updates if a request for the shadow is already
+     * present in the queue.
+     *
+     * @param value the request to merge
+     * @return true if the request was merged; false when no existing request is present.
+     */
+    private boolean mergeIfPresent(SyncRequest value) {
+        String key = createKey(value);
+        SyncRequest updated = requests.computeIfPresent(key, (k, oldValue) -> merger.merge(oldValue, value));
+        return updated != null;
+    }
+
+    /**
+     * Add an item to the queue. This will wait if the queue is full until there is space. If a request for the
+     * shadow already exists in the queue, it is merged and no extra capacity is consumed.
+     *
+     * @param value a value to add
+     * @throws InterruptedException if the thread is interrupted while waiting
+     * @throws NullPointerException if value is null
+     */
+    @SuppressWarnings("PMD.AvoidThrowingNullPointerException") // BlockingQueue Interface requires NPE on null
     public void put(SyncRequest value) throws InterruptedException {
-        unwrap(() -> enqueueRequest(value, k -> {
-            queue.put(k);
-            return true; // put will always succeed as it cannot timeout (but it can be interrupted)
-        }));
+        if (value == null) {
+            throw new NullPointerException();
+        }
+        lock.lockInterruptibly();
+        try {
+            if (!mergeIfPresent(value)) {
+                waitIfFull();
+
+                enqueue(value);
+            }
+            signalIfNotFull();
+            signalIfNotEmpty();
+        } finally {
+            lock.unlock();
+        }
     }
 
-    @Override
+    /**
+     * Add an item to the queue, with a timeout to wait while the queue is at capacity.  If a request for the
+     * shadow already exists in the queue, it is merged and no extra capacity is consumed.
+     *
+     * @param value   a value to add
+     * @param timeout how long to wait, before giving up, in terms of unit
+     * @param unit    how to interpret the timeout
+     * @return true if the item was added; false if the timeout expired.
+     * @throws InterruptedException if the thread is interrupted while waiting
+     * @throws NullPointerException if value is null
+     */
+    @SuppressWarnings("PMD.AvoidThrowingNullPointerException") // BlockingQueue Interface requires NPE on null
     public boolean offer(SyncRequest value, long timeout, TimeUnit unit) throws InterruptedException {
-        return unwrap(() -> enqueueRequest(value, k -> queue.offer(k, timeout, unit)));
+        if (value == null) {
+            throw new NullPointerException();
+        }
+
+        lock.lockInterruptibly();
+        try {
+            if (!mergeIfPresent(value)) {
+                if (!await(this::isFull, notFull, timeout, unit)) {
+                    return false;
+                }
+                enqueue(value);
+            }
+            signalIfNotFull();
+            signalIfNotEmpty();
+        } finally {
+            lock.unlock();
+        }
+        return true;
     }
 
-    @Override
+    /**
+     * Add an item to the queue. If the queue has no space, return immediately.  If a request for the
+     * shadow already exists in the queue, it is merged and no extra capacity is consumed.
+     *
+     * @param value the value to add
+     * @return true if the item is added, otherwise false.
+     * @throws NullPointerException if value is null
+     */
+    @SuppressWarnings("PMD.AvoidThrowingNullPointerException") // BlockingQueue Interface requires NPE on null
     public boolean offer(SyncRequest value) {
-        // offer does not throw InterruptedException so there is no need to unwrap
-        return enqueueRequest(value, queue::offer);
-    }
-
-    @Override
-    public SyncRequest take() throws InterruptedException {
-        takeLock.lockInterruptibly();
+        if (value == null) {
+            throw new NullPointerException();
+        }
+        lock.lock();
         try {
-            // take waits until an object is available
-            Object key = queue.take();
-            return requests.remove(key);
-        } finally {
-            takeLock.unlock();
-        }
-    }
-
-    @Override
-    public SyncRequest poll(long timeout, TimeUnit unit) throws InterruptedException {
-        takeLock.lockInterruptibly();
-        try {
-            Object key = queue.poll(timeout, unit);
-            if (key == null) {
-                // key is null if poll times out
-                return null;
-            }
-            return requests.remove(key);
-        } finally {
-            takeLock.unlock();
-        }
-    }
-
-    @Override
-    public SyncRequest poll() {
-        takeLock.lock();
-        try {
-            final Object key = queue.poll();
-            if (key == null) {
-                // key is null if queue is empty
-                return null;
-            }
-            return requests.remove(key);
-        } finally {
-            takeLock.unlock();
-        }
-    }
-
-    @Override
-    public SyncRequest peek() {
-        takeLock.lock();
-        try {
-            final Object key = queue.peek();
-            if (key == null) {
-                // key is null if queue is empty
-                return null;
-            }
-            return requests.get(key);
-        } finally {
-            takeLock.unlock();
-        }
-    }
-
-    @Override
-    public int drainTo(Collection<? super SyncRequest> c) {
-        return drainTo(c, Integer.MAX_VALUE);
-    }
-
-    @Override
-    public int drainTo(Collection<? super SyncRequest> c, int maxElements) {
-        // This collection can have multiple requests for the same shadow. Once a request is removed, it is fair
-        // to add a new request for the same shadow.
-        takeLock.lock();
-        try {
-            final int n = Math.min(maxElements, size());
-            for (int i = 0; i < n; i++) {
-                c.add(poll());
-            }
-            return n;
-        } finally {
-            takeLock.unlock();
-        }
-    }
-
-    @Override
-    public int size() {
-        return queue.size();
-    }
-
-    @Override
-    public int remainingCapacity() {
-        return queue.remainingCapacity();
-    }
-
-    @Override
-    public Iterator<SyncRequest> iterator() {
-        return new QueueIterator();
-    }
-
-    private class QueueIterator implements Iterator<SyncRequest> {
-        private SyncRequest next = null;
-        Iterator<Object> keys;
-
-        public QueueIterator() {
-            takeLock.lock();
-            try {
-                // weak iterator with no guarantees that objects are not removed or added while iterating
-                keys = queue.iterator();
-                if (keys.hasNext()) {
-                    Object key = keys.next();
-                    next = requests.get(key);
-                }
-            } finally {
-                takeLock.unlock();
-            }
-        }
-
-        @Override
-        public boolean hasNext() {
-            return next != null;
-        }
-
-        @SuppressWarnings("PMD.NullAssignment")
-        @Override
-        public SyncRequest next() {
-            if (next == null) {
-                throw new NoSuchElementException();
-            }
-            takeLock.lock();
-            SyncRequest ret = next;
-            try {
-                next = null;
-                if (keys.hasNext()) {
-                    next = requests.get(keys.next());
-                }
-                return ret;
-            } finally {
-                takeLock.unlock();
-            }
-        }
-    }
-
-
-    /**
-     * Interface for an interruptable function to add an object to a queue.
-     */
-    @FunctionalInterface
-    private interface Queuer {
-        boolean enqueue(Object o) throws InterruptedException;
-    }
-
-    /**
-     * Enqueue a request into the queue and request map.
-     *
-     * @param value the value to enqueue.
-     * @param queuer an operation for enqueuing. This may throw an InterruptedException.
-     * @return true if the value is enqueued.
-     * @throws WrappedInterruptedException if an InterruptedException occurs while adding the key to the backing queue
-     */
-    private boolean enqueueRequest(SyncRequest value, Queuer queuer) throws WrappedInterruptedException {
-        final Object key = keyMapper.apply(value);
-
-        // Compute a new value for the map by either storing the request if one is not present, or merging if it does.
-        // The key is added to the queue first and if that succeeds, then the map can be updated
-        // `compute` is atomic for `ConcurrentHashMap` and will synchronize the map so concurrent changes cannot occur
-        SyncRequest computed = requests.compute(key, (k, oldValue) -> {
-            if (oldValue != null) {
-                return merger.apply(oldValue, value);
-            }
-            try {
-                if (queuer.enqueue(k)) {
-                    // if key is enqueued the new `value` can be used in the map
-                    return value;
+            if (!mergeIfPresent(value)) {
+                if (isFull()) {
+                    return false;
                 } else {
-                    // return null to indicate nothing will be added to the map
-                    return null;
+                    enqueue(value);
                 }
-            } catch (InterruptedException e) {
-                throw new WrappedInterruptedException(e);
             }
-        });
-
-        // computed will be null if the `enqueue` operation fails
-        return computed != null;
+            signalIfNotFull();
+            signalIfNotEmpty();
+        } finally {
+            lock.unlock();
+        }
+        return true;
     }
 
     /**
-     * Utility to rethrow a wrapped {@link InterruptedException}.
+     * Take an item from the queue. This will wait indefinitely for an item to become available.
      *
-     * @param s a supplier - the enqueue function returns a boolean if it succeeds
-     * @return the result from the supplied function
-     * @throws InterruptedException if a {@link WrappedInterruptedException} is thrown from the supplier
+     * @return the request from the queue
+     * @throws InterruptedException if the thread is interrupted while waiting for data
      */
-    private boolean unwrap(BooleanSupplier s) throws InterruptedException {
+    public SyncRequest take() throws InterruptedException {
+        lock.lockInterruptibly();
         try {
-            return s.getAsBoolean();
-        } catch (WrappedInterruptedException e) {
-            throw e.getCause();
+            waitIfEmpty();
+            SyncRequest value = dequeue();
+            signalIfNotFull();
+            signalIfNotEmpty();
+            return value;
+        } finally {
+            lock.unlock();
         }
     }
 
-    static class WrappedInterruptedException extends RuntimeException {
-
-        private static final long serialVersionUID = 5805388348668990285L;
-
-        public WrappedInterruptedException(InterruptedException cause) {
-            super(cause);
+    /**
+     * Take an item from the queue. This waits for up to the specified wait time for an item to become available.
+     *
+     * @param timeout how long to wait, before giving up, in terms of unit
+     * @param unit    how to interpret the timeout
+     * @return the request at the front of the queue or null if the timeout expired
+     * @throws InterruptedException if the thread is interrupted while waiting
+     */
+    public SyncRequest poll(long timeout, TimeUnit unit) throws InterruptedException {
+        lock.lockInterruptibly();
+        try {
+            if (!await(this::isEmpty, notEmpty, timeout, unit)) {
+                return null;
+            }
+            SyncRequest value = dequeue();
+            signalIfNotFull();
+            signalIfNotEmpty();
+            return value;
+        } finally {
+            lock.unlock();
         }
 
-        @Override
-        public synchronized InterruptedException getCause() {
-            return (InterruptedException) super.getCause();
+    }
+
+    /**
+     * Take an item from the queue. Returns immediately if no item is available.
+     *
+     * @return the request at the head of the queue or null if no items are available.
+     */
+    public SyncRequest poll() {
+        lock.lock();
+        try {
+            if (isEmpty()) {
+                return null;
+            }
+            SyncRequest value = dequeue();
+            signalIfNotFull();
+            signalIfNotEmpty();
+            return value;
+        } finally {
+            lock.unlock();
         }
     }
 
+    /**
+     * Return, but don't remove, the head of the queue.
+     *
+     * @return the item at the head of the queue, or null if it is empty.
+     */
+    public SyncRequest peek() {
+        lock.lock();
+        try {
+            return requests.values().stream().findFirst().orElse(null);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * Returns true if this queue has no items.
+     *
+     * @return true if the queue has no item
+     */
+    public boolean isEmpty() {
+        lock.lock();
+        try {
+            return requests.isEmpty();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * Return true if the queue has no more space.
+     *
+     * @return true if the queue has no more space
+     */
+    public boolean isFull() {
+        lock.lock();
+        try {
+            return capacity == requests.size();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * Remove all items from the queue.
+     */
+    public void clear() {
+        lock.lock();
+        try {
+            requests.clear();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * Returns the number of items in the queue.
+     *
+     * @return the number of items in the queue.
+     */
+    public int size() {
+        lock.lock();
+        try {
+            return requests.size();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * Returns the amount of space left in the queue.
+     *
+     * @return the amount of space left in the queue.
+     */
+    public int remainingCapacity() {
+        lock.lock();
+        try {
+            return capacity - requests.size();
+        } finally {
+            lock.unlock();
+        }
+    }
 }

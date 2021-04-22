@@ -195,6 +195,7 @@
                         <ruleset>codestyle/pmd-eg-tests-ruleset.xml</ruleset>
                     </rulesets>
                     <includeTests>true</includeTests>
+                    <excludes>**/awssdk/**</excludes>
                     <skip>${skipTests}</skip>
                 </configuration>
                 <executions>
@@ -244,6 +245,7 @@
                     <configLocation>codestyle/checkstyle.xml</configLocation>
                     <violationSeverity>warning</violationSeverity>
                     <maxAllowedViolations>0</maxAllowedViolations>
+                    <excludes>**/awssdk/**</excludes>
                     <skip>${skipTests}</skip>
                 </configuration>
                 <executions>
