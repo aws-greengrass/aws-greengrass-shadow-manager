@@ -89,7 +89,7 @@ class CloudUpdateSyncRequestTest {
                 .thingName(THING_NAME)
                 .shadowName(SHADOW_NAME)
                 .cloudDeleted(false)
-                .cloudDocument(BASE_DOCUMENT)
+                .lastSyncedDocument(BASE_DOCUMENT)
                 .cloudVersion(5L)
                 .lastSyncTime(epochSecondsMinus60)
                 .build()));
@@ -104,7 +104,7 @@ class CloudUpdateSyncRequestTest {
         verify(mockIotDataPlaneClient, times(1)).updateThingShadow(any(UpdateThingShadowRequest.class));
 
         assertThat(syncInformationCaptor.getValue(), is(notNullValue()));
-        assertThat(syncInformationCaptor.getValue().getCloudDocument(), is(JsonUtil.getPayloadBytes(shadowDocument.toJson(false))));
+        assertThat(syncInformationCaptor.getValue().getLastSyncedDocument(), is(JsonUtil.getPayloadBytes(shadowDocument.toJson(false))));
         assertThat(syncInformationCaptor.getValue().getCloudVersion(), is(6L));
         assertThat(syncInformationCaptor.getValue().getCloudUpdateTime(), is(greaterThanOrEqualTo(epochSeconds)));
         assertThat(syncInformationCaptor.getValue().getLastSyncTime(), is(greaterThanOrEqualTo(epochSeconds)));

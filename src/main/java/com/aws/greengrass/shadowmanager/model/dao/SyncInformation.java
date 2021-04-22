@@ -17,7 +17,7 @@ import java.time.Instant;
 public class SyncInformation {
     private String thingName;
     private String shadowName;
-    private byte[] cloudDocument;
+    private byte[] lastSyncedDocument;
     private long localVersion;
     private long cloudVersion;
     private long cloudUpdateTime;

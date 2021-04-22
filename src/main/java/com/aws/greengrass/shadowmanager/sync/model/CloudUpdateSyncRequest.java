@@ -112,7 +112,7 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
 
         try {
             this.dao.updateSyncInformation(SyncInformation.builder()
-                    .cloudDocument(JsonUtil.getPayloadBytes(shadowDocument.get().toJson(false)))
+                    .lastSyncedDocument(JsonUtil.getPayloadBytes(shadowDocument.get().toJson(false)))
                     .cloudVersion(cloudVersion + 1)
                     .cloudDeleted(false)
                     .shadowName(getShadowName())
