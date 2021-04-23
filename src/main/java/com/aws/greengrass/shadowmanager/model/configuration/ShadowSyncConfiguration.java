@@ -48,7 +48,6 @@ public class ShadowSyncConfiguration {
      */
     public static ShadowSyncConfiguration processConfiguration(Map<String, Object> configTopicsPojo, String thingName) {
         List<ThingShadowSyncConfiguration> syncConfigurationList = new ArrayList<>();
-        int maxOutboundSyncUpdatesPerSecond = DEFAULT_MAX_OUTBOUND_SYNC_UPDATES_PS;
         try {
             processNucleusThingConfiguration(configTopicsPojo, thingName, syncConfigurationList);
             processOtherThingConfigurations(configTopicsPojo, syncConfigurationList);
@@ -56,6 +55,7 @@ public class ShadowSyncConfiguration {
             throw new InvalidConfigurationException(e);
         }
 
+        int maxOutboundSyncUpdatesPerSecond = DEFAULT_MAX_OUTBOUND_SYNC_UPDATES_PS;
         if (configTopicsPojo.containsKey(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC)) {
             int newMaxOutboundSyncUpdatesPerSecond = Coerce.toInt(configTopicsPojo
                     .get(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC));
