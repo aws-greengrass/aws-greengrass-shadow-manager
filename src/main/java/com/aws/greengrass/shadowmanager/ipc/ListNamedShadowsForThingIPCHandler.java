@@ -13,7 +13,6 @@ import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.model.LogEvents;
-import com.aws.greengrass.shadowmanager.model.ShadowRequest;
 import com.aws.greengrass.shadowmanager.util.Validator;
 import software.amazon.awssdk.aws.greengrass.GeneratedAbstractListNamedShadowsForThingOperationHandler;
 import software.amazon.awssdk.aws.greengrass.model.InvalidArgumentsError;
@@ -107,9 +106,8 @@ public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNam
             try {
                 logger.atTrace("ipc-list-named-shadow-for-thing-request").log();
 
-                ShadowRequest shadowRequest = new ShadowRequest(thingName);
-                Validator.validateShadowRequest(shadowRequest);
-                authorizationHandlerWrapper.doAuthorization(LIST_NAMED_SHADOWS_FOR_THING, serviceName, shadowRequest);
+                Validator.validateThingName(thingName);
+                authorizationHandlerWrapper.doAuthorization(LIST_NAMED_SHADOWS_FOR_THING, serviceName, thingName);
 
                 int pageSize = Optional.ofNullable(request.getPageSize())
                         .orElse(DEFAULT_PAGE_SIZE);
