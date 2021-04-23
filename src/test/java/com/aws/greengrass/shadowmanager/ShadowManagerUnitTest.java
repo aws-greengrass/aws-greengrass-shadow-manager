@@ -11,6 +11,7 @@ import com.aws.greengrass.config.UnsupportedInputTypeException;
 import com.aws.greengrass.config.WhatHappened;
 import com.aws.greengrass.deployment.DeviceConfiguration;
 import com.aws.greengrass.shadowmanager.exception.InvalidConfigurationException;
+import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.ipc.PubSubClientWrapper;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientFactory;
 import com.aws.greengrass.shadowmanager.util.ShadowWriteSynchronizeHelper;
@@ -23,6 +24,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
@@ -411,6 +414,80 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
                 .thenReturn(maxDocSizeTopic);
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
                 .thenReturn(configTopics);
+        ShadowManager shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockDeviceConfiguration, mockSynchronizeHelper, mockClientFactory);
+        shadowManager.install();
+        assertTrue(shadowManager.isErrored());
+    }
+
+    @ParameterizedTest
+    @MethodSource("com.aws.greengrass.shadowmanager.TestUtils#invalidShadowNames")
+    void GIVEN_bad_shadow_names_WHEN_initialize_THEN_service_errors(String shadowName, ExtensionContext extensionContext) throws UnsupportedInputTypeException {
+        ignoreExceptionOfType(extensionContext, InvalidConfigurationException.class);
+        ignoreExceptionOfType(extensionContext, InvalidRequestParametersException.class);
+        Topic thingNameTopic = mock(Topic.class);
+        Topic maxDiskUtilizationMBTopic = Topic.of(context, CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC, DEFAULT_DISK_UTILIZATION_SIZE_B);
+        Topic maxDocSizeTopic = Topic.of(context, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC, DEFAULT_DOCUMENT_SIZE);
+        Topics configTopics = Topics.of(context, CONFIGURATION_SYNCHRONIZATION_TOPIC, null);
+        List<Map<String, Object>> shadowDocumentsList = new ArrayList<>();
+        Map<String, Object> thingAMap = new HashMap<>();
+        thingAMap.put(CONFIGURATION_THING_NAME_TOPIC, THING_NAME_A);
+        thingAMap.put(CONFIGURATION_CLASSIC_SHADOW_TOPIC, false);
+        thingAMap.put(CONFIGURATION_NAMED_SHADOWS_TOPIC, Collections.singletonList(shadowName));
+        Map<String, Object> thingBMap = new HashMap<>();
+        thingBMap.put(CONFIGURATION_THING_NAME_TOPIC, THING_NAME_B);
+        thingBMap.put(CONFIGURATION_NAMED_SHADOWS_TOPIC, Collections.singletonList("foo2"));
+        shadowDocumentsList.add(thingAMap);
+        shadowDocumentsList.add(thingBMap);
+        configTopics.createLeafChild(CONFIGURATION_SHADOW_DOCUMENTS_TOPIC).withValueChecked(shadowDocumentsList);
+        configTopics.createLeafChild(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC).withValueChecked(500);
+        configTopics.createLeafChild(CONFIGURATION_PROVIDE_SYNC_STATUS_TOPIC).withValueChecked(true);
+
+        when(thingNameTopic.getOnce()).thenReturn(KERNEL_THING);
+        when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC))
+                .thenReturn(maxDiskUtilizationMBTopic);
+        when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC))
+                .thenReturn(maxDocSizeTopic);
+        when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
+                .thenReturn(configTopics);
+        when(mockDeviceConfiguration.getThingName()).thenReturn(thingNameTopic);
+        ShadowManager shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockDeviceConfiguration, mockSynchronizeHelper, mockClientFactory);
+        shadowManager.install();
+        assertTrue(shadowManager.isErrored());
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @MethodSource("com.aws.greengrass.shadowmanager.TestUtils#invalidThingNames")
+    void GIVEN_bad_thing_names_WHEN_initialize_THEN_service_errors(String thingName, ExtensionContext extensionContext) throws UnsupportedInputTypeException {
+        ignoreExceptionOfType(extensionContext, InvalidConfigurationException.class);
+        ignoreExceptionOfType(extensionContext, InvalidRequestParametersException.class);
+        Topic thingNameTopic = mock(Topic.class);
+        Topic maxDiskUtilizationMBTopic = Topic.of(context, CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC, DEFAULT_DISK_UTILIZATION_SIZE_B);
+        Topic maxDocSizeTopic = Topic.of(context, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC, DEFAULT_DOCUMENT_SIZE);
+        Topics configTopics = Topics.of(context, CONFIGURATION_SYNCHRONIZATION_TOPIC, null);
+        List<Map<String, Object>> shadowDocumentsList = new ArrayList<>();
+        Map<String, Object> thingAMap = new HashMap<>();
+        thingAMap.put(CONFIGURATION_THING_NAME_TOPIC, thingName);
+        thingAMap.put(CONFIGURATION_CLASSIC_SHADOW_TOPIC, false);
+        thingAMap.put(CONFIGURATION_NAMED_SHADOWS_TOPIC, Arrays.asList("foo", "bar"));
+        Map<String, Object> thingBMap = new HashMap<>();
+        thingBMap.put(CONFIGURATION_THING_NAME_TOPIC, THING_NAME_B);
+        thingBMap.put(CONFIGURATION_NAMED_SHADOWS_TOPIC, Collections.singletonList("foo2"));
+        shadowDocumentsList.add(thingAMap);
+        shadowDocumentsList.add(thingBMap);
+        configTopics.createLeafChild(CONFIGURATION_SHADOW_DOCUMENTS_TOPIC).withValueChecked(shadowDocumentsList);
+        configTopics.createLeafChild(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC).withValueChecked(500);
+        configTopics.createLeafChild(CONFIGURATION_PROVIDE_SYNC_STATUS_TOPIC).withValueChecked(true);
+
+        when(thingNameTopic.getOnce()).thenReturn(KERNEL_THING);
+        when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC))
+                .thenReturn(maxDiskUtilizationMBTopic);
+        when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC))
+                .thenReturn(maxDocSizeTopic);
+        when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
+                .thenReturn(configTopics);
+        when(mockDeviceConfiguration.getThingName()).thenReturn(thingNameTopic);
+
         ShadowManager shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockDeviceConfiguration, mockSynchronizeHelper, mockClientFactory);
         shadowManager.install();
         assertTrue(shadowManager.isErrored());
