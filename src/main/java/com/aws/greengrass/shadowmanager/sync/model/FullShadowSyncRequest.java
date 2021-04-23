@@ -137,6 +137,8 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
             logger.atDebug()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                    .kv("local-version", localShadowDocument.get().getVersion())
+                    .kv("cloud-version", cloudShadowDocument.get().getVersion())
                     .log("Not performing full sync since both local and cloud versions are already in sync");
             return;
         }
@@ -159,12 +161,17 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
 
         long localDocumentVersion = localShadowDocument.get().getVersion();
         long cloudDocumentVersion = cloudShadowDocument.get().getVersion();
+
+        // If the cloud document version is different from the last sync, that means the local document needed
+        // some updates. So we go ahead an update the local shadow document.
         if (!isDocVersionSame(cloudShadowDocument.get(), syncInformation, DataOwner.CLOUD)) {
             updateDocument.set(SHADOW_DOCUMENT_VERSION, new LongNode(localShadowDocument.get().getVersion()));
             SdkBytes payloadBytes = getSdkBytes(updateDocument);
             updateLocalShadowDocument(payloadBytes);
             localDocumentVersion = localDocumentVersion + 1;
         }
+        // If the local document version is different from the last sync, that means the cloud document needed
+        // some updates. So we go ahead an update the cloud shadow document.
         if (!isDocVersionSame(localShadowDocument.get(), syncInformation, DataOwner.LOCAL)) {
             updateDocument.set(SHADOW_DOCUMENT_VERSION, new LongNode(cloudShadowDocument.get().getVersion()));
             SdkBytes payloadBytes = getSdkBytes(updateDocument);
@@ -262,24 +269,29 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
                     .cause(e)
-                    .log("Unable to find cloud shadow. Deleting local shadow.");
+                    .log("Unable to find cloud shadow");
         } catch (ThrottlingException | ServiceUnavailableException | InternalFailureException e) {
             logger.atWarn()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                    .cause(e).log();
+                    .log("Could not execute cloud shadow get request");
             throw new RetryableException(e);
         } catch (SdkServiceException | SdkClientException | IOException e) {
             logger.atError()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                    .cause(e).log();
+                    .log("Could not execute cloud shadow get request");
             throw new SkipSyncRequestException(e);
         }
         return Optional.empty();
     }
 
     private void updateLocalShadowDocument(SdkBytes payloadBytes) {
+        logger.atDebug()
+                .kv(LOG_THING_NAME_KEY, getThingName())
+                .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                .log("Updating local shadow document");
+
         software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest localRequest =
                 new software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest();
         localRequest.setPayload(payloadBytes.asByteArray());
@@ -289,6 +301,11 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
     }
 
     private void deleteLocalShadowDocument() {
+        logger.atDebug()
+                .kv(LOG_THING_NAME_KEY, getThingName())
+                .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                .log("Deleting local shadow document");
+
         software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowRequest localRequest =
                 new software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowRequest();
         localRequest.setShadowName(getShadowName());
@@ -299,6 +316,11 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
     private void updateCloudShadowDocument(SdkBytes updateDocument)
             throws RetryableException, SkipSyncRequestException {
         try {
+            logger.atDebug()
+                    .kv(LOG_THING_NAME_KEY, getThingName())
+                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                    .log("Updating cloud shadow document");
+
             this.clientFactory.getIotDataPlaneClient().updateThingShadow(UpdateThingShadowRequest.builder()
                     .shadowName(getShadowName())
                     .thingName(getThingName())
@@ -308,13 +330,13 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
             logger.atWarn()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                    .cause(e).log("Could not execute cloud shadow update request");
+                    .log("Could not execute cloud shadow update request");
             throw new RetryableException(e);
         } catch (SdkServiceException | SdkClientException e) {
             logger.atError()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                    .cause(e).log("Could not execute cloud shadow update request");
+                    .log("Could not execute cloud shadow update request");
             throw new SkipSyncRequestException(e);
         }
     }
@@ -322,6 +344,11 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
     private void deleteCloudShadowDocument()
             throws RetryableException, SkipSyncRequestException {
         try {
+            logger.atDebug()
+                    .kv(LOG_THING_NAME_KEY, getThingName())
+                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                    .log("Deleting cloud shadow document");
+
             this.clientFactory.getIotDataPlaneClient().deleteThingShadow(DeleteThingShadowRequest.builder()
                     .shadowName(getShadowName())
                     .thingName(getThingName())
@@ -330,13 +357,13 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
             logger.atWarn()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                    .cause(e).log("Could not execute cloud shadow delete request");
+                    .log("Could not execute cloud shadow delete request");
             throw new RetryableException(e);
         } catch (SdkServiceException | SdkClientException e) {
             logger.atError()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                    .cause(e).log("Could not execute cloud shadow delete request");
+                    .log("Could not execute cloud shadow delete request");
             throw new SkipSyncRequestException(e);
         }
     }
