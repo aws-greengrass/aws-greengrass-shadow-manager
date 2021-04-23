@@ -274,7 +274,7 @@ class ShadowManagerDAOImplTest {
 
     @ParameterizedTest
     @MethodSource("validUpdateSyncInformationTests")
-    void GIVEN_valid_sync_information_WHEN_update_and_get_THEN_successfully_updates_and_gets_sync_information(byte[] cloudDocument, long cloudVersion, boolean cloudDeleted, long localVersion) {
+    void GIVEN_valid_sync_information_WHEN_update_and_get_THEN_successfully_updates_and_gets_sync_information(byte[] lastSyncedDocument, long cloudVersion, boolean cloudDeleted, long localVersion) {
         long epochMinus60Seconds = Instant.now().minusSeconds(60).getEpochSecond();
         SyncInformation syncInformation = SyncInformation.builder()
                 .thingName(THING_NAME)
@@ -282,7 +282,7 @@ class ShadowManagerDAOImplTest {
                 .cloudDeleted(cloudDeleted)
                 .cloudVersion(cloudVersion)
                 .cloudUpdateTime(epochMinus60Seconds)
-                .cloudDocument(cloudDocument)
+                .lastSyncedDocument(lastSyncedDocument)
                 .localVersion(localVersion)
                 .build();
         assertTrue(dao.updateSyncInformation(syncInformation));
@@ -294,7 +294,7 @@ class ShadowManagerDAOImplTest {
 
     @ParameterizedTest
     @MethodSource("validUpdateSyncInformationTests")
-    void GIVEN_valid_sync_information_WHEN_update_delete_and_get_THEN_successfully_updates_and_deletes_sync_information(byte[] cloudDocument, long cloudVersion, boolean cloudDeleted, long localVersion) {
+    void GIVEN_valid_sync_information_WHEN_update_delete_and_get_THEN_successfully_updates_and_deletes_sync_information(byte[] lastSyncedDocument, long cloudVersion, boolean cloudDeleted, long localVersion) {
         long epochMinus60Seconds = Instant.now().minusSeconds(60).getEpochSecond();
         SyncInformation syncInformation = SyncInformation.builder()
                 .thingName(THING_NAME)
@@ -302,7 +302,7 @@ class ShadowManagerDAOImplTest {
                 .cloudDeleted(cloudDeleted)
                 .cloudVersion(cloudVersion)
                 .cloudUpdateTime(epochMinus60Seconds)
-                .cloudDocument(cloudDocument)
+                .lastSyncedDocument(lastSyncedDocument)
                 .localVersion(localVersion)
                 .build();
         assertTrue(dao.updateSyncInformation(syncInformation));

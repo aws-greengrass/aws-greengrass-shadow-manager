@@ -86,7 +86,7 @@ public class CloudDeleteSyncRequest extends BaseSyncRequest {
         Optional<SyncInformation> syncInformation = this.dao.getShadowSyncInformation(getThingName(), getShadowName());
         try {
             this.dao.updateSyncInformation(SyncInformation.builder()
-                    .cloudDocument(null)
+                    .lastSyncedDocument(null)
                     .cloudVersion(syncInformation.map(SyncInformation::getCloudVersion).orElse(0L))
                     .cloudDeleted(true)
                     .shadowName(getShadowName())

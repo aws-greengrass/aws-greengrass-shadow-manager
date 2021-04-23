@@ -158,7 +158,7 @@ class ShadowManagerTest extends GGServiceTestUtil {
                     .cloudDeleted(false)
                     .cloudVersion(1)
                     .cloudUpdateTime(epochMinus60Seconds)
-                    .cloudDocument(BASE_DOCUMENT)
+                    .lastSyncedDocument(BASE_DOCUMENT)
                     .build();
             assertTrue(impl.updateSyncInformation(syncInformation));
         }

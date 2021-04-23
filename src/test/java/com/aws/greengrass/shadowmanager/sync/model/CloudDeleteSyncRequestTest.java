@@ -83,7 +83,7 @@ class CloudDeleteSyncRequestTest {
                 .thingName(THING_NAME)
                 .shadowName(SHADOW_NAME)
                 .cloudDeleted(false)
-                .cloudDocument(BASE_DOCUMENT)
+                .lastSyncedDocument(BASE_DOCUMENT)
                 .cloudVersion(1L)
                 .lastSyncTime(epochSecondsMinus60)
                 .build()));
@@ -97,7 +97,7 @@ class CloudDeleteSyncRequestTest {
         verify(mockIotDataPlaneClient, times(1)).deleteThingShadow(any(DeleteThingShadowRequest.class));
 
         assertThat(syncInformationCaptor.getValue(), is(notNullValue()));
-        assertThat(syncInformationCaptor.getValue().getCloudDocument(), is(nullValue()));
+        assertThat(syncInformationCaptor.getValue().getLastSyncedDocument(), is(nullValue()));
         assertThat(syncInformationCaptor.getValue().getCloudVersion(), is(1L));
         assertThat(syncInformationCaptor.getValue().getCloudUpdateTime(), is(greaterThanOrEqualTo(epochSeconds)));
         assertThat(syncInformationCaptor.getValue().getLastSyncTime(), is(greaterThanOrEqualTo(epochSeconds)));
@@ -120,7 +120,7 @@ class CloudDeleteSyncRequestTest {
         verify(mockIotDataPlaneClient, times(1)).deleteThingShadow(any(DeleteThingShadowRequest.class));
 
         assertThat(syncInformationCaptor.getValue(), is(notNullValue()));
-        assertThat(syncInformationCaptor.getValue().getCloudDocument(), is(nullValue()));
+        assertThat(syncInformationCaptor.getValue().getLastSyncedDocument(), is(nullValue()));
         assertThat(syncInformationCaptor.getValue().getCloudVersion(), is(0L));
         assertThat(syncInformationCaptor.getValue().getCloudUpdateTime(), is(greaterThanOrEqualTo(epochSeconds)));
         assertThat(syncInformationCaptor.getValue().getLastSyncTime(), is(greaterThanOrEqualTo(epochSeconds)));
