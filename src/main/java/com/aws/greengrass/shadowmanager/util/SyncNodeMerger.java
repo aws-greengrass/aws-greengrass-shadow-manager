@@ -8,8 +8,8 @@ package com.aws.greengrass.shadowmanager.util;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 import java.util.HashSet;
 import java.util.Iterator;
@@ -37,6 +37,7 @@ public final class SyncNodeMerger {
      * @param owner The data owner which is used during conflict resolution
      * @return The correct synchronized merge node.
      */
+    @SuppressFBWarnings(value = "BC_UNCONFIRMED_CAST", justification = "We do check the type before cast.")
     public static JsonNode getMergedNode(JsonNode local, JsonNode cloud, JsonNode base, DataOwner owner) {
 
         // If both the local and cloud are null, return null since they are the same.
@@ -47,12 +48,7 @@ public final class SyncNodeMerger {
         // Check if all the 3 versions are objects. If so, iterate over them and figure out the exact merged value
         // for the object node.
         if (areNodesObjects(local, cloud, base)) {
-            final ObjectNode result = (ObjectNode) getMergedNodeForObjectOrArray(local, cloud, base, owner);
-            return result.size() > 0 ? result : null;
-        } else if (areNodesArrays(local, cloud, base)) {
-            // Check if all the 3 versions are array. If so, iterate over them and figure out the exact merged values
-            // for the array node.
-            final ArrayNode result = (ArrayNode) getMergedNodeForObjectOrArray(local, cloud, base, owner);
+            final ObjectNode result = getMergedNode((ObjectNode)local, (ObjectNode)cloud, (ObjectNode)base, owner);
             return result.size() > 0 ? result : null;
         } else {
             // Check if the local value has changed since the last sync.
@@ -78,15 +74,28 @@ public final class SyncNodeMerger {
         }
     }
 
+    /**
+     * This function handles the recursion for all the fields in either an ObjectNode to figure out
+     * the synchronized merged node.
+     *
+     * @param local The current local document.
+     * @param cloud The current cloud document.
+     * @param base  The last synced document.
+     * @param owner The data owner which is used during conflict resolution.
+     * @return The correct synchronized merge node.
+     */
+    private static ObjectNode getMergedNode(ObjectNode local, ObjectNode cloud, ObjectNode base,
+                                            DataOwner owner) {
+        ObjectNode result = OBJECT_MAPPER.createObjectNode();
+        final HashSet<String> visited = new HashSet<>();
+        iterateOverAllUnvisitedFields(local, cloud, base, owner, result, visited, local.fieldNames());
+        iterateOverAllUnvisitedFields(local, cloud, base, owner, result, visited, cloud.fieldNames());
+        return result;
+    }
 
     private static boolean areNodesObjects(JsonNode local, JsonNode cloud, JsonNode base) {
         return local != null && local.isObject() && cloud != null && cloud.isObject() && base != null
                 && base.isObject();
-    }
-
-    private static boolean areNodesArrays(JsonNode local, JsonNode cloud, JsonNode base) {
-        return local != null && local.isArray() && cloud != null && cloud.isArray() && base != null
-                && base.isArray();
     }
 
     /**
@@ -108,30 +117,6 @@ public final class SyncNodeMerger {
             hasChanged = base != null && latest == null;
         }
         return hasChanged;
-    }
-
-    /**
-     * This function handles the recursion for all the fields in either an ObjectNode or an ArrayNode to figure out
-     * the synchronized merged node.
-     *
-     * @param local The current local document.
-     * @param cloud The current cloud document.
-     * @param base  The last synced document.
-     * @param owner The data owner which is used during conflict resolution.
-     * @return The correct synchronized merge node.
-     */
-    private static JsonNode getMergedNodeForObjectOrArray(JsonNode local, JsonNode cloud, JsonNode base,
-                                                          DataOwner owner) {
-        JsonNode result;
-        if (local.isArray()) {
-            result = OBJECT_MAPPER.createArrayNode();
-        } else {
-            result = OBJECT_MAPPER.createObjectNode();
-        }
-        final HashSet<String> visited = new HashSet<>();
-        iterateOverAllUnvisitedFields(local, cloud, base, owner, result, visited, local.fieldNames());
-        iterateOverAllUnvisitedFields(local, cloud, base, owner, result, visited, cloud.fieldNames());
-        return result;
     }
 
     /**
@@ -158,11 +143,7 @@ public final class SyncNodeMerger {
             final JsonNode baseValue = base.get(field);
             JsonNode mergedResult = getMergedNode(localValue, cloudValue, baseValue, owner);
             if (mergedResult != null) {
-                if (result.isArray()) {
-                    ((ArrayNode) result).add(mergedResult);
-                } else {
-                    ((ObjectNode) result).set(field, mergedResult);
-                }
+                ((ObjectNode) result).set(field, mergedResult);
             }
             visited.add(field);
         }
@@ -190,7 +171,7 @@ public final class SyncNodeMerger {
      */
     private static JsonNode chooseOwnerValue(JsonNode local, JsonNode cloud, DataOwner owner) {
         switch (owner) {
-            case GGC:
+            case LOCAL:
                 return local;
             case CLOUD:
                 return cloud;

@@ -9,6 +9,6 @@ package com.aws.greengrass.shadowmanager.util;
  * Enum to state whose value should be used in case of a conflict.
  */
 public enum DataOwner {
-    GGC,
+    LOCAL,
     CLOUD
 }

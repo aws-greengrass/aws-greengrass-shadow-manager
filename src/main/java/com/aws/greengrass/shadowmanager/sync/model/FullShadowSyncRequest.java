@@ -97,20 +97,43 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
     @Override
     public void execute() throws SyncException, RetryableException, SkipSyncRequestException {
         Optional<ShadowDocument> localShadowDocument = this.dao.getShadowThing(getThingName(), getShadowName());
-        ShadowDocument cloudShadowDocument = getCloudShadowDocument();
+        Optional<SyncInformation> syncInformation = this.dao.getShadowSyncInformation(getThingName(), getShadowName());
+        Optional<ShadowDocument> cloudShadowDocument = getCloudShadowDocument();
+
+        if (!cloudShadowDocument.isPresent() && localShadowDocument.isPresent()) {
+            deleteLocalShadowDocument();
+            syncInformation.ifPresent(information -> this.dao.updateSyncInformation(SyncInformation.builder()
+                    .localVersion(localShadowDocument.get().getVersion())
+                    .cloudVersion(information.getCloudVersion())
+                    .shadowName(getShadowName())
+                    .thingName(getThingName())
+                    // TODO: get the latest from metadata?
+                    .cloudUpdateTime(Instant.now().getEpochSecond())
+                    .lastSyncedDocument(null)
+                    .build()));
+            return;
+        }
 
         //TODO: Need to figure out the actual behavior here. Might need to delete the cloud here right? Also add similar
         //    logic if cloud does not exist and the local exists?
-        if (!localShadowDocument.isPresent() && cloudShadowDocument != null) {
+        if (!localShadowDocument.isPresent() && cloudShadowDocument.isPresent()) {
             deleteCloudShadowDocument();
+            syncInformation.ifPresent(information -> this.dao.updateSyncInformation(SyncInformation.builder()
+                    .localVersion(information.getLocalVersion())
+                    .cloudVersion(cloudShadowDocument.get().getVersion())
+                    .shadowName(getShadowName())
+                    .thingName(getThingName())
+                    // TODO: get the latest from metadata?
+                    .cloudUpdateTime(Instant.now().getEpochSecond())
+                    .lastSyncedDocument(null)
+                    .build()));
             return;
         }
 
         // Get the sync information and check if the versions are same. If the local and cloud versions are same, we
         // don't need to do any sync.
-        Optional<SyncInformation> syncInformation = this.dao.getShadowSyncInformation(getThingName(), getShadowName());
-        if (isDocVersionSame(cloudShadowDocument, syncInformation)
-                && isDocVersionSame(localShadowDocument.get(), syncInformation)) {
+        if (isDocVersionSame(cloudShadowDocument.get(), syncInformation, DataOwner.CLOUD)
+                && isDocVersionSame(localShadowDocument.get(), syncInformation, DataOwner.LOCAL)) {
             logger.atDebug()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
@@ -122,12 +145,12 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
         // Gets the merged reported node from the local, cloud and base documents. If an existing field has changed in
         // both local and cloud, the local document's value will be selected.
         JsonNode mergedReportedNode = SyncNodeMerger.getMergedNode(getReported(localShadowDocument.get()),
-                getReported(cloudShadowDocument), getReported(baseShadowDocument), DataOwner.GGC);
+                getReported(cloudShadowDocument.get()), getReported(baseShadowDocument), DataOwner.LOCAL);
 
         // Gets the merged desired node from the local, cloud and base documents. If an existing field has changed in
         // both local and cloud, the cloud document's value will be selected.
         JsonNode mergedDesiredNode = SyncNodeMerger.getMergedNode(getDesired(localShadowDocument.get()),
-                getDesired(cloudShadowDocument), getDesired(baseShadowDocument), DataOwner.CLOUD);
+                getDesired(cloudShadowDocument.get()), getDesired(baseShadowDocument), DataOwner.CLOUD);
         ShadowState updatedState = new ShadowState(mergedDesiredNode, mergedReportedNode);
 
         JsonNode updatedStateJson = updatedState.toJson();
@@ -135,24 +158,22 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
         updateDocument.set(SHADOW_DOCUMENT_STATE, updatedStateJson);
 
         long localDocumentVersion = localShadowDocument.get().getVersion();
-        long cloudDocumentVersion = cloudShadowDocument == null ? 0 : cloudShadowDocument.getVersion();
-        if (!isDocVersionSame(localShadowDocument.get(), syncInformation)) {
+        long cloudDocumentVersion = cloudShadowDocument.get().getVersion();
+        if (!isDocVersionSame(cloudShadowDocument.get(), syncInformation, DataOwner.CLOUD)) {
             updateDocument.set(SHADOW_DOCUMENT_VERSION, new LongNode(localShadowDocument.get().getVersion()));
             SdkBytes payloadBytes = getSdkBytes(updateDocument);
             updateLocalShadowDocument(payloadBytes);
             localDocumentVersion = localDocumentVersion + 1;
         }
-        if (!isDocVersionSame(cloudShadowDocument, syncInformation)) {
-            if (cloudShadowDocument != null) {
-                updateDocument.set(SHADOW_DOCUMENT_VERSION, new LongNode(cloudShadowDocument.getVersion()));
-            }
+        if (!isDocVersionSame(localShadowDocument.get(), syncInformation, DataOwner.LOCAL)) {
+            updateDocument.set(SHADOW_DOCUMENT_VERSION, new LongNode(cloudShadowDocument.get().getVersion()));
             SdkBytes payloadBytes = getSdkBytes(updateDocument);
             updateCloudShadowDocument(payloadBytes);
             cloudDocumentVersion = cloudDocumentVersion + 1;
         }
 
-        if (!isDocVersionSame(localShadowDocument.get(), syncInformation)
-                || !isDocVersionSame(cloudShadowDocument, syncInformation)) {
+        if (!isDocVersionSame(localShadowDocument.get(), syncInformation, DataOwner.LOCAL)
+                || !isDocVersionSame(cloudShadowDocument.get(), syncInformation, DataOwner.CLOUD)) {
             updateDocument.remove(SHADOW_DOCUMENT_VERSION);
             this.dao.updateSyncInformation(SyncInformation.builder()
                     .localVersion(localDocumentVersion)
@@ -215,14 +236,17 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
         return payloadBytes;
     }
 
-    private boolean isDocVersionSame(ShadowDocument shadowDocument,
-                                     @NonNull Optional<SyncInformation> syncInformation) {
+    private boolean isDocVersionSame(ShadowDocument shadowDocument, @NonNull Optional<SyncInformation> syncInformation,
+                                     DataOwner owner) {
         return shadowDocument != null && syncInformation.isPresent()
-                && syncInformation.get().getCloudVersion() == shadowDocument.getVersion();
+                && (DataOwner.CLOUD.equals(owner)
+                && syncInformation.get().getCloudVersion() == shadowDocument.getVersion()
+                || DataOwner.LOCAL.equals(owner)
+                && syncInformation.get().getLocalVersion() == shadowDocument.getVersion());
     }
 
     @Nullable
-    private ShadowDocument getCloudShadowDocument() throws RetryableException, SkipSyncRequestException {
+    private Optional<ShadowDocument> getCloudShadowDocument() throws RetryableException, SkipSyncRequestException {
         try {
             GetThingShadowResponse getThingShadowResponse = this.clientFactory.getIotDataPlaneClient()
                     .getThingShadow(GetThingShadowRequest
@@ -231,7 +255,7 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
                             .thingName(getThingName())
                             .build());
             if (getThingShadowResponse != null && getThingShadowResponse.payload() != null) {
-                return new ShadowDocument(getThingShadowResponse.payload().asByteArray());
+                return Optional.of(new ShadowDocument(getThingShadowResponse.payload().asByteArray()));
             }
         } catch (ResourceNotFoundException e) {
             logger.atWarn()
@@ -239,26 +263,20 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
                     .cause(e)
                     .log("Unable to find cloud shadow. Deleting local shadow.");
-            deleteLocalShadowDocument();
         } catch (ThrottlingException | ServiceUnavailableException | InternalFailureException e) {
             logger.atWarn()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
                     .cause(e).log();
             throw new RetryableException(e);
-        } catch (SdkServiceException | SdkClientException e) {
+        } catch (SdkServiceException | SdkClientException | IOException e) {
             logger.atError()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
                     .cause(e).log();
             throw new SkipSyncRequestException(e);
-        } catch (IOException e) {
-            logger.atWarn()
-                    .kv(LOG_THING_NAME_KEY, getThingName())
-                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                    .cause(e).log("Unable to serialize cloud document");
         }
-        return null;
+        return Optional.empty();
     }
 
     private void updateLocalShadowDocument(SdkBytes payloadBytes) {
@@ -308,7 +326,7 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
                     .shadowName(getShadowName())
                     .thingName(getThingName())
                     .build());
-        } catch (ConflictException | ThrottlingException | ServiceUnavailableException | InternalFailureException e) {
+        } catch (ThrottlingException | ServiceUnavailableException | InternalFailureException e) {
             logger.atWarn()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
