@@ -9,12 +9,15 @@ import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
+import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.model.UpdateThingShadowHandlerResponse;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
+import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientFactory;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException;
 import org.hamcrest.Matchers;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -50,6 +53,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -69,6 +73,13 @@ public class LocalUpdateSyncRequestTest {
     @Captor
     private ArgumentCaptor<SyncInformation> syncInformationCaptor;
 
+    SyncContext syncContext;
+
+    @BeforeEach
+    void setup() {
+        syncContext = new SyncContext(mockDao, mockUpdateThingShadowRequestHandler,
+                mock(DeleteThingShadowRequestHandler.class), mock(IotDataPlaneClientFactory.class));
+    }
 
     @Test
     void GIVEN_good_local_update_request_WHEN_execute_THEN_successfully_updates_local_shadow_and_sync_information() throws SkipSyncRequestException, UnknownShadowException {
@@ -87,8 +98,8 @@ public class LocalUpdateSyncRequestTest {
         when(mockUpdateThingShadowRequestHandler.handleRequest(any(UpdateThingShadowRequest.class), anyString()))
                 .thenReturn(new UpdateThingShadowHandlerResponse(new UpdateThingShadowResponse(), UPDATE_DOCUMENT));
 
-        LocalUpdateSyncRequest request = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, UPDATE_DOCUMENT, mockDao, mockUpdateThingShadowRequestHandler);
-        request.execute();
+        LocalUpdateSyncRequest request = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, UPDATE_DOCUMENT);
+        request.execute(syncContext);
 
         verify(mockDao, times(1)).getShadowSyncInformation(anyString(), anyString());
         verify(mockUpdateThingShadowRequestHandler, times(1)).handleRequest(any(), any());
@@ -110,8 +121,8 @@ public class LocalUpdateSyncRequestTest {
 
         final byte[] badCloudPayload = "{\"version\": 6, \"badUpdate\": {\"reported\": {\"name\": \"The Beatles\"}}}".getBytes();
 
-        LocalUpdateSyncRequest request = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, badCloudPayload, mockDao, mockUpdateThingShadowRequestHandler);
-        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, request::execute);
+        LocalUpdateSyncRequest request = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, badCloudPayload);
+        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, () -> request.execute(syncContext));
         assertThat(thrown.getCause(), is(instanceOf(IOException.class)));
 
         verify(mockDao, times(0)).getShadowSyncInformation(anyString(), anyString());
@@ -136,8 +147,8 @@ public class LocalUpdateSyncRequestTest {
                 .lastSyncTime(epochSeconds)
                 .build()));
 
-        LocalUpdateSyncRequest request = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, cloudPayload, mockDao, mockUpdateThingShadowRequestHandler);
-        ConflictError thrown = assertThrows(ConflictError.class, request::execute);
+        LocalUpdateSyncRequest request = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, cloudPayload);
+        ConflictError thrown = assertThrows(ConflictError.class, () -> request.execute(syncContext));
         assertThat(thrown.getMessage(), Matchers.startsWith("Missed update(s)"));
 
         verify(mockDao, times(1)).getShadowSyncInformation(anyString(), anyString());
@@ -162,8 +173,8 @@ public class LocalUpdateSyncRequestTest {
                 .lastSyncTime(epochSeconds)
                 .build()));
 
-        LocalUpdateSyncRequest request = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, cloudPayload, mockDao, mockUpdateThingShadowRequestHandler);
-        assertDoesNotThrow(request::execute);
+        LocalUpdateSyncRequest request = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, cloudPayload);
+        assertDoesNotThrow(() -> request.execute(syncContext));
 
         verify(mockDao, times(1)).getShadowSyncInformation(anyString(), anyString());
         verify(mockUpdateThingShadowRequestHandler, times(0)).handleRequest(any(), any());
@@ -188,8 +199,8 @@ public class LocalUpdateSyncRequestTest {
         when(mockUpdateThingShadowRequestHandler.handleRequest(any(UpdateThingShadowRequest.class), anyString()))
                 .thenThrow(new ConflictError(SAMPLE_EXCEPTION_MESSAGE));
 
-        LocalUpdateSyncRequest request = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, UPDATE_DOCUMENT, mockDao, mockUpdateThingShadowRequestHandler);
-        ConflictError thrown = assertThrows(ConflictError.class, request::execute);
+        LocalUpdateSyncRequest request = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, UPDATE_DOCUMENT);
+        ConflictError thrown = assertThrows(ConflictError.class, () -> request.execute(syncContext));
         assertThat(thrown.getMessage(), is(equalTo(SAMPLE_EXCEPTION_MESSAGE)));
 
         verify(mockDao, times(1)).getShadowSyncInformation(anyString(), anyString());
@@ -215,8 +226,8 @@ public class LocalUpdateSyncRequestTest {
         when(mockUpdateThingShadowRequestHandler.handleRequest(any(UpdateThingShadowRequest.class), anyString()))
                 .thenThrow(ShadowManagerDataException.class);
 
-        LocalUpdateSyncRequest request = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, UPDATE_DOCUMENT, mockDao, mockUpdateThingShadowRequestHandler);
-        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, request::execute);
+        LocalUpdateSyncRequest request = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, UPDATE_DOCUMENT);
+        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, () -> request.execute(syncContext));
         assertThat(thrown.getCause(), is(instanceOf(ShadowManagerDataException.class)));
 
         verify(mockDao, times(1)).getShadowSyncInformation(anyString(), anyString());
@@ -243,8 +254,8 @@ public class LocalUpdateSyncRequestTest {
                 .thenThrow(new UnauthorizedError(SAMPLE_EXCEPTION_MESSAGE));
 
 
-        LocalUpdateSyncRequest request = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, UPDATE_DOCUMENT, mockDao, mockUpdateThingShadowRequestHandler);
-        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, request::execute);
+        LocalUpdateSyncRequest request = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, UPDATE_DOCUMENT);
+        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, () -> request.execute(syncContext));
         assertThat(thrown.getCause(), is(instanceOf(UnauthorizedError.class)));
 
         verify(mockDao, times(1)).getShadowSyncInformation(anyString(), anyString());
@@ -271,8 +282,8 @@ public class LocalUpdateSyncRequestTest {
                 .thenThrow(new InvalidArgumentsError(SAMPLE_EXCEPTION_MESSAGE));
 
 
-        LocalUpdateSyncRequest request = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, UPDATE_DOCUMENT, mockDao, mockUpdateThingShadowRequestHandler);
-        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, request::execute);
+        LocalUpdateSyncRequest request = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, UPDATE_DOCUMENT);
+        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, () -> request.execute(syncContext));
         assertThat(thrown.getCause(), is(instanceOf(InvalidArgumentsError.class)));
 
         verify(mockDao, times(1)).getShadowSyncInformation(anyString(), anyString());
@@ -299,8 +310,8 @@ public class LocalUpdateSyncRequestTest {
                 .thenThrow(new ServiceError(SAMPLE_EXCEPTION_MESSAGE));
 
 
-        LocalUpdateSyncRequest request = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, UPDATE_DOCUMENT, mockDao, mockUpdateThingShadowRequestHandler);
-        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, request::execute);
+        LocalUpdateSyncRequest request = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, UPDATE_DOCUMENT);
+        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, () -> request.execute(syncContext));
         assertThat(thrown.getCause(), is(instanceOf(ServiceError.class)));
 
         verify(mockDao, times(1)).getShadowSyncInformation(anyString(), anyString());

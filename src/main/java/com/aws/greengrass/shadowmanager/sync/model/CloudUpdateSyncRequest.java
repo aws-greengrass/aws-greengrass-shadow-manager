@@ -14,7 +14,7 @@ import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.exception.SyncException;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
-import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientFactory;
+import com.aws.greengrass.shadowmanager.util.JsonMerger;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -47,26 +47,26 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
     @NonNull
     JsonNode updateDocument;
 
-    @NonNull
-    IotDataPlaneClientFactory clientFactory;
-
     /**
      * Ctr for CloudUpdateSyncRequest.
      *
      * @param thingName      The thing name associated with the sync shadow update
      * @param shadowName     The shadow name associated with the sync shadow update
      * @param updateDocument The update request bytes.
-     * @param dao            Local shadow database management
-     * @param clientFactory  The IoT data plane client factory to make shadow operations on the cloud.
      */
     public CloudUpdateSyncRequest(String thingName,
                                   String shadowName,
-                                  JsonNode updateDocument,
-                                  ShadowManagerDAO dao,
-                                  IotDataPlaneClientFactory clientFactory) {
-        super(thingName, shadowName, dao);
+                                  JsonNode updateDocument) {
+        super(thingName, shadowName);
         this.updateDocument = updateDocument;
-        this.clientFactory = clientFactory;
+    }
+
+    /**
+     * Merge the sync requests together.
+     * @param other the newer request to merge
+     */
+    public void merge(CloudUpdateSyncRequest other) {
+        JsonMerger.merge(updateDocument, other.updateDocument);
     }
 
     /**
@@ -79,8 +79,10 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
      */
     @SuppressWarnings("PMD.PrematureDeclaration")
     @Override
-    public void execute() throws SyncException, RetryableException, SkipSyncRequestException, ConflictException {
-        Optional<ShadowDocument> shadowDocument = this.dao.getShadowThing(getThingName(), getShadowName());
+    public void execute(SyncContext context) throws SyncException, RetryableException, SkipSyncRequestException,
+            ConflictException {
+        Optional<ShadowDocument> shadowDocument = context.getDao().getShadowThing(getThingName(), getShadowName());
+
         if (!shadowDocument.isPresent()) {
             logger.atWarn()
                     .kv(LOG_THING_NAME_KEY, getThingName())
@@ -88,14 +90,15 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
                     .log("Unable to sync shadow since shadow does not exist");
             return;
         }
-        long cloudVersion = getAndUpdateCloudVersionInRequest();
+        long cloudVersion = getAndUpdateCloudVersionInRequest(context.getDao());
 
         try {
-            this.clientFactory.getIotDataPlaneClient().updateThingShadow(UpdateThingShadowRequest.builder()
-                    .shadowName(getShadowName())
-                    .thingName(getThingName())
-                    .payload(SdkBytes.fromByteArray(JsonUtil.getPayloadBytes(updateDocument)))
-                    .build());
+            context.getIotDataPlaneClientFactory().getIotDataPlaneClient()
+                    .updateThingShadow(UpdateThingShadowRequest.builder()
+                            .shadowName(getShadowName())
+                            .thingName(getThingName())
+                            .payload(SdkBytes.fromByteArray(JsonUtil.getPayloadBytes(updateDocument)))
+                            .build());
         } catch (ConflictException e) {  // NOPMD - Throw ConflictException instead of treated as SdkServiceException
             throw e;
         } catch (ThrottlingException | ServiceUnavailableException | InternalFailureException e) {
@@ -105,7 +108,7 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
         }
 
         try {
-            this.dao.updateSyncInformation(SyncInformation.builder()
+            context.getDao().updateSyncInformation(SyncInformation.builder()
                     .lastSyncedDocument(JsonUtil.getPayloadBytes(shadowDocument.get().toJson(false)))
                     .cloudVersion(cloudVersion + 1)
                     .cloudDeleted(false)
@@ -121,9 +124,9 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
         }
     }
 
-    private long getAndUpdateCloudVersionInRequest() {
+    private long getAndUpdateCloudVersionInRequest(ShadowManagerDAO dao) {
         long cloudVersion = 0;
-        Optional<SyncInformation> syncInformation = this.dao.getShadowSyncInformation(getThingName(), getShadowName());
+        Optional<SyncInformation> syncInformation = dao.getShadowSyncInformation(getThingName(), getShadowName());
 
         // If the sync information is correct
         if (syncInformation.isPresent()) {

@@ -22,10 +22,13 @@ public interface SyncRequest {
     /**
      * Executes sync request.
      *
+     * @param context context object containing useful objects for requests to use when executing.
      * @throws SyncException            When error occurs in sync operation
      * @throws RetryableException       When error occurs in sync operation indicating a request needs to be retried
      * @throws SkipSyncRequestException When error occurs in sync operation indicating a request needs to be skipped.
      * @throws UnknownShadowException   When shadow not found in the sync table.
      */
-    void execute() throws SyncException, RetryableException, SkipSyncRequestException, UnknownShadowException;
+    void execute(SyncContext context) throws SyncException, RetryableException, SkipSyncRequestException,
+            UnknownShadowException;
+
 }

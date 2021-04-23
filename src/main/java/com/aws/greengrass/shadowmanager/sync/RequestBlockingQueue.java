@@ -13,6 +13,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BooleanSupplier;
+import javax.inject.Inject;
 
 /**
  * Blocking "queue" implementation that keeps a single request per shadow. If a request comes in for a shadow, it is
@@ -57,6 +58,7 @@ public class RequestBlockingQueue {
      *
      * @param merger a merger
      */
+    @Inject
     public RequestBlockingQueue(RequestMerger merger) {
         this(merger, MAX_CAPACITY);
     }
@@ -206,13 +208,40 @@ public class RequestBlockingQueue {
     }
 
     /**
+     * Take the head of the queue and add an item in one atomic action. If the queue is empty, the given item is
+     * returned.
+     *
+     * @param value a request to add
+     * @return the head of the queue (which may be the given value if the queue is empty)
+     * @throws NullPointerException if value is null
+     */
+    @SuppressWarnings("PMD.AvoidThrowingNullPointerException")
+    public SyncRequest offerAndTake(SyncRequest value) {
+        if (value == null) {
+            throw new NullPointerException();
+        }
+        lock.lock();
+        try {
+            if (isEmpty()) {
+                return value;
+            }
+            SyncRequest head = dequeue();
+            enqueue(value);
+            // no signalling as we are not changing "fullness" of the queue
+            return head;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
      * Add an item to the queue, with a timeout to wait while the queue is at capacity.  If a request for the
      * shadow already exists in the queue, it is merged and no extra capacity is consumed.
      *
      * @param value   a value to add
      * @param timeout how long to wait, before giving up, in terms of unit
      * @param unit    how to interpret the timeout
-     * @return true if the item was added; false if the timeout expired.
+     * @return true if the item was added; false if the timeout expired
      * @throws InterruptedException if the thread is interrupted while waiting
      * @throws NullPointerException if value is null
      */
@@ -346,6 +375,25 @@ public class RequestBlockingQueue {
     }
 
     /**
+     * Remove the request associated with the shadow. The removed request may not be the same as the value passed in -
+     * only the thing name and shadow name are used to determine which request to remove.
+     *
+     * @param value a request associated with as shadow.
+     * @return the removed request
+     */
+    public SyncRequest remove(SyncRequest value) {
+        lock.lock();
+        try {
+            SyncRequest removed = requests.remove(createKey(value));
+            signalIfNotEmpty();
+            signalIfNotFull();
+            return removed;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
      * Returns true if this queue has no items.
      *
      * @return true if the queue has no item
@@ -380,6 +428,7 @@ public class RequestBlockingQueue {
         lock.lock();
         try {
             requests.clear();
+            signalIfNotFull();
         } finally {
             lock.unlock();
         }

@@ -16,7 +16,9 @@ public enum LogEvents {
     UPDATE_THING_SHADOW("handle-update-thing-shadow"),
     DELETE_THING_SHADOW("handle-delete-thing-shadow"),
     LIST_NAMED_SHADOWS("handle-list-named-shadows-for-thing"),
-    CLOUD_DATA_CLIENT_SUBSCRIPTION_ERROR("cloud-data-client-subscription-error");
+    CLOUD_DATA_CLIENT_SUBSCRIPTION_ERROR("cloud-data-client-subscription-error"),
+    SYNC("sync"),
+    ;
 
     String code;
 
