@@ -30,9 +30,11 @@ import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.exception.SdkServiceException;
 import software.amazon.awssdk.services.iotdataplane.model.ConflictException;
+import software.amazon.awssdk.services.iotdataplane.model.DeleteThingShadowRequest;
 import software.amazon.awssdk.services.iotdataplane.model.GetThingShadowRequest;
 import software.amazon.awssdk.services.iotdataplane.model.GetThingShadowResponse;
 import software.amazon.awssdk.services.iotdataplane.model.InternalFailureException;
+import software.amazon.awssdk.services.iotdataplane.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.iotdataplane.model.ServiceUnavailableException;
 import software.amazon.awssdk.services.iotdataplane.model.ThrottlingException;
 import software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowRequest;
@@ -100,6 +102,7 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
         //TODO: Need to figure out the actual behavior here. Might need to delete the cloud here right? Also add similar
         //    logic if cloud does not exist and the local exists?
         if (!localShadowDocument.isPresent() && cloudShadowDocument != null) {
+            deleteCloudShadowDocument();
             return;
         }
 
@@ -259,6 +262,13 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
             if (getThingShadowResponse != null && getThingShadowResponse.payload() != null) {
                 return new ShadowDocument(getThingShadowResponse.payload().asByteArray());
             }
+        } catch (ResourceNotFoundException e) {
+            logger.atWarn()
+                    .kv(LOG_THING_NAME_KEY, getThingName())
+                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                    .cause(e)
+                    .log("Unable to find cloud shadow. Deleting local shadow.");
+            deleteLocalShadowDocument();
         } catch (ThrottlingException | ServiceUnavailableException | InternalFailureException e) {
             logger.atWarn()
                     .kv(LOG_THING_NAME_KEY, getThingName())
@@ -289,6 +299,14 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
         updateThingShadowRequestHandler.handleRequest(localRequest, ShadowManager.SERVICE_NAME);
     }
 
+    private void deleteLocalShadowDocument() {
+        software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowRequest localRequest =
+                new software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowRequest();
+        localRequest.setShadowName(getShadowName());
+        localRequest.setThingName(getThingName());
+        deleteThingShadowRequestHandler.handleRequest(localRequest, ShadowManager.SERVICE_NAME);
+    }
+
     private void updateCloudShadowDocument(SdkBytes updateDocument)
             throws RetryableException, SkipSyncRequestException {
         try {
@@ -296,6 +314,28 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
                     .shadowName(getShadowName())
                     .thingName(getThingName())
                     .payload(updateDocument)
+                    .build());
+        } catch (ConflictException | ThrottlingException | ServiceUnavailableException | InternalFailureException e) {
+            logger.atWarn()
+                    .kv(LOG_THING_NAME_KEY, getThingName())
+                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                    .cause(e).log("Could not execute cloud shadow delete request");
+            throw new RetryableException(e);
+        } catch (SdkServiceException | SdkClientException e) {
+            logger.atError()
+                    .kv(LOG_THING_NAME_KEY, getThingName())
+                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                    .cause(e).log("Could not execute cloud shadow delete request");
+            throw new SkipSyncRequestException(e);
+        }
+    }
+
+    private void deleteCloudShadowDocument()
+            throws RetryableException, SkipSyncRequestException {
+        try {
+            this.clientFactory.getIotDataPlaneClient().deleteThingShadow(DeleteThingShadowRequest.builder()
+                    .shadowName(getShadowName())
+                    .thingName(getThingName())
                     .build());
         } catch (ConflictException | ThrottlingException | ServiceUnavailableException | InternalFailureException e) {
             logger.atWarn()
