@@ -15,9 +15,9 @@ import com.aws.greengrass.shadowmanager.exception.SyncException;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
+import com.aws.greengrass.shadowmanager.model.UpdateThingShadowHandlerResponse;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.LongNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -91,12 +91,12 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
 
         long cloudUpdateVersion = shadowDocument.getVersion();
         long currentCloudVersion = currentSyncInformation.getCloudVersion();
-        long updatedLocalVersion = currentSyncInformation.getLocalVersion() + 1;
+        long currentLocalVersion = currentSyncInformation.getLocalVersion();
 
         // Expected sequential cloud update, routing update to local shadow
         if (cloudUpdateVersion == currentCloudVersion + 1) {
             try {
-                updateRequestWithNewLocalVersion(updatedLocalVersion);
+                updateRequestWithLocalVersion(currentLocalVersion);
 
                 UpdateThingShadowRequest request = new UpdateThingShadowRequest();
                 request.setThingName(getThingName());
@@ -104,7 +104,21 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
                 request.setPayload(updateDocument);
 
                 // TODO: verify service name is authorized
-                updateThingShadowRequestHandler.handleRequest(request, SHADOW_MANAGER_NAME);
+                UpdateThingShadowHandlerResponse updateThingShadowHandlerResponse =
+                        updateThingShadowRequestHandler.handleRequest(request, SHADOW_MANAGER_NAME);
+
+                byte[] updatedDocument = updateThingShadowHandlerResponse.getCurrentDocument();
+                long updateTime = Instant.now().getEpochSecond();
+                dao.updateSyncInformation(SyncInformation.builder()
+                        .thingName(getThingName())
+                        .shadowName(getShadowName())
+                        .lastSyncedDocument(updatedDocument)
+                        .cloudUpdateTime(updateTime)
+                        .localVersion(currentLocalVersion + 1)
+                        .cloudVersion(cloudUpdateVersion)
+                        .lastSyncTime(updateTime)
+                        .cloudDeleted(false)
+                        .build());
 
             } catch (ConflictError e) {
                 logger.atWarn()
@@ -114,7 +128,8 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
                         .setCause(e)
                         .log("Conflict error occurred when syncing local shadow");
                 throw new FullSyncRequestException(e);
-            } catch (UnauthorizedError | InvalidArgumentsError | ServiceError | IOException e) {
+            } catch (ShadowManagerDataException | UnauthorizedError | InvalidArgumentsError | ServiceError
+                    | IOException e) {
                 logger.atError()
                         .setEventType(LogEvents.LOCAL_UPDATE_SYNC_REQUEST.code())
                         .kv(LOG_THING_NAME_KEY, getThingName())
@@ -124,50 +139,13 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
                 throw new SkipSyncRequestException(e);
             }
 
-            try {
-                // update sync table by pulling new complete document from local shadow
-                ShadowDocument newLocalShadowDocument = dao.getShadowThing(getThingName(), getShadowName())
-                        .orElseThrow(() -> {
-                            SyncException syncException = new SyncException("Unable to get updated local shadow");
-                            logger.atWarn()
-                                    .setEventType(LogEvents.LOCAL_UPDATE_SYNC_REQUEST.code())
-                                    .kv(LOG_THING_NAME_KEY, getThingName())
-                                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                                    .cause(syncException)
-                                    .log("Failed to update sync table");
-                            return syncException;
-                        });
-
-                long updateTime = Instant.now().getEpochSecond();
-                dao.updateSyncInformation(SyncInformation.builder()
-                        .thingName(getThingName())
-                        .shadowName(getShadowName())
-                        .lastSyncedDocument(JsonUtil.getPayloadBytes(newLocalShadowDocument.toJson(true)))
-                        .cloudUpdateTime(updateTime)
-                        .localVersion(updatedLocalVersion)
-                        .lastSyncTime(updateTime)
-                        .cloudDeleted(false)
-                        .build());
-
-            } catch (JsonProcessingException | ShadowManagerDataException e) {
-                logger.atError()
-                        .kv(LOG_THING_NAME_KEY, getThingName())
-                        .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                        .cause(e)
-                        .log("Failed to update sync table");
-            }
-
         // edge case where might have missed sync update from cloud
         } else if (cloudUpdateVersion > currentCloudVersion + 1) {
-            throw new FullSyncRequestException("Missed cloud updates");
-
-        // edge cases where version is either the same or less than current sync version
-        } else {
-            return;
+            throw new FullSyncRequestException("Missed cloud updates, will need a full sync");
         }
     }
 
-    private void updateRequestWithNewLocalVersion(long updatedLocalVersion) throws IOException {
+    private void updateRequestWithLocalVersion(long updatedLocalVersion) throws IOException {
         Optional<JsonNode> updateDocumentRequest = JsonUtil.getPayloadJson(updateDocument);
         if (updateDocumentRequest.isPresent()) {
             ((ObjectNode) updateDocumentRequest.get()).set(SHADOW_DOCUMENT_VERSION,

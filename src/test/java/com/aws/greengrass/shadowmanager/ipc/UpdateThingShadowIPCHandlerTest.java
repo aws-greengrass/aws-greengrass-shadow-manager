@@ -5,6 +5,7 @@
 
 package com.aws.greengrass.shadowmanager.ipc;
 
+import com.aws.greengrass.shadowmanager.model.UpdateThingShadowHandlerResponse;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest;
+import software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowResponse;
 import software.amazon.awssdk.crt.eventstream.ServerConnectionContinuation;
 import software.amazon.awssdk.eventstreamrpc.AuthenticationData;
 import software.amazon.awssdk.eventstreamrpc.OperationContinuationHandlerContext;
@@ -21,10 +23,7 @@ import static com.aws.greengrass.shadowmanager.TestUtils.TEST_SERVICE;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.*;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 class UpdateThingShadowIPCHandlerTest {
@@ -46,8 +45,8 @@ class UpdateThingShadowIPCHandlerTest {
     @Test
     void GIVEN_update_thing_shadow_ipc_handler_WHEN_handle_request_THEN_request_handler_is_called() {
         try (UpdateThingShadowIPCHandler updateThingShadowIPCHandler = new UpdateThingShadowIPCHandler(mockContext, mockUpdateThingShadowRequestHandler)) {
+            when(mockUpdateThingShadowRequestHandler.handleRequest(any(UpdateThingShadowRequest.class), anyString())).thenReturn(new UpdateThingShadowHandlerResponse(new UpdateThingShadowResponse(), new byte[0]));
             assertDoesNotThrow(() -> updateThingShadowIPCHandler.handleRequest(mock(UpdateThingShadowRequest.class)));
-
             verify(mockUpdateThingShadowRequestHandler, times(1)).handleRequest(any(UpdateThingShadowRequest.class), anyString());
         }
     }
