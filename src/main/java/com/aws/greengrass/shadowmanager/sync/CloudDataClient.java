@@ -32,6 +32,8 @@ import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_UPDATE_SUB
  * Class to subscribe to IoT Core Shadow topics.
  */
 public class CloudDataClient {
+    // TODO: Implement blocking queue for processing subscription requests
+
     private static final Logger logger = LogManager.getLogger(CloudDataClient.class);
     private final SyncHandler syncHandler;
     private final MqttClient mqttClient;
@@ -105,12 +107,15 @@ public class CloudDataClient {
      * @throws InterruptedException Interrupt occurred while trying to clear subscriptions
      */
     public synchronized void clearSubscriptions() throws InterruptedException {
-        for (String topic : subscribedUpdateShadowTopics) {
+
+        Set<String> tempTopicSet = new HashSet<>(subscribedUpdateShadowTopics);
+        for (String topic : tempTopicSet) {
             unsubscribeToShadow(topic, this::handleUpdate);
             subscribedUpdateShadowTopics.remove(topic);
         }
 
-        for (String topic : subscribedDeleteShadowTopics) {
+        tempTopicSet = new HashSet<>(subscribedDeleteShadowTopics);
+        for (String topic : tempTopicSet) {
             unsubscribeToShadow(topic, this::handleDelete);
             subscribedDeleteShadowTopics.remove(topic);
         }
