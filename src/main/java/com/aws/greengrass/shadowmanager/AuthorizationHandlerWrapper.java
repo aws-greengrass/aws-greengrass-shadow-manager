@@ -53,12 +53,25 @@ public class AuthorizationHandlerWrapper {
      */
     public void doAuthorization(String opCode, String serviceName, ShadowRequest shadowRequest)
             throws AuthorizationException {
+        doAuthorization(opCode, serviceName, shadowRequest.getShadowTopicPrefix());
+    }
+
+    /**
+     * Checks if service is authorized to run the operation on the target shadow resource.
+     *
+     * @param opCode      The operation to be executed
+     * @param serviceName The service trying to run the operation
+     * @param resource    The resource on which the operation is happening.
+     * @throws AuthorizationException When the service is unauthorized to execute the operation on shadow resource
+     */
+    public void doAuthorization(String opCode, String serviceName, String resource)
+            throws AuthorizationException {
         authorizationHandler.isAuthorized(
                 SHADOW_MANAGER_NAME,
                 Permission.builder()
                         .principal(serviceName)
                         .operation(opCode)
-                        .resource(shadowRequest.getShadowTopicPrefix())
+                        .resource(resource)
                         .build());
     }
 }

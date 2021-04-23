@@ -33,9 +33,43 @@ public final class Validator {
      * Validates the shadow request if the thing name and shadow name has valid length and pattern.
      *
      * @param shadowRequest The shadow request object containing the thingName and shadowName
+     * @throws InvalidRequestParametersException if the thing name or shadow name validation fails.
      */
     public static void validateShadowRequest(ShadowRequest shadowRequest) {
-        String thingName = shadowRequest.getThingName();
+        validateThingName(shadowRequest.getThingName());
+        validateShadowName(shadowRequest.getShadowName());
+    }
+
+    /**
+     * Validates the shadow name has valid length and pattern.
+     *
+     * @param shadowName The shadow name to validate.
+     * @throws InvalidRequestParametersException if the shadow name validation fails.
+     */
+    public static void validateShadowName(String shadowName) {
+        if (Utils.isEmpty(shadowName)) {
+            return;
+        }
+
+        if (shadowName.length() > MAX_SHADOW_NAME_LENGTH) {
+            throw new InvalidRequestParametersException(ErrorMessage.createInvalidShadowNameMessage(String.format(
+                    "ShadowName has a maximum length of %d", MAX_SHADOW_NAME_LENGTH)));
+        }
+
+        Matcher matcher = PATTERN.matcher(shadowName);
+        if (!matcher.matches()) {
+            throw new InvalidRequestParametersException(ErrorMessage.createInvalidShadowNameMessage(String.format(
+                    "ShadowName must match pattern %s", SHADOW_PATTERN)));
+        }
+    }
+
+    /**
+     * Validates the thing name has valid length and pattern.
+     *
+     * @param thingName The thing name to validate.
+     * @throws InvalidRequestParametersException if the thing name validation fails.
+     */
+    public static void validateThingName(String thingName) {
         if (Utils.isEmpty(thingName)) {
             throw new InvalidRequestParametersException(ErrorMessage.createInvalidThingNameMessage(
                     "ThingName is missing"));
@@ -50,22 +84,6 @@ public final class Validator {
         if (!matcher.matches()) {
             throw new InvalidRequestParametersException(ErrorMessage.createInvalidThingNameMessage(String.format(
                     "ThingName must match pattern %s", SHADOW_PATTERN)));
-        }
-
-        String shadowName = shadowRequest.getShadowName();
-        if (Utils.isEmpty(shadowName)) {
-            return;
-        }
-
-        if (shadowName.length() > MAX_SHADOW_NAME_LENGTH) {
-            throw new InvalidRequestParametersException(ErrorMessage.createInvalidShadowNameMessage(String.format(
-                    "ShadowName has a maximum length of %d", MAX_SHADOW_NAME_LENGTH)));
-        }
-
-        matcher = PATTERN.matcher(shadowName);
-        if (!matcher.matches()) {
-            throw new InvalidRequestParametersException(ErrorMessage.createInvalidShadowNameMessage(String.format(
-                    "ShadowName must match pattern %s", SHADOW_PATTERN)));
         }
     }
 

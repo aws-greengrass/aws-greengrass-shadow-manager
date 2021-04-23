@@ -32,6 +32,20 @@ public final class TestUtils {
         );
     }
 
+    static Stream<Arguments> invalidThingNames() {
+        return Stream.of(
+                arguments(INVALID_NAME_PATTERN),
+                arguments(INVALID_NAME_LENGTH)
+        );
+    }
+
+    static Stream<Arguments> invalidShadowNames() {
+        return Stream.of(
+                arguments(INVALID_NAME_PATTERN),
+                arguments(INVALID_NAME_LENGTH)
+        );
+    }
+
     private TestUtils() {
     }
 }
