@@ -136,12 +136,4 @@ public class ShadowState {
     public boolean isEmpty() {
         return isNullOrMissing(reported) && isNullOrMissing(desired);
     }
-
-    public void syncDesired(JsonNode desired) {
-
-    }
-
-    public void syncReported(JsonNode reported) {
-
-    }
 }

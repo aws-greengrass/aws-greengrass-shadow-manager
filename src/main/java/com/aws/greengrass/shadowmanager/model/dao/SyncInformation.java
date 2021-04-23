@@ -11,7 +11,7 @@ import lombok.Getter;
 
 import java.time.Instant;
 
-@Builder(toBuilder = true)
+@Builder
 @Getter
 @Data
 public class SyncInformation {

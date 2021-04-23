@@ -246,7 +246,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      *
      * @param thingName       Name of the Thing for the shadow topic prefix.
      * @param shadowName      Name of shadow topic prefix for thing.
-     * @return 1 if the shadow document does not exists; Else the correct version.
+     * @return Optional containing the new shadow document version if document exists; Else an empty optional
      */
     @Override
     public Optional<Long> getShadowDocumentVersion(String thingName, String shadowName) {
