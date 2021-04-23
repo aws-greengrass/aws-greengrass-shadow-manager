@@ -73,13 +73,13 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
      * Executes a cloud shadow update after a successful local shadow update.
      *
      * @throws SyncException            if there is any exception while making the HTTP shadow request to the cloud.
-     * @throws RetryableException       if the cloud version is not the same as the version of the shadow on the cloud
-     *                                  or if the cloud is throttling the request.
+     * @throws ConflictException        if cloud version is not the same as the version in the cloud.
+     * @throws RetryableException       if the cloud is throttling the request or some other transient issue.
      * @throws SkipSyncRequestException if the update request on the cloud shadow failed for another 400 exception.
      */
     @SuppressWarnings("PMD.PrematureDeclaration")
     @Override
-    public void execute() throws SyncException, RetryableException, SkipSyncRequestException {
+    public void execute() throws SyncException, RetryableException, SkipSyncRequestException, ConflictException {
         Optional<ShadowDocument> shadowDocument = this.dao.getShadowThing(getThingName(), getShadowName());
         if (!shadowDocument.isPresent()) {
             logger.atWarn()
@@ -96,7 +96,13 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
                     .thingName(getThingName())
                     .payload(SdkBytes.fromByteArray(JsonUtil.getPayloadBytes(updateDocument)))
                     .build());
-        } catch (ConflictException | ThrottlingException | ServiceUnavailableException | InternalFailureException e) {
+        } catch (ConflictException e) {
+            logger.atWarn()
+                    .kv(LOG_THING_NAME_KEY, getThingName())
+                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                    .cause(e).log("Could not execute cloud shadow delete request");
+            throw e;
+        } catch (ThrottlingException | ServiceUnavailableException | InternalFailureException e) {
             logger.atWarn()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())

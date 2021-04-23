@@ -6,7 +6,7 @@
 package com.aws.greengrass.shadowmanager.sync.model;
 
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
-import com.aws.greengrass.shadowmanager.exception.FullSyncRequestException;
+import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowRequestHandler;
@@ -71,7 +71,7 @@ public class LocalUpdateSyncRequestTest {
 
 
     @Test
-    void GIVEN_good_local_update_request_WHEN_execute_THEN_successfully_updates_local_shadow_and_sync_information() throws SkipSyncRequestException, FullSyncRequestException {
+    void GIVEN_good_local_update_request_WHEN_execute_THEN_successfully_updates_local_shadow_and_sync_information() throws SkipSyncRequestException, RetryableException {
         lenient().when(mockDao.updateSyncInformation(syncInformationCaptor.capture())).thenReturn(true);
 
         long epochSeconds = Instant.now().getEpochSecond();
@@ -120,7 +120,9 @@ public class LocalUpdateSyncRequestTest {
     }
 
     @Test
-    void GIVEN_cloud_update_with_much_higher_version_WHEN_execute_THEN_throw_full_sync_request_exception() {
+    void GIVEN_cloud_update_with_much_higher_version_WHEN_execute_THEN_throw_full_sync_request_exception(ExtensionContext context) {
+        ignoreExceptionOfType(context, ConflictError.class);
+
         final byte[] cloudPayload =  "{\"version\": 10, \"state\": {\"reported\": {\"name\": \"The Beatles\"}}}".getBytes();
 
         long epochSeconds = Instant.now().getEpochSecond();
@@ -135,8 +137,8 @@ public class LocalUpdateSyncRequestTest {
                 .build()));
 
         LocalUpdateSyncRequest request = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, cloudPayload, mockDao, mockUpdateThingShadowRequestHandler);
-        FullSyncRequestException thrown = assertThrows(FullSyncRequestException.class, request::execute);
-        assertThat(thrown.getMessage(), Matchers.startsWith("Missed cloud updates"));
+        ConflictError thrown = assertThrows(ConflictError.class, request::execute);
+        assertThat(thrown.getMessage(), Matchers.startsWith("Missed updates"));
 
         verify(mockDao, times(1)).getShadowSyncInformation(anyString(), anyString());
         verify(mockUpdateThingShadowRequestHandler, times(0)).handleRequest(any(), any());
@@ -187,8 +189,8 @@ public class LocalUpdateSyncRequestTest {
                 .thenThrow(new ConflictError(SAMPLE_EXCEPTION_MESSAGE));
 
         LocalUpdateSyncRequest request = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, UPDATE_DOCUMENT, mockDao, mockUpdateThingShadowRequestHandler);
-        FullSyncRequestException thrown = assertThrows(FullSyncRequestException.class, request::execute);
-        assertThat(thrown.getCause(), is(instanceOf(ConflictError.class)));
+        ConflictError thrown = assertThrows(ConflictError.class, request::execute);
+        assertThat(thrown.getMessage(), is(equalTo(SAMPLE_EXCEPTION_MESSAGE)));
 
         verify(mockDao, times(1)).getShadowSyncInformation(anyString(), anyString());
         verify(mockUpdateThingShadowRequestHandler, times(1)).handleRequest(any(), any());

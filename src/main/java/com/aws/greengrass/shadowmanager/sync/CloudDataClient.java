@@ -12,6 +12,7 @@ import com.aws.greengrass.mqttclient.SubscribeRequest;
 import com.aws.greengrass.mqttclient.UnsubscribeRequest;
 import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.model.ShadowRequest;
+import com.aws.greengrass.util.Pair;
 import software.amazon.awssdk.crt.mqtt.MqttMessage;
 
 import java.util.HashSet;
@@ -52,19 +53,20 @@ public class CloudDataClient {
     }
 
     /**
-     * Updates and subscribes to set of update/delete topics.
-     * TODO: determine correct input type based on who processes configuration
+     * Updates and subscribes to set of update/delete topics for set of shadows.
      *
-     * @param topics Set of shadow topic prefixes to subscribe to the update/delete topic
+     * @param shadowSet Set of shadow topic prefixes to subscribe to the update/delete topic
      * @throws InterruptedException Interrupt occurred while trying to update subscriptions
      */
-    public synchronized void updateSubscriptions(Set<String> topics) throws InterruptedException {
+    public synchronized void updateSubscriptions(Set<Pair<String, String>> shadowSet) throws InterruptedException {
         Set<String> newUpdateTopics = new HashSet<>();
         Set<String> newDeleteTopics = new HashSet<>();
-        topics.forEach(s -> {
-            newUpdateTopics.add(s + SHADOW_UPDATE_SUBSCRIPTION_TOPIC);
-            newDeleteTopics.add(s + SHADOW_DELETE_SUBSCRIPTION_TOPIC);
-        });
+
+        for (Pair<String,String> shadow : shadowSet) {
+            ShadowRequest request = new ShadowRequest(shadow.getLeft(), shadow.getRight());
+            newUpdateTopics.add(request.getShadowTopicPrefix() + SHADOW_UPDATE_SUBSCRIPTION_TOPIC);
+            newDeleteTopics.add(request.getShadowTopicPrefix() + SHADOW_DELETE_SUBSCRIPTION_TOPIC);
+        }
 
         // keep track of update/delete topics separately to keep track of faulty subscriptions
         updateTopicSubscriptions(subscribedUpdateShadowTopics, newUpdateTopics, this::handleUpdate);

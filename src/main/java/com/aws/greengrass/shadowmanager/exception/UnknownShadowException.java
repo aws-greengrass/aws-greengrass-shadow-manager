@@ -6,17 +6,12 @@
 package com.aws.greengrass.shadowmanager.exception;
 
 /**
- * Exception indicating that a full sync is necessary during execution of a sync request.
+ * Exception indicating that expected shadow was not found.
  */
-public class FullSyncRequestException extends Exception {
+public class UnknownShadowException extends RuntimeException {
     private static final long serialVersionUID = -1488980916089225328L;
 
-    public FullSyncRequestException(Throwable e) {
-        super(e);
-    }
-
-    public FullSyncRequestException(String message) {
+    public UnknownShadowException(final String message) {
         super(message);
     }
-
 }

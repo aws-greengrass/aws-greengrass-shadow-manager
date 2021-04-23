@@ -8,10 +8,10 @@ package com.aws.greengrass.shadowmanager.sync.model;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
-import com.aws.greengrass.shadowmanager.exception.FullSyncRequestException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.exception.SyncException;
+import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
@@ -71,7 +71,7 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
      * Main execution thread for syncing cloud update to local shadow.
      */
     @Override
-    public void execute() throws FullSyncRequestException, SyncException, SkipSyncRequestException {
+    public void execute() throws SyncException, SkipSyncRequestException, ConflictError, UnknownShadowException {
         ShadowDocument shadowDocument;
         try {
             shadowDocument = new ShadowDocument(updateDocument);
@@ -86,8 +86,17 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
         }
 
         SyncInformation currentSyncInformation = dao.getShadowSyncInformation(getThingName(), getShadowName())
-                .orElseThrow(() -> new FullSyncRequestException("Missing sync information. A full sync needed "
-                        + "to reconcile shadow."));
+                .orElseThrow(() ->  {
+                    UnknownShadowException unknownShadowException = new UnknownShadowException("Shadow not found "
+                            + "in sync table.");
+                    logger.atError()
+                            .setEventType(LogEvents.LOCAL_UPDATE_SYNC_REQUEST.code())
+                            .kv(LOG_THING_NAME_KEY, getThingName())
+                            .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                            .setCause(unknownShadowException)
+                            .log("Failed to sync cloud update to local shadow");
+                    return unknownShadowException;
+                });
 
         long cloudUpdateVersion = shadowDocument.getVersion();
         long currentCloudVersion = currentSyncInformation.getCloudVersion();
@@ -126,8 +135,8 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
                         .kv(LOG_THING_NAME_KEY, getThingName())
                         .kv(LOG_SHADOW_NAME_KEY, getShadowName())
                         .setCause(e)
-                        .log("Conflict error occurred when syncing local shadow");
-                throw new FullSyncRequestException(e);
+                        .log("Failed to execute local update sync request");
+                throw e;
             } catch (ShadowManagerDataException | UnauthorizedError | InvalidArgumentsError | ServiceError
                     | IOException e) {
                 logger.atError()
@@ -141,7 +150,14 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
 
         // edge case where might have missed sync update from cloud
         } else if (cloudUpdateVersion > currentCloudVersion + 1) {
-            throw new FullSyncRequestException("Missed cloud updates, will need a full sync");
+            ConflictError conflictError = new ConflictError("Missed updates from the cloud");
+            logger.atWarn()
+                    .setEventType(LogEvents.LOCAL_UPDATE_SYNC_REQUEST.code())
+                    .kv(LOG_THING_NAME_KEY, getThingName())
+                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                    .setCause(conflictError)
+                    .log("Failed to execute local update sync request");
+            throw conflictError;
         }
     }
 
