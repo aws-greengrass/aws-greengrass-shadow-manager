@@ -25,6 +25,7 @@ import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.model.configuration.ShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfiguration;
+import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientFactory;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
@@ -40,6 +41,7 @@ import software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService;
 
 import java.io.IOException;
 import java.sql.SQLException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -49,6 +51,7 @@ import java.util.Optional;
 import javax.inject.Inject;
 
 import static com.aws.greengrass.componentmanager.KernelConfigResolver.CONFIGURATION_CONFIG_KEY;
+import static com.aws.greengrass.shadowmanager.model.Constants.CLASSIC_SHADOW_IDENTIFIER;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SYNCHRONIZATION_TOPIC;
@@ -175,6 +178,9 @@ public class ShadowManager extends PluginService {
 
                 // Remove sync information of shadows that are no longer being synced.
                 deleteRemovedSyncInformation();
+
+                // Initialize the sync information if the sync information does not exist.
+                initializeSyncInfo();
             } catch (InvalidConfigurationException e) {
                 serviceErrored(e);
             }
@@ -235,6 +241,32 @@ public class ShadowManager extends PluginService {
 
         removedShadowList.forEach(shadowThingPair ->
                 dao.deleteSyncInformation(shadowThingPair.getLeft(), shadowThingPair.getRight()));
+    }
+
+    private void initializeSyncInfo() {
+        long epochSeconds = Instant.EPOCH.getEpochSecond();
+        for (ThingShadowSyncConfiguration configuration : syncConfiguration.getSyncConfigurationList()) {
+            if (configuration.isSyncClassicShadow()) {
+                insertSyncInfoIfNotPresent(epochSeconds, configuration, CLASSIC_SHADOW_IDENTIFIER);
+            }
+            for (String shadowName : configuration.getSyncNamedShadows()) {
+                insertSyncInfoIfNotPresent(epochSeconds, configuration, shadowName);
+            }
+        }
+    }
+
+    private void insertSyncInfoIfNotPresent(long epochSeconds, ThingShadowSyncConfiguration configuration,
+                                            String shadowName) {
+        this.dao.insertSyncInfoIfNotExists(SyncInformation.builder()
+                .thingName(configuration.getThingName())
+                .shadowName(shadowName)
+                .cloudDeleted(false)
+                .cloudVersion(0)
+                .cloudUpdateTime(epochSeconds)
+                .lastSyncedDocument(null)
+                .localVersion(0)
+                .lastSyncTime(epochSeconds)
+                .build());
     }
 
     private Optional<ThingShadowSyncConfiguration> getNucleusThingShadowSyncConfiguration() {

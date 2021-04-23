@@ -79,9 +79,17 @@ public interface ShadowManagerDAO {
     /**
      * Attempts to delete the cloud shadow document in the sync table.
      *
-     * @param thingName       Name of the Thing for the shadow topic prefix.
-     * @param shadowName      Name of shadow topic prefix for thing.
+     * @param thingName  Name of the Thing for the shadow topic prefix.
+     * @param shadowName Name of shadow topic prefix for thing.
      * @return true if the cloud document (soft) delete was successful or not.
      */
     boolean deleteSyncInformation(String thingName, String shadowName);
+
+    /**
+     * Attempts to insert a new sync information row for a thing's shadow if it does not exist.
+     *
+     * @param request The update shadow sync information request containing the necessary information to update.
+     * @return true if the insert is successful; Else false.
+     */
+    boolean insertSyncInfoIfNotExists(SyncInformation request);
 }

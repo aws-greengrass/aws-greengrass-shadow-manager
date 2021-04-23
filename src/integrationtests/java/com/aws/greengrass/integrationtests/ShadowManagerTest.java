@@ -171,7 +171,20 @@ class ShadowManagerTest extends GGServiceTestUtil {
         createThingShadowSyncInfo(impl, THING_NAME);
         createThingShadowSyncInfo(impl, THING_NAME2);
 
-        List<Map<String, Object>> shadowDocumentsList = new ArrayList<>();
+        List<Pair<String, String>> allSyncedShadowNames = impl.listSyncedShadows();
+        assertThat(allSyncedShadowNames, containsInAnyOrder(
+                new Pair<>(THING_NAME, "Shadow-0"),
+                new Pair<>(THING_NAME, "Shadow-1"),
+                new Pair<>(THING_NAME, "Shadow-2"),
+                new Pair<>(THING_NAME, "Shadow-3"),
+                new Pair<>(THING_NAME, "Shadow-4"),
+                new Pair<>(THING_NAME2, "Shadow-0"),
+                new Pair<>(THING_NAME2, "Shadow-1"),
+                new Pair<>(THING_NAME2, "Shadow-2"),
+                new Pair<>(THING_NAME2, "Shadow-3"),
+                new Pair<>(THING_NAME2, "Shadow-4")));
+
+    List<Map<String, Object>> shadowDocumentsList = new ArrayList<>();
         Map<String, Object> thingAMap = new HashMap<>();
         thingAMap.put(CONFIGURATION_THING_NAME_TOPIC, THING_NAME);
         thingAMap.put(CONFIGURATION_CLASSIC_SHADOW_TOPIC, false);
@@ -184,10 +197,12 @@ class ShadowManagerTest extends GGServiceTestUtil {
         shadowManager.getConfig().lookupTopics(CONFIGURATION_CONFIG_KEY).lookupTopics(CONFIGURATION_SYNCHRONIZATION_TOPIC)
                 .replaceAndWait(Collections.singletonMap(CONFIGURATION_SHADOW_DOCUMENTS_TOPIC, shadowDocumentsList));
 
-        List<Pair<String, String>> allSyncedShadowNames = impl.listSyncedShadows();
+        allSyncedShadowNames = impl.listSyncedShadows();
         assertThat(allSyncedShadowNames, containsInAnyOrder(
                 new Pair<>(THING_NAME, "Shadow-0"),
                 new Pair<>(THING_NAME, "Shadow-1"),
-                new Pair<>(THING_NAME2, "Shadow-0")));
+                new Pair<>(THING_NAME2, ""),
+                new Pair<>(THING_NAME2, "Shadow-0"),
+                new Pair<>(THING_NAME2, "Shadow-5")));
     }
 }
