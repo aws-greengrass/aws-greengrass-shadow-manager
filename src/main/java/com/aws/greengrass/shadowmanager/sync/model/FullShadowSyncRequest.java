@@ -186,35 +186,6 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
         return null;
     }
 
-    /**
-     * Updates the local shadow since it does not exist.
-     *
-     * @param cloudShadowDocument The cloud document.
-     * @throws SkipSyncRequestException if there was an issue serializing shadow document.
-     */
-    //TODO: Mostly remove this function.
-    private void updateNonExistentLocalDocument(ShadowDocument cloudShadowDocument) throws SkipSyncRequestException {
-        // Get the latest shadow version from the DAO if it exists.
-        Optional<Long> localVersion = this.dao.getShadowDocumentVersion(getThingName(), getShadowName());
-        ObjectNode updateDocument = OBJECT_MAPPER.createObjectNode();
-        updateDocument.set(SHADOW_DOCUMENT_STATE, cloudShadowDocument.toJson(false));
-        // Append the version if the version exists.
-        localVersion.ifPresent(version -> updateDocument.set(SHADOW_DOCUMENT_VERSION, new LongNode(version)));
-        updateLocalShadowDocument(getSdkBytes(updateDocument));
-
-        // Remove the version since we don't add the version in the document column.
-        updateDocument.remove(SHADOW_DOCUMENT_VERSION);
-        this.dao.updateSyncInformation(SyncInformation.builder()
-                .localVersion(localVersion.isPresent() ? localVersion.get() : 1)
-                .cloudVersion(cloudShadowDocument.getVersion())
-                .shadowName(getShadowName())
-                .thingName(getThingName())
-                // TODO: get the latest from metadata?
-                .cloudUpdateTime(Instant.now().getEpochSecond())
-                .lastSyncedDocument(getSdkBytes(updateDocument).asByteArray())
-                .build());
-    }
-
     private JsonNode getReported(ShadowDocument shadowDocument) {
         if (shadowDocument == null) {
             return null;
@@ -319,13 +290,13 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
             logger.atWarn()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                    .cause(e).log("Could not execute cloud shadow delete request");
+                    .cause(e).log("Could not execute cloud shadow update request");
             throw new RetryableException(e);
         } catch (SdkServiceException | SdkClientException e) {
             logger.atError()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                    .cause(e).log("Could not execute cloud shadow delete request");
+                    .cause(e).log("Could not execute cloud shadow update request");
             throw new SkipSyncRequestException(e);
         }
     }
