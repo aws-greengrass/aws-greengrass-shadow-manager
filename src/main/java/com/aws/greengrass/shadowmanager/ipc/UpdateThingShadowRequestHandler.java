@@ -20,6 +20,7 @@ import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.model.ResponseMessageBuilder;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.ShadowRequest;
+import com.aws.greengrass.shadowmanager.model.UpdateThingShadowHandlerResponse;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.shadowmanager.util.ShadowWriteSynchronizeHelper;
@@ -88,7 +89,7 @@ public class UpdateThingShadowRequestHandler {
      * @throws ServiceError          if database error occurs
      */
     @SuppressWarnings({"PMD.PreserveStackTrace", "PMD.PrematureDeclaration", "checkstyle:JavadocMethod"})
-    public UpdateThingShadowResponse handleRequest(UpdateThingShadowRequest request, String serviceName) {
+    public UpdateThingShadowHandlerResponse handleRequest(UpdateThingShadowRequest request, String serviceName) {
         return translateExceptions(() -> {
             String thingName = request.getThingName();
             String shadowName = request.getShadowName();
@@ -174,8 +175,8 @@ public class UpdateThingShadowRequestHandler {
                             .update(updateDocumentRequest);
 
                     // Update the new document in the DAO.
-                    Optional<byte[]> result = dao.updateShadowThing(thingName, shadowName,
-                            JsonUtil.getPayloadBytes(updatedDocument.toJson(false)),
+                    byte[] updateDocumentBytes = JsonUtil.getPayloadBytes(updatedDocument.toJson(false));
+                    Optional<byte[]> result = dao.updateShadowThing(thingName, shadowName, updateDocumentBytes,
                             updatedDocument.getVersion());
                     if (!result.isPresent()) {
                         ServiceError error = new ServiceError("Unexpected error occurred in trying to "
@@ -213,14 +214,14 @@ public class UpdateThingShadowRequestHandler {
                             .publishOperation(Operation.UPDATE_SHADOW)
                             .build());
 
-                    UpdateThingShadowResponse response = new UpdateThingShadowResponse();
-                    response.setPayload(responseNodeBytes);
+                    UpdateThingShadowResponse updateThingShadowResponse = new UpdateThingShadowResponse();
+                    updateThingShadowResponse.setPayload(responseNodeBytes);
                     logger.atDebug()
                             .kv(LOG_THING_NAME_KEY, thingName)
                             .kv(LOG_SHADOW_NAME_KEY, shadowName)
                             .log("Successfully updated shadow");
                     this.syncHandler.pushCloudUpdateSyncRequest(thingName, shadowName, updateDocumentRequest);
-                    return response;
+                    return new UpdateThingShadowHandlerResponse(updateThingShadowResponse, updateDocumentBytes);
                 } catch (ShadowManagerDataException | IOException e) {
                     throwServiceError(thingName, shadowName, clientToken, e);
                 }

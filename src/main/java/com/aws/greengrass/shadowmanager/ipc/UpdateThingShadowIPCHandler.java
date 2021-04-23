@@ -5,6 +5,7 @@
 
 package com.aws.greengrass.shadowmanager.ipc;
 
+import com.aws.greengrass.shadowmanager.model.UpdateThingShadowHandlerResponse;
 import software.amazon.awssdk.aws.greengrass.GeneratedAbstractUpdateThingShadowOperationHandler;
 import software.amazon.awssdk.aws.greengrass.model.ConflictError;
 import software.amazon.awssdk.aws.greengrass.model.InvalidArgumentsError;
@@ -54,7 +55,8 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
      */
     @Override
     public UpdateThingShadowResponse handleRequest(UpdateThingShadowRequest request) {
-        return this.handler.handleRequest(request, serviceName);
+        UpdateThingShadowHandlerResponse response = this.handler.handleRequest(request, serviceName);
+        return response.getUpdateThingShadowResponse();
     }
 
     @Override

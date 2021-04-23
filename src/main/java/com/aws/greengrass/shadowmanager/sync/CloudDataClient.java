@@ -37,7 +37,7 @@ public class CloudDataClient {
     private final Set<String> subscribedUpdateShadowTopics = new HashSet<>();
     private final Set<String> subscribedDeleteShadowTopics = new HashSet<>();
     private final Pattern shadowPattern = Pattern.compile("\\$aws\\/things\\/(.*)\\/shadow(\\/name\\/(.*))?\\/");
-    private final int MAX_SUBSCRIPTION_RETRIES = 3;
+    private final int maxRetryCount = 3;
 
     /**
      * Ctr for CloudDataClient.
@@ -172,7 +172,7 @@ public class CloudDataClient {
      */
     private boolean subscribeToShadow(String topic, Consumer<MqttMessage> callback)
             throws InterruptedException, ExecutionException {
-        for (int i = 0; i < MAX_SUBSCRIPTION_RETRIES; i++){
+        for (int i = 0; i < maxRetryCount; i++) {
             try {
                 mqttClient.subscribe(SubscribeRequest.builder().topic(topic).callback(callback).build());
                 return true;
@@ -197,7 +197,7 @@ public class CloudDataClient {
      */
     private boolean unsubscribeToShadow(String topic, Consumer<MqttMessage> callback)
             throws InterruptedException, ExecutionException {
-        for (int i = 0; i < MAX_SUBSCRIPTION_RETRIES; i++){
+        for (int i = 0; i < maxRetryCount; i++) {
             try {
                 mqttClient.unsubscribe(UnsubscribeRequest.builder().topic(topic).callback(callback).build());
                 return true;
