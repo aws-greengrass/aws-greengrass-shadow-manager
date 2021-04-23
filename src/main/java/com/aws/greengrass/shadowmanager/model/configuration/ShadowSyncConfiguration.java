@@ -6,6 +6,7 @@
 package com.aws.greengrass.shadowmanager.model.configuration;
 
 import com.aws.greengrass.shadowmanager.exception.InvalidConfigurationException;
+import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.util.Validator;
 import com.aws.greengrass.util.Coerce;
 import com.aws.greengrass.util.SerializerFactory;
@@ -47,10 +48,14 @@ public class ShadowSyncConfiguration {
      */
     public static ShadowSyncConfiguration processConfiguration(Map<String, Object> configTopicsPojo, String thingName) {
         List<ThingShadowSyncConfiguration> syncConfigurationList = new ArrayList<>();
-        int maxOutboundSyncUpdatesPerSecond = DEFAULT_MAX_OUTBOUND_SYNC_UPDATES_PS;
-        processNucleusThingConfiguration(configTopicsPojo, thingName, syncConfigurationList);
-        processOtherThingConfigurations(configTopicsPojo, syncConfigurationList);
+        try {
+            processNucleusThingConfiguration(configTopicsPojo, thingName, syncConfigurationList);
+            processOtherThingConfigurations(configTopicsPojo, syncConfigurationList);
+        } catch (InvalidRequestParametersException e) {
+            throw new InvalidConfigurationException(e);
+        }
 
+        int maxOutboundSyncUpdatesPerSecond = DEFAULT_MAX_OUTBOUND_SYNC_UPDATES_PS;
         if (configTopicsPojo.containsKey(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC)) {
             int newMaxOutboundSyncUpdatesPerSecond = Coerce.toInt(configTopicsPojo
                     .get(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC));
@@ -70,6 +75,13 @@ public class ShadowSyncConfiguration {
                 .build();
     }
 
+    /**
+     * Processes the device thing configuration.
+     *
+     * @param configTopicsPojo      The POJO for the configuration topic of device thing.
+     * @param syncConfigurationList the sync configuration list to add the device thing configuration to.
+     * @throws InvalidRequestParametersException if the named shadow validation fails.
+     */
     private static void processOtherThingConfigurations(Map<String, Object> configTopicsPojo,
                                                         List<ThingShadowSyncConfiguration> syncConfigurationList) {
         configTopicsPojo.computeIfPresent(CONFIGURATION_SHADOW_DOCUMENTS_TOPIC, (ignored, shadowDocumentsObject) -> {
@@ -81,6 +93,10 @@ public class ShadowSyncConfiguration {
                             ThingShadowSyncConfiguration syncConfiguration = SerializerFactory
                                     .getFailSafeJsonObjectMapper()
                                     .convertValue(shadowDocumentsToSync, ThingShadowSyncConfiguration.class);
+                            Validator.validateThingName(syncConfiguration.getThingName());
+                            for (String namedShadow : syncConfiguration.getSyncNamedShadows()) {
+                                Validator.validateShadowName(namedShadow);
+                            }
                             syncConfigurationList.add(syncConfiguration);
                         } catch (IllegalArgumentException e) {
                             throw new InvalidConfigurationException(e);
@@ -95,6 +111,14 @@ public class ShadowSyncConfiguration {
         });
     }
 
+    /**
+     * Processes the Nucleus thing configuration.
+     *
+     * @param configTopicsPojo      The POJO for the configuration topic of nucleus thing.
+     * @param thingName             The nucleus thing name.
+     * @param syncConfigurationList the sync configuration list to add the nucleus thing configuration to.
+     * @throws InvalidRequestParametersException if the named shadow validation fails.
+     */
     private static void processNucleusThingConfiguration(Map<String, Object> configTopicsPojo, String thingName,
                                                          List<ThingShadowSyncConfiguration> syncConfigurationList) {
         configTopicsPojo.computeIfPresent(CONFIGURATION_NUCLEUS_THING_TOPIC, (ignored, nucleusThingConfigObject) -> {
@@ -105,15 +129,19 @@ public class ShadowSyncConfiguration {
                         .isNucleusThing(true)
                         .thingName(thingName)
                         .build();
-                for (Map.Entry<String,Object> configObjectEntry : nucleusThingConfig.entrySet()) {
+                for (Map.Entry<String, Object> configObjectEntry : nucleusThingConfig.entrySet()) {
                     switch (configObjectEntry.getKey()) {
                         case CONFIGURATION_CLASSIC_SHADOW_TOPIC:
                             syncConfiguration = syncConfiguration.toBuilder()
                                     .syncClassicShadow(Coerce.toBoolean(configObjectEntry.getValue())).build();
                             break;
                         case CONFIGURATION_NAMED_SHADOWS_TOPIC:
+                            List<String> namedShadows = Coerce.toStringList(configObjectEntry.getValue());
+                            for (String namedShadow : namedShadows) {
+                                Validator.validateShadowName(namedShadow);
+                            }
                             syncConfiguration = syncConfiguration.toBuilder()
-                                    .syncNamedShadows(Coerce.toStringList(configObjectEntry.getValue()))
+                                    .syncNamedShadows(namedShadows)
                                     .build();
                             break;
                         default:
