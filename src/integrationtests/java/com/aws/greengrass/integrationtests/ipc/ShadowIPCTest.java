@@ -37,6 +37,8 @@ import software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowResponse;
 import software.amazon.awssdk.aws.greengrass.model.GetThingShadowRequest;
 import software.amazon.awssdk.aws.greengrass.model.GetThingShadowResponse;
 import software.amazon.awssdk.aws.greengrass.model.InvalidArgumentsError;
+import software.amazon.awssdk.aws.greengrass.model.ListNamedShadowsForThingRequest;
+import software.amazon.awssdk.aws.greengrass.model.ListNamedShadowsForThingResponse;
 import software.amazon.awssdk.aws.greengrass.model.ResourceNotFoundError;
 import software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest;
 import software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowResponse;
@@ -69,9 +71,11 @@ import static com.aws.greengrass.testcommons.testutilities.TestUtils.asyncAssert
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.anyOf;
+import static org.hamcrest.Matchers.arrayContaining;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -544,6 +548,21 @@ class ShadowIPCTest {
 
     @Test
     @Order(8)
+    void GIVEN_shadow_client_WHEN_list_thing_shadow_THEN_correctly_gets_shadow() throws Exception {
+        try(EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
+            GreengrassCoreIPCClient ipcClient = new GreengrassCoreIPCClient(connection);
+
+            ListNamedShadowsForThingRequest request = new ListNamedShadowsForThingRequest();
+            request.setThingName(MOCK_THING_NAME);
+
+            ListNamedShadowsForThingResponse response = ipcClient.listNamedShadowsForThing(request, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS);
+            assertThat(response.getResults().toArray(), arrayContaining(SHADOW_NAME_1));
+            assertThat(response.getNextToken(), is(nullValue()));
+        }
+    }
+
+    @Test
+    @Order(9)
     void GIVEN_shadow_client_WHEN_subscribed_to_accept_and_delete_shadow_THEN_correctly_deletes_shadow() throws Exception {
         try(EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
             final long currentEpochSeconds = Instant.now().getEpochSecond();
@@ -576,7 +595,7 @@ class ShadowIPCTest {
     }
 
     @Test
-    @Order(9)
+    @Order(10)
     void GIVEN_shadow_client_WHEN_get_shadow_with_deleted_shadow_and_subscribed_to_rejected_THEN_fails_and_receives_correct_message_over_pubsub(ExtensionContext context) throws Exception {
         try(EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
             ignoreExceptionUltimateCauseOfType(context, InvalidRequestParametersException.class);

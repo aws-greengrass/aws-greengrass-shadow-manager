@@ -21,16 +21,21 @@ services:
       accessControl:
         aws.greengrass.ShadowManager:
           policyId1:
-            policyDescription: access to shadow
+            policyDescription: access to CRUD shadow operations
             operations:
               - 'aws.greengrass#GetThingShadow'
               - 'aws.greengrass#UpdateThingShadow'
               - 'aws.greengrass#DeleteThingShadow'
+            resources:
+              - '*'
+          policyId2:
+            policyDescription: access to list named shadows
+            operations:
               - 'aws.greengrass#ListNamedShadowsForThing'
             resources:
               - '*'
         aws.greengrass.ipc.pubsub:
-          policyId2:
+          policyId3:
             policyDescription: access to pubsub topics
             operations:
               - 'aws.greengrass#SubscribeToTopic'

@@ -14,6 +14,10 @@ import com.aws.greengrass.shadowmanager.exception.SyncException;
  */
 public interface SyncRequest {
 
+    String getThingName();
+
+    String getShadowName();
+
     /**
      * Executes sync request.
      *
