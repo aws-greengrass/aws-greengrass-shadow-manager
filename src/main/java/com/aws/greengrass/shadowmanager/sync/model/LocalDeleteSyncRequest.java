@@ -13,7 +13,6 @@ import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.exception.SyncException;
 import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowRequestHandler;
-import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import lombok.NonNull;
@@ -72,39 +71,18 @@ public class LocalDeleteSyncRequest extends BaseSyncRequest {
             deletedCloudVersion = JsonUtil.getPayloadJson(deletePayload)
                     .filter(s -> s.has(SHADOW_DOCUMENT_VERSION))
                     .map(s -> s.get(SHADOW_DOCUMENT_VERSION).asLong())
-                    .orElseThrow(() -> {
-                        InvalidArgumentsError invalidArgumentsError = new InvalidArgumentsError("Invalid "
-                                + "delete payload from cloud");
-                        logger.atError()
-                                .setEventType(LogEvents.LOCAL_DELETE_SYNC_REQUEST.code())
-                                .kv(LOG_THING_NAME_KEY, getThingName())
-                                .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                                .setCause(invalidArgumentsError)
-                                .log("Unable to parse version from cloud delete payload");
-                        return new SkipSyncRequestException(invalidArgumentsError);
-                    });
+                    .orElseThrow(() -> new SkipSyncRequestException("Invalid delete payload from the cloud"));
         } catch (IOException e) {
             logger.atError()
-                    .setEventType(LogEvents.LOCAL_DELETE_SYNC_REQUEST.code())
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
                     .setCause(e)
-                    .log("Failed to sync cloud delete to local shadow");
+                    .log("Failed to parse delete payload from the cloud");
             return;
         }
 
         SyncInformation syncInformation = this.dao.getShadowSyncInformation(getThingName(), getShadowName())
-                .orElseThrow(() -> {
-                    UnknownShadowException unknownShadowException = new UnknownShadowException("Shadow not found "
-                            + "in sync table");
-                    logger.atError()
-                            //.setEventType(LogEvents.LOCAL_UPDATE_SYNC_REQUEST.code())
-                            .kv(LOG_THING_NAME_KEY, getThingName())
-                            .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                            .setCause(unknownShadowException)
-                            .log("Failed to sync cloud delete to local shadow");
-                    return unknownShadowException;
-                });
+                .orElseThrow(() -> new UnknownShadowException("Shadow not found in sync table"));
 
         long currentCloudVersion = syncInformation.getCloudVersion();
 
@@ -130,31 +108,17 @@ public class LocalDeleteSyncRequest extends BaseSyncRequest {
 
             } catch (ResourceNotFoundError e) {
                 logger.atInfo()
-                        .setEventType(LogEvents.LOCAL_DELETE_SYNC_REQUEST.code())
                         .kv(LOG_THING_NAME_KEY, getThingName())
                         .kv(LOG_SHADOW_NAME_KEY, getShadowName())
                         .setCause(e)
                         .log("Attempted to delete shadow that was already deleted");
             } catch (ShadowManagerDataException | UnauthorizedError | InvalidArgumentsError | ServiceError e) {
-                logger.atError()
-                        .setEventType(LogEvents.LOCAL_DELETE_SYNC_REQUEST.code())
-                        .kv(LOG_THING_NAME_KEY, getThingName())
-                        .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                        .setCause(e)
-                        .log("Failed to execute local delete sync request");
                 throw new SkipSyncRequestException(e);
             }
 
         // missed cloud update(s) need to do full sync
         } else {
-            ConflictError conflictError = new ConflictError("Missed updates from the cloud");
-            logger.atWarn()
-                    .setEventType(LogEvents.LOCAL_DELETE_SYNC_REQUEST.code())
-                    .kv(LOG_THING_NAME_KEY, getThingName())
-                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                    .setCause(conflictError)
-                    .log("Failed to execute local update sync request");
-            throw conflictError;
+            throw new ConflictError("Missed update(s) from the cloud");
         }
     }
 }

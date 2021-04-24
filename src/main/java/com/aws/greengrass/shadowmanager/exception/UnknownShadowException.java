@@ -6,17 +6,12 @@
 package com.aws.greengrass.shadowmanager.exception;
 
 /**
- * An exception indicating the sync request needs to be skipped.
+ * Exception indicating that expected shadow was not found.
  */
-public class SkipSyncRequestException extends Exception {
+public class UnknownShadowException extends RuntimeException {
     private static final long serialVersionUID = -1488980916089225328L;
 
-    public SkipSyncRequestException(Throwable t) {
-        super(t);
-    }
-
-    public SkipSyncRequestException(final String message) {
+    public UnknownShadowException(final String message) {
         super(message);
     }
-
 }
