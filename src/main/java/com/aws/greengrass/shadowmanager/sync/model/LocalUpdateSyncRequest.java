@@ -5,15 +5,12 @@
 
 package com.aws.greengrass.shadowmanager.sync.model;
 
-import com.aws.greengrass.logging.api.Logger;
-import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.exception.SyncException;
 import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowRequestHandler;
-import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.UpdateThingShadowHandlerResponse;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
@@ -32,8 +29,6 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.Optional;
 
-import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
-import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_VERSION;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_MANAGER_NAME;
 
@@ -41,8 +36,6 @@ import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_MANAGER_NA
  * Sync request to update locally stored shadow.
  */
 public class LocalUpdateSyncRequest extends BaseSyncRequest {
-    private static final Logger logger = LogManager.getLogger(LocalUpdateSyncRequest.class);
-
     @NonNull
     UpdateThingShadowRequestHandler updateThingShadowRequestHandler;
 
@@ -76,27 +69,11 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
         try {
             shadowDocument = new ShadowDocument(updateDocument);
         } catch (IOException e) {
-            logger.atError()
-                    .setEventType(LogEvents.LOCAL_UPDATE_SYNC_REQUEST.code())
-                    .kv(LOG_THING_NAME_KEY, getThingName())
-                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                    .setCause(e)
-                    .log("Unable to parse update payload from cloud.");
             throw new SkipSyncRequestException(e);
         }
 
         SyncInformation currentSyncInformation = dao.getShadowSyncInformation(getThingName(), getShadowName())
-                .orElseThrow(() ->  {
-                    UnknownShadowException unknownShadowException = new UnknownShadowException("Shadow not found "
-                            + "in sync table.");
-                    logger.atError()
-                            .setEventType(LogEvents.LOCAL_UPDATE_SYNC_REQUEST.code())
-                            .kv(LOG_THING_NAME_KEY, getThingName())
-                            .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                            .setCause(unknownShadowException)
-                            .log("Failed to sync cloud update to local shadow");
-                    return unknownShadowException;
-                });
+                .orElseThrow(() -> new UnknownShadowException("Shadow not found in sync table"));
 
         long cloudUpdateVersion = shadowDocument.getVersion();
         long currentCloudVersion = currentSyncInformation.getCloudVersion();
@@ -128,36 +105,14 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
                         .lastSyncTime(updateTime)
                         .cloudDeleted(false)
                         .build());
-
-            } catch (ConflictError e) {
-                logger.atWarn()
-                        .setEventType(LogEvents.LOCAL_UPDATE_SYNC_REQUEST.code())
-                        .kv(LOG_THING_NAME_KEY, getThingName())
-                        .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                        .setCause(e)
-                        .log("Failed to execute local update sync request");
-                throw e;
             } catch (ShadowManagerDataException | UnauthorizedError | InvalidArgumentsError | ServiceError
                     | IOException e) {
-                logger.atError()
-                        .setEventType(LogEvents.LOCAL_UPDATE_SYNC_REQUEST.code())
-                        .kv(LOG_THING_NAME_KEY, getThingName())
-                        .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                        .setCause(e)
-                        .log("Failed to execute local update sync request");
                 throw new SkipSyncRequestException(e);
             }
 
         // edge case where might have missed sync update from cloud
         } else if (cloudUpdateVersion > currentCloudVersion + 1) {
-            ConflictError conflictError = new ConflictError("Missed updates from the cloud");
-            logger.atWarn()
-                    .setEventType(LogEvents.LOCAL_UPDATE_SYNC_REQUEST.code())
-                    .kv(LOG_THING_NAME_KEY, getThingName())
-                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                    .setCause(conflictError)
-                    .log("Failed to execute local update sync request");
-            throw conflictError;
+            throw new ConflictError("Missed update(s) from the cloud");
         }
     }
 

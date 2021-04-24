@@ -9,6 +9,7 @@ import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
+import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.model.UpdateThingShadowHandlerResponse;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
@@ -71,7 +72,7 @@ public class LocalUpdateSyncRequestTest {
 
 
     @Test
-    void GIVEN_good_local_update_request_WHEN_execute_THEN_successfully_updates_local_shadow_and_sync_information() throws SkipSyncRequestException, RetryableException {
+    void GIVEN_good_local_update_request_WHEN_execute_THEN_successfully_updates_local_shadow_and_sync_information() throws SkipSyncRequestException, UnknownShadowException {
         lenient().when(mockDao.updateSyncInformation(syncInformationCaptor.capture())).thenReturn(true);
 
         long epochSeconds = Instant.now().getEpochSecond();
@@ -138,7 +139,7 @@ public class LocalUpdateSyncRequestTest {
 
         LocalUpdateSyncRequest request = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, cloudPayload, mockDao, mockUpdateThingShadowRequestHandler);
         ConflictError thrown = assertThrows(ConflictError.class, request::execute);
-        assertThat(thrown.getMessage(), Matchers.startsWith("Missed updates"));
+        assertThat(thrown.getMessage(), Matchers.startsWith("Missed update(s)"));
 
         verify(mockDao, times(1)).getShadowSyncInformation(anyString(), anyString());
         verify(mockUpdateThingShadowRequestHandler, times(0)).handleRequest(any(), any());

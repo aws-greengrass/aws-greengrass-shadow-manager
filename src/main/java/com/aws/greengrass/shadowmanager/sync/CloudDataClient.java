@@ -128,24 +128,17 @@ public class CloudDataClient {
      * @param callback Callback function applied to specific topic
      * @throws InterruptedException Interrupt occurred while trying to subscribe to a shadow
      */
-    private void subscribeToShadow(String topic, Consumer<MqttMessage> callback)
-            throws InterruptedException {
+    private void subscribeToShadow(String topic, Consumer<MqttMessage> callback) throws InterruptedException {
         while (true) {
             try {
                 mqttClient.subscribe(SubscribeRequest.builder().topic(topic).callback(callback).build());
                 break;
-            } catch (TimeoutException e) {
+            } catch (TimeoutException | ExecutionException e) {
                 logger.atWarn()
-                        .setEventType(LogEvents.MQTT_CLIENT_SUBSCRIPTION_ERROR.code())
+                        .setEventType(LogEvents.CLOUD_DATA_CLIENT_SUBSCRIPTION_ERROR.code())
                         .kv(LOG_TOPIC, topic)
                         .setCause(e)
-                        .log("Timeout occurred when attempting to subscribe shadow topic... retrying");
-            } catch (ExecutionException e) {
-                logger.atWarn()
-                        .setEventType(LogEvents.MQTT_CLIENT_SUBSCRIPTION_ERROR.code())
-                        .kv(LOG_TOPIC, topic)
-                        .setCause(e)
-                        .log("Unexpected exception thrown attempting to subscribe shadow topic... retrying");
+                        .log("Failed to subscribe to shadow topic");
             }
         }
     }
@@ -157,24 +150,17 @@ public class CloudDataClient {
      * @param callback Callback function applied to specific topic
      * @throws InterruptedException Interrupt occurred while trying to unsubscribe to a shadow
      */
-    private void unsubscribeToShadow(String topic, Consumer<MqttMessage> callback)
-            throws InterruptedException {
+    private void unsubscribeToShadow(String topic, Consumer<MqttMessage> callback) throws InterruptedException {
         while (true) {
             try {
                 mqttClient.unsubscribe(UnsubscribeRequest.builder().topic(topic).callback(callback).build());
                 break;
-            } catch (TimeoutException e) {
+            } catch (TimeoutException | ExecutionException e) {
                 logger.atWarn()
-                        .setEventType(LogEvents.MQTT_CLIENT_SUBSCRIPTION_ERROR.code())
+                        .setEventType(LogEvents.CLOUD_DATA_CLIENT_SUBSCRIPTION_ERROR.code())
                         .kv(LOG_TOPIC, topic)
                         .setCause(e)
-                        .log("Timeout occurred when attempting to unsubscribe shadow topic... retrying");
-            } catch (ExecutionException e) {
-                logger.atWarn()
-                        .setEventType(LogEvents.MQTT_CLIENT_SUBSCRIPTION_ERROR.code())
-                        .kv(LOG_TOPIC, topic)
-                        .setCause(e)
-                        .log("Unexpected exception thrown attempting to unsubscribe shadow topic... retrying");
+                        .log("Failed to unsubscribe to shadow topic");
             }
         }
     }

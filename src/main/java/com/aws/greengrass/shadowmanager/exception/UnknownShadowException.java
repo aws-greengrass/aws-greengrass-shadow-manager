@@ -8,7 +8,7 @@ package com.aws.greengrass.shadowmanager.exception;
 /**
  * Exception indicating that expected shadow was not found.
  */
-public class UnknownShadowException extends RuntimeException {
+public class UnknownShadowException extends Exception {
     private static final long serialVersionUID = -1488980916089225328L;
 
     public UnknownShadowException(final String message) {

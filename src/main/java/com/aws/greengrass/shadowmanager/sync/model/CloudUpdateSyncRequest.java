@@ -96,23 +96,11 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
                     .thingName(getThingName())
                     .payload(SdkBytes.fromByteArray(JsonUtil.getPayloadBytes(updateDocument)))
                     .build());
-        } catch (ConflictException e) {
-            logger.atWarn()
-                    .kv(LOG_THING_NAME_KEY, getThingName())
-                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                    .cause(e).log("Could not execute cloud shadow delete request");
+        } catch (ConflictException e) {  // NOPMD - Throw ConflictException instead of treated as SdkServiceException
             throw e;
         } catch (ThrottlingException | ServiceUnavailableException | InternalFailureException e) {
-            logger.atWarn()
-                    .kv(LOG_THING_NAME_KEY, getThingName())
-                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                    .cause(e).log("Could not execute cloud shadow delete request");
             throw new RetryableException(e);
         } catch (SdkServiceException | SdkClientException | IOException e) {
-            logger.atError()
-                    .kv(LOG_THING_NAME_KEY, getThingName())
-                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                    .cause(e).log("Could not execute cloud shadow delete request");
             throw new SkipSyncRequestException(e);
         }
 
@@ -129,7 +117,7 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
             logger.atWarn()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                    .cause(e).log();
+                    .cause(e).log("Failed to update sync table after updating cloud shadow");
         }
     }
 
