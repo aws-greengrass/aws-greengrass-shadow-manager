@@ -69,16 +69,11 @@ public class LocalDeleteSyncRequest extends BaseSyncRequest {
         Long deletedCloudVersion;
         try {
             deletedCloudVersion = JsonUtil.getPayloadJson(deletePayload)
-                    .filter(s -> s.has(SHADOW_DOCUMENT_VERSION))
+                    .filter(s -> s.has(SHADOW_DOCUMENT_VERSION) && s.get(SHADOW_DOCUMENT_VERSION).isIntegralNumber())
                     .map(s -> s.get(SHADOW_DOCUMENT_VERSION).asLong())
                     .orElseThrow(() -> new SkipSyncRequestException("Invalid delete payload from the cloud"));
         } catch (IOException e) {
-            logger.atError()
-                    .kv(LOG_THING_NAME_KEY, getThingName())
-                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                    .setCause(e)
-                    .log("Failed to parse delete payload from the cloud");
-            return;
+            throw new SkipSyncRequestException(e);
         }
 
         SyncInformation syncInformation = this.dao.getShadowSyncInformation(getThingName(), getShadowName())
