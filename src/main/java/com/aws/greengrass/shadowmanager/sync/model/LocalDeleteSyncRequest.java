@@ -5,37 +5,156 @@
 
 package com.aws.greengrass.shadowmanager.sync.model;
 
+import com.aws.greengrass.logging.api.Logger;
+import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
+import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
+import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.exception.SyncException;
+import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowRequestHandler;
+import com.aws.greengrass.shadowmanager.model.LogEvents;
+import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
+import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import lombok.NonNull;
+import software.amazon.awssdk.aws.greengrass.model.ConflictError;
+import software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowRequest;
+import software.amazon.awssdk.aws.greengrass.model.InvalidArgumentsError;
+import software.amazon.awssdk.aws.greengrass.model.ResourceNotFoundError;
+import software.amazon.awssdk.aws.greengrass.model.ServiceError;
+import software.amazon.awssdk.aws.greengrass.model.UnauthorizedError;
+
+import java.io.IOException;
+import java.time.Instant;
+
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
+import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_VERSION;
+import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_MANAGER_NAME;
 
 /**
  * Sync request to delete a locally stored shadow.
  */
 public class LocalDeleteSyncRequest extends BaseSyncRequest {
+    private static final Logger logger = LogManager.getLogger(LocalDeleteSyncRequest.class);
 
     @NonNull
     DeleteThingShadowRequestHandler deleteThingShadowRequestHandler;
+
+    private final byte[] deletePayload;
 
     /**
      * Ctr for LocalDeleteSyncRequest.
      *
      * @param thingName                   The thing name associated with the sync shadow update
      * @param shadowName                  The shadow name associated with the sync shadow update
+     * @param deletePayload               Delete response payload containing the deleted shadow version
      * @param dao                         Local shadow database management
      * @param deleteThingShadowRequestHandler Reference to the DeleteThingShadow IPC Handler
      */
     public LocalDeleteSyncRequest(String thingName,
                                   String shadowName,
+                                  byte[] deletePayload,
                                   ShadowManagerDAO dao,
                                   DeleteThingShadowRequestHandler deleteThingShadowRequestHandler) {
         super(thingName, shadowName, dao);
+        this.deletePayload = deletePayload;
         this.deleteThingShadowRequestHandler = deleteThingShadowRequestHandler;
     }
 
+    /**
+     * Main execution thread for syncing cloud deletes to local shadow.
+     */
     @Override
-    public void execute() throws SyncException {
+    public void execute() throws SyncException, UnknownShadowException, SkipSyncRequestException {
+        Long deletedCloudVersion;
+        try {
+            deletedCloudVersion = JsonUtil.getPayloadJson(deletePayload)
+                    .filter(s -> s.has(SHADOW_DOCUMENT_VERSION))
+                    .map(s -> s.get(SHADOW_DOCUMENT_VERSION).asLong())
+                    .orElseThrow(() -> {
+                        InvalidArgumentsError invalidArgumentsError = new InvalidArgumentsError("Invalid "
+                                + "delete payload from cloud");
+                        logger.atError()
+                                .setEventType(LogEvents.LOCAL_DELETE_SYNC_REQUEST.code())
+                                .kv(LOG_THING_NAME_KEY, getThingName())
+                                .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                                .setCause(invalidArgumentsError)
+                                .log("Unable to parse version from cloud delete payload");
+                        return new SkipSyncRequestException(invalidArgumentsError);
+                    });
+        } catch (IOException e) {
+            logger.atError()
+                    .setEventType(LogEvents.LOCAL_DELETE_SYNC_REQUEST.code())
+                    .kv(LOG_THING_NAME_KEY, getThingName())
+                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                    .setCause(e)
+                    .log("Failed to sync cloud delete to local shadow");
+            return;
+        }
 
+        SyncInformation syncInformation = this.dao.getShadowSyncInformation(getThingName(), getShadowName())
+                .orElseThrow(() -> {
+                    UnknownShadowException unknownShadowException = new UnknownShadowException("Shadow not found "
+                            + "in sync table");
+                    logger.atError()
+                            //.setEventType(LogEvents.LOCAL_UPDATE_SYNC_REQUEST.code())
+                            .kv(LOG_THING_NAME_KEY, getThingName())
+                            .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                            .setCause(unknownShadowException)
+                            .log("Failed to sync cloud delete to local shadow");
+                    return unknownShadowException;
+                });
+
+        long currentCloudVersion = syncInformation.getCloudVersion();
+
+        // TODO: add smarter way to check if there were local updates since last sync and push local update to cloud
+        if (deletedCloudVersion >= currentCloudVersion) {
+            try {
+                DeleteThingShadowRequest request = new DeleteThingShadowRequest();
+                request.setThingName(getThingName());
+                request.setShadowName(getShadowName());
+                deleteThingShadowRequestHandler.handleRequest(request, SHADOW_MANAGER_NAME);
+
+                long updateTime = Instant.now().getEpochSecond();
+                dao.updateSyncInformation(SyncInformation.builder()
+                        .thingName(getThingName())
+                        .shadowName(getShadowName())
+                        .lastSyncedDocument(null)
+                        .cloudUpdateTime(updateTime)
+                        .localVersion(syncInformation.getLocalVersion())
+                        .cloudVersion(deletedCloudVersion)
+                        .lastSyncTime(updateTime)
+                        .cloudDeleted(true)
+                        .build());
+
+            } catch (ResourceNotFoundError e) {
+                logger.atInfo()
+                        .setEventType(LogEvents.LOCAL_DELETE_SYNC_REQUEST.code())
+                        .kv(LOG_THING_NAME_KEY, getThingName())
+                        .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                        .setCause(e)
+                        .log("Attempted to delete shadow that was already deleted");
+            } catch (ShadowManagerDataException | UnauthorizedError | InvalidArgumentsError | ServiceError e) {
+                logger.atError()
+                        .setEventType(LogEvents.LOCAL_DELETE_SYNC_REQUEST.code())
+                        .kv(LOG_THING_NAME_KEY, getThingName())
+                        .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                        .setCause(e)
+                        .log("Failed to execute local delete sync request");
+                throw new SkipSyncRequestException(e);
+            }
+
+        // missed cloud update(s) need to do full sync
+        } else {
+            ConflictError conflictError = new ConflictError("Missed updates from the cloud");
+            logger.atWarn()
+                    .setEventType(LogEvents.LOCAL_DELETE_SYNC_REQUEST.code())
+                    .kv(LOG_THING_NAME_KEY, getThingName())
+                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                    .setCause(conflictError)
+                    .log("Failed to execute local update sync request");
+            throw conflictError;
+        }
     }
 }

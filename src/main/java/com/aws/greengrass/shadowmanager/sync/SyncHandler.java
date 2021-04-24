@@ -122,11 +122,12 @@ public class SyncHandler {
      * been successfully deleted.
      * TODO: implement message queue data structure to push SyncRequest
      *
-     * @param thingName  The thing name associated with the sync shadow update
-     * @param shadowName The shadow name associated with the sync shadow update
+     * @param thingName     The thing name associated with the sync shadow update
+     * @param shadowName    The shadow name associated with the sync shadow update
+     * @param deletePayload Delete response payload containing the deleted shadow version
      */
-    public void pushLocalDeleteSyncRequest(String thingName, String shadowName) {
-        LocalDeleteSyncRequest localDeleteSyncRequest = new LocalDeleteSyncRequest(thingName, shadowName, this.dao,
-                this.shadowManager.getDeleteThingShadowRequestHandler());
+    public void pushLocalDeleteSyncRequest(String thingName, String shadowName, byte[] deletePayload) {
+        LocalDeleteSyncRequest localDeleteSyncRequest = new LocalDeleteSyncRequest(thingName, shadowName,
+                deletePayload, this.dao, this.shadowManager.getDeleteThingShadowRequestHandler());
     }
 }
