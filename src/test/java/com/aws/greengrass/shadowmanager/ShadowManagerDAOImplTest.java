@@ -35,6 +35,7 @@ import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -144,22 +145,6 @@ class ShadowManagerDAOImplTest {
         doNothing().when(mockPreparedStatement).setInt(eq(3), integerArgumentCaptor.capture());
     }
 
-    private void assertUpdateShadowSyncStatementMocks(long epochNow) {
-        assertThat(stringArgumentCaptor.getAllValues().size(), is(2));
-        assertThat(longArgumentCaptor.getAllValues().size(), is(4));
-        assertThat(bytesArgumentCaptor.getValue(), is(notNullValue()));
-        assertThat(booleanArgumentCaptor.getValue(), is(notNullValue()));
-
-        assertThat(bytesArgumentCaptor.getValue(), is(BASE_DOCUMENT));
-        assertThat(booleanArgumentCaptor.getValue(), is(false));
-        assertThat(stringArgumentCaptor.getAllValues().get(0), is(THING_NAME));
-        assertThat(stringArgumentCaptor.getAllValues().get(1), is(SHADOW_NAME));
-        assertThat(longArgumentCaptor.getAllValues().get(0), is(2L));
-        assertThat(longArgumentCaptor.getAllValues().get(1), is(lessThanOrEqualTo(epochNow)));
-        assertThat(longArgumentCaptor.getAllValues().get(2), is(greaterThanOrEqualTo(epochNow)));
-        assertThat(longArgumentCaptor.getAllValues().get(3), is(5L));
-    }
-
     private void assertDeleteShadowSyncMocks() {
         assertThat(stringArgumentCaptor.getAllValues().size(), is(2));
         assertThat(stringArgumentCaptor.getAllValues().get(0), is(THING_NAME));
@@ -180,6 +165,52 @@ class ShadowManagerDAOImplTest {
         doNothing().when(mockPreparedStatement).setLong(eq(6), longArgumentCaptor.capture());
         doNothing().when(mockPreparedStatement).setLong(eq(7), longArgumentCaptor.capture());
         doNothing().when(mockPreparedStatement).setLong(eq(8), longArgumentCaptor.capture());
+    }
+
+    private void assertUpdateShadowSyncStatementMocks(long epochNow) {
+        assertThat(stringArgumentCaptor.getAllValues().size(), is(2));
+        assertThat(longArgumentCaptor.getAllValues().size(), is(4));
+        assertThat(bytesArgumentCaptor.getValue(), is(notNullValue()));
+        assertThat(booleanArgumentCaptor.getValue(), is(notNullValue()));
+
+        assertThat(bytesArgumentCaptor.getValue(), is(BASE_DOCUMENT));
+        assertThat(booleanArgumentCaptor.getValue(), is(false));
+        assertThat(stringArgumentCaptor.getAllValues().get(0), is(THING_NAME));
+        assertThat(stringArgumentCaptor.getAllValues().get(1), is(SHADOW_NAME));
+        assertThat(longArgumentCaptor.getAllValues().get(0), is(2L));
+        assertThat(longArgumentCaptor.getAllValues().get(1), is(lessThanOrEqualTo(epochNow)));
+        assertThat(longArgumentCaptor.getAllValues().get(2), is(greaterThanOrEqualTo(epochNow)));
+        assertThat(longArgumentCaptor.getAllValues().get(3), is(5L));
+    }
+
+    private void setupInsertShadowSyncStatementMocks() throws SQLException {
+        doNothing().when(mockPreparedStatement).setString(eq(1), stringArgumentCaptor.capture());
+        doNothing().when(mockPreparedStatement).setString(eq(2), stringArgumentCaptor.capture());
+        doNothing().when(mockPreparedStatement).setBytes(eq(3), bytesArgumentCaptor.capture());
+        doNothing().when(mockPreparedStatement).setLong(eq(4), longArgumentCaptor.capture());
+        doNothing().when(mockPreparedStatement).setBoolean(eq(5), booleanArgumentCaptor.capture());
+        doNothing().when(mockPreparedStatement).setLong(eq(6), longArgumentCaptor.capture());
+        doNothing().when(mockPreparedStatement).setLong(eq(7), longArgumentCaptor.capture());
+        doNothing().when(mockPreparedStatement).setLong(eq(8), longArgumentCaptor.capture());
+        doNothing().when(mockPreparedStatement).setString(eq(9), stringArgumentCaptor.capture());
+        doNothing().when(mockPreparedStatement).setString(eq(10), stringArgumentCaptor.capture());
+    }
+
+    private void assertInsertShadowSyncStatementMocks() {
+        assertThat(stringArgumentCaptor.getAllValues().size(), is(4));
+        assertThat(longArgumentCaptor.getAllValues().size(), is(4));
+        assertThat(bytesArgumentCaptor.getValue(), is(nullValue()));
+        assertThat(booleanArgumentCaptor.getValue(), is(notNullValue()));
+
+        assertThat(booleanArgumentCaptor.getValue(), is(false));
+        assertThat(stringArgumentCaptor.getAllValues().get(0), is(THING_NAME));
+        assertThat(stringArgumentCaptor.getAllValues().get(1), is(SHADOW_NAME));
+        assertThat(stringArgumentCaptor.getAllValues().get(2), is(THING_NAME));
+        assertThat(stringArgumentCaptor.getAllValues().get(3), is(SHADOW_NAME));
+        assertThat(longArgumentCaptor.getAllValues().get(0), is(0L));
+        assertThat(longArgumentCaptor.getAllValues().get(1), is(0L));
+        assertThat(longArgumentCaptor.getAllValues().get(2), is(0L));
+        assertThat(longArgumentCaptor.getAllValues().get(3), is(0L));
     }
 
     @BeforeEach
@@ -490,6 +521,62 @@ class ShadowManagerDAOImplTest {
         ShadowManagerDAOImpl impl = new ShadowManagerDAOImpl(mockDatabase);
         assertThrows(ShadowManagerDataException.class, () -> impl.deleteSyncInformation(THING_NAME, SHADOW_NAME));
         assertDeleteShadowSyncMocks();
+    }
+
+    @Test
+    void GIVEN_existing_shadow_WHEN_insertSyncInfoIfNotExists_THEN_deletes_shadow_document() throws SQLException {
+        setupInsertShadowSyncStatementMocks();
+
+        when(mockPreparedStatement.executeUpdate()).thenReturn(1);
+        ShadowManagerDAOImpl impl = new ShadowManagerDAOImpl(mockDatabase);
+        assertTrue(impl.insertSyncInfoIfNotExists(SyncInformation.builder()
+                .thingName(THING_NAME)
+                .shadowName(SHADOW_NAME)
+                .cloudUpdateTime(Instant.EPOCH.getEpochSecond())
+                .lastSyncTime(Instant.EPOCH.getEpochSecond())
+                .cloudVersion(0)
+                .localVersion(0)
+                .lastSyncedDocument(null)
+                .build()));
+
+        assertInsertShadowSyncStatementMocks();
+    }
+
+    @Test
+    void GIVEN_existing_shadow_WHEN_insertSyncInfoIfNotExists_and_h2_returns_0_rows_deleted_THEN_returns_empty_optional() throws SQLException {
+        setupInsertShadowSyncStatementMocks();
+
+        when(mockPreparedStatement.executeUpdate()).thenReturn(0);
+        ShadowManagerDAOImpl impl = new ShadowManagerDAOImpl(mockDatabase);
+        assertFalse(impl.insertSyncInfoIfNotExists(SyncInformation.builder()
+                .thingName(THING_NAME)
+                .shadowName(SHADOW_NAME)
+                .cloudUpdateTime(Instant.EPOCH.getEpochSecond())
+                .lastSyncTime(Instant.EPOCH.getEpochSecond())
+                .cloudVersion(0)
+                .localVersion(0)
+                .lastSyncedDocument(null)
+                .build()));
+
+        assertInsertShadowSyncStatementMocks();
+    }
+
+    @Test
+    void GIVEN_existing_shadow_WHEN_insertSyncInfoIfNotExists_and_h2_throws_SQL_exception_THEN_ShadowManagerDataException_is_thrown() throws SQLException {
+        setupInsertShadowSyncStatementMocks();
+
+        when(mockPreparedStatement.executeUpdate()).thenThrow(SQLException.class);
+        ShadowManagerDAOImpl impl = new ShadowManagerDAOImpl(mockDatabase);
+        assertThrows(ShadowManagerDataException.class, () -> impl.insertSyncInfoIfNotExists(SyncInformation.builder()
+                .thingName(THING_NAME)
+                .shadowName(SHADOW_NAME)
+                .cloudUpdateTime(Instant.EPOCH.getEpochSecond())
+                .lastSyncTime(Instant.EPOCH.getEpochSecond())
+                .cloudVersion(0)
+                .localVersion(0)
+                .lastSyncedDocument(null)
+                .build()));
+        assertInsertShadowSyncStatementMocks();
     }
 
     @Test
