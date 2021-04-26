@@ -16,6 +16,8 @@ public final class Constants {
     public static final String CLASSIC_SHADOW_TOPIC_PREFIX = "$aws/things/%s/shadow";
     public static final String LOG_THING_NAME_KEY = "thing name";
     public static final String LOG_SHADOW_NAME_KEY = "shadow name";
+    public static final String LOG_LOCAL_VERSION_KEY = "local-version";
+    public static final String LOG_CLOUD_VERSION_KEY = "cloud-version";
     public static final String SHADOW_DOCUMENT_VERSION = "version";
     public static final String SHADOW_DOCUMENT_TIMESTAMP = "timestamp";
     public static final String SHADOW_DOCUMENT_CLIENT_TOKEN = "clientToken";
