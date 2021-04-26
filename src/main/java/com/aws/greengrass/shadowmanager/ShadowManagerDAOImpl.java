@@ -244,8 +244,8 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
     /**
      * Attempts to get the shadow document version.
      *
-     * @param thingName       Name of the Thing for the shadow topic prefix.
-     * @param shadowName      Name of shadow topic prefix for thing.
+     * @param thingName  Name of the Thing for the shadow topic prefix.
+     * @param shadowName Name of shadow topic prefix for thing.
      * @return Optional containing the new shadow document version if document exists; Else an empty optional
      */
     @Override
@@ -260,6 +260,34 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
                         }
                     }
                     return Optional.empty();
+                });
+    }
+
+    /**
+     * Attempts to insert a new sync information row for a thing's shadow if it does not exist.
+     *
+     * @param request The update shadow sync information request containing the necessary information to update.
+     * @return true if the insert is successful; Else false.
+     */
+    @Override
+    public boolean insertSyncInfoIfNotExists(SyncInformation request) {
+        String sql = "INSERT INTO sync(thingName, shadowName, lastSyncedDocument, cloudVersion, cloudDeleted, "
+                + "cloudUpdateTime, lastSyncTime, localVersion) SELECT ?, ?, ?, ?, ?, ?, ?, ? "
+                + "WHERE NOT EXISTS(SELECT 1 FROM sync WHERE thingName = ? AND shadowName = ?)";
+        return execute(sql,
+                preparedStatement -> {
+                    preparedStatement.setString(1, request.getThingName());
+                    preparedStatement.setString(2, request.getShadowName());
+                    preparedStatement.setBytes(3, request.getLastSyncedDocument());
+                    preparedStatement.setLong(4, request.getCloudVersion());
+                    preparedStatement.setBoolean(5, request.isCloudDeleted());
+                    preparedStatement.setLong(6, request.getCloudUpdateTime());
+                    preparedStatement.setLong(7, request.getLastSyncTime());
+                    preparedStatement.setLong(8, request.getLocalVersion());
+                    preparedStatement.setString(9, request.getThingName());
+                    preparedStatement.setString(10, request.getShadowName());
+                    int result = preparedStatement.executeUpdate();
+                    return result == 1;
                 });
 
     }
