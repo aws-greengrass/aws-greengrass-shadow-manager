@@ -45,6 +45,9 @@ public class RequestMergerTest {
     @Mock
     DeleteThingShadowRequestHandler deleteHandler;
 
+    @Mock
+    IotDataPlaneClientFactory clientFactory;
+
     static FullShadowSyncRequest fullShadowSyncRequest = Mockito.mock(FullShadowSyncRequest.class, "fullShadowSync");
 
     static CloudUpdateSyncRequest cloudUpdateSyncRequest = Mockito.mock(CloudUpdateSyncRequest.class, "cloudUpdate");
@@ -57,7 +60,7 @@ public class RequestMergerTest {
 
     @BeforeEach
     void setup() {
-        merger = new RequestMerger(shadowManagerDAO, updateHandler, deleteHandler);
+        merger = new RequestMerger(shadowManagerDAO, updateHandler, deleteHandler, clientFactory);
     }
 
     @ParameterizedTest
