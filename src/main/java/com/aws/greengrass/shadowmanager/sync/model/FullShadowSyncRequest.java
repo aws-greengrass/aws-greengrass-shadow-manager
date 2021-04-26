@@ -48,6 +48,8 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.Optional;
 
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_CLOUD_VERSION_KEY;
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_LOCAL_VERSION_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE;
@@ -111,6 +113,12 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
         Optional<ShadowDocument> cloudShadowDocument = getCloudShadowDocument();
         // If both the local and cloud document does not exist, then update the sync info and return.
         if (!cloudShadowDocument.isPresent() && !localShadowDocument.isPresent()) {
+            logger.atInfo()
+                    .kv(LOG_THING_NAME_KEY, getThingName())
+                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                    .kv(LOG_LOCAL_VERSION_KEY, syncInformation.get().getLocalVersion())
+                    .kv(LOG_CLOUD_VERSION_KEY, syncInformation.get().getCloudVersion())
+                    .log("Not performing full sync since both local and cloud versions are already in sync");
             this.dao.updateSyncInformation(SyncInformation.builder()
                     .localVersion(syncInformation.get().getLocalVersion())
                     .cloudVersion(syncInformation.get().getCloudVersion())
@@ -154,11 +162,17 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
             logger.atDebug()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                    .kv("local-version", localShadowDocument.get().getVersion())
-                    .kv("cloud-version", cloudShadowDocument.get().getVersion())
+                    .kv(LOG_LOCAL_VERSION_KEY, localShadowDocument.get().getVersion())
+                    .kv(LOG_CLOUD_VERSION_KEY, cloudShadowDocument.get().getVersion())
                     .log("Not performing full sync since both local and cloud versions are already in sync");
             return;
         }
+        logger.atTrace()
+                .kv(LOG_THING_NAME_KEY, getThingName())
+                .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                .kv(LOG_LOCAL_VERSION_KEY, localShadowDocument.get().getVersion())
+                .kv(LOG_CLOUD_VERSION_KEY, cloudShadowDocument.get().getVersion())
+                .log("Performing full sync");
         ShadowDocument baseShadowDocument = deserializeLastSyncedShadowDocument(syncInformation.get());
 
         // Gets the merged reported node from the local, cloud and base documents. If an existing field has changed in
@@ -196,6 +210,12 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
                 || !isDocVersionSame(cloudShadowDocument.get(), syncInformation.get(), DataOwner.CLOUD)) {
             updateSyncInformation(updateDocument, localDocumentVersion, cloudDocumentVersion);
         }
+        logger.atTrace()
+                .kv(LOG_THING_NAME_KEY, getThingName())
+                .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                .kv(LOG_LOCAL_VERSION_KEY, localShadowDocument.get().getVersion())
+                .kv(LOG_CLOUD_VERSION_KEY, cloudShadowDocument.get().getVersion())
+                .log("Successfully performed full sync");
     }
 
     /**
@@ -239,6 +259,11 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
      */
     private void handleFirstLocalSync(@NonNull ShadowDocument cloudShadowDocument)
             throws SkipSyncRequestException {
+        logger.atInfo()
+                .kv(LOG_THING_NAME_KEY, getThingName())
+                .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                .kv(LOG_CLOUD_VERSION_KEY, cloudShadowDocument.getVersion())
+                .log("Syncing local shadow for the first time");
         ObjectNode updateDocument = (ObjectNode) cloudShadowDocument.toJson(false);
         long localDocumentVersion = updateLocalDocumentAndGetUpdatedVersion(updateDocument, Optional.empty());
         updateSyncInformation(updateDocument, localDocumentVersion, cloudShadowDocument.getVersion());
@@ -273,6 +298,11 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
      */
     private void handleFirstCloudSync(@NonNull ShadowDocument localShadowDocument)
             throws SkipSyncRequestException, RetryableException {
+        logger.atInfo()
+                .kv(LOG_THING_NAME_KEY, getThingName())
+                .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                .kv(LOG_LOCAL_VERSION_KEY, localShadowDocument.getVersion())
+                .log("Syncing cloud shadow for the first time");
         ObjectNode updateDocument = (ObjectNode) localShadowDocument.toJson(false);
         long cloudDocumentVersion = updateCloudDocumentAndGetUpdatedVersion(updateDocument, Optional.empty());
         updateSyncInformation(updateDocument, localShadowDocument.getVersion(), cloudDocumentVersion);
@@ -307,6 +337,13 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
      */
     private void updateSyncInformation(ObjectNode updateDocument, long localDocumentVersion, long cloudDocumentVersion)
             throws SkipSyncRequestException {
+        logger.atTrace()
+                .kv(LOG_THING_NAME_KEY, getThingName())
+                .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                .kv(LOG_LOCAL_VERSION_KEY, localDocumentVersion)
+                .kv(LOG_CLOUD_VERSION_KEY, cloudDocumentVersion)
+                .log("Updating sync information");
+
         updateDocument.remove(SHADOW_DOCUMENT_VERSION);
         this.dao.updateSyncInformation(SyncInformation.builder()
                 .localVersion(localDocumentVersion)
@@ -351,10 +388,10 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
         try {
             return new ShadowDocument(syncInformation.getLastSyncedDocument());
         } catch (IOException e) {
-            logger.atWarn()
+            logger.atError()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                    .log();
+                    .log("Could not deserialize last synced shadow document");
             //TODO: Should we put the last synced as null? (we should not ever be in this situation though)
             throw new SkipSyncRequestException(e);
         }
@@ -419,6 +456,11 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
      * @throws SkipSyncRequestException if the get request encountered errors which should be skipped.
      */
     private Optional<ShadowDocument> getCloudShadowDocument() throws RetryableException, SkipSyncRequestException {
+        logger.atTrace()
+                .kv(LOG_THING_NAME_KEY, getThingName())
+                .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                .log("Getting cloud shadow document");
+
         try {
             GetThingShadowResponse getThingShadowResponse = this.clientFactory.getIotDataPlaneClient()
                     .getThingShadow(GetThingShadowRequest
@@ -482,7 +524,7 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
      * @throws SkipSyncRequestException if the delete request encountered errors which should be skipped.
      */
     private void deleteLocalShadowDocument() throws SkipSyncRequestException {
-        logger.atDebug()
+        logger.atInfo()
                 .kv(LOG_THING_NAME_KEY, getThingName())
                 .kv(LOG_SHADOW_NAME_KEY, getShadowName())
                 .log("Deleting local shadow document");
@@ -523,7 +565,7 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
             logger.atWarn()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                    .log("Conflict exception occurred while updating cloud document.s");
+                    .log("Conflict exception occurred while updating cloud document.");
             throw e;
         } catch (ThrottlingException | ServiceUnavailableException | InternalFailureException e) {
             logger.atWarn()
@@ -548,7 +590,7 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
      */
     private void deleteCloudShadowDocument() throws RetryableException, SkipSyncRequestException {
         try {
-            logger.atDebug()
+            logger.atInfo()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
                     .log("Deleting cloud shadow document");
