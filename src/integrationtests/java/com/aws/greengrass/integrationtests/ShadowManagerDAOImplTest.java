@@ -315,4 +315,63 @@ class ShadowManagerDAOImplTest {
 
         assertFalse(dao.deleteSyncInformation(THING_NAME, SHADOW_NAME));
     }
+
+    @Test
+    void GIVEN_non_existent_sync_info_WHEN_insert_THEN_successfully_inserts_sync_information() {
+        long epochSeconds = Instant.EPOCH.getEpochSecond();
+        SyncInformation syncInformation = SyncInformation.builder()
+                .thingName(THING_NAME)
+                .shadowName(SHADOW_NAME)
+                .cloudDeleted(false)
+                .cloudVersion(0)
+                .cloudUpdateTime(epochSeconds)
+                .lastSyncedDocument(null)
+                .localVersion(0)
+                .lastSyncTime(epochSeconds)
+                .build();
+        assertTrue(dao.insertSyncInfoIfNotExists(syncInformation));
+
+        Optional<SyncInformation> shadowSyncInformation = dao.getShadowSyncInformation(THING_NAME, SHADOW_NAME);
+        assertThat(shadowSyncInformation, is(not(Optional.empty())));
+        assertThat(shadowSyncInformation.get(), is(syncInformation));
+    }
+
+    @Test
+    void GIVEN_existent_sync_info_WHEN_insert_THEN_does_not_insert_new_sync_information() {
+        long epochSeconds = Instant.EPOCH.getEpochSecond();
+        long epochMinus60Seconds = Instant.now().minusSeconds(60).getEpochSecond();
+        SyncInformation initialSyncInformation = SyncInformation.builder()
+                .thingName(THING_NAME)
+                .shadowName(SHADOW_NAME)
+                .cloudDeleted(false)
+                .cloudVersion(10)
+                .cloudUpdateTime(epochMinus60Seconds)
+                .lastSyncedDocument(BASE_DOCUMENT)
+                .localVersion(20)
+                .lastSyncTime(epochMinus60Seconds)
+                .build();
+
+        SyncInformation syncInformationToUpdate = SyncInformation.builder()
+                .thingName(THING_NAME)
+                .shadowName(SHADOW_NAME)
+                .cloudDeleted(false)
+                .cloudVersion(0)
+                .cloudUpdateTime(epochSeconds)
+                .lastSyncedDocument(null)
+                .localVersion(0)
+                .lastSyncTime(epochSeconds)
+                .build();
+
+        assertTrue(dao.insertSyncInfoIfNotExists(initialSyncInformation));
+
+        Optional<SyncInformation> shadowSyncInformation = dao.getShadowSyncInformation(THING_NAME, SHADOW_NAME);
+        assertThat(shadowSyncInformation, is(not(Optional.empty())));
+        assertThat(shadowSyncInformation.get(), is(initialSyncInformation));
+
+        assertFalse(dao.insertSyncInfoIfNotExists(syncInformationToUpdate));
+
+        shadowSyncInformation = dao.getShadowSyncInformation(THING_NAME, SHADOW_NAME);
+        assertThat(shadowSyncInformation, is(not(Optional.empty())));
+        assertThat(shadowSyncInformation.get(), is(initialSyncInformation));
+    }
 }
