@@ -67,6 +67,7 @@ public class CloudDataClientTest {
     void setup() throws InterruptedException, ExecutionException, TimeoutException {
         lenient().doNothing().when(mockMqttClient).subscribe(subscribeRequestCaptor.capture());
         lenient().doNothing().when(mockMqttClient).unsubscribe(unsubscribeRequestCaptor.capture());
+        lenient().doReturn(true).when(mockMqttClient).connected();
     }
 
     private Set<String> getTopicSet(Set<Pair<String, String>> shadowSet) {
@@ -154,6 +155,21 @@ public class CloudDataClientTest {
         CloudDataClient cloudDataClient = new CloudDataClient(mockSyncHandler, mockMqttClient);
 
         cloudDataClient.clearSubscriptions();
+        Thread.sleep(2000);
+
+        verify(mockMqttClient, times(0)).subscribe(any(SubscribeRequest.class));
+        verify(mockMqttClient, times(0)).unsubscribe(any(UnsubscribeRequest.class));
+    }
+
+    @Test
+    void GIVEN_update_subscriptions_offline_WHEN_update_subscriptions_THEN_do_nothing(ExtensionContext context) throws InterruptedException, TimeoutException, ExecutionException {
+        ignoreExceptionOfType(context, InterruptedException.class);
+        CloudDataClient cloudDataClient = new CloudDataClient(mockSyncHandler, mockMqttClient);
+
+        lenient().doReturn(false).when(mockMqttClient).connected();
+
+        cloudDataClient.clearSubscriptions();
+        cloudDataClient.updateSubscriptions(SHADOW_SET);
         Thread.sleep(2000);
 
         verify(mockMqttClient, times(0)).subscribe(any(SubscribeRequest.class));

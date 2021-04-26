@@ -15,6 +15,7 @@ import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.model.ShadowRequest;
 import com.aws.greengrass.util.Pair;
 import com.aws.greengrass.util.RetryUtils;
+import software.amazon.awssdk.crt.mqtt.MqttClientConnectionEvents;
 import software.amazon.awssdk.crt.mqtt.MqttMessage;
 
 import java.time.Duration;
@@ -40,6 +41,7 @@ public class CloudDataClient {
     private static final Logger logger = LogManager.getLogger(CloudDataClient.class);
     private final SyncHandler syncHandler;
     private final MqttClient mqttClient;
+    private Set<Pair<String, String>> targetShadowSet = new HashSet<>();
     private final Set<String> subscribedUpdateShadowTopics = new HashSet<>();
     private final Set<String> subscribedDeleteShadowTopics = new HashSet<>();
     private final Pattern shadowPattern = Pattern.compile("\\$aws\\/things\\/(.*)\\/shadow(\\/name\\/(.*))?\\/");
@@ -62,6 +64,18 @@ public class CloudDataClient {
                            MqttClient mqttClient) {
         this.syncHandler = syncHandler;
         this.mqttClient = mqttClient;
+
+        mqttClient.addToCallbackEvents(new MqttClientConnectionEvents() {
+            @Override
+            public void onConnectionInterrupted(int errorCode) {
+                stop();
+            }
+
+            @Override
+            public void onConnectionResumed(boolean sessionPresent) {
+                updateSubscriptions(targetShadowSet);
+            }
+        });
     }
 
     /**
@@ -78,8 +92,7 @@ public class CloudDataClient {
      */
     public void clearSubscriptions() {
         stop();
-        subscriberThread = new Thread(() -> updateSubscriptions(Collections.emptySet(), Collections.emptySet()));
-        subscriberThread.start();
+        updateSubscriptions(Collections.emptySet());
     }
 
     /**
@@ -88,6 +101,7 @@ public class CloudDataClient {
      * @param shadowSet Set of shadow topic prefixes to subscribe to the update/delete topic
      */
     public void updateSubscriptions(Set<Pair<String, String>> shadowSet) {
+        targetShadowSet = new HashSet<>(shadowSet);
         Set<String> newUpdateTopics = new HashSet<>();
         Set<String> newDeleteTopics = new HashSet<>();
 
@@ -109,6 +123,13 @@ public class CloudDataClient {
      * @param deleteTopics Set of delete shadow topics to subscribe to
      */
     private synchronized void updateSubscriptions(Set<String> updateTopics, Set<String> deleteTopics) {
+
+        if (!mqttClient.connected()) {
+            logger.atWarn()
+                    .setEventType(LogEvents.CLOUD_DATA_CLIENT_SUBSCRIPTION_ERROR.code())
+                    .log("Attempting to update subscriptions when offline");
+            return;
+        }
 
         // get update topics to remove and subscribe
         Set<String> updateTopicsToRemove = new HashSet<>(subscribedUpdateShadowTopics);
