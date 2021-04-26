@@ -10,11 +10,15 @@ import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.mqttclient.MqttClient;
 import com.aws.greengrass.mqttclient.SubscribeRequest;
 import com.aws.greengrass.mqttclient.UnsubscribeRequest;
+import com.aws.greengrass.shadowmanager.exception.SubscriptionRetryException;
 import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.model.ShadowRequest;
 import com.aws.greengrass.util.Pair;
+import com.aws.greengrass.util.RetryUtils;
 import software.amazon.awssdk.crt.mqtt.MqttMessage;
 
+import java.time.Duration;
+import java.time.temporal.ChronoUnit;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
@@ -40,8 +44,12 @@ public class CloudDataClient {
     private final Set<String> subscribedDeleteShadowTopics = new HashSet<>();
     private final Pattern shadowPattern = Pattern.compile("\\$aws\\/things\\/(.*)\\/shadow(\\/name\\/(.*))?\\/");
     private Thread subscriberThread;
-    private volatile boolean running = false;
-    private static final int MAX_RETRY_COUNT = 5;
+    private static final RetryUtils.RetryConfig RETRY_CONFIG = RetryUtils.RetryConfig.builder()
+            .maxAttempt(Integer.MAX_VALUE)
+            .initialRetryInterval(Duration.of(3, ChronoUnit.SECONDS))
+            .maxRetryInterval(Duration.of(1, ChronoUnit.MINUTES))
+            .retryableExceptions(Collections.singletonList(SubscriptionRetryException.class))
+            .build();
 
     /**
      * Ctr for CloudDataClient.
@@ -57,12 +65,29 @@ public class CloudDataClient {
     }
 
     /**
+     * Stops the mqtt subscriber thread.
+     */
+    public void stop() {
+        if (subscriberThread != null && subscriberThread.isAlive()) {
+            subscriberThread.interrupt();
+        }
+    }
+
+    /**
+     * Unsubscribes from all subscribed shadow topics.
+     */
+    public void clearSubscriptions() {
+        stop();
+        subscriberThread = new Thread(() -> updateSubscriptions(Collections.emptySet(), Collections.emptySet()));
+        subscriberThread.start();
+    }
+
+    /**
      * Updates and subscribes to set of update/delete topics for set of shadows.
      *
      * @param shadowSet Set of shadow topic prefixes to subscribe to the update/delete topic
-     * @throws InterruptedException Interrupt occurred when trying to reset subscriber thread
      */
-    public synchronized void updateSubscriptions(Set<Pair<String, String>> shadowSet) throws InterruptedException {
+    public void updateSubscriptions(Set<Pair<String, String>> shadowSet) {
         Set<String> newUpdateTopics = new HashSet<>();
         Set<String> newDeleteTopics = new HashSet<>();
 
@@ -72,12 +97,7 @@ public class CloudDataClient {
             newDeleteTopics.add(request.getShadowTopicPrefix() + SHADOW_DELETE_SUBSCRIPTION_TOPIC);
         }
 
-        if (subscriberThread != null && subscriberThread.isAlive()) {
-            running = false;
-            Thread.sleep(1000);
-        }
-
-        running = true;
+        stop();
         subscriberThread = new Thread(() -> updateSubscriptions(newUpdateTopics, newDeleteTopics));
         subscriberThread.start();
     }
@@ -88,7 +108,7 @@ public class CloudDataClient {
      * @param updateTopics Set of update shadow topics to subscribe to
      * @param deleteTopics Set of delete shadow topics to subscribe to
      */
-    private void updateSubscriptions(Set<String> updateTopics, Set<String> deleteTopics) {
+    private synchronized void updateSubscriptions(Set<String> updateTopics, Set<String> deleteTopics) {
 
         // get update topics to remove and subscribe
         Set<String> updateTopicsToRemove = new HashSet<>(subscribedUpdateShadowTopics);
@@ -103,54 +123,54 @@ public class CloudDataClient {
         Set<String> deleteTopicsToSubscribe = new HashSet<>(deleteTopics);
         deleteTopicsToSubscribe.removeAll(subscribedDeleteShadowTopics);
 
-        int retryCount = 0;
-
-        // TODO: Implement exponential backoff algorithm
-        while (!updateTopicsToRemove.isEmpty() || !updateTopicsToSubscribe.isEmpty()
-                || !deleteTopicsToRemove.isEmpty() || !deleteTopicsToSubscribe.isEmpty()
-                && running) {
-            try {
-                Thread.sleep(retryCount * 1000);
-
+        boolean success;
+        try {
+            success = RetryUtils.runWithRetry(RETRY_CONFIG, () -> {
                 unsubscribeToShadows(subscribedUpdateShadowTopics, updateTopicsToRemove, this::handleUpdate);
                 subscribeToShadows(subscribedUpdateShadowTopics, updateTopicsToSubscribe, this::handleUpdate);
 
                 unsubscribeToShadows(subscribedDeleteShadowTopics, deleteTopicsToRemove, this::handleDelete);
                 subscribeToShadows(subscribedDeleteShadowTopics, deleteTopicsToSubscribe, this::handleDelete);
 
-                if (retryCount < MAX_RETRY_COUNT) {
-                    retryCount++;
+                if (!updateTopicsToRemove.isEmpty() || !updateTopicsToSubscribe.isEmpty()
+                        || !deleteTopicsToRemove.isEmpty() || !deleteTopicsToSubscribe.isEmpty()
+                        && !Thread.currentThread().isInterrupted()) {
+
+                    throw new SubscriptionRetryException("Missed shadow topics to (un)subscribe to");
                 }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                logger.atError()
-                        .setEventType(LogEvents.CLOUD_DATA_CLIENT_SUBSCRIPTION_ERROR.code())
-                        .setCause(e)
-                        .log("Failed to update subscriptions");
-                running = false;
-                return;
-            }
+
+                // if interrupted then handle
+                if (Thread.currentThread().isInterrupted()) {
+                    Thread.currentThread().interrupt();
+                    logger.atError()
+                            .setEventType(LogEvents.CLOUD_DATA_CLIENT_SUBSCRIPTION_ERROR.code())
+                            .log("Failed to update subscriptions");
+                    return false;
+                }
+
+                return true;
+            }, LogEvents.CLOUD_DATA_CLIENT_SUBSCRIPTION_ERROR.code(), logger);
+
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            logger.atError()
+                    .setEventType(LogEvents.CLOUD_DATA_CLIENT_SUBSCRIPTION_ERROR.code())
+                    .setCause(e)
+                    .log("Failed to update subscriptions");
+            return;
+        } catch (Exception e) { // NOPMD - thrown by RetryUtils.runWithRetry()
+            logger.atError()
+                    .setEventType(LogEvents.CLOUD_DATA_CLIENT_SUBSCRIPTION_ERROR.code())
+                    .setCause(e)
+                    .log("Failed to update subscriptions");
+            return;
         }
 
-        logger.atDebug()
-                .setEventType(LogEvents.CLOUD_DATA_CLIENT_SUBSCRIPTION_ERROR.code())
-                .log("Finished updating subscriptions");
-        running = false;
-    }
-
-    /**
-     * Unsubscribes from all subscribed shadow topics.
-     *
-     * @throws InterruptedException Interrupt occurred while trying to clear subscriptions
-     */
-    public synchronized void clearSubscriptions() throws InterruptedException {
-        if (subscriberThread != null && subscriberThread.isAlive()) {
-            running = false;
-            Thread.sleep(1000);
+        if (success) {
+            logger.atDebug()
+                    .setEventType(LogEvents.CLOUD_DATA_CLIENT_SUBSCRIPTION_ERROR.code())
+                    .log("Finished updating subscriptions");
         }
-
-        subscriberThread = new Thread(() -> updateSubscriptions(Collections.emptySet(), Collections.emptySet()));
-        subscriberThread.start();
     }
 
     /**

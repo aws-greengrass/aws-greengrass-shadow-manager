@@ -114,7 +114,7 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
                     .cloudUpdateTime(Instant.now().getEpochSecond())
                     .build());
         } catch (JsonProcessingException | ShadowManagerDataException e) {
-            logger.atWarn()
+            logger.atError()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
                     .cause(e).log("Failed to update sync table after updating cloud shadow");
