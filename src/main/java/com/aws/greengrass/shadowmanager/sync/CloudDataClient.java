@@ -32,14 +32,14 @@ import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_UPDATE_SUB
  * Class to subscribe to IoT Core Shadow topics.
  */
 public class CloudDataClient {
-    // TODO: Implement blocking queue for processing subscription requests
-
     private static final Logger logger = LogManager.getLogger(CloudDataClient.class);
     private final SyncHandler syncHandler;
     private final MqttClient mqttClient;
     private final Set<String> subscribedUpdateShadowTopics = new HashSet<>();
     private final Set<String> subscribedDeleteShadowTopics = new HashSet<>();
     private final Pattern shadowPattern = Pattern.compile("\\$aws\\/things\\/(.*)\\/shadow(\\/name\\/(.*))?\\/");
+    private Thread subscriberThread;
+    private volatile boolean running = false;
 
     /**
      * Ctr for CloudDataClient.
@@ -58,47 +58,73 @@ public class CloudDataClient {
      * Updates and subscribes to set of update/delete topics for set of shadows.
      *
      * @param shadowSet Set of shadow topic prefixes to subscribe to the update/delete topic
-     * @throws InterruptedException Interrupt occurred while trying to update subscriptions
+     * @throws InterruptedException Interrupt occurred when trying to reset subscriber thread
      */
     public synchronized void updateSubscriptions(Set<Pair<String, String>> shadowSet) throws InterruptedException {
         Set<String> newUpdateTopics = new HashSet<>();
         Set<String> newDeleteTopics = new HashSet<>();
 
-        for (Pair<String,String> shadow : shadowSet) {
+        for (Pair<String, String> shadow : shadowSet) {
             ShadowRequest request = new ShadowRequest(shadow.getLeft(), shadow.getRight());
             newUpdateTopics.add(request.getShadowTopicPrefix() + SHADOW_UPDATE_SUBSCRIPTION_TOPIC);
             newDeleteTopics.add(request.getShadowTopicPrefix() + SHADOW_DELETE_SUBSCRIPTION_TOPIC);
         }
 
-        // keep track of update/delete topics separately to keep track of faulty subscriptions
-        updateTopicSubscriptions(subscribedUpdateShadowTopics, newUpdateTopics, this::handleUpdate);
-        updateTopicSubscriptions(subscribedDeleteShadowTopics, newDeleteTopics, this::handleDelete);
+        if (subscriberThread.isAlive()) {
+            running = false;
+            Thread.sleep(1000);
+        }
+
+        running = true;
+        subscriberThread = new Thread(() -> updateSubscriptions(newUpdateTopics, newDeleteTopics));
     }
 
     /**
-     * Updates the subscriptions for a specific set of topics. This is generalized to apply to either update/delete
-     * topics so that both topics can be tracked separately in case of failures.
+     * Updates subscriptions for set of update and delete shadow topics.
      *
-     * @param currentTopics Set of topics currently subscribed to
-     * @param newTopics     New set of topics to subscribe to
-     * @param callback      Callback function applied to specific topic
-     * @throws InterruptedException Interrupt occurred while trying to update subscriptions
+     * @param updateTopics Set of update shadow topics to subscribe to
+     * @param deleteTopics Set of delete shadow topics to subscribe to
      */
-    private void updateTopicSubscriptions(Set<String> currentTopics, Set<String> newTopics,
-                                          Consumer<MqttMessage> callback) throws InterruptedException {
-        Set<String> topicsToRemove = new HashSet<>(currentTopics);
-        topicsToRemove.removeAll(newTopics);
-        for (String topic : topicsToRemove) {
-            unsubscribeToShadow(topic, callback);
-            currentTopics.remove(topic);
+    private void updateSubscriptions(Set<String> updateTopics, Set<String> deleteTopics) {
+
+        // get update topics to remove and subscribe
+        Set<String> updateTopicsToRemove = new HashSet<>(subscribedUpdateShadowTopics);
+        updateTopicsToRemove.removeAll(updateTopics);
+
+        Set<String> updateTopicsToSubscribe = new HashSet<>(updateTopics);
+        updateTopicsToSubscribe.removeAll(subscribedUpdateShadowTopics);
+
+        Set<String> deleteTopicsToRemove = new HashSet<>(subscribedDeleteShadowTopics);
+        updateTopicsToRemove.removeAll(deleteTopics);
+
+        Set<String> deleteTopicsToSubscribe = new HashSet<>(deleteTopics);
+        updateTopicsToSubscribe.removeAll(subscribedDeleteShadowTopics);
+
+        // TODO: Implement exponential backoff algorithm
+        while (!updateTopicsToRemove.isEmpty() || !updateTopicsToSubscribe.isEmpty()
+                || !deleteTopicsToRemove.isEmpty() || !deleteTopicsToSubscribe.isEmpty()
+                && running) {
+            try {
+                unsubscribeToShadows(subscribedUpdateShadowTopics, updateTopicsToRemove, this::handleUpdate);
+                subscribeToShadows(subscribedUpdateShadowTopics, updateTopicsToSubscribe, this::handleUpdate);
+
+                unsubscribeToShadows(subscribedDeleteShadowTopics, deleteTopicsToRemove, this::handleDelete);
+                subscribeToShadows(subscribedDeleteShadowTopics, deleteTopicsToSubscribe, this::handleDelete);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                logger.atError()
+                        .setEventType(LogEvents.CLOUD_DATA_CLIENT_SUBSCRIPTION_ERROR.code())
+                        .setCause(e)
+                        .log("Failed to update subscriptions");
+                running = false;
+                return;
+            }
         }
 
-        Set<String> topicsToSubscribe = new HashSet<>(newTopics);
-        topicsToSubscribe.removeAll(currentTopics);
-        for (String topic : topicsToSubscribe) {
-            subscribeToShadow(topic, callback);
-            currentTopics.add(topic);
-        }
+        logger.atDebug()
+                .setEventType(LogEvents.CLOUD_DATA_CLIENT_SUBSCRIPTION_ERROR.code())
+                .log("Finished updating subscriptions");
+        running = false;
     }
 
     /**
@@ -107,60 +133,87 @@ public class CloudDataClient {
      * @throws InterruptedException Interrupt occurred while trying to clear subscriptions
      */
     public synchronized void clearSubscriptions() throws InterruptedException {
+        Set<String> updateTopicsToRemove = new HashSet<>(subscribedUpdateShadowTopics);
+        Set<String> deleteTopicsToRemove = new HashSet<>(subscribedDeleteShadowTopics);
 
-        Set<String> tempTopicSet = new HashSet<>(subscribedUpdateShadowTopics);
-        for (String topic : tempTopicSet) {
-            unsubscribeToShadow(topic, this::handleUpdate);
-            subscribedUpdateShadowTopics.remove(topic);
+        if (subscriberThread.isAlive()) {
+            running = false;
+            Thread.sleep(1000);
         }
 
-        tempTopicSet = new HashSet<>(subscribedDeleteShadowTopics);
-        for (String topic : tempTopicSet) {
-            unsubscribeToShadow(topic, this::handleDelete);
-            subscribedDeleteShadowTopics.remove(topic);
-        }
-    }
-
-    /**
-     * Subscribes to a shadow topic.
-     *
-     * @param topic    MQTT message from shadow topic
-     * @param callback Callback function applied to specific topic
-     * @throws InterruptedException Interrupt occurred while trying to subscribe to a shadow
-     */
-    private void subscribeToShadow(String topic, Consumer<MqttMessage> callback) throws InterruptedException {
-        while (true) {
-            try {
-                mqttClient.subscribe(SubscribeRequest.builder().topic(topic).callback(callback).build());
-                break;
-            } catch (TimeoutException | ExecutionException e) {
-                logger.atWarn()
-                        .setEventType(LogEvents.CLOUD_DATA_CLIENT_SUBSCRIPTION_ERROR.code())
-                        .kv(LOG_TOPIC, topic)
-                        .setCause(e)
-                        .log("Failed to subscribe to shadow topic");
+        // TODO: Implement exponential backoff algorithm
+        subscriberThread = new Thread(() -> {
+            running = true;
+            while (!updateTopicsToRemove.isEmpty() || !deleteTopicsToRemove.isEmpty() && running) {
+                try {
+                    unsubscribeToShadows(subscribedUpdateShadowTopics, updateTopicsToRemove, this::handleUpdate);
+                    unsubscribeToShadows(subscribedDeleteShadowTopics, deleteTopicsToRemove, this::handleDelete);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    logger.atError()
+                            .setEventType(LogEvents.CLOUD_DATA_CLIENT_SUBSCRIPTION_ERROR.code())
+                            .setCause(e)
+                            .log("Failed to clear shadow topic subscriptions");
+                    running = false;
+                    return;
+                }
             }
-        }
+
+            logger.atDebug()
+                    .setEventType(LogEvents.CLOUD_DATA_CLIENT_SUBSCRIPTION_ERROR.code())
+                    .log("Finished clearing shadow topic subscriptions");
+            running = false;
+        });
     }
 
     /**
-     * Unsubscribes to a shadow topic.
+     * Unsubscribes to a given set of shadow topics.
      *
-     * @param topic    MQTT message from shadow topic
-     * @param callback Callback function applied to specific topic
-     * @throws InterruptedException Interrupt occurred while trying to unsubscribe to a shadow
+     * @param currentTopics       Set of shadow topics being tracked by the CloudDataClient
+     * @param topicsToUnsubscribe Set of shadow topics to unsubscribe to
+     * @param callback            Callback function applied to shadow topic
+     * @throws InterruptedException Interrupt occurred while trying to unsubscribe to shadows
      */
-    private void unsubscribeToShadow(String topic, Consumer<MqttMessage> callback) throws InterruptedException {
-        while (true) {
+    private void unsubscribeToShadows(Set<String> currentTopics, Set<String> topicsToUnsubscribe,
+                                      Consumer<MqttMessage> callback) throws InterruptedException {
+        Set<String> tempHashSet = new HashSet<>(topicsToUnsubscribe);
+        for (String topic : tempHashSet) {
             try {
                 mqttClient.unsubscribe(UnsubscribeRequest.builder().topic(topic).callback(callback).build());
-                break;
+                topicsToUnsubscribe.remove(topic);
+                currentTopics.remove(topic);
             } catch (TimeoutException | ExecutionException e) {
                 logger.atWarn()
                         .setEventType(LogEvents.CLOUD_DATA_CLIENT_SUBSCRIPTION_ERROR.code())
                         .kv(LOG_TOPIC, topic)
                         .setCause(e)
                         .log("Failed to unsubscribe to shadow topic");
+            }
+        }
+    }
+
+    /**
+     * Subscribes to a given set of shadow topics.
+     *
+     * @param currentTopics     Set of shadow topics being tracked by the CloudDataClient
+     * @param topicsToSubscribe Set of shadow topics to subscribe to
+     * @param callback          Callback function applied to shadow topic
+     * @throws InterruptedException Interrupt occurred while trying to subscribe to shadows
+     */
+    private void subscribeToShadows(Set<String> currentTopics, Set<String> topicsToSubscribe,
+                                    Consumer<MqttMessage> callback) throws InterruptedException {
+        Set<String> tempHashSet = new HashSet<>(topicsToSubscribe);
+        for (String topic : tempHashSet) {
+            try {
+                mqttClient.subscribe(SubscribeRequest.builder().topic(topic).callback(callback).build());
+                topicsToSubscribe.remove(topic);
+                currentTopics.add(topic);
+            } catch (TimeoutException | ExecutionException e) {
+                logger.atWarn()
+                        .setEventType(LogEvents.CLOUD_DATA_CLIENT_SUBSCRIPTION_ERROR.code())
+                        .kv(LOG_TOPIC, topic)
+                        .setCause(e)
+                        .log("Failed to subscribe to shadow topic");
             }
         }
     }
