@@ -460,7 +460,6 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
                 .kv(LOG_THING_NAME_KEY, getThingName())
                 .kv(LOG_SHADOW_NAME_KEY, getShadowName())
                 .log("Getting cloud shadow document");
-
         try {
             GetThingShadowResponse getThingShadowResponse = this.clientFactory.getIotDataPlaneClient()
                     .getThingShadow(GetThingShadowRequest
