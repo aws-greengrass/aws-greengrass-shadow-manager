@@ -40,6 +40,7 @@ public class CloudDataClient {
     private final Pattern shadowPattern = Pattern.compile("\\$aws\\/things\\/(.*)\\/shadow(\\/name\\/(.*))?\\/");
     private Thread subscriberThread;
     private volatile boolean running = false;
+    private static final int MAX_RETRY_COUNT = 5;
 
     /**
      * Ctr for CloudDataClient.
@@ -101,16 +102,24 @@ public class CloudDataClient {
         Set<String> deleteTopicsToSubscribe = new HashSet<>(deleteTopics);
         deleteTopicsToSubscribe.removeAll(subscribedDeleteShadowTopics);
 
+        int retryCount = 0;
+
         // TODO: Implement exponential backoff algorithm
         while (!updateTopicsToRemove.isEmpty() || !updateTopicsToSubscribe.isEmpty()
                 || !deleteTopicsToRemove.isEmpty() || !deleteTopicsToSubscribe.isEmpty()
                 && running) {
             try {
+                Thread.sleep(retryCount * 1000);
+
                 unsubscribeToShadows(subscribedUpdateShadowTopics, updateTopicsToRemove, this::handleUpdate);
                 subscribeToShadows(subscribedUpdateShadowTopics, updateTopicsToSubscribe, this::handleUpdate);
 
                 unsubscribeToShadows(subscribedDeleteShadowTopics, deleteTopicsToRemove, this::handleDelete);
                 subscribeToShadows(subscribedDeleteShadowTopics, deleteTopicsToSubscribe, this::handleDelete);
+
+                if (retryCount < MAX_RETRY_COUNT) {
+                    retryCount++;
+                }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 logger.atError()
@@ -145,10 +154,17 @@ public class CloudDataClient {
         // TODO: Implement exponential backoff algorithm
         subscriberThread = new Thread(() -> {
             running = true;
+            int retryCount = 0;
+
             while (!updateTopicsToRemove.isEmpty() || !deleteTopicsToRemove.isEmpty() && running) {
                 try {
+                    Thread.sleep(retryCount * 1000);
                     unsubscribeToShadows(subscribedUpdateShadowTopics, updateTopicsToRemove, this::handleUpdate);
                     unsubscribeToShadows(subscribedDeleteShadowTopics, deleteTopicsToRemove, this::handleDelete);
+
+                    if (retryCount < MAX_RETRY_COUNT) {
+                        retryCount++;
+                    }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     logger.atError()
