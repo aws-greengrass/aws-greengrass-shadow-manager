@@ -51,7 +51,7 @@ public class CloudDataClientTest {
 
         CloudDataClient cloudDataClient = new CloudDataClient(mockSyncHandler, mockMqttClient);
         cloudDataClient.updateSubscriptions(SHADOW_SET);
-
+        Thread.sleep(2000);
         verify(mockMqttClient, times(6)).subscribe(any(SubscribeRequest.class));
         verify(mockMqttClient, times(0)).unsubscribe(any(UnsubscribeRequest.class));
     }
@@ -67,9 +67,11 @@ public class CloudDataClientTest {
 
         CloudDataClient cloudDataClient = new CloudDataClient(mockSyncHandler, mockMqttClient);
         cloudDataClient.updateSubscriptions(SHADOW_SET);
+        Thread.sleep(2000);
 
         // update subscriptions again
         cloudDataClient.updateSubscriptions(newShadowSet);
+        Thread.sleep(2000);
 
         verify(mockMqttClient, times(8)).subscribe(any(SubscribeRequest.class));
         verify(mockMqttClient, times(2)).unsubscribe(any(UnsubscribeRequest.class));
@@ -79,8 +81,10 @@ public class CloudDataClientTest {
     void GIVEN_existing_shadows_and_update_with_new_set_WHEN_clear_subscriptions_THEN_subscriptions_cleared() throws InterruptedException, TimeoutException, ExecutionException {
         CloudDataClient cloudDataClient = new CloudDataClient(mockSyncHandler, mockMqttClient);
         cloudDataClient.updateSubscriptions(SHADOW_SET);
+        Thread.sleep(2000);
 
         cloudDataClient.clearSubscriptions();
+        Thread.sleep(2000);
 
         verify(mockMqttClient, times(6)).subscribe(any(SubscribeRequest.class));
         verify(mockMqttClient, times(6)).unsubscribe(any(UnsubscribeRequest.class));

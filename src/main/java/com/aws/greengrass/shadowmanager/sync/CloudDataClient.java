@@ -70,13 +70,14 @@ public class CloudDataClient {
             newDeleteTopics.add(request.getShadowTopicPrefix() + SHADOW_DELETE_SUBSCRIPTION_TOPIC);
         }
 
-        if (subscriberThread.isAlive()) {
+        if (subscriberThread != null && subscriberThread.isAlive()) {
             running = false;
             Thread.sleep(1000);
         }
 
         running = true;
         subscriberThread = new Thread(() -> updateSubscriptions(newUpdateTopics, newDeleteTopics));
+        subscriberThread.start();
     }
 
     /**
@@ -95,10 +96,10 @@ public class CloudDataClient {
         updateTopicsToSubscribe.removeAll(subscribedUpdateShadowTopics);
 
         Set<String> deleteTopicsToRemove = new HashSet<>(subscribedDeleteShadowTopics);
-        updateTopicsToRemove.removeAll(deleteTopics);
+        deleteTopicsToRemove.removeAll(deleteTopics);
 
         Set<String> deleteTopicsToSubscribe = new HashSet<>(deleteTopics);
-        updateTopicsToSubscribe.removeAll(subscribedDeleteShadowTopics);
+        deleteTopicsToSubscribe.removeAll(subscribedDeleteShadowTopics);
 
         // TODO: Implement exponential backoff algorithm
         while (!updateTopicsToRemove.isEmpty() || !updateTopicsToSubscribe.isEmpty()
@@ -136,7 +137,7 @@ public class CloudDataClient {
         Set<String> updateTopicsToRemove = new HashSet<>(subscribedUpdateShadowTopics);
         Set<String> deleteTopicsToRemove = new HashSet<>(subscribedDeleteShadowTopics);
 
-        if (subscriberThread.isAlive()) {
+        if (subscriberThread != null && subscriberThread.isAlive()) {
             running = false;
             Thread.sleep(1000);
         }
@@ -164,6 +165,7 @@ public class CloudDataClient {
                     .log("Finished clearing shadow topic subscriptions");
             running = false;
         });
+        subscriberThread.start();
     }
 
     /**
