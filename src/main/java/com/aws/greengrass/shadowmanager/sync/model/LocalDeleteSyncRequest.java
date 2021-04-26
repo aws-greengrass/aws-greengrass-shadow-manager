@@ -65,7 +65,7 @@ public class LocalDeleteSyncRequest extends BaseSyncRequest {
      * Main execution thread for syncing cloud deletes to local shadow.
      */
     @Override
-    public void execute() throws SyncException, UnknownShadowException, SkipSyncRequestException {
+    public void execute() throws SyncException, SkipSyncRequestException, UnknownShadowException {
         Long deletedCloudVersion;
         try {
             deletedCloudVersion = JsonUtil.getPayloadJson(deletePayload)

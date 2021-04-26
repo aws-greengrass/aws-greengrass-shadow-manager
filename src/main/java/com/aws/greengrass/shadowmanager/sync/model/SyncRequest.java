@@ -8,6 +8,7 @@ package com.aws.greengrass.shadowmanager.sync.model;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.exception.SyncException;
+import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
 
 /**
  * Interface for a sync request.
@@ -24,6 +25,7 @@ public interface SyncRequest {
      * @throws SyncException            When error occurs in sync operation
      * @throws RetryableException       When error occurs in sync operation indicating a request needs to be retried
      * @throws SkipSyncRequestException When error occurs in sync operation indicating a request needs to be skipped.
+     * @throws UnknownShadowException   When shadow not found in the sync table.
      */
-    void execute() throws SyncException, RetryableException, SkipSyncRequestException;
+    void execute() throws SyncException, RetryableException, SkipSyncRequestException, UnknownShadowException;
 }

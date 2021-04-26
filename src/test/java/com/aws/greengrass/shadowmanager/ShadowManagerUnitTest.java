@@ -13,6 +13,7 @@ import com.aws.greengrass.deployment.DeviceConfiguration;
 import com.aws.greengrass.shadowmanager.exception.InvalidConfigurationException;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.ipc.PubSubClientWrapper;
+import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientFactory;
 import com.aws.greengrass.shadowmanager.util.ShadowWriteSynchronizeHelper;
 import com.aws.greengrass.shadowmanager.util.Validator;
@@ -111,6 +112,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         shadowManager.install();
         assertFalse(shadowManager.isErrored());
         verify(mockDatabase, times(1)).setMaxDiskUtilization(intObjectCaptor.capture());
+        verify(mockDao, times(0)).insertSyncInfoIfNotExists(any(SyncInformation.class));
         assertThat(intObjectCaptor.getValue(), is(notNullValue()));
         assertThat(intObjectCaptor.getValue(), is(maxDiskUtilizationMB));
     }
@@ -130,6 +132,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         ShadowManager shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockDeviceConfiguration, mockSynchronizeHelper, mockClientFactory);
         shadowManager.install();
         assertTrue(shadowManager.isErrored());
+        verify(mockDao, times(0)).insertSyncInfoIfNotExists(any(SyncInformation.class));
     }
 
     @ParameterizedTest
@@ -148,6 +151,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
 
         assertFalse(shadowManager.isErrored());
         assertThat(Validator.getMaxShadowDocumentSize(), is(maxDocSize));
+        verify(mockDao, times(0)).insertSyncInfoIfNotExists(any(SyncInformation.class));
     }
 
     @ParameterizedTest
@@ -165,6 +169,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         ShadowManager shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockDeviceConfiguration, mockSynchronizeHelper, mockClientFactory);
         shadowManager.install();
         assertTrue(shadowManager.isErrored());
+        verify(mockDao, times(0)).insertSyncInfoIfNotExists(any(SyncInformation.class));
     }
 
     @Test
@@ -218,6 +223,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         });
         assertThat(shadowManager.getSyncConfiguration().getMaxOutboundSyncUpdatesPerSecond(), is(500));
         assertThat(shadowManager.getSyncConfiguration().isProvideSyncStatus(), is(true));
+        verify(mockDao, times(6)).insertSyncInfoIfNotExists(any(SyncInformation.class));
     }
 
     @Test
@@ -271,6 +277,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         });
         assertThat(shadowManager.getSyncConfiguration().getMaxOutboundSyncUpdatesPerSecond(), is(500));
         assertThat(shadowManager.getSyncConfiguration().isProvideSyncStatus(), is(true));
+        verify(mockDao, times(6)).insertSyncInfoIfNotExists(any(SyncInformation.class));
     }
 
     @Test
@@ -318,6 +325,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
                 fail("Encountered unknown thing in sync configurations list: " + thingShadowSyncConfiguration.getThingName());
             }
         });
+        verify(mockDao, times(2)).insertSyncInfoIfNotExists(any(SyncInformation.class));
 
     }
 
@@ -346,6 +354,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         ShadowManager shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockDeviceConfiguration, mockSynchronizeHelper, mockClientFactory);
         shadowManager.install();
         assertTrue(shadowManager.isErrored());
+        verify(mockDao, times(0)).insertSyncInfoIfNotExists(any(SyncInformation.class));
     }
 
     @Test
@@ -373,6 +382,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         ShadowManager shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockDeviceConfiguration, mockSynchronizeHelper, mockClientFactory);
         shadowManager.install();
         assertTrue(shadowManager.isErrored());
+        verify(mockDao, times(0)).insertSyncInfoIfNotExists(any(SyncInformation.class));
     }
 
     @Test
@@ -396,6 +406,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         ShadowManager shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockDeviceConfiguration, mockSynchronizeHelper, mockClientFactory);
         shadowManager.install();
         assertTrue(shadowManager.isErrored());
+        verify(mockDao, times(0)).insertSyncInfoIfNotExists(any(SyncInformation.class));
     }
 
     @Test
@@ -417,6 +428,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         ShadowManager shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockDeviceConfiguration, mockSynchronizeHelper, mockClientFactory);
         shadowManager.install();
         assertTrue(shadowManager.isErrored());
+        verify(mockDao, times(0)).insertSyncInfoIfNotExists(any(SyncInformation.class));
     }
 
     @ParameterizedTest
@@ -453,6 +465,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         ShadowManager shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockDeviceConfiguration, mockSynchronizeHelper, mockClientFactory);
         shadowManager.install();
         assertTrue(shadowManager.isErrored());
+        verify(mockDao, times(0)).insertSyncInfoIfNotExists(any(SyncInformation.class));
     }
 
     @ParameterizedTest
@@ -491,5 +504,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         ShadowManager shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockDeviceConfiguration, mockSynchronizeHelper, mockClientFactory);
         shadowManager.install();
         assertTrue(shadowManager.isErrored());
+        verify(mockDao, times(0)).insertSyncInfoIfNotExists(any(SyncInformation.class));
     }
 }

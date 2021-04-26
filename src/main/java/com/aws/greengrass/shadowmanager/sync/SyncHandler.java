@@ -60,7 +60,8 @@ public class SyncHandler {
                 shadowName,
                 this.dao,
                 this.shadowManager.getUpdateThingShadowRequestHandler(),
-                this.shadowManager.getDeleteThingShadowRequestHandler());
+                this.shadowManager.getDeleteThingShadowRequestHandler(),
+                this.clientFactory);
     }
 
     /**
