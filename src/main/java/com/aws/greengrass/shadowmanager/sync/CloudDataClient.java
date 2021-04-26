@@ -15,6 +15,7 @@ import com.aws.greengrass.shadowmanager.model.ShadowRequest;
 import com.aws.greengrass.util.Pair;
 import software.amazon.awssdk.crt.mqtt.MqttMessage;
 
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -143,44 +144,12 @@ public class CloudDataClient {
      * @throws InterruptedException Interrupt occurred while trying to clear subscriptions
      */
     public synchronized void clearSubscriptions() throws InterruptedException {
-        Set<String> updateTopicsToRemove = new HashSet<>(subscribedUpdateShadowTopics);
-        Set<String> deleteTopicsToRemove = new HashSet<>(subscribedDeleteShadowTopics);
-
         if (subscriberThread != null && subscriberThread.isAlive()) {
             running = false;
             Thread.sleep(1000);
         }
 
-        // TODO: Implement exponential backoff algorithm
-        subscriberThread = new Thread(() -> {
-            running = true;
-            int retryCount = 0;
-
-            while (!updateTopicsToRemove.isEmpty() || !deleteTopicsToRemove.isEmpty() && running) {
-                try {
-                    Thread.sleep(retryCount * 1000);
-                    unsubscribeToShadows(subscribedUpdateShadowTopics, updateTopicsToRemove, this::handleUpdate);
-                    unsubscribeToShadows(subscribedDeleteShadowTopics, deleteTopicsToRemove, this::handleDelete);
-
-                    if (retryCount < MAX_RETRY_COUNT) {
-                        retryCount++;
-                    }
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    logger.atError()
-                            .setEventType(LogEvents.CLOUD_DATA_CLIENT_SUBSCRIPTION_ERROR.code())
-                            .setCause(e)
-                            .log("Failed to clear shadow topic subscriptions");
-                    running = false;
-                    return;
-                }
-            }
-
-            logger.atDebug()
-                    .setEventType(LogEvents.CLOUD_DATA_CLIENT_SUBSCRIPTION_ERROR.code())
-                    .log("Finished clearing shadow topic subscriptions");
-            running = false;
-        });
+        subscriberThread = new Thread(() -> updateSubscriptions(Collections.emptySet(), Collections.emptySet()));
         subscriberThread.start();
     }
 
