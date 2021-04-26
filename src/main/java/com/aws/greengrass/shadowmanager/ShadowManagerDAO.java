@@ -86,6 +86,15 @@ public interface ShadowManagerDAO {
     boolean deleteSyncInformation(String thingName, String shadowName);
 
     /**
+     * Attempts to get the shadow document version.
+     *
+     * @param thingName       Name of the Thing for the shadow topic prefix.
+     * @param shadowName      Name of shadow topic prefix for thing.
+     * @return Optional containing the new shadow document version if document exists; Else an empty optional
+     */
+    Optional<Long> getShadowDocumentVersion(String thingName, String shadowName);
+
+    /**
      * Attempts to insert a new sync information row for a thing's shadow if it does not exist.
      *
      * @param request The update shadow sync information request containing the necessary information to update.

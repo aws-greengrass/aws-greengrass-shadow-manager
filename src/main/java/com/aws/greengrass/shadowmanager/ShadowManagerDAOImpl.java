@@ -242,6 +242,28 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
     }
 
     /**
+     * Attempts to get the shadow document version.
+     *
+     * @param thingName  Name of the Thing for the shadow topic prefix.
+     * @param shadowName Name of shadow topic prefix for thing.
+     * @return Optional containing the new shadow document version if document exists; Else an empty optional
+     */
+    @Override
+    public Optional<Long> getShadowDocumentVersion(String thingName, String shadowName) {
+        return execute("SELECT version FROM documents WHERE thingName = ? AND shadowName = ?",
+                preparedStatement -> {
+                    preparedStatement.setString(1, thingName);
+                    preparedStatement.setString(2, shadowName);
+                    try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                        if (resultSet.next()) {
+                            return Optional.of(resultSet.getLong(1));
+                        }
+                    }
+                    return Optional.empty();
+                });
+    }
+
+    /**
      * Attempts to insert a new sync information row for a thing's shadow if it does not exist.
      *
      * @param request The update shadow sync information request containing the necessary information to update.

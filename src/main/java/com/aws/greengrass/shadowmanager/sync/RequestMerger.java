@@ -26,27 +26,30 @@ class RequestMerger {
     private final ShadowManagerDAO dao;
     private final UpdateThingShadowRequestHandler updateHandler;
     private final DeleteThingShadowRequestHandler deleteHandler;
+    private final IotDataPlaneClientFactory clientFactory;
 
     /**
      * Construct a new instance.
      *
-     * @param dao a data access object
+     * @param dao           a data access object
      * @param updateHandler an update handler
      * @param deleteHandler a delete handler
      */
     @Inject
     public RequestMerger(ShadowManagerDAO dao, UpdateThingShadowRequestHandler updateHandler,
-            DeleteThingShadowRequestHandler deleteHandler) {
+                         DeleteThingShadowRequestHandler deleteHandler,
+                         IotDataPlaneClientFactory clientFactory) {
         this.dao = dao;
         this.updateHandler = updateHandler;
         this.deleteHandler = deleteHandler;
+        this.clientFactory = clientFactory;
     }
 
     /**
      * Merge two requests into one. This implementation returns a {@link FullShadowSyncRequest}.
      *
      * @param oldValue a request to merge.
-     * @param value a request to merge.
+     * @param value    a request to merge.
      * @return a merged request
      */
     @SuppressWarnings({"PMD.EmptyIfStmt"})
@@ -63,15 +66,15 @@ class RequestMerger {
         } else if (oldValue instanceof LocalUpdateSyncRequest && value instanceof LocalUpdateSyncRequest) {
             // TODO: combine existing requests
         } else if (oldValue instanceof CloudUpdateSyncRequest && value instanceof CloudDeleteSyncRequest
-            || oldValue instanceof LocalUpdateSyncRequest && value instanceof LocalDeleteSyncRequest) {
+                || oldValue instanceof LocalUpdateSyncRequest && value instanceof LocalDeleteSyncRequest) {
             // update followed by delete, just send the delete
             return value;
         } else if (oldValue instanceof CloudDeleteSyncRequest && value instanceof CloudDeleteSyncRequest
-            || oldValue instanceof LocalDeleteSyncRequest && value instanceof LocalDeleteSyncRequest) {
+                || oldValue instanceof LocalDeleteSyncRequest && value instanceof LocalDeleteSyncRequest) {
             // this should never happen (multiple local or multiple cloud deletes) but it can safely return either value
             return oldValue;
         } else if (oldValue instanceof CloudDeleteSyncRequest && value instanceof LocalDeleteSyncRequest
-            || oldValue instanceof LocalDeleteSyncRequest && value instanceof CloudDeleteSyncRequest) {
+                || oldValue instanceof LocalDeleteSyncRequest && value instanceof CloudDeleteSyncRequest) {
             // TODO: support simultaneous delete without full sync
         } else if (oldValue instanceof CloudUpdateSyncRequest && value instanceof LocalUpdateSyncRequest
                 || oldValue instanceof LocalUpdateSyncRequest && value instanceof CloudUpdateSyncRequest) {
@@ -82,6 +85,6 @@ class RequestMerger {
 
         // Instead of a partial update, a full sync request will force a get of the latest local and remote shadows
         return new FullShadowSyncRequest(value.getThingName(), value.getShadowName(),
-                dao, updateHandler, deleteHandler);
+                dao, updateHandler, deleteHandler, clientFactory);
     }
 }
