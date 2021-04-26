@@ -10,6 +10,7 @@ import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.ShadowManager;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
+import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.exception.SyncException;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowRequestHandler;
@@ -26,6 +27,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.LongNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.NonNull;
+import software.amazon.awssdk.aws.greengrass.model.ConflictError;
+import software.amazon.awssdk.aws.greengrass.model.InvalidArgumentsError;
+import software.amazon.awssdk.aws.greengrass.model.ServiceError;
+import software.amazon.awssdk.aws.greengrass.model.UnauthorizedError;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.exception.SdkServiceException;
@@ -42,7 +47,6 @@ import software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowReque
 import java.io.IOException;
 import java.time.Instant;
 import java.util.Optional;
-import javax.annotation.Nullable;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
@@ -96,44 +100,57 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
      */
     @Override
     public void execute() throws SyncException, RetryableException, SkipSyncRequestException {
-        Optional<ShadowDocument> localShadowDocument = this.dao.getShadowThing(getThingName(), getShadowName());
         Optional<SyncInformation> syncInformation = this.dao.getShadowSyncInformation(getThingName(), getShadowName());
-        Optional<ShadowDocument> cloudShadowDocument = getCloudShadowDocument();
 
-        if (!cloudShadowDocument.isPresent() && localShadowDocument.isPresent()) {
-            deleteLocalShadowDocument();
-            syncInformation.ifPresent(information -> this.dao.updateSyncInformation(SyncInformation.builder()
-                    .localVersion(localShadowDocument.get().getVersion())
-                    .cloudVersion(information.getCloudVersion())
+        if (!syncInformation.isPresent()) {
+            // This should never happen since we always add a default sync info entry in the DB.
+            throw new SkipSyncRequestException("Unable to find sync information");
+        }
+
+        Optional<ShadowDocument> localShadowDocument = this.dao.getShadowThing(getThingName(), getShadowName());
+        Optional<ShadowDocument> cloudShadowDocument = getCloudShadowDocument();
+        // If both the local and cloud document does not exist, then update the sync info and return.
+        if (!cloudShadowDocument.isPresent() && !localShadowDocument.isPresent()) {
+            this.dao.updateSyncInformation(SyncInformation.builder()
+                    .localVersion(syncInformation.get().getLocalVersion())
+                    .cloudVersion(syncInformation.get().getCloudVersion())
                     .shadowName(getShadowName())
                     .thingName(getThingName())
                     // TODO: get the latest from metadata?
                     .cloudUpdateTime(Instant.now().getEpochSecond())
                     .lastSyncedDocument(null)
-                    .build()));
+                    .build());
             return;
         }
 
-        //TODO: Need to figure out the actual behavior here. Might need to delete the cloud here right? Also add similar
-        //    logic if cloud does not exist and the local exists?
-        if (!localShadowDocument.isPresent() && cloudShadowDocument.isPresent()) {
-            deleteCloudShadowDocument();
-            syncInformation.ifPresent(information -> this.dao.updateSyncInformation(SyncInformation.builder()
-                    .localVersion(information.getLocalVersion())
-                    .cloudVersion(cloudShadowDocument.get().getVersion())
-                    .shadowName(getShadowName())
-                    .thingName(getThingName())
-                    // TODO: get the latest from metadata?
-                    .cloudUpdateTime(Instant.now().getEpochSecond())
-                    .lastSyncedDocument(null)
-                    .build()));
+        // If only the cloud document does not exist, check if this is the first time we are syncing this shadow. If we
+        // are, go ahead and update the cloud with the local document and update the sync information.
+        // If it's not the first time for sync, go ahead and delete the local shadow and update the sync info.
+        if (!cloudShadowDocument.isPresent()) {
+            if (isFirstSync(syncInformation.get())) {
+                handleFirstCloudSync(localShadowDocument.get());
+            } else {
+                handleLocalDelete(localShadowDocument.get(), syncInformation.get());
+            }
+            return;
+        }
+
+        // If only the local document does not exist, check if this is the first time we are syncing this shadow. If we
+        // are, go ahead and update the local with the cloud document and update the sync information.
+        // If it's not the first time for sync, go ahead and delete the cloud shadow and update the sync info.
+        if (!localShadowDocument.isPresent()) {
+            if (isFirstSync(syncInformation.get())) {
+                handleFirstLocalSync(cloudShadowDocument.get());
+            } else {
+                handleCloudDelete(cloudShadowDocument.get(), syncInformation.get());
+            }
             return;
         }
 
         // Get the sync information and check if the versions are same. If the local and cloud versions are same, we
         // don't need to do any sync.
-        if (isDocVersionSame(cloudShadowDocument.get(), syncInformation, DataOwner.CLOUD)
-                && isDocVersionSame(localShadowDocument.get(), syncInformation, DataOwner.LOCAL)) {
+        if (isDocVersionSame(cloudShadowDocument.get(), syncInformation.get(), DataOwner.CLOUD)
+                && isDocVersionSame(localShadowDocument.get(), syncInformation.get(), DataOwner.LOCAL)) {
             logger.atDebug()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
@@ -142,7 +159,7 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
                     .log("Not performing full sync since both local and cloud versions are already in sync");
             return;
         }
-        ShadowDocument baseShadowDocument = deserializeLastSyncedShadowDocument(syncInformation);
+        ShadowDocument baseShadowDocument = deserializeLastSyncedShadowDocument(syncInformation.get());
 
         // Gets the merged reported node from the local, cloud and base documents. If an existing field has changed in
         // both local and cloud, the local document's value will be selected.
@@ -164,54 +181,183 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
 
         // If the cloud document version is different from the last sync, that means the local document needed
         // some updates. So we go ahead an update the local shadow document.
-        if (!isDocVersionSame(cloudShadowDocument.get(), syncInformation, DataOwner.CLOUD)) {
-            updateDocument.set(SHADOW_DOCUMENT_VERSION, new LongNode(localShadowDocument.get().getVersion()));
-            SdkBytes payloadBytes = getSdkBytes(updateDocument);
-            updateLocalShadowDocument(payloadBytes);
-            localDocumentVersion = localDocumentVersion + 1;
+        if (!isDocVersionSame(cloudShadowDocument.get(), syncInformation.get(), DataOwner.CLOUD)) {
+            localDocumentVersion = updateLocalDocumentAndGetUpdatedVersion(updateDocument,
+                    Optional.of(localDocumentVersion));
         }
         // If the local document version is different from the last sync, that means the cloud document needed
         // some updates. So we go ahead an update the cloud shadow document.
-        if (!isDocVersionSame(localShadowDocument.get(), syncInformation, DataOwner.LOCAL)) {
-            updateDocument.set(SHADOW_DOCUMENT_VERSION, new LongNode(cloudShadowDocument.get().getVersion()));
-            SdkBytes payloadBytes = getSdkBytes(updateDocument);
-            updateCloudShadowDocument(payloadBytes);
-            cloudDocumentVersion = cloudDocumentVersion + 1;
+        if (!isDocVersionSame(localShadowDocument.get(), syncInformation.get(), DataOwner.LOCAL)) {
+            cloudDocumentVersion = updateCloudDocumentAndGetUpdatedVersion(updateDocument,
+                    Optional.of(cloudDocumentVersion));
         }
 
-        if (!isDocVersionSame(localShadowDocument.get(), syncInformation, DataOwner.LOCAL)
-                || !isDocVersionSame(cloudShadowDocument.get(), syncInformation, DataOwner.CLOUD)) {
-            updateDocument.remove(SHADOW_DOCUMENT_VERSION);
-            this.dao.updateSyncInformation(SyncInformation.builder()
-                    .localVersion(localDocumentVersion)
-                    .cloudVersion(cloudDocumentVersion)
-                    .shadowName(getShadowName())
-                    .thingName(getThingName())
-                    // TODO: get the latest from metadata?
-                    .cloudUpdateTime(Instant.now().getEpochSecond())
-                    .lastSyncedDocument(getSdkBytes(updateDocument).asByteArray())
-                    .build());
+        if (!isDocVersionSame(localShadowDocument.get(), syncInformation.get(), DataOwner.LOCAL)
+                || !isDocVersionSame(cloudShadowDocument.get(), syncInformation.get(), DataOwner.CLOUD)) {
+            updateSyncInformation(updateDocument, localDocumentVersion, cloudDocumentVersion);
         }
+    }
+
+    /**
+     * Check if this is the first time there is a sync for the thing's shadow by checking the last sync time.
+     *
+     * @param syncInformation The sync information for the thing's shadow.
+     * @return true if this is the first time the shadow is being sync; Else false.
+     */
+    private boolean isFirstSync(@NonNull SyncInformation syncInformation) {
+        return syncInformation.getLastSyncTime() == Instant.EPOCH.getEpochSecond();
+    }
+
+    /**
+     * Delete the cloud shadow using the IoT Data plane client and then update the sync information.
+     *
+     * @param syncInformation     The sync information for the thing's shadow.
+     * @param cloudShadowDocument The current cloud document.
+     * @throws RetryableException       if the delete request to cloud encountered a retryable exception.
+     * @throws SkipSyncRequestException if the delete request to cloud encountered a skipable exception.
+     */
+    private void handleCloudDelete(@NonNull ShadowDocument cloudShadowDocument,
+                                   @NonNull SyncInformation syncInformation)
+            throws RetryableException, SkipSyncRequestException {
+        deleteCloudShadowDocument();
+        this.dao.updateSyncInformation(SyncInformation.builder()
+                .localVersion(syncInformation.getLocalVersion())
+                .cloudVersion(cloudShadowDocument.getVersion())
+                .shadowName(getShadowName())
+                .thingName(getThingName())
+                // TODO: get the latest from metadata?
+                .cloudUpdateTime(Instant.now().getEpochSecond())
+                .lastSyncedDocument(null)
+                .build());
+    }
+
+    /**
+     * Create the local shadow using the request handlers and then update the sync information.
+     *
+     * @param cloudShadowDocument The current cloud document.
+     * @throws SkipSyncRequestException if the update request encountered a skipable exception.
+     */
+    private void handleFirstLocalSync(@NonNull ShadowDocument cloudShadowDocument)
+            throws SkipSyncRequestException {
+        ObjectNode updateDocument = (ObjectNode) cloudShadowDocument.toJson(false);
+        long localDocumentVersion = updateLocalDocumentAndGetUpdatedVersion(updateDocument, Optional.empty());
+        updateSyncInformation(updateDocument, localDocumentVersion, cloudShadowDocument.getVersion());
+    }
+
+    /**
+     * Delete the local shadow using the request handlers and then update the sync information.
+     *
+     * @param syncInformation     The sync information for the thing's shadow.
+     * @param localShadowDocument The current local document.
+     * @throws SkipSyncRequestException if the delete request encountered a skipable exception.
+     */
+    private void handleLocalDelete(@NonNull ShadowDocument localShadowDocument,
+                                   @NonNull SyncInformation syncInformation) throws SkipSyncRequestException {
+        deleteLocalShadowDocument();
+        this.dao.updateSyncInformation(SyncInformation.builder()
+                .localVersion(localShadowDocument.getVersion())
+                .cloudVersion(syncInformation.getCloudVersion())
+                .shadowName(getShadowName())
+                .thingName(getThingName())
+                // TODO: get the latest from metadata?
+                .cloudUpdateTime(Instant.now().getEpochSecond())
+                .lastSyncedDocument(null)
+                .build());
+    }
+
+    /**
+     * Create the cloud shadow using the IoT Data plane client and then update the sync information.
+     *
+     * @param localShadowDocument The current local document.
+     * @throws SkipSyncRequestException if the update request to cloud encountered a skipable exception.
+     */
+    private void handleFirstCloudSync(@NonNull ShadowDocument localShadowDocument)
+            throws SkipSyncRequestException, RetryableException {
+        ObjectNode updateDocument = (ObjectNode) localShadowDocument.toJson(false);
+        long cloudDocumentVersion = updateCloudDocumentAndGetUpdatedVersion(updateDocument, Optional.empty());
+        updateSyncInformation(updateDocument, localShadowDocument.getVersion(), cloudDocumentVersion);
+    }
+
+    /**
+     * Add the version node to the update request payload and then update the local shadow document using that request.
+     *
+     * @param updateDocument       The update request payload.
+     * @param localDocumentVersion The current local document version.
+     * @return the updated local document version.
+     * @throws SkipSyncRequestException if the update request encountered a skipable exception.
+     */
+    private long updateLocalDocumentAndGetUpdatedVersion(ObjectNode updateDocument, Optional<Long> localDocumentVersion)
+            throws SkipSyncRequestException {
+        localDocumentVersion.ifPresent(version ->
+                updateDocument.set(SHADOW_DOCUMENT_VERSION, new LongNode(version)));
+        SdkBytes payloadBytes = getSdkBytes(updateDocument);
+        updateLocalShadowDocument(payloadBytes);
+        //TODO: get the version from the response object
+        return localDocumentVersion.map(version -> version + 1).orElse(1L);
+    }
+
+    /**
+     * Update the sync information for the thing's shadow using the update request payload and the current local and
+     * cloud version.
+     *
+     * @param updateDocument       The update request payload.
+     * @param localDocumentVersion The current local document version.
+     * @param cloudDocumentVersion The current cloud document version.
+     * @throws SkipSyncRequestException if the serialization of the update request payload failed.
+     */
+    private void updateSyncInformation(ObjectNode updateDocument, long localDocumentVersion, long cloudDocumentVersion)
+            throws SkipSyncRequestException {
+        updateDocument.remove(SHADOW_DOCUMENT_VERSION);
+        this.dao.updateSyncInformation(SyncInformation.builder()
+                .localVersion(localDocumentVersion)
+                .cloudVersion(cloudDocumentVersion)
+                .shadowName(getShadowName())
+                .thingName(getThingName())
+                // TODO: get the latest from metadata?
+                .cloudUpdateTime(Instant.now().getEpochSecond())
+                .lastSyncedDocument(getSdkBytes(updateDocument).asByteArray())
+                .build());
+    }
+
+    /**
+     * Add the version node to the update request payload and then update the cloud shadow document using that request.
+     *
+     * @param updateDocument       The update request payload.
+     * @param cloudDocumentVersion The current cloud document version.
+     * @return the updated local document version.
+     * @throws RetryableException       if the delete request to cloud encountered a retryable exception or if the
+     *                                  serialization of the update request payload failed.
+     * @throws SkipSyncRequestException if the delete request to cloud encountered a skipable exception.
+     */
+    private long updateCloudDocumentAndGetUpdatedVersion(ObjectNode updateDocument, Optional<Long> cloudDocumentVersion)
+            throws SkipSyncRequestException, RetryableException {
+        cloudDocumentVersion.ifPresent(version ->
+                updateDocument.set(SHADOW_DOCUMENT_VERSION, new LongNode(version)));
+        SdkBytes payloadBytes = getSdkBytes(updateDocument);
+        updateCloudShadowDocument(payloadBytes);
+        //TODO: get the version from the response object
+        return cloudDocumentVersion.map(version -> version + 1).orElse(1L);
     }
 
     /**
      * Deserialize the last synced shadow document if sync information is present.
      *
      * @param syncInformation the sync informationf for the shadow.
-     * @return the Shadow Docment if the sync information is present; Else null.
+     * @return the Shadow Document if the sync information is present; Else null.
+     * @throws SkipSyncRequestException if the serialization of the last synced document failed.
      */
-    private ShadowDocument deserializeLastSyncedShadowDocument(Optional<SyncInformation> syncInformation) {
-        if (syncInformation.isPresent()) {
-            try {
-                return new ShadowDocument(syncInformation.get().getLastSyncedDocument());
-            } catch (IOException e) {
-                logger.atWarn()
-                        .kv(LOG_THING_NAME_KEY, getThingName())
-                        .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                        .cause(e).log();
-            }
+    private ShadowDocument deserializeLastSyncedShadowDocument(@NonNull SyncInformation syncInformation)
+            throws SkipSyncRequestException {
+        try {
+            return new ShadowDocument(syncInformation.getLastSyncedDocument());
+        } catch (IOException e) {
+            logger.atWarn()
+                    .kv(LOG_THING_NAME_KEY, getThingName())
+                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                    .log();
+            //TODO: Should we put the last synced as null? (we should not ever be in this situation though)
+            throw new SkipSyncRequestException(e);
         }
-        return null;
     }
 
     private JsonNode getReported(ShadowDocument shadowDocument) {
@@ -228,6 +374,13 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
         return shadowDocument.getState() == null ? null : shadowDocument.getState().getDesired();
     }
 
+    /**
+     * Gets the SDK bytes object from the Object Node.
+     *
+     * @param updateDocument The update request payload.
+     * @return The SDK bytes object for the update request.
+     * @throws SkipSyncRequestException if the serialization of the update request payload failed.
+     */
     @NonNull
     private SdkBytes getSdkBytes(ObjectNode updateDocument) throws SkipSyncRequestException {
         SdkBytes payloadBytes;
@@ -243,16 +396,28 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
         return payloadBytes;
     }
 
-    private boolean isDocVersionSame(ShadowDocument shadowDocument, @NonNull Optional<SyncInformation> syncInformation,
+    /**
+     * Check if the current shadow document version is same as the version in the sync information for the shadow.
+     *
+     * @param shadowDocument  The current shadow document.
+     * @param syncInformation The sync information for the shadow.
+     * @param owner           The owner of the shadow i.e. LOCAL or CLOUD.
+     * @return true if the version was the same; Else false.
+     */
+    private boolean isDocVersionSame(ShadowDocument shadowDocument, @NonNull SyncInformation syncInformation,
                                      DataOwner owner) {
-        return shadowDocument != null && syncInformation.isPresent()
-                && (DataOwner.CLOUD.equals(owner)
-                && syncInformation.get().getCloudVersion() == shadowDocument.getVersion()
-                || DataOwner.LOCAL.equals(owner)
-                && syncInformation.get().getLocalVersion() == shadowDocument.getVersion());
+        return shadowDocument != null
+                && (DataOwner.CLOUD.equals(owner) && syncInformation.getCloudVersion() == shadowDocument.getVersion()
+                || DataOwner.LOCAL.equals(owner) && syncInformation.getLocalVersion() == shadowDocument.getVersion());
     }
 
-    @Nullable
+    /**
+     * Gets the cloud shadow document using the IoT Data plane client.
+     *
+     * @return an optional of the cloud shadow document if it existed.
+     * @throws RetryableException       if the get request encountered errors which should be retried.
+     * @throws SkipSyncRequestException if the get request encountered errors which should be skipped.
+     */
     private Optional<ShadowDocument> getCloudShadowDocument() throws RetryableException, SkipSyncRequestException {
         try {
             GetThingShadowResponse getThingShadowResponse = this.clientFactory.getIotDataPlaneClient()
@@ -286,7 +451,14 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
         return Optional.empty();
     }
 
-    private void updateLocalShadowDocument(SdkBytes payloadBytes) {
+    /**
+     * Update the local shadow document using the update request handler.
+     *
+     * @param payloadBytes The update request bytes.
+     * @throws ConflictError            if the update request for local had a bad version.
+     * @throws SkipSyncRequestException if the update request encountered errors which should be skipped.
+     */
+    private void updateLocalShadowDocument(SdkBytes payloadBytes) throws ConflictError, SkipSyncRequestException {
         logger.atDebug()
                 .kv(LOG_THING_NAME_KEY, getThingName())
                 .kv(LOG_SHADOW_NAME_KEY, getShadowName())
@@ -297,10 +469,19 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
         localRequest.setPayload(payloadBytes.asByteArray());
         localRequest.setShadowName(getShadowName());
         localRequest.setThingName(getThingName());
-        updateThingShadowRequestHandler.handleRequest(localRequest, ShadowManager.SERVICE_NAME);
+        try {
+            updateThingShadowRequestHandler.handleRequest(localRequest, ShadowManager.SERVICE_NAME);
+        } catch (ShadowManagerDataException | UnauthorizedError | InvalidArgumentsError | ServiceError e) {
+            throw new SkipSyncRequestException(e);
+        }
     }
 
-    private void deleteLocalShadowDocument() {
+    /**
+     * Delete the local shadow document using the delete request handler.
+     *
+     * @throws SkipSyncRequestException if the delete request encountered errors which should be skipped.
+     */
+    private void deleteLocalShadowDocument() throws SkipSyncRequestException {
         logger.atDebug()
                 .kv(LOG_THING_NAME_KEY, getThingName())
                 .kv(LOG_SHADOW_NAME_KEY, getShadowName())
@@ -310,11 +491,23 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
                 new software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowRequest();
         localRequest.setShadowName(getShadowName());
         localRequest.setThingName(getThingName());
-        deleteThingShadowRequestHandler.handleRequest(localRequest, ShadowManager.SERVICE_NAME);
+        try {
+            deleteThingShadowRequestHandler.handleRequest(localRequest, ShadowManager.SERVICE_NAME);
+        } catch (ShadowManagerDataException | UnauthorizedError | InvalidArgumentsError | ServiceError e) {
+            throw new SkipSyncRequestException(e);
+        }
     }
 
+    /**
+     * Update the cloud document using the IoT Data plane client.
+     *
+     * @param updateDocument The update request payload.
+     * @throws ConflictException        if the update request for cloud had a bad version.
+     * @throws RetryableException       if the update request encountered errors which should be retried.
+     * @throws SkipSyncRequestException if the update request encountered errors which should be skipped.
+     */
     private void updateCloudShadowDocument(SdkBytes updateDocument)
-            throws RetryableException, SkipSyncRequestException {
+            throws ConflictException, RetryableException, SkipSyncRequestException {
         try {
             logger.atDebug()
                     .kv(LOG_THING_NAME_KEY, getThingName())
@@ -326,7 +519,13 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
                     .thingName(getThingName())
                     .payload(updateDocument)
                     .build());
-        } catch (ConflictException | ThrottlingException | ServiceUnavailableException | InternalFailureException e) {
+        } catch (ConflictException e) {
+            logger.atWarn()
+                    .kv(LOG_THING_NAME_KEY, getThingName())
+                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                    .log("Conflict exception occurred while updating cloud document.s");
+            throw e;
+        } catch (ThrottlingException | ServiceUnavailableException | InternalFailureException e) {
             logger.atWarn()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
@@ -341,8 +540,13 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
         }
     }
 
-    private void deleteCloudShadowDocument()
-            throws RetryableException, SkipSyncRequestException {
+    /**
+     * Delete the cloud document using the IoT Data plane client.
+     *
+     * @throws RetryableException       if the delete request encountered errors which should be retried.
+     * @throws SkipSyncRequestException if the delete request encountered errors which should be skipped.
+     */
+    private void deleteCloudShadowDocument() throws RetryableException, SkipSyncRequestException {
         try {
             logger.atDebug()
                     .kv(LOG_THING_NAME_KEY, getThingName())
