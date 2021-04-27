@@ -18,15 +18,18 @@ import com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.util.Pair;
 import com.fasterxml.jackson.databind.JsonNode;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Answers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import software.amazon.awssdk.aws.greengrass.model.ConflictError;
+import software.amazon.awssdk.services.iotdataplane.model.ConflictException;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -44,6 +47,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.isA;
 import static org.mockito.ArgumentMatchers.any;
@@ -60,8 +64,6 @@ import static org.mockito.Mockito.when;
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 public class SyncHandlerTest {
 
-
-
     @Mock
     RequestBlockingQueue queue;
 
@@ -77,11 +79,6 @@ public class SyncHandlerTest {
     void setup() {
         lenient().when(queue.remainingCapacity()).thenReturn(1024);
         syncHandler = new SyncHandler(queue, executorService);
-    }
-
-    @AfterEach
-    void stop() {
-
     }
 
     @Test
@@ -145,6 +142,7 @@ public class SyncHandlerTest {
         when(context.getDao().listSyncedShadows()).thenReturn(shadows);
 
         syncHandler.start(context, numThreads);
+        assertThat(syncHandler.syncThreads, hasSize(numThreads));
 
         // WHEN
         syncHandler.stop();
@@ -152,6 +150,7 @@ public class SyncHandlerTest {
         // THEN
         verify(syncThread, times(1)).cancel(true);
         verify(queue, times(2)).clear(); // full sync and stop both clear
+        assertThat(syncHandler.syncThreads, hasSize(0));
     }
 
     @Test
@@ -179,6 +178,10 @@ public class SyncHandlerTest {
 
         verify(syncThread, times(1)).cancel(true);
         assertThat("syncing", syncHandler.syncing.get(), is(false));
+
+        // check that we are interrupted by our "fake" exception. This also clears the thread state so cleanup
+        // happens correctly
+        assertThat(Thread.interrupted(), is(true));
     }
 
     @Test
@@ -360,6 +363,59 @@ public class SyncHandlerTest {
         }
 
         verify(queue, times(1)).take();
+    }
+
+    @ParameterizedTest
+    @ValueSource(classes = { ConflictException.class, ConflictError.class })
+    void GIVEN_syncing_WHEN_conflict_error_THEN_full_sync(Class clazz, ExtensionContext extensionContext)
+            throws Exception {
+        ExceptionLogProtector.ignoreExceptionOfType(extensionContext, clazz);
+
+        ExecutorService executorService = Executors.newSingleThreadExecutor();
+        SyncHandler.Retryer retryer = mock(SyncHandler.Retryer.class);
+        syncHandler = new SyncHandler(queue, executorService, retryer);
+
+        when(context.getDao().listSyncedShadows()).thenReturn(Collections.emptyList());
+
+        CloudUpdateSyncRequest request1 = mock(CloudUpdateSyncRequest.class);
+        lenient().when(request1.getThingName()).thenReturn("thing1");
+        lenient().when(request1.getShadowName()).thenReturn("shadow1");
+
+        CountDownLatch executeLatch = new CountDownLatch(2); // 1 retry to fail, 1 to succeed
+
+        when(queue.take()).thenAnswer(invocation -> {
+            if (executeLatch.getCount() == 2) {
+                return request1;
+            }
+            // sleep for the subsequent take until thread shuts down
+            Thread.sleep(Duration.of(5, ChronoUnit.SECONDS).toMillis());
+            return null;
+        });
+
+        doAnswer(invocation -> {
+            executeLatch.countDown();
+            throw (Throwable)mock(clazz);
+        }).when(retryer).run(any(), eq(request1), eq(context));
+
+        doAnswer(invocation -> {
+            executeLatch.countDown();
+            return null;
+        }).when(retryer).run(any(), any(FullShadowSyncRequest.class), eq(context));
+
+        try {
+            syncHandler.start(context, 1);
+
+            assertThat("executed requests", executeLatch.await(5, TimeUnit.SECONDS), is(true));
+        } finally {
+            executorService.shutdownNow();
+        }
+
+        ArgumentCaptor<SyncRequest> requestCaptor = ArgumentCaptor.forClass(SyncRequest.class);
+        verify(retryer, times(2)).run(any(), requestCaptor.capture(), any());
+        assertThat(requestCaptor.getAllValues().get(0), is(request1));
+        assertThat(requestCaptor.getAllValues().get(1), instanceOf(FullShadowSyncRequest.class));
+        assertThat(requestCaptor.getAllValues().get(1).getThingName(), is("thing1"));
+        assertThat(requestCaptor.getAllValues().get(1).getShadowName(), is("shadow1"));
     }
 
     @Test

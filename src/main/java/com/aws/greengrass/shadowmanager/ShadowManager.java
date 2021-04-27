@@ -190,11 +190,13 @@ public class ShadowManager extends PluginService {
                     thingNameTopic.remove(this.deviceThingNameWatcher);
                 }
 
+                syncHandler.stop();
                 // Remove sync information of shadows that are no longer being synced.
                 deleteRemovedSyncInformation();
 
                 // Initialize the sync information if the sync information does not exist.
                 initializeSyncInfo();
+                startSyncHandler();
             } catch (InvalidConfigurationException e) {
                 serviceErrored(e);
             }

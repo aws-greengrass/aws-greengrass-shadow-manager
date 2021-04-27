@@ -18,6 +18,8 @@ import com.aws.greengrass.shadowmanager.sync.model.SyncRequest;
 import com.aws.greengrass.util.Pair;
 import com.aws.greengrass.util.RetryUtils;
 import com.fasterxml.jackson.databind.JsonNode;
+import software.amazon.awssdk.aws.greengrass.model.ConflictError;
+import software.amazon.awssdk.services.iotdataplane.model.ConflictException;
 
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
@@ -162,6 +164,7 @@ public class SyncHandler {
             logger.atWarn(SYNC_EVENT_TYPE)
                     .log("Interrupted while queuing full sync requests at startup. Syncing will stop");
             stop();
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -180,6 +183,7 @@ public class SyncHandler {
 
             logger.atDebug(SYNC_EVENT_TYPE).log("Cancel {} sync thread(s)", syncThreads.size());
             syncThreads.forEach(t -> t.cancel(true));
+            syncThreads.clear();
 
             int remaining = syncQueue.size();
             syncQueue.clear();
@@ -217,6 +221,7 @@ public class SyncHandler {
                     logger.atInfo(SYNC_EVENT_TYPE)
                             .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
                             .addKeyValue(LOG_SHADOW_NAME_KEY, request.getShadowName())
+                            .addKeyValue("Type", request.getClass().getSimpleName())
                             .log("Executing sync request");
 
                     retryer.run(retryConfig, request, context);
@@ -244,6 +249,14 @@ public class SyncHandler {
                 } catch (InterruptedException e) {
                     logger.atWarn(SYNC_EVENT_TYPE).log("Interrupted while waiting for sync requests");
                     Thread.currentThread().interrupt();
+                } catch (ConflictException | ConflictError e) {
+                    logger.atWarn(SYNC_EVENT_TYPE)
+                            .cause(e)
+                            .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
+                            .addKeyValue(LOG_SHADOW_NAME_KEY, request.getShadowName())
+                            .log("Received conflict when processing request. Retrying as a full sync");
+                    // don't need to add to queue as we want to immediately retry as a full sync
+                    request = new FullShadowSyncRequest(request.getThingName(), request.getShadowName());
                 } catch (Exception e) {
                     logger.atError(SYNC_EVENT_TYPE)
                             .cause(e)
