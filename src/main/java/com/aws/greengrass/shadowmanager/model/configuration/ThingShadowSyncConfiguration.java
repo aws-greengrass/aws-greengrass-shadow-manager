@@ -12,6 +12,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.Collections;
 import java.util.List;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_CLASSIC_SHADOW_TOPIC;
@@ -30,7 +31,7 @@ public class ThingShadowSyncConfiguration {
     @Builder.Default
     private boolean syncClassicShadow = true;
     @JsonProperty(CONFIGURATION_NAMED_SHADOWS_TOPIC)
-    private List<String> syncNamedShadows;
+    private List<String> syncNamedShadows = Collections.emptyList();
     @Builder.Default
     private boolean isNucleusThing = false;
 }
