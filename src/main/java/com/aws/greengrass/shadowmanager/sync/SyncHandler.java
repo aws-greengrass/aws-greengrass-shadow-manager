@@ -221,7 +221,6 @@ public class SyncHandler {
      */
     @SuppressWarnings({"PMD.CompareObjectsWithEquals", "PMD.AvoidCatchingGenericException"})
     private void syncLoop() {
-        // if queue contains a single element that keeps failing, we don't want to retry at the initial rate
         logger.atInfo(SYNC_EVENT_TYPE).log("Start waiting for sync requests");
         try {
             SyncRequest request = syncQueue.take();
