@@ -17,8 +17,6 @@ import com.aws.greengrass.shadowmanager.sync.model.LocalDeleteSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.LocalUpdateSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.SyncRequest;
 
-import javax.inject.Inject;
-
 /**
  * Merge requests that can be combined together. Falls back to FullSync if requests cannot be combined in a
  * meaningful way.
@@ -29,7 +27,6 @@ class RequestMerger {
     /**
      * Construct a new instance.
      */
-    @Inject
     public RequestMerger() {
 
     }

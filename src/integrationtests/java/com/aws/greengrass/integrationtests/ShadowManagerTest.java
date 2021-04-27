@@ -7,13 +7,14 @@ package com.aws.greengrass.integrationtests;
 
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
 import com.aws.greengrass.dependency.State;
-import com.aws.greengrass.lifecyclemanager.GreengrassService;
 import com.aws.greengrass.lifecyclemanager.GlobalStateChangeListener;
+import com.aws.greengrass.lifecyclemanager.GreengrassService;
 import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
 import com.aws.greengrass.shadowmanager.ShadowManager;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAOImpl;
 import com.aws.greengrass.shadowmanager.ShadowManagerDatabase;
+import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
@@ -165,7 +166,8 @@ class ShadowManagerTest extends GGServiceTestUtil {
     }
 
     @Test
-    void GIVEN_existing_sync_information_WHEN_config_updates_THEN_removed_sync_information_for_removed_shadows() throws Exception {
+    void GIVEN_existing_sync_information_WHEN_config_updates_THEN_removed_sync_information_for_removed_shadows(ExtensionContext context) throws Exception {
+        ignoreExceptionOfType(context, SkipSyncRequestException.class);
         startNucleusWithConfig(DEFAULT_CONFIG, State.RUNNING, false);
         ShadowManagerDAOImpl impl = kernel.getContext().get(ShadowManagerDAOImpl.class);
         createThingShadowSyncInfo(impl, THING_NAME);
@@ -184,7 +186,8 @@ class ShadowManagerTest extends GGServiceTestUtil {
                 new Pair<>(THING_NAME2, "Shadow-3"),
                 new Pair<>(THING_NAME2, "Shadow-4")));
 
-    List<Map<String, Object>> shadowDocumentsList = new ArrayList<>();
+
+        List<Map<String, Object>> shadowDocumentsList = new ArrayList<>();
         Map<String, Object> thingAMap = new HashMap<>();
         thingAMap.put(CONFIGURATION_THING_NAME_TOPIC, THING_NAME);
         thingAMap.put(CONFIGURATION_CLASSIC_SHADOW_TOPIC, false);
@@ -194,6 +197,7 @@ class ShadowManagerTest extends GGServiceTestUtil {
         thingBMap.put(CONFIGURATION_NAMED_SHADOWS_TOPIC, Arrays.asList("Shadow-0", "Shadow-5"));
         shadowDocumentsList.add(thingAMap);
         shadowDocumentsList.add(thingBMap);
+
         shadowManager.getConfig().lookupTopics(CONFIGURATION_CONFIG_KEY).lookupTopics(CONFIGURATION_SYNCHRONIZATION_TOPIC)
                 .replaceAndWait(Collections.singletonMap(CONFIGURATION_SHADOW_DOCUMENTS_TOPIC, shadowDocumentsList));
 

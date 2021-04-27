@@ -7,6 +7,7 @@ package com.aws.greengrass.shadowmanager.sync;
 
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
+import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
 import com.aws.greengrass.shadowmanager.sync.model.CloudDeleteSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.CloudUpdateSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.FullShadowSyncRequest;
@@ -366,8 +367,8 @@ public class SyncHandlerTest {
     }
 
     @ParameterizedTest
-    @ValueSource(classes = { ConflictException.class, ConflictError.class })
-    void GIVEN_syncing_WHEN_conflict_error_THEN_full_sync(Class clazz, ExtensionContext extensionContext)
+    @ValueSource(classes = { ConflictException.class, ConflictError.class, UnknownShadowException.class})
+    void GIVEN_syncing_WHEN_error_THEN_full_sync(Class clazz, ExtensionContext extensionContext)
             throws Exception {
         ExceptionLogProtector.ignoreExceptionOfType(extensionContext, clazz);
 

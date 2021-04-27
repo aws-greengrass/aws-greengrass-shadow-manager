@@ -8,6 +8,7 @@ package com.aws.greengrass.shadowmanager.sync;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
+import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
 import com.aws.greengrass.shadowmanager.sync.model.CloudDeleteSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.CloudUpdateSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.FullShadowSyncRequest;
@@ -82,11 +83,6 @@ public class SyncHandler {
      * Indicates whether syncing is running or not.
      */
     final AtomicBoolean syncing = new AtomicBoolean(false);
-
-    /**
-     * Lock to ensure start and stop can't happen simultaneously.
-     */
-    private final Object lifecycleLock = new Object();
 
     /**
      * Interface for executing sync requests.
@@ -165,28 +161,23 @@ public class SyncHandler {
      * @param syncParallelism number of threads to use for syncing
      */
     public void start(SyncContext context, int syncParallelism) {
-        synchronized (lifecycleLock) {
-            if (syncing.get()) {
-                logger.atDebug(SYNC_EVENT_TYPE).log("Syncing is already in process. Ignoring request to start");
-                return;
-            }
+        if (syncing.compareAndSet(false, true)) {
             this.context = context;
             logger.atInfo(SYNC_EVENT_TYPE).log("Start syncing");
             for (int i = 0; i < syncParallelism; i++) {
                 syncThreads.add(syncExecutorService.submit(this::syncLoop));
             }
-            syncing.set(true);
-        }
 
-        // enqueuing full sync requests does not need to be part of lifecycle sync lock as nucleus executes lifecycle
-        // actions on backing thread
-        try {
-            fullSyncOnAllShadows();
-        } catch (InterruptedException e) {
-            logger.atWarn(SYNC_EVENT_TYPE)
-                    .log("Interrupted while queuing full sync requests at startup. Syncing will stop");
-            stop();
-            Thread.currentThread().interrupt();
+            try {
+                fullSyncOnAllShadows();
+            } catch (InterruptedException e) {
+                logger.atWarn(SYNC_EVENT_TYPE)
+                        .log("Interrupted while queuing full sync requests at startup. Syncing will stop");
+                stop();
+                Thread.currentThread().interrupt();
+            }
+        } else {
+            logger.atDebug(SYNC_EVENT_TYPE).log("Syncing is already in process. Ignoring request to start");
         }
     }
 
@@ -194,12 +185,7 @@ public class SyncHandler {
      * Stops sync threads and clear syncing queue.
      */
     public void stop() {
-        synchronized (lifecycleLock) {
-            if (!syncing.get()) {
-                logger.atDebug(SYNC_EVENT_TYPE).log("Syncing is already stopped. Ignoring request to stop");
-                return;
-            }
-
+        if (syncing.compareAndSet(true, false)) {
             logger.atInfo(SYNC_EVENT_TYPE).log("Stop syncing");
             syncing.set(false);
 
@@ -213,6 +199,8 @@ public class SyncHandler {
             if (remaining > 0) {
                 logger.atInfo(SYNC_EVENT_TYPE).log("Stopped syncing with {} pending sync items", remaining);
             }
+        } else {
+            logger.atDebug(SYNC_EVENT_TYPE).log("Syncing is already stopped. Ignoring request to stop");
         }
     }
 
@@ -264,6 +252,14 @@ public class SyncHandler {
                             .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
                             .addKeyValue(LOG_SHADOW_NAME_KEY, request.getShadowName())
                             .log("Received conflict when processing request. Retrying as a full sync");
+                    // don't need to add to queue as we want to immediately retry as a full sync
+                    request = new FullShadowSyncRequest(request.getThingName(), request.getShadowName());
+                } catch (UnknownShadowException e) {
+                    logger.atWarn(SYNC_EVENT_TYPE)
+                            .cause(e)
+                            .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
+                            .addKeyValue(LOG_SHADOW_NAME_KEY, request.getShadowName())
+                            .log("Received unknown shadow when processing request. Retrying as a full sync");
                     // don't need to add to queue as we want to immediately retry as a full sync
                     request = new FullShadowSyncRequest(request.getThingName(), request.getShadowName());
                 } catch (Exception e) {
