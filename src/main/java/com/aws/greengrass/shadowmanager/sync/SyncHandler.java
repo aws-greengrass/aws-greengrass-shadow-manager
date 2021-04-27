@@ -74,6 +74,8 @@ public class SyncHandler {
 
     private final ExecutorService syncExecutorService;
 
+    private final Object lifecycleLock = new Object();
+
     /**
      * The threads running the sync loop.
      */
@@ -161,23 +163,25 @@ public class SyncHandler {
      * @param syncParallelism number of threads to use for syncing
      */
     public void start(SyncContext context, int syncParallelism) {
-        if (syncing.compareAndSet(false, true)) {
-            this.context = context;
-            logger.atInfo(SYNC_EVENT_TYPE).log("Start syncing");
-            for (int i = 0; i < syncParallelism; i++) {
-                syncThreads.add(syncExecutorService.submit(this::syncLoop));
+        synchronized (lifecycleLock) {
+            if (syncing.compareAndSet(false, true)) {
+                this.context = context;
+                logger.atInfo(SYNC_EVENT_TYPE).log("Start syncing");
+                for (int i = 0; i < syncParallelism; i++) {
+                    syncThreads.add(syncExecutorService.submit(this::syncLoop));
+                }
+            } else {
+                logger.atDebug(SYNC_EVENT_TYPE).log("Syncing is already in progress. Ignoring request to start");
+                return;
             }
-
-            try {
-                fullSyncOnAllShadows();
-            } catch (InterruptedException e) {
-                logger.atWarn(SYNC_EVENT_TYPE)
-                        .log("Interrupted while queuing full sync requests at startup. Syncing will stop");
-                stop();
-                Thread.currentThread().interrupt();
-            }
-        } else {
-            logger.atDebug(SYNC_EVENT_TYPE).log("Syncing is already in process. Ignoring request to start");
+        }
+        try {
+            fullSyncOnAllShadows();
+        } catch (InterruptedException e) {
+            logger.atWarn(SYNC_EVENT_TYPE)
+                    .log("Interrupted while queuing full sync requests at startup. Syncing will stop");
+            stop();
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -185,22 +189,24 @@ public class SyncHandler {
      * Stops sync threads and clear syncing queue.
      */
     public void stop() {
-        if (syncing.compareAndSet(true, false)) {
-            logger.atInfo(SYNC_EVENT_TYPE).log("Stop syncing");
-            syncing.set(false);
+        synchronized (lifecycleLock) {
+            if (syncing.compareAndSet(true, false)) {
+                logger.atInfo(SYNC_EVENT_TYPE).log("Stop syncing");
+                syncing.set(false);
 
-            logger.atDebug(SYNC_EVENT_TYPE).log("Cancel {} sync thread(s)", syncThreads.size());
-            syncThreads.forEach(t -> t.cancel(true));
-            syncThreads.clear();
+                logger.atDebug(SYNC_EVENT_TYPE).log("Cancel {} sync thread(s)", syncThreads.size());
+                syncThreads.forEach(t -> t.cancel(true));
+                syncThreads.clear();
 
-            int remaining = syncQueue.size();
-            syncQueue.clear();
+                int remaining = syncQueue.size();
+                syncQueue.clear();
 
-            if (remaining > 0) {
-                logger.atInfo(SYNC_EVENT_TYPE).log("Stopped syncing with {} pending sync items", remaining);
+                if (remaining > 0) {
+                    logger.atInfo(SYNC_EVENT_TYPE).log("Stopped syncing with {} pending sync items", remaining);
+                }
+            } else {
+                logger.atDebug(SYNC_EVENT_TYPE).log("Syncing is already stopped. Ignoring request to stop");
             }
-        } else {
-            logger.atDebug(SYNC_EVENT_TYPE).log("Syncing is already stopped. Ignoring request to stop");
         }
     }
 
