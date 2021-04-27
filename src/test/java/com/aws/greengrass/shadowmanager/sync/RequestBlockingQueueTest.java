@@ -267,15 +267,39 @@ public class RequestBlockingQueueTest {
     }
 
     @Test
-    public void GIVEN_null_request_WHEN_added_THEN_throws() {
+    void GIVEN_null_request_WHEN_added_THEN_throws() {
         assertThrows(NullPointerException.class, () -> queue.put(null));
         assertThrows(NullPointerException.class, () -> queue.offer(null));
         assertThrows(NullPointerException.class, () -> queue.offer(null, WAIT_SECONDS, TimeUnit.SECONDS));
     }
 
     @Test
-    public void GIVEN_use_constructor_without_capacity_THEN_default_capacity_used() {
+    void GIVEN_use_constructor_without_capacity_THEN_default_capacity_used() {
         RequestBlockingQueue q = new RequestBlockingQueue(merger);
         assertThat(q.remainingCapacity(), is(RequestBlockingQueue.MAX_CAPACITY));
+    }
+
+    @Test
+    void GIVEN_item_WHEN_remove_THEN_item_removed() {
+        queue.offer(thingAShadow1);
+        assertThat("queue empty", queue.isEmpty(), is(false));
+
+        queue.remove(thingAShadow2);
+        assertThat("queue empty", queue.isEmpty(), is(false));
+
+        queue.remove(thingAShadow1);
+        assertThat("queue empty", queue.isEmpty(), is(true));
+    }
+
+    @Test
+    void GIVEN_empty_queue_WHEN_offerAndTake_THEN_return_offered() {
+        assertThat(queue.offerAndTake(thingAShadow1), is(thingAShadow1));
+    }
+
+    @Test
+    void GIVEN_non_empty_queue_WHEN_offerAndTake_THEN_return_head() {
+        queue.offer(thingAShadow2);
+        assertThat(queue.offerAndTake(thingAShadow1), is(thingAShadow2));
+        assertThat(queue.poll(), is(thingAShadow1));
     }
 }

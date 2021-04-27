@@ -10,7 +10,9 @@ import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowRequestHandler;
+import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
+import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientFactory;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.fasterxml.jackson.core.JsonParseException;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,6 +53,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
@@ -69,6 +72,7 @@ public class LocalDeleteSyncRequestTest {
     @Captor
     private ArgumentCaptor<SyncInformation> syncInformationCaptor;
 
+    private SyncContext syncContext;
     private long syncTime;
 
     @BeforeEach
@@ -87,6 +91,9 @@ public class LocalDeleteSyncRequestTest {
                 .build()));
         lenient().when(mockDeleteThingShadowRequestHandler.handleRequest(any(DeleteThingShadowRequest.class), anyString()))
                 .thenReturn(new DeleteThingShadowResponse());
+
+        syncContext = new SyncContext(mockDao, mock(UpdateThingShadowRequestHandler.class),
+                mockDeleteThingShadowRequestHandler, mock(IotDataPlaneClientFactory.class));
     }
 
 
@@ -94,8 +101,8 @@ public class LocalDeleteSyncRequestTest {
     @ValueSource(longs = {5, 6})
     void GIVEN_good_cloud_delete_payload_WHEN_execute_THEN_successfully_deletes_local_shadow_and_updates_sync_information(long deletedVersion) throws SkipSyncRequestException, UnknownShadowException {
         byte[] deletePayloadBytes = String.format("{\"version\": %d}", deletedVersion).getBytes();
-        LocalDeleteSyncRequest request = new LocalDeleteSyncRequest(THING_NAME, SHADOW_NAME, deletePayloadBytes, mockDao, mockDeleteThingShadowRequestHandler);
-        request.execute();
+        LocalDeleteSyncRequest request = new LocalDeleteSyncRequest(THING_NAME, SHADOW_NAME, deletePayloadBytes);
+        request.execute(syncContext);
 
         verify(mockDao, times(1)).getShadowSyncInformation(anyString(), anyString());
         verify(mockDeleteThingShadowRequestHandler, times(1)).handleRequest(any(), any());
@@ -114,9 +121,9 @@ public class LocalDeleteSyncRequestTest {
     @Test
     void GIVEN_delete_version_less_than_synced_version_WHEN_execute_THEN_throw_conflict_error() {
         byte[] deletePayloadBytes = "{\"version\": 2}".getBytes();
-        LocalDeleteSyncRequest request = new LocalDeleteSyncRequest(THING_NAME, SHADOW_NAME, deletePayloadBytes, mockDao, mockDeleteThingShadowRequestHandler);
+        LocalDeleteSyncRequest request = new LocalDeleteSyncRequest(THING_NAME, SHADOW_NAME, deletePayloadBytes);
 
-        ConflictError thrown = assertThrows(ConflictError.class, request::execute);
+        ConflictError thrown = assertThrows(ConflictError.class, () -> request.execute(syncContext));
         assertThat(thrown.getMessage(), startsWith("Missed update(s)"));
 
         verify(mockDao, times(1)).getShadowSyncInformation(anyString(), anyString());
@@ -132,9 +139,9 @@ public class LocalDeleteSyncRequestTest {
     })
     void GIVEN_could_not_get_version_from_json_delete_payload_WHEN_execute_THEN_throw_skip_sync_request_exception(String deletePayloadString) {
         byte[] deletePayloadBytes = deletePayloadString.getBytes();
-        LocalDeleteSyncRequest request = new LocalDeleteSyncRequest(THING_NAME, SHADOW_NAME, deletePayloadBytes, mockDao, mockDeleteThingShadowRequestHandler);
+        LocalDeleteSyncRequest request = new LocalDeleteSyncRequest(THING_NAME, SHADOW_NAME, deletePayloadBytes);
 
-        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, request::execute);
+        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, () -> request.execute(syncContext));
         assertThat(thrown.getMessage(), startsWith("Invalid delete payload"));
 
         verify(mockDao, times(0)).getShadowSyncInformation(anyString(), anyString());
@@ -146,9 +153,9 @@ public class LocalDeleteSyncRequestTest {
     void GIVEN_could_not_parse_delete_payload_WHEN_execute_THEN_throw_skip_sync_request_exception(ExtensionContext context) {
         ignoreExceptionOfType(context, JsonParseException.class);
         byte[] deletePayloadBytes = "{NotAParsableJson}".getBytes();
-        LocalDeleteSyncRequest request = new LocalDeleteSyncRequest(THING_NAME, SHADOW_NAME, deletePayloadBytes, mockDao, mockDeleteThingShadowRequestHandler);
+        LocalDeleteSyncRequest request = new LocalDeleteSyncRequest(THING_NAME, SHADOW_NAME, deletePayloadBytes);
 
-        assertThrows(SkipSyncRequestException.class, request::execute);
+        assertThrows(SkipSyncRequestException.class, () -> request.execute(syncContext));
 
         verify(mockDao, times(0)).getShadowSyncInformation(anyString(), anyString());
         verify(mockDeleteThingShadowRequestHandler, times(0)).handleRequest(any(), any());
@@ -158,9 +165,9 @@ public class LocalDeleteSyncRequestTest {
     @Test
     void GIVEN_shadow_not_found_in_sync_table_WHEN_execute_THEN_throw_unknown_shadow_exception(ExtensionContext context) {
         lenient().when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.empty());
-        LocalDeleteSyncRequest request = new LocalDeleteSyncRequest(THING_NAME, SHADOW_NAME, CLOUD_DELETE_PAYLOAD, mockDao, mockDeleteThingShadowRequestHandler);
+        LocalDeleteSyncRequest request = new LocalDeleteSyncRequest(THING_NAME, SHADOW_NAME, CLOUD_DELETE_PAYLOAD);
 
-        UnknownShadowException thrown = assertThrows(UnknownShadowException.class, request::execute);
+        UnknownShadowException thrown = assertThrows(UnknownShadowException.class, () -> request.execute(syncContext));
         assertThat(thrown.getMessage(), startsWith("Shadow not found"));
 
         verify(mockDao, times(1)).getShadowSyncInformation(anyString(), anyString());
@@ -174,8 +181,8 @@ public class LocalDeleteSyncRequestTest {
         when(mockDeleteThingShadowRequestHandler.handleRequest(any(DeleteThingShadowRequest.class), anyString()))
                 .thenThrow(new ResourceNotFoundError(SAMPLE_EXCEPTION_MESSAGE));
 
-        LocalDeleteSyncRequest request = new LocalDeleteSyncRequest(THING_NAME, SHADOW_NAME, CLOUD_DELETE_PAYLOAD, mockDao, mockDeleteThingShadowRequestHandler);
-        assertDoesNotThrow(request::execute);
+        LocalDeleteSyncRequest request = new LocalDeleteSyncRequest(THING_NAME, SHADOW_NAME, CLOUD_DELETE_PAYLOAD);
+        assertDoesNotThrow(() -> request.execute(syncContext));
 
         verify(mockDao, times(1)).getShadowSyncInformation(anyString(), anyString());
         verify(mockDeleteThingShadowRequestHandler, times(1)).handleRequest(any(), any());
@@ -187,8 +194,8 @@ public class LocalDeleteSyncRequestTest {
         when(mockDeleteThingShadowRequestHandler.handleRequest(any(DeleteThingShadowRequest.class), anyString()))
                 .thenThrow(new UnauthorizedError(SAMPLE_EXCEPTION_MESSAGE));
 
-        LocalDeleteSyncRequest request = new LocalDeleteSyncRequest(THING_NAME, SHADOW_NAME, CLOUD_DELETE_PAYLOAD, mockDao, mockDeleteThingShadowRequestHandler);
-        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, request::execute);
+        LocalDeleteSyncRequest request = new LocalDeleteSyncRequest(THING_NAME, SHADOW_NAME, CLOUD_DELETE_PAYLOAD);
+        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, () -> request.execute(syncContext));
         assertThat(thrown.getMessage(), containsString(SAMPLE_EXCEPTION_MESSAGE));
 
 
@@ -202,8 +209,8 @@ public class LocalDeleteSyncRequestTest {
         when(mockDeleteThingShadowRequestHandler.handleRequest(any(DeleteThingShadowRequest.class), anyString()))
                 .thenThrow(new InvalidArgumentsError(SAMPLE_EXCEPTION_MESSAGE));
 
-        LocalDeleteSyncRequest request = new LocalDeleteSyncRequest(THING_NAME, SHADOW_NAME, CLOUD_DELETE_PAYLOAD, mockDao, mockDeleteThingShadowRequestHandler);
-        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, request::execute);
+        LocalDeleteSyncRequest request = new LocalDeleteSyncRequest(THING_NAME, SHADOW_NAME, CLOUD_DELETE_PAYLOAD);
+        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, () -> request.execute(syncContext));
         assertThat(thrown.getMessage(), containsString(SAMPLE_EXCEPTION_MESSAGE));
 
 
@@ -217,8 +224,8 @@ public class LocalDeleteSyncRequestTest {
         when(mockDeleteThingShadowRequestHandler.handleRequest(any(DeleteThingShadowRequest.class), anyString()))
                 .thenThrow(new ServiceError(SAMPLE_EXCEPTION_MESSAGE));
 
-        LocalDeleteSyncRequest request = new LocalDeleteSyncRequest(THING_NAME, SHADOW_NAME, CLOUD_DELETE_PAYLOAD, mockDao, mockDeleteThingShadowRequestHandler);
-        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, request::execute);
+        LocalDeleteSyncRequest request = new LocalDeleteSyncRequest(THING_NAME, SHADOW_NAME, CLOUD_DELETE_PAYLOAD);
+        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, () -> request.execute(syncContext));
         assertThat(thrown.getMessage(), containsString(SAMPLE_EXCEPTION_MESSAGE));
 
 
@@ -232,8 +239,8 @@ public class LocalDeleteSyncRequestTest {
         when(mockDeleteThingShadowRequestHandler.handleRequest(any(DeleteThingShadowRequest.class), anyString()))
                 .thenThrow(new ShadowManagerDataException(new Exception(SAMPLE_EXCEPTION_MESSAGE)));
 
-        LocalDeleteSyncRequest request = new LocalDeleteSyncRequest(THING_NAME, SHADOW_NAME, CLOUD_DELETE_PAYLOAD, mockDao, mockDeleteThingShadowRequestHandler);
-        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, request::execute);
+        LocalDeleteSyncRequest request = new LocalDeleteSyncRequest(THING_NAME, SHADOW_NAME, CLOUD_DELETE_PAYLOAD);
+        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, () -> request.execute(syncContext));
         assertThat(thrown.getMessage(), containsString(SAMPLE_EXCEPTION_MESSAGE));
 
         verify(mockDao, times(1)).getShadowSyncInformation(anyString(), anyString());

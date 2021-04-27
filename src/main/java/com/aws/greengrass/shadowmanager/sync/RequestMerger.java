@@ -5,9 +5,11 @@
 
 package com.aws.greengrass.shadowmanager.sync;
 
-import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
-import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowRequestHandler;
-import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowRequestHandler;
+import com.aws.greengrass.logging.api.LogEventBuilder;
+import com.aws.greengrass.logging.api.Logger;
+import com.aws.greengrass.logging.impl.LogManager;
+import com.aws.greengrass.shadowmanager.model.Constants;
+import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.sync.model.CloudDeleteSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.CloudUpdateSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.FullShadowSyncRequest;
@@ -15,38 +17,22 @@ import com.aws.greengrass.shadowmanager.sync.model.LocalDeleteSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.LocalUpdateSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.SyncRequest;
 
-import javax.inject.Inject;
-
 /**
  * Merge requests that can be combined together. Falls back to FullSync if requests cannot be combined in a
  * meaningful way.
  */
 class RequestMerger {
-
-    private final ShadowManagerDAO dao;
-    private final UpdateThingShadowRequestHandler updateHandler;
-    private final DeleteThingShadowRequestHandler deleteHandler;
-    private final IotDataPlaneClientFactory clientFactory;
+    private static final Logger logger = LogManager.getLogger(RequestMerger.class);
 
     /**
      * Construct a new instance.
-     *
-     * @param dao           a data access object
-     * @param updateHandler an update handler
-     * @param deleteHandler a delete handler
      */
-    @Inject
-    public RequestMerger(ShadowManagerDAO dao, UpdateThingShadowRequestHandler updateHandler,
-                         DeleteThingShadowRequestHandler deleteHandler,
-                         IotDataPlaneClientFactory clientFactory) {
-        this.dao = dao;
-        this.updateHandler = updateHandler;
-        this.deleteHandler = deleteHandler;
-        this.clientFactory = clientFactory;
+    public RequestMerger() {
+
     }
 
     /**
-     * Merge two requests into one. This implementation returns a {@link FullShadowSyncRequest}.
+     * Merge two requests into one.
      *
      * @param oldValue a request to merge.
      * @param value    a request to merge.
@@ -61,17 +47,31 @@ class RequestMerger {
             return value;
         }
 
+        LogEventBuilder logEvent = logger.atDebug(LogEvents.SYNC.code())
+                .addKeyValue(Constants.LOG_THING_NAME_KEY, oldValue.getThingName())
+                .addKeyValue(Constants.LOG_THING_NAME_KEY, oldValue.getShadowName());
+
         if (oldValue instanceof CloudUpdateSyncRequest && value instanceof CloudUpdateSyncRequest) {
-            // TODO: combine existing requests
+            logEvent.log("Merge cloud update requests");
+            ((CloudUpdateSyncRequest) oldValue).merge((CloudUpdateSyncRequest) value);
+            return oldValue;
         } else if (oldValue instanceof LocalUpdateSyncRequest && value instanceof LocalUpdateSyncRequest) {
             // TODO: combine existing requests
-        } else if (oldValue instanceof CloudUpdateSyncRequest && value instanceof CloudDeleteSyncRequest
-                || oldValue instanceof LocalUpdateSyncRequest && value instanceof LocalDeleteSyncRequest) {
-            // update followed by delete, just send the delete
+        } else if ((oldValue instanceof CloudUpdateSyncRequest || oldValue instanceof LocalUpdateSyncRequest)
+                && (value instanceof CloudDeleteSyncRequest || value instanceof LocalDeleteSyncRequest)) {
+            // update followed by delete, just send the delete - no matter the direction
+            logEvent.log("Merge new delete shadow request");
             return value;
+        } else if ((oldValue instanceof CloudDeleteSyncRequest || oldValue instanceof LocalDeleteSyncRequest)
+                && (value instanceof CloudUpdateSyncRequest || value instanceof LocalUpdateSyncRequest)) {
+            // delete followed by update - but we haven't processed delete yet. Prioritizing deletes otherwise it may
+            // be impossible to intentionally sync deletes
+            logEvent.log("Merge with older delete shadow request. Discarding update and prioritizing delete");
+            return oldValue;
         } else if (oldValue instanceof CloudDeleteSyncRequest && value instanceof CloudDeleteSyncRequest
                 || oldValue instanceof LocalDeleteSyncRequest && value instanceof LocalDeleteSyncRequest) {
             // this should never happen (multiple local or multiple cloud deletes) but it can safely return either value
+            logEvent.log("Merge redundant delete requests");
             return oldValue;
         } else if (oldValue instanceof CloudDeleteSyncRequest && value instanceof LocalDeleteSyncRequest
                 || oldValue instanceof LocalDeleteSyncRequest && value instanceof CloudDeleteSyncRequest) {
@@ -82,9 +82,8 @@ class RequestMerger {
             // the same as a full sync but with partial updates
         }
 
-
+        logEvent.log("Creating full shadow sync request");
         // Instead of a partial update, a full sync request will force a get of the latest local and remote shadows
-        return new FullShadowSyncRequest(value.getThingName(), value.getShadowName(),
-                dao, updateHandler, deleteHandler, clientFactory);
+        return new FullShadowSyncRequest(value.getThingName(), value.getShadowName());
     }
 }

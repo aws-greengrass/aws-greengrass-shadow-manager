@@ -7,15 +7,12 @@ package com.aws.greengrass.shadowmanager.sync.model;
 
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
-import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.exception.SyncException;
 import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
-import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
-import lombok.NonNull;
 import software.amazon.awssdk.aws.greengrass.model.ConflictError;
 import software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowRequest;
 import software.amazon.awssdk.aws.greengrass.model.InvalidArgumentsError;
@@ -31,41 +28,30 @@ import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KE
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_VERSION;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_MANAGER_NAME;
 
+
 /**
  * Sync request to delete a locally stored shadow.
  */
 public class LocalDeleteSyncRequest extends BaseSyncRequest {
     private static final Logger logger = LogManager.getLogger(LocalDeleteSyncRequest.class);
 
-    @NonNull
-    DeleteThingShadowRequestHandler deleteThingShadowRequestHandler;
-
     private final byte[] deletePayload;
+
 
     /**
      * Ctr for LocalDeleteSyncRequest.
      *
-     * @param thingName                   The thing name associated with the sync shadow update
-     * @param shadowName                  The shadow name associated with the sync shadow update
-     * @param deletePayload               Delete response payload containing the deleted shadow version
-     * @param dao                         Local shadow database management
-     * @param deleteThingShadowRequestHandler Reference to the DeleteThingShadow IPC Handler
+     * @param thingName     The thing name associated with the sync shadow update
+     * @param shadowName    The shadow name associated with the sync shadow update
+     * @param deletePayload Delete response payload containing the deleted shadow version
      */
-    public LocalDeleteSyncRequest(String thingName,
-                                  String shadowName,
-                                  byte[] deletePayload,
-                                  ShadowManagerDAO dao,
-                                  DeleteThingShadowRequestHandler deleteThingShadowRequestHandler) {
-        super(thingName, shadowName, dao);
+    public LocalDeleteSyncRequest(String thingName, String shadowName, byte[] deletePayload) {
+         super(thingName,shadowName);
         this.deletePayload = deletePayload;
-        this.deleteThingShadowRequestHandler = deleteThingShadowRequestHandler;
     }
 
-    /**
-     * Main execution thread for syncing cloud deletes to local shadow.
-     */
     @Override
-    public void execute() throws SyncException, SkipSyncRequestException, UnknownShadowException {
+    public void execute(SyncContext context) throws SyncException, SkipSyncRequestException, UnknownShadowException {
         Long deletedCloudVersion;
         try {
             deletedCloudVersion = JsonUtil.getPayloadJson(deletePayload)
@@ -76,7 +62,7 @@ public class LocalDeleteSyncRequest extends BaseSyncRequest {
             throw new SkipSyncRequestException(e);
         }
 
-        SyncInformation syncInformation = this.dao.getShadowSyncInformation(getThingName(), getShadowName())
+        SyncInformation syncInformation = context.getDao().getShadowSyncInformation(getThingName(), getShadowName())
                 .orElseThrow(() -> new UnknownShadowException("Shadow not found in sync table"));
 
         long currentCloudVersion = syncInformation.getCloudVersion();
@@ -87,10 +73,10 @@ public class LocalDeleteSyncRequest extends BaseSyncRequest {
                 DeleteThingShadowRequest request = new DeleteThingShadowRequest();
                 request.setThingName(getThingName());
                 request.setShadowName(getShadowName());
-                deleteThingShadowRequestHandler.handleRequest(request, SHADOW_MANAGER_NAME);
+                context.getDeleteHandler().handleRequest(request, SHADOW_MANAGER_NAME);
 
                 long updateTime = Instant.now().getEpochSecond();
-                dao.updateSyncInformation(SyncInformation.builder()
+                context.getDao().updateSyncInformation(SyncInformation.builder()
                         .thingName(getThingName())
                         .shadowName(getShadowName())
                         .lastSyncedDocument(null)
@@ -110,7 +96,6 @@ public class LocalDeleteSyncRequest extends BaseSyncRequest {
             } catch (ShadowManagerDataException | UnauthorizedError | InvalidArgumentsError | ServiceError e) {
                 throw new SkipSyncRequestException(e);
             }
-
         // missed cloud update(s) need to do full sync
         } else {
             throw new ConflictError("Missed update(s) from the cloud");

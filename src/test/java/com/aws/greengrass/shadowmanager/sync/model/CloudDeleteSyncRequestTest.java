@@ -67,11 +67,15 @@ class CloudDeleteSyncRequestTest {
     private IotDataPlaneClient mockIotDataPlaneClient;
     @Captor
     private ArgumentCaptor<SyncInformation> syncInformationCaptor;
+    @Mock
+    private SyncContext mockContext;
 
     @BeforeEach
     void setup() {
         lenient().when(mockClientFactory.getIotDataPlaneClient()).thenReturn(mockIotDataPlaneClient);
         lenient().when(mockDao.updateSyncInformation(syncInformationCaptor.capture())).thenReturn(true);
+        lenient().when(mockContext.getDao()).thenReturn(mockDao);
+        lenient().when(mockContext.getIotDataPlaneClientFactory()).thenReturn(mockClientFactory);
     }
 
     @Test
@@ -87,9 +91,9 @@ class CloudDeleteSyncRequestTest {
                 .cloudVersion(1L)
                 .lastSyncTime(epochSecondsMinus60)
                 .build()));
-        CloudDeleteSyncRequest request = new CloudDeleteSyncRequest(THING_NAME, SHADOW_NAME, mockDao, mockClientFactory);
+        CloudDeleteSyncRequest request = new CloudDeleteSyncRequest(THING_NAME, SHADOW_NAME);
 
-        request.execute();
+        request.execute(mockContext);
 
         verify(mockClientFactory, times(1)).getIotDataPlaneClient();
         verify(mockDao, times(1)).getShadowSyncInformation(anyString(), anyString());
@@ -110,9 +114,9 @@ class CloudDeleteSyncRequestTest {
     void GIVEN_cloud_delete_request_for_non_existent_shadow_WHEN_execute_THEN_does_not_update_cloud_shadow_and_sync_information() throws RetryableException, SkipSyncRequestException, IOException {
         long epochSeconds = Instant.now().getEpochSecond();
         when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.empty());
-        CloudDeleteSyncRequest request = new CloudDeleteSyncRequest(THING_NAME, SHADOW_NAME, mockDao, mockClientFactory);
+        CloudDeleteSyncRequest request = new CloudDeleteSyncRequest(THING_NAME, SHADOW_NAME);
 
-        request.execute();
+        request.execute(mockContext);
 
         verify(mockClientFactory, times(1)).getIotDataPlaneClient();
         verify(mockDao, times(1)).getShadowSyncInformation(anyString(), anyString());
@@ -134,9 +138,9 @@ class CloudDeleteSyncRequestTest {
     void GIVEN_bad_cloud_delete_request_WHEN_execute_and_updateShadow_throws_retryable_error_THEN_does_not_update_cloud_shadow_and_sync_information(Class clazz, ExtensionContext context) throws IOException {
         ignoreExceptionOfType(context, clazz);
         when(mockIotDataPlaneClient.deleteThingShadow(any(DeleteThingShadowRequest.class))).thenThrow(clazz);
-        CloudDeleteSyncRequest request = new CloudDeleteSyncRequest(THING_NAME, SHADOW_NAME, mockDao, mockClientFactory);
+        CloudDeleteSyncRequest request = new CloudDeleteSyncRequest(THING_NAME, SHADOW_NAME);
 
-        RetryableException thrown = assertThrows(RetryableException.class, request::execute);
+        RetryableException thrown = assertThrows(RetryableException.class, () -> request.execute(mockContext));
         assertThat(thrown.getCause(), is(instanceOf(clazz)));
 
         verify(mockClientFactory, times(1)).getIotDataPlaneClient();
@@ -151,9 +155,10 @@ class CloudDeleteSyncRequestTest {
     void GIVEN_bad_cloud_delete_request_WHEN_execute_and_updateShadow_throws_skipable_error_THEN_does_not_update_cloud_shadow_and_sync_information(Class clazz, ExtensionContext context) throws IOException {
         ignoreExceptionOfType(context, clazz);
         when(mockIotDataPlaneClient.deleteThingShadow(any(DeleteThingShadowRequest.class))).thenThrow(clazz);
-        CloudDeleteSyncRequest request = new CloudDeleteSyncRequest(THING_NAME, SHADOW_NAME, mockDao, mockClientFactory);
+        CloudDeleteSyncRequest request = new CloudDeleteSyncRequest(THING_NAME, SHADOW_NAME);
 
-        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, request::execute);
+        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class,
+                () -> request.execute(mockContext));
         assertThat(thrown.getCause(), is(instanceOf(clazz)));
 
         verify(mockClientFactory, times(1)).getIotDataPlaneClient();

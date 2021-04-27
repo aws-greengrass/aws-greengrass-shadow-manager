@@ -109,10 +109,15 @@ class FullShadowSyncRequestTest {
     @Captor
     private ArgumentCaptor<DeleteThingShadowRequest> cloudDeleteThingShadowRequest;
 
+
+    private SyncContext syncContext;
+
     @BeforeEach
     void setup() {
         lenient().when(mockClientFactory.getIotDataPlaneClient()).thenReturn(mockIotDataPlaneClient);
         lenient().when(mockDao.updateSyncInformation(syncInformationCaptor.capture())).thenReturn(true);
+        syncContext = new SyncContext(mockDao, mockUpdateThingShadowRequestHandler, mockDeleteThingShadowRequestHandler,
+                mockClientFactory);
     }
 
     @Test
@@ -140,8 +145,8 @@ class FullShadowSyncRequestTest {
                 thenReturn(mock(UpdateThingShadowHandlerResponse.class));
         when(mockIotDataPlaneClient.updateThingShadow(cloudUpdateThingShadowRequestCaptor.capture())).thenReturn(mock(UpdateThingShadowResponse.class));
 
-        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME, mockDao, mockUpdateThingShadowRequestHandler, mockDeleteThingShadowRequestHandler, mockClientFactory);
-        fullShadowSyncRequest.execute();
+        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME);
+        fullShadowSyncRequest.execute(syncContext);
 
         verify(mockClientFactory, times(2)).getIotDataPlaneClient();
         verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
@@ -198,8 +203,8 @@ class FullShadowSyncRequestTest {
                 .build()));
         when(mockIotDataPlaneClient.deleteThingShadow(cloudDeleteThingShadowRequest.capture())).thenReturn(mock(DeleteThingShadowResponse.class));
 
-        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME, mockDao, mockUpdateThingShadowRequestHandler, mockDeleteThingShadowRequestHandler, mockClientFactory);
-        fullShadowSyncRequest.execute();
+        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME);
+        fullShadowSyncRequest.execute(syncContext);
 
         verify(mockClientFactory, times(2)).getIotDataPlaneClient();
         verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
@@ -243,8 +248,8 @@ class FullShadowSyncRequestTest {
                 .lastSyncTime(epochSecondsMinus60)
                 .build()));
 
-        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME, mockDao, mockUpdateThingShadowRequestHandler, mockDeleteThingShadowRequestHandler, mockClientFactory);
-        fullShadowSyncRequest.execute();
+        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME);
+        fullShadowSyncRequest.execute(syncContext);
 
         verify(mockClientFactory, times(1)).getIotDataPlaneClient();
         verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
@@ -275,8 +280,8 @@ class FullShadowSyncRequestTest {
         when(mockDeleteThingShadowRequestHandler.handleRequest(localDeleteThingShadowRequest.capture(), anyString())).
                 thenReturn(mock(software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowResponse.class));
 
-        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME, mockDao, mockUpdateThingShadowRequestHandler, mockDeleteThingShadowRequestHandler, mockClientFactory);
-        fullShadowSyncRequest.execute();
+        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME);
+        fullShadowSyncRequest.execute(syncContext);
 
         verify(mockClientFactory, times(1)).getIotDataPlaneClient();
         verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
@@ -324,8 +329,8 @@ class FullShadowSyncRequestTest {
         when(mockUpdateThingShadowRequestHandler.handleRequest(localUpdateThingShadowRequestCaptor.capture(), anyString())).
                 thenReturn(mock(UpdateThingShadowHandlerResponse.class));
 
-        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME, mockDao, mockUpdateThingShadowRequestHandler, mockDeleteThingShadowRequestHandler, mockClientFactory);
-        fullShadowSyncRequest.execute();
+        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME);
+        fullShadowSyncRequest.execute(syncContext);
 
         verify(mockClientFactory, times(1)).getIotDataPlaneClient();
         verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
@@ -377,8 +382,8 @@ class FullShadowSyncRequestTest {
                 .build()));
         when(mockIotDataPlaneClient.updateThingShadow(cloudUpdateThingShadowRequestCaptor.capture())).thenReturn(mock(UpdateThingShadowResponse.class));
 
-        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME, mockDao, mockUpdateThingShadowRequestHandler, mockDeleteThingShadowRequestHandler, mockClientFactory);
-        fullShadowSyncRequest.execute();
+        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME);
+        fullShadowSyncRequest.execute(syncContext);
 
         verify(mockClientFactory, times(2)).getIotDataPlaneClient();
         verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
@@ -428,8 +433,8 @@ class FullShadowSyncRequestTest {
                 .lastSyncTime(Instant.EPOCH.getEpochSecond())
                 .build()));
 
-        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME, mockDao, mockUpdateThingShadowRequestHandler, mockDeleteThingShadowRequestHandler, mockClientFactory);
-        fullShadowSyncRequest.execute();
+        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME);
+        fullShadowSyncRequest.execute(syncContext);
 
         verify(mockClientFactory, times(1)).getIotDataPlaneClient();
         verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
@@ -456,8 +461,9 @@ class FullShadowSyncRequestTest {
         ignoreExceptionOfType(context, SkipSyncRequestException.class);
         when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.empty());
 
-        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME, mockDao, mockUpdateThingShadowRequestHandler, mockDeleteThingShadowRequestHandler, mockClientFactory);
-        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, fullShadowSyncRequest::execute);
+        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME);
+        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class,
+                () -> fullShadowSyncRequest.execute(syncContext));
         assertThat(thrown.getMessage(), is("Unable to find sync information"));
 
         verify(mockClientFactory, times(0)).getIotDataPlaneClient();
@@ -491,8 +497,9 @@ class FullShadowSyncRequestTest {
                 .build()));
         when(mockIotDataPlaneClient.deleteThingShadow(cloudDeleteThingShadowRequest.capture())).thenThrow(clazz);
 
-        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME, mockDao, mockUpdateThingShadowRequestHandler, mockDeleteThingShadowRequestHandler, mockClientFactory);
-        RetryableException thrown = assertThrows(RetryableException.class, fullShadowSyncRequest::execute);
+        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME);
+        RetryableException thrown = assertThrows(RetryableException.class,
+                () -> fullShadowSyncRequest.execute(syncContext));
         assertThat(thrown.getCause(), is(instanceOf(clazz)));
 
 
@@ -531,8 +538,9 @@ class FullShadowSyncRequestTest {
                 .build()));
         when(mockIotDataPlaneClient.deleteThingShadow(cloudDeleteThingShadowRequest.capture())).thenThrow(clazz);
 
-        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME, mockDao, mockUpdateThingShadowRequestHandler, mockDeleteThingShadowRequestHandler, mockClientFactory);
-        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, fullShadowSyncRequest::execute);
+        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME);
+        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class,
+                () -> fullShadowSyncRequest.execute(syncContext));
         assertThat(thrown.getCause(), is(instanceOf(clazz)));
 
 
@@ -569,8 +577,9 @@ class FullShadowSyncRequestTest {
                 .build()));
         when(mockDeleteThingShadowRequestHandler.handleRequest(localDeleteThingShadowRequest.capture(), anyString())).thenThrow(mock(clazz));
 
-        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME, mockDao, mockUpdateThingShadowRequestHandler, mockDeleteThingShadowRequestHandler, mockClientFactory);
-        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, fullShadowSyncRequest::execute);
+        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME);
+        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class,
+                () -> fullShadowSyncRequest.execute(syncContext));
         assertThat(thrown.getCause(), is(instanceOf(clazz)));
 
         verify(mockClientFactory, times(1)).getIotDataPlaneClient();
@@ -604,8 +613,8 @@ class FullShadowSyncRequestTest {
                 .lastSyncTime(epochSecondsMinus60)
                 .build()));
 
-        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME, mockDao, mockUpdateThingShadowRequestHandler, mockDeleteThingShadowRequestHandler, mockClientFactory);
-        RetryableException thrown = assertThrows(RetryableException.class, fullShadowSyncRequest::execute);
+        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME);
+        RetryableException thrown = assertThrows(RetryableException.class, () -> fullShadowSyncRequest.execute(syncContext));
         assertThat(thrown.getCause(), is(instanceOf(clazz)));
 
 
@@ -636,8 +645,8 @@ class FullShadowSyncRequestTest {
                 .lastSyncTime(epochSecondsMinus60)
                 .build()));
 
-        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME, mockDao, mockUpdateThingShadowRequestHandler, mockDeleteThingShadowRequestHandler, mockClientFactory);
-        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, fullShadowSyncRequest::execute);
+        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME);
+        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, () -> fullShadowSyncRequest.execute(syncContext));
         assertThat(thrown.getCause(), is(instanceOf(clazz)));
 
 
@@ -675,8 +684,8 @@ class FullShadowSyncRequestTest {
                 thenReturn(mock(UpdateThingShadowHandlerResponse.class));
         when(mockIotDataPlaneClient.updateThingShadow(cloudUpdateThingShadowRequestCaptor.capture())).thenThrow(clazz);
 
-        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME, mockDao, mockUpdateThingShadowRequestHandler, mockDeleteThingShadowRequestHandler, mockClientFactory);
-        RetryableException thrown = assertThrows(RetryableException.class, fullShadowSyncRequest::execute);
+        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME);
+        RetryableException thrown = assertThrows(RetryableException.class, () -> fullShadowSyncRequest.execute(syncContext));
         assertThat(thrown.getCause(), is(instanceOf(clazz)));
 
         verify(mockClientFactory, times(2)).getIotDataPlaneClient();
@@ -727,8 +736,8 @@ class FullShadowSyncRequestTest {
                 thenReturn(mock(UpdateThingShadowHandlerResponse.class));
         when(mockIotDataPlaneClient.updateThingShadow(cloudUpdateThingShadowRequestCaptor.capture())).thenThrow(ConflictException.class);
 
-        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME, mockDao, mockUpdateThingShadowRequestHandler, mockDeleteThingShadowRequestHandler, mockClientFactory);
-        assertThrows(ConflictException.class, fullShadowSyncRequest::execute);
+        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME);
+        assertThrows(ConflictException.class, () -> fullShadowSyncRequest.execute(syncContext));
 
         verify(mockClientFactory, times(2)).getIotDataPlaneClient();
         verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
@@ -777,8 +786,8 @@ class FullShadowSyncRequestTest {
         when(mockUpdateThingShadowRequestHandler.handleRequest(localUpdateThingShadowRequestCaptor.capture(), anyString())).
                 thenThrow(ConflictError.class);
 
-        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME, mockDao, mockUpdateThingShadowRequestHandler, mockDeleteThingShadowRequestHandler, mockClientFactory);
-        assertThrows(ConflictError.class, fullShadowSyncRequest::execute);
+        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME);
+        assertThrows(ConflictError.class, () -> fullShadowSyncRequest.execute(syncContext));
 
         verify(mockClientFactory, times(1)).getIotDataPlaneClient();
         verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
@@ -822,8 +831,8 @@ class FullShadowSyncRequestTest {
                 thenReturn(mock(UpdateThingShadowHandlerResponse.class));
         when(mockIotDataPlaneClient.updateThingShadow(cloudUpdateThingShadowRequestCaptor.capture())).thenThrow(clazz);
 
-        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME, mockDao, mockUpdateThingShadowRequestHandler, mockDeleteThingShadowRequestHandler, mockClientFactory);
-        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, fullShadowSyncRequest::execute);
+        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME);
+        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, () -> fullShadowSyncRequest.execute(syncContext));
         assertThat(thrown.getCause(), is(instanceOf(clazz)));
 
         verify(mockClientFactory, times(2)).getIotDataPlaneClient();
@@ -873,8 +882,8 @@ class FullShadowSyncRequestTest {
                 .build()));
         when(mockUpdateThingShadowRequestHandler.handleRequest(localUpdateThingShadowRequestCaptor.capture(), anyString())).thenThrow(mock(clazz));
 
-        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME, mockDao, mockUpdateThingShadowRequestHandler, mockDeleteThingShadowRequestHandler, mockClientFactory);
-        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, fullShadowSyncRequest::execute);
+        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME);
+        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, () -> fullShadowSyncRequest.execute(syncContext));
         assertThat(thrown.getCause(), is(instanceOf(clazz)));
 
         verify(mockClientFactory, times(1)).getIotDataPlaneClient();
@@ -913,8 +922,8 @@ class FullShadowSyncRequestTest {
                 .lastSyncTime(epochSecondsMinus60)
                 .build()));
 
-        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME, mockDao, mockUpdateThingShadowRequestHandler, mockDeleteThingShadowRequestHandler, mockClientFactory);
-        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, fullShadowSyncRequest::execute);
+        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME);
+        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, () -> fullShadowSyncRequest.execute(syncContext));
         assertThat(thrown.getCause(), is(instanceOf(IOException.class)));
 
         verify(mockClientFactory, times(1)).getIotDataPlaneClient();
