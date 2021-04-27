@@ -37,6 +37,7 @@ import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
@@ -71,6 +72,9 @@ public class SyncHandlerTest {
     @Mock
     ExecutorService executorService;
 
+    @Mock
+    CloudDataClient cloudDataClient;
+
     @Mock(answer = Answers.RETURNS_DEEP_STUBS)
     SyncContext context;
 
@@ -79,7 +83,7 @@ public class SyncHandlerTest {
     @BeforeEach
     void setup() {
         lenient().when(queue.remainingCapacity()).thenReturn(1024);
-        syncHandler = new SyncHandler(queue, executorService);
+        syncHandler = new SyncHandler(queue, executorService, cloudDataClient);
     }
 
     @Test
@@ -93,12 +97,13 @@ public class SyncHandlerTest {
         when(context.getDao().listSyncedShadows()).thenReturn(shadows);
 
         // WHEN
-        syncHandler.start(context, numThreads);
+        syncHandler.start(context, new HashSet<>(shadows), numThreads);
 
         // THEN
         verify(queue, times(1)).clear();
         verify(queue, times(shadows.size())).put(any());
         assertThat(syncHandler.syncThreads, hasSize(numThreads));
+        verify(cloudDataClient, times(1)).updateSubscriptions(new HashSet<>(shadows));
     }
 
     @Test
@@ -111,10 +116,10 @@ public class SyncHandlerTest {
                 new Pair<>("b", "2"));
         when(context.getDao().listSyncedShadows()).thenReturn(shadows);
 
-        syncHandler.start(context, numThreads);
+        syncHandler.start(context, new HashSet<>(shadows), numThreads);
 
         // WHEN - start again
-        syncHandler.start(context, numThreads);
+        syncHandler.start(context, new HashSet<>(shadows), numThreads);
 
         // THEN - did nothing different from starting
         verify(queue, times(1)).clear();
@@ -142,7 +147,7 @@ public class SyncHandlerTest {
         List<Pair<String, String>> shadows = Arrays.asList(new Pair<>("a", "1"), new Pair<>("b", "2"));
         when(context.getDao().listSyncedShadows()).thenReturn(shadows);
 
-        syncHandler.start(context, numThreads);
+        syncHandler.start(context, new HashSet<>(shadows), numThreads);
         assertThat(syncHandler.syncThreads, hasSize(numThreads));
 
         // WHEN
@@ -152,6 +157,7 @@ public class SyncHandlerTest {
         verify(syncThread, times(1)).cancel(true);
         verify(queue, times(2)).clear(); // full sync and stop both clear
         assertThat(syncHandler.syncThreads, hasSize(0));
+        verify(cloudDataClient, times(1)).stopSubscribing();
     }
 
     @Test
@@ -175,7 +181,7 @@ public class SyncHandlerTest {
         when(executorService.submit(any(Runnable.class))).thenReturn(syncThread);
 
         // GIVEN
-        syncHandler.start(context, 1);
+        syncHandler.start(context, new HashSet<>(shadows), 1);
 
         verify(syncThread, times(1)).cancel(true);
         assertThat("syncing", syncHandler.syncing.get(), is(false));
@@ -208,7 +214,7 @@ public class SyncHandlerTest {
     void GIVEN_request_added_to_queue_WHEN_request_taken_from_queue_THEN_execute_request() throws Exception {
         RequestBlockingQueue queue = new RequestBlockingQueue(new RequestMerger());
         ExecutorService executorService = Executors.newSingleThreadExecutor();
-        syncHandler = new SyncHandler(queue, executorService);
+        syncHandler = new SyncHandler(queue, executorService, cloudDataClient);
 
         when(context.getDao().listSyncedShadows()).thenReturn(Collections.emptyList());
 
@@ -219,7 +225,7 @@ public class SyncHandlerTest {
             return null;
         }).when(request).execute(context);
         try {
-            syncHandler.start(context, 1);
+            syncHandler.start(context, Collections.emptySet(), 1);
 
             lenient().when(request.getThingName()).thenReturn("thing");
             lenient().when(request.getShadowName()).thenReturn("shadow");
@@ -238,7 +244,7 @@ public class SyncHandlerTest {
         ExceptionLogProtector.ignoreExceptionOfType(extensionContext, RetryableException.class);
         ExecutorService executorService = Executors.newSingleThreadExecutor();
         SyncHandler.Retryer retryer = mock(SyncHandler.Retryer.class);
-        syncHandler = new SyncHandler(queue, executorService, retryer);
+        syncHandler = new SyncHandler(queue, executorService, cloudDataClient, retryer);
 
         when(context.getDao().listSyncedShadows()).thenReturn(Collections.emptyList());
 
@@ -274,7 +280,7 @@ public class SyncHandlerTest {
         when(queue.offerAndTake(request1)).thenReturn(request1);
 
         try {
-            syncHandler.start(context, 1);
+            syncHandler.start(context, Collections.emptySet(),1);
 
             assertThat("executed request", executeLatch.await(5, TimeUnit.SECONDS), is(true));
             assertThat("take all requests", takeLatch.await(5, TimeUnit.SECONDS), is(true));
@@ -290,7 +296,7 @@ public class SyncHandlerTest {
         ExceptionLogProtector.ignoreExceptionOfType(extensionContext, SkipSyncRequestException.class);
         ExecutorService executorService = Executors.newSingleThreadExecutor();
         SyncHandler.Retryer retryer = mock(SyncHandler.Retryer.class);
-        syncHandler = new SyncHandler(queue, executorService, retryer);
+        syncHandler = new SyncHandler(queue, executorService, cloudDataClient, retryer);
 
         when(context.getDao().listSyncedShadows()).thenReturn(Collections.emptyList());
 
@@ -323,7 +329,7 @@ public class SyncHandlerTest {
         }).when(retryer).run(any(), eq(request2), eq(context));
 
         try {
-            syncHandler.start(context, 1);
+            syncHandler.start(context, Collections.emptySet(), 1);
 
             assertThat("executed requests", executeLatch.await(5, TimeUnit.SECONDS), is(true));
         } finally {
@@ -337,7 +343,7 @@ public class SyncHandlerTest {
         ExceptionLogProtector.ignoreExceptionOfType(extensionContext, SkipSyncRequestException.class);
         ExecutorService executorService = Executors.newSingleThreadExecutor();
         SyncHandler.Retryer retryer = mock(SyncHandler.Retryer.class);
-        syncHandler = new SyncHandler(queue, executorService, retryer);
+        syncHandler = new SyncHandler(queue, executorService, cloudDataClient, retryer);
 
         when(context.getDao().listSyncedShadows()).thenReturn(Collections.emptyList());
 
@@ -356,7 +362,7 @@ public class SyncHandlerTest {
 
 
         try {
-            syncHandler.start(context, 1);
+            syncHandler.start(context, Collections.emptySet(),1);
 
             assertThat("executed requests", executeLatch.await(5, TimeUnit.SECONDS), is(true));
         } finally {
@@ -374,7 +380,7 @@ public class SyncHandlerTest {
 
         ExecutorService executorService = Executors.newSingleThreadExecutor();
         SyncHandler.Retryer retryer = mock(SyncHandler.Retryer.class);
-        syncHandler = new SyncHandler(queue, executorService, retryer);
+        syncHandler = new SyncHandler(queue, executorService, cloudDataClient, retryer);
 
         when(context.getDao().listSyncedShadows()).thenReturn(Collections.emptyList());
 
@@ -404,7 +410,7 @@ public class SyncHandlerTest {
         }).when(retryer).run(any(), any(FullShadowSyncRequest.class), eq(context));
 
         try {
-            syncHandler.start(context, 1);
+            syncHandler.start(context, Collections.emptySet(), 1);
 
             assertThat("executed requests", executeLatch.await(5, TimeUnit.SECONDS), is(true));
         } finally {

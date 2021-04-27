@@ -9,16 +9,20 @@ import com.aws.greengrass.shadowmanager.exception.InvalidConfigurationException;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.util.Validator;
 import com.aws.greengrass.util.Coerce;
+import com.aws.greengrass.util.Pair;
 import com.aws.greengrass.util.SerializerFactory;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Getter;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
+import static com.aws.greengrass.shadowmanager.model.Constants.CLASSIC_SHADOW_IDENTIFIER;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_CLASSIC_SHADOW_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_NAMED_SHADOWS_TOPIC;
@@ -156,5 +160,22 @@ public class ShadowSyncConfiguration {
             }
             return nucleusThingConfigObject;
         });
+    }
+
+    /**
+     * Returns the set of shadows to be synced.
+     *
+     * @return Set of shadows to be synced.
+     */
+    public Set<Pair<String, String>> getSyncShadows() {
+        Set<Pair<String, String>> syncShadowSet = new HashSet<>();
+        syncConfigurationList.forEach(thingShadowSyncConfiguration -> {
+            if (thingShadowSyncConfiguration.isSyncClassicShadow()) {
+                syncShadowSet.add(new Pair<>(thingShadowSyncConfiguration.getThingName(), CLASSIC_SHADOW_IDENTIFIER));
+            }
+            thingShadowSyncConfiguration.getSyncNamedShadows().forEach(shadowName ->
+                    syncShadowSet.add(new Pair<>(thingShadowSyncConfiguration.getThingName(), shadowName)));
+        });
+        return syncShadowSet;
     }
 }

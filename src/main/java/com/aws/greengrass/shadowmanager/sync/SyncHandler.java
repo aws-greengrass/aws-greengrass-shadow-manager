@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -74,6 +75,8 @@ public class SyncHandler {
 
     private final ExecutorService syncExecutorService;
 
+    private final CloudDataClient cloudDataClient;
+
     private final Object lifecycleLock = new Object();
 
     /**
@@ -103,10 +106,12 @@ public class SyncHandler {
      *
      * @param syncQueue the queue for storing sync requests
      * @param executorService provider of threads for syncing
+     * @param cloudDataClient the data client subscribing to cloud shadow topics
      */
     @Inject
-    public SyncHandler(RequestBlockingQueue syncQueue, ExecutorService executorService) {
-        this (syncQueue, executorService,
+    public SyncHandler(RequestBlockingQueue syncQueue, ExecutorService executorService,
+                       CloudDataClient cloudDataClient) {
+        this (syncQueue, executorService, cloudDataClient,
                 // retry wrapper so that requests can be mocked
                 (config, request, context) ->
                         RetryUtils.runWithRetry(config,
@@ -117,10 +122,11 @@ public class SyncHandler {
                                 SYNC_EVENT_TYPE, logger));
     }
 
-    SyncHandler(RequestBlockingQueue syncQueue, ExecutorService executorService,
+    SyncHandler(RequestBlockingQueue syncQueue, ExecutorService executorService, CloudDataClient cloudDataClient,
             Retryer retryer) {
         this.syncQueue = syncQueue;
         this.syncExecutorService = executorService;
+        this.cloudDataClient = cloudDataClient;
         this.retryer = retryer;
     }
 
@@ -160,9 +166,10 @@ public class SyncHandler {
     /**
      * Start sync threads to process sync requests. This automatically starts a full sync for all shadows.
      * @param context         an context object for syncing
+     * @param shadowSet       Set of shadow topic prefixes to subscribe to the update/delete topic
      * @param syncParallelism number of threads to use for syncing
      */
-    public void start(SyncContext context, int syncParallelism) {
+    public void start(SyncContext context, Set<Pair<String, String>> shadowSet, int syncParallelism) {
         synchronized (lifecycleLock) {
             if (syncing.compareAndSet(false, true)) {
                 this.context = context;
@@ -177,6 +184,7 @@ public class SyncHandler {
         }
         try {
             fullSyncOnAllShadows();
+            cloudDataClient.updateSubscriptions(shadowSet);
         } catch (InterruptedException e) {
             logger.atWarn(SYNC_EVENT_TYPE)
                     .log("Interrupted while queuing full sync requests at startup. Syncing will stop");
@@ -190,6 +198,7 @@ public class SyncHandler {
      */
     public void stop() {
         synchronized (lifecycleLock) {
+            cloudDataClient.stopSubscribing();
             if (syncing.compareAndSet(true, false)) {
                 logger.atInfo(SYNC_EVENT_TYPE).log("Stop syncing");
                 syncing.set(false);

@@ -69,7 +69,7 @@ public class CloudDataClient {
         mqttClient.addToCallbackEvents(new MqttClientConnectionEvents() {
             @Override
             public void onConnectionInterrupted(int errorCode) {
-                stop();
+                stopSubscribing();
             }
 
             @Override
@@ -82,18 +82,10 @@ public class CloudDataClient {
     /**
      * Stops the mqtt subscriber thread.
      */
-    public void stop() {
+    public void stopSubscribing() {
         if (subscriberThread != null && subscriberThread.isAlive()) {
             subscriberThread.interrupt();
         }
-    }
-
-    /**
-     * Unsubscribes from all subscribed shadow topics.
-     */
-    public void clearSubscriptions() {
-        stop();
-        updateSubscriptions(Collections.emptySet());
     }
 
     /**
@@ -112,7 +104,7 @@ public class CloudDataClient {
             newDeleteTopics.add(request.getShadowTopicPrefix() + SHADOW_DELETE_SUBSCRIPTION_TOPIC);
         }
 
-        stop();
+        stopSubscribing();
         subscriberThread = new Thread(() -> updateSubscriptions(newUpdateTopics, newDeleteTopics));
         subscriberThread.start();
     }

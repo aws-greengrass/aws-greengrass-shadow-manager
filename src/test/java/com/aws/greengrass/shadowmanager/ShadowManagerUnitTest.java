@@ -21,6 +21,7 @@ import com.aws.greengrass.shadowmanager.util.ShadowWriteSynchronizeHelper;
 import com.aws.greengrass.shadowmanager.util.Validator;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.testcommons.testutilities.GGServiceTestUtil;
+import com.aws.greengrass.util.Pair;
 import com.fasterxml.jackson.databind.exc.MismatchedInputException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,11 +40,14 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static com.aws.greengrass.componentmanager.KernelConfigResolver.CONFIGURATION_CONFIG_KEY;
 import static com.aws.greengrass.deployment.DeviceConfiguration.DEVICE_PARAM_THING_NAME;
+import static com.aws.greengrass.shadowmanager.model.Constants.CLASSIC_SHADOW_IDENTIFIER;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_CLASSIC_SHADOW_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC;
@@ -59,8 +63,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_DOCUMENT_
 import static com.aws.greengrass.shadowmanager.model.Constants.MAX_SHADOW_DOCUMENT_SIZE;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -323,13 +326,20 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         thingNameTopic = thingNameTopic.withValue(newThingName);
         shadowManager.handleDeviceThingNameChange(WhatHappened.changed, thingNameTopic);
         assertThat(shadowManager.getSyncConfiguration().getSyncConfigurationList().size(), is(1));
+        Set<Pair<String,String>> foundSyncShadowSet = new HashSet<>();
         shadowManager.getSyncConfiguration().getSyncConfigurationList().forEach(thingShadowSyncConfiguration -> {
+            if (thingShadowSyncConfiguration.isSyncClassicShadow()) {
+                foundSyncShadowSet.add(new Pair<>(thingShadowSyncConfiguration.getThingName(), CLASSIC_SHADOW_IDENTIFIER));
+            }
+            thingShadowSyncConfiguration.getSyncNamedShadows().forEach(shadowName ->
+                    foundSyncShadowSet.add(new Pair<>(thingShadowSyncConfiguration.getThingName(), shadowName)));
             if (newThingName.equals(thingShadowSyncConfiguration.getThingName())) {
                 assertThat(thingShadowSyncConfiguration.getSyncNamedShadows(), is(Collections.singletonList("boo2")));
             } else {
                 fail("Encountered unknown thing in sync configurations list: " + thingShadowSyncConfiguration.getThingName());
             }
         });
+        assertThat(foundSyncShadowSet, is(equalTo(shadowManager.getSyncConfiguration().getSyncShadows())));
         verify(mockDao, times(2)).insertSyncInfoIfNotExists(any(SyncInformation.class));
 
     }

@@ -347,7 +347,7 @@ public class ShadowManager extends PluginService {
             final SyncContext syncContext = new SyncContext(dao, getUpdateThingShadowRequestHandler(),
                     getDeleteThingShadowRequestHandler(),
                     iotDataPlaneClientFactory);
-            syncHandler.start(syncContext, SyncHandler.DEFAULT_PARALLELISM);
+            syncHandler.start(syncContext, syncConfiguration.getSyncShadows(), SyncHandler.DEFAULT_PARALLELISM);
         }
     }
 }
