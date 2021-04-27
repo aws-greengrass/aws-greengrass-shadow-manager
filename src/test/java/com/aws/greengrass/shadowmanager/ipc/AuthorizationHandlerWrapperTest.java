@@ -9,6 +9,7 @@ import com.aws.greengrass.authorization.AuthorizationHandler;
 import com.aws.greengrass.authorization.Permission;
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
 import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
+import com.aws.greengrass.shadowmanager.ShadowManager;
 import com.aws.greengrass.shadowmanager.model.ShadowRequest;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import org.junit.jupiter.api.Test;
@@ -83,5 +84,15 @@ public class AuthorizationHandlerWrapperTest {
                 () -> authorizationHandlerWrapper.registerComponent(TEST_SERVICE, TEST_OPERATIONS_SET));
 
         assertThat(thrown.getMessage(), is(equalTo(SAMPLE_EXCEPTION_MESSAGE)));
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {SHADOW_NAME})
+    void GIVEN_shadow_manager_WHEN_perform_action_THEN_authorized(String shadowName)  {
+        AuthorizationHandlerWrapper authorizationHandlerWrapper = new AuthorizationHandlerWrapper(mockAuthorizationHandler);
+        ShadowRequest shadowRequest = new ShadowRequest(THING_NAME, shadowName);
+        assertDoesNotThrow(() -> authorizationHandlerWrapper.doAuthorization(OP_CODE, ShadowManager.SERVICE_NAME,
+                shadowRequest ));
     }
 }
