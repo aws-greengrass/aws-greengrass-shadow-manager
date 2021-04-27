@@ -41,6 +41,27 @@ import static com.aws.greengrass.shadowmanager.model.LogEvents.SYNC;
  */
 public class SyncHandler {
     private static final Logger logger = LogManager.getLogger(SyncHandler.class);
+
+    /**
+     * Configuration for retrying sync requests.
+     */
+    private static final RetryUtils.RetryConfig DEFAULT_RETRY_CONFIG =
+            RetryUtils.RetryConfig.builder()
+                    .maxAttempt(5)
+                    .initialRetryInterval(Duration.of(3, ChronoUnit.SECONDS))
+                    .maxRetryInterval(Duration.of(1, ChronoUnit.MINUTES))
+                    .retryableExceptions(Collections.singletonList(RetryableException.class)).build();
+    /**
+     * Configuration for retrying a sync request immediately after failing with the {@link #DEFAULT_RETRY_CONFIG}.
+     */
+    private static final RetryUtils.RetryConfig FAILED_RETRY_CONFIG =
+            RetryUtils.RetryConfig.builder()
+                    .maxAttempt(3)
+                    .initialRetryInterval(Duration.of(30, ChronoUnit.SECONDS))
+                    .maxRetryInterval(Duration.of(2, ChronoUnit.MINUTES))
+                    .retryableExceptions(Collections.singletonList(RetryableException.class))
+                    .build();
+
     private static final String SYNC_EVENT_TYPE = SYNC.code();
 
     /**
@@ -76,6 +97,7 @@ public class SyncHandler {
      * Context object containing handlers useful for sync requests.
      */
     private SyncContext context;
+
 
 
     /**
@@ -199,23 +221,11 @@ public class SyncHandler {
      */
     @SuppressWarnings({"PMD.CompareObjectsWithEquals", "PMD.AvoidCatchingGenericException"})
     private void syncLoop() {
-        RetryUtils.RetryConfig defaultConfig = RetryUtils.RetryConfig.builder()
-                .maxAttempt(5)
-                .initialRetryInterval(Duration.of(3, ChronoUnit.SECONDS))
-                .maxRetryInterval(Duration.of(1, ChronoUnit.MINUTES))
-                .retryableExceptions(Collections.singletonList(RetryableException.class))
-                .build();
         // if queue contains a single element that keeps failing, we don't want to retry at the initial rate
-        RetryUtils.RetryConfig failedRetryConfig = RetryUtils.RetryConfig.builder()
-                .maxAttempt(3)
-                .initialRetryInterval(Duration.of(30, ChronoUnit.SECONDS))
-                .maxRetryInterval(Duration.of(2, ChronoUnit.MINUTES))
-                .retryableExceptions(Collections.singletonList(RetryableException.class))
-                .build();
         logger.atInfo(SYNC_EVENT_TYPE).log("Start waiting for sync requests");
         try {
             SyncRequest request = syncQueue.take();
-            RetryUtils.RetryConfig retryConfig = defaultConfig;
+            RetryUtils.RetryConfig retryConfig = DEFAULT_RETRY_CONFIG;
             do {
                 try {
                     logger.atInfo(SYNC_EVENT_TYPE)
@@ -225,7 +235,7 @@ public class SyncHandler {
                             .log("Executing sync request");
 
                     retryer.run(retryConfig, request, context);
-                    retryConfig = defaultConfig; // reset the retry config back to default on successful execution
+                    retryConfig = DEFAULT_RETRY_CONFIG; // reset the retry config back to default after success
 
                     logger.atDebug(SYNC_EVENT_TYPE).log("Waiting for next sync request");
                     request = syncQueue.take();
@@ -244,7 +254,7 @@ public class SyncHandler {
                     // if queue was empty, we are going to immediately retrying the same request. For this case don't
                     // use the default retry configuration - keep from spamming too quickly
                     if (request == failedRequest) {
-                        retryConfig = failedRetryConfig;
+                        retryConfig = FAILED_RETRY_CONFIG;
                     }
                 } catch (InterruptedException e) {
                     logger.atWarn(SYNC_EVENT_TYPE).log("Interrupted while waiting for sync requests");
