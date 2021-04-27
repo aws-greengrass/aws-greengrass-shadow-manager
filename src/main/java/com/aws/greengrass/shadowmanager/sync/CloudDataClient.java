@@ -45,6 +45,7 @@ public class CloudDataClient {
     private final Set<String> subscribedUpdateShadowTopics = new HashSet<>();
     private final Set<String> subscribedDeleteShadowTopics = new HashSet<>();
     private final Pattern shadowPattern = Pattern.compile("\\$aws\\/things\\/(.*)\\/shadow(\\/name\\/(.*))?\\/");
+    // TODO: use ExecutorService for managing threads
     private Thread subscriberThread;
     private static final RetryUtils.RetryConfig RETRY_CONFIG = RetryUtils.RetryConfig.builder()
             .maxAttempt(Integer.MAX_VALUE)
