@@ -42,10 +42,12 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.Optional;
 
+import static com.aws.greengrass.shadowmanager.TestUtils.SAMPLE_EXCEPTION_MESSAGE;
 import static com.aws.greengrass.shadowmanager.TestUtils.SHADOW_NAME;
 import static com.aws.greengrass.shadowmanager.TestUtils.THING_NAME;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
@@ -127,7 +129,7 @@ class CloudUpdateSyncRequestTest {
     }
 
     @ParameterizedTest
-    @ValueSource(classes = {ConflictException.class, ThrottlingException.class, ServiceUnavailableException.class, InternalFailureException.class})
+    @ValueSource(classes = {ThrottlingException.class, ServiceUnavailableException.class, InternalFailureException.class})
     void GIVEN_bad_cloud_update_request_WHEN_execute_and_updateShadow_throws_retryable_error_THEN_does_not_update_cloud_shadow_and_sync_information(Class clazz, ExtensionContext context) throws IOException {
         ignoreExceptionOfType(context, clazz);
         ShadowDocument shadowDocument = new ShadowDocument(BASE_DOCUMENT);
@@ -137,6 +139,24 @@ class CloudUpdateSyncRequestTest {
 
         RetryableException thrown = assertThrows(RetryableException.class, request::execute);
         assertThat(thrown.getCause(), is(instanceOf(clazz)));
+
+        verify(mockClientFactory, times(1)).getIotDataPlaneClient();
+        verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
+        verify(mockDao, times(0)).updateSyncInformation(any());
+        verify(mockIotDataPlaneClient, times(1)).updateThingShadow(any(UpdateThingShadowRequest.class));
+    }
+
+    @Test
+    void GIVEN_bad_cloud_update_request_WHEN_execute_and_updateShadow_throws_conflict_exception_THEN_does_not_update_cloud_shadow_and_sync_information(ExtensionContext context) throws IOException {
+        ignoreExceptionOfType(context, ConflictException.class);
+        ShadowDocument shadowDocument = new ShadowDocument(BASE_DOCUMENT);
+        when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.of(shadowDocument));
+        when(mockIotDataPlaneClient.updateThingShadow(any(UpdateThingShadowRequest.class)))
+                .thenThrow(ConflictException.builder().message(SAMPLE_EXCEPTION_MESSAGE).build());
+        CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, baseDocumentJson, mockDao, mockClientFactory);
+
+        ConflictException thrown = assertThrows(ConflictException.class, request::execute);
+        assertThat(thrown.getMessage(), is(equalTo(SAMPLE_EXCEPTION_MESSAGE)));
 
         verify(mockClientFactory, times(1)).getIotDataPlaneClient();
         verify(mockDao, times(1)).getShadowThing(anyString(), anyString());

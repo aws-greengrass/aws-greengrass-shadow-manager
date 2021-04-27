@@ -1,0 +1,21 @@
+{
+  "state": {
+    "desired": {
+      "color": {
+        "r": 255,
+        "g": 255,
+        "b": 255
+      },
+      "SomeKey": "SomeValue"
+    },
+    "reported": {
+      "color": {
+        "r": 255,
+        "g": 255,
+        "b": 255
+      },
+      "SomeKey": "SomeValue"
+    }
+  },
+  "version": 2
+}

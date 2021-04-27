@@ -10,6 +10,7 @@ import com.aws.greengrass.shadowmanager.ipc.model.PubSubRequest;
 import com.aws.greengrass.shadowmanager.model.Constants;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.ShadowRequest;
+import com.aws.greengrass.shadowmanager.model.UpdateThingShadowHandlerResponse;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
@@ -91,6 +92,9 @@ class UpdateThingShadowRequestHandlerTest {
     private final static String GOOD_UPDATE_DOCUMENT_WITH_SAME_DESIRED_AND_REPORTED_FILE_NAME = "good_update_document_with_same_reported_and_desired.json";
     private final static String GOOD_UPDATE_DOCUMENT_WITH_REPORTED_REQUEST_FILE_NAME = "good_update_document_with_reported.json";
     private final static String GOOD_UPDATED_DOCUMENT_FILE_NAME = "good_new_document.json";
+    private final static String GOOD_UPDATED_DOCUMENT_WITH_REPORTED_FILE_NAME = "good_new_document_with_updated_reported.json";
+    private final static String GOOD_UPDATED_DOCUMENT_WITH_SAME_DESIRED_AND_REPORTED_FILE_NAME = "good_new_document_with_same_reported_and_desired.json";
+    private final static String GOOD_UPDATED_DOCUMENT_WITH_DESIRED_FILE_NAME = "good_new_document_with_desired.json";
     private final static String GOOD_DOCUMENTS_PAYLOAD_FILE_NAME = "good_documents_payload.json";
     private final static String GOOD_DOCUMENTS_PAYLOAD_WITH_NO_PREVIOUS_FILE_NAME = "good_documents_payload_with_no_previous.json";
     private final static String GOOD_DELTA_FILE_NAME = "good_delta_node.json";
@@ -157,16 +161,22 @@ class UpdateThingShadowRequestHandlerTest {
         when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(new ShadowDocument(initialDocument)));
         when(mockDao.updateShadowThing(any(), any(), any(), anyLong())).thenReturn(Optional.of(updateDocument));
 
-        UpdateThingShadowResponse actualResponse = updateThingShadowIPCHandler.handleRequest(request, TEST_SERVICE);
-        Optional<JsonNode> updatedDocumentJson = JsonUtil.getPayloadJson(actualResponse.getPayload());
+        UpdateThingShadowHandlerResponse actualResponse = updateThingShadowIPCHandler.handleRequest(request, TEST_SERVICE);
+        Optional<JsonNode> updatedDocumentJson = JsonUtil.getPayloadJson(actualResponse.getUpdateThingShadowResponse().getPayload());
         assertThat("Retrieved updateDocumentJson", updatedDocumentJson.isPresent(), is(true));
         assertAndRemoveTsAndMetadata(updatedDocumentJson.get());
+        Optional<JsonNode> currentDocumentJson = JsonUtil.getPayloadJson(actualResponse.getCurrentDocument());
+        assertAndRemoveMetadata(currentDocumentJson.get());
 
         Optional<JsonNode> expectedAcceptedJson = JsonUtil.getPayloadJson(updateRequest);
         assertThat("Retrieved expectedAcceptedJson", expectedAcceptedJson.isPresent(), is(true));
         ((ObjectNode) expectedAcceptedJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(2));
-
         assertThat(updatedDocumentJson.get(), is(equalTo(expectedAcceptedJson.get())));
+
+        Optional<JsonNode> expectedUpdateDocument = JsonUtil.getPayloadJson(updateDocument);
+        assertThat("Retrieved expectedUpdateDocument", expectedUpdateDocument.isPresent(), is(true));
+        ((ObjectNode) currentDocumentJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(2));
+        assertThat(currentDocumentJson.get(), is(equalTo(expectedUpdateDocument.get())));
 
         verify(mockPubSubClientWrapper, times(1)).accept(pubSubRequestCaptor.capture());
         verify(mockPubSubClientWrapper, times(1)).delta(pubSubRequestCaptor.capture());
@@ -214,7 +224,7 @@ class UpdateThingShadowRequestHandlerTest {
     void GIVEN_update_thing_shadow_request_with_reported_and_existing_shadow_WHEN_handle_request_THEN_update_thing_shadow(String shadowName) throws IOException, URISyntaxException {
         byte[] initialDocument = getJsonFromResource(RESOURCE_DIRECTORY_NAME + GOOD_INITIAL_DOCUMENT_FILE_NAME);
         byte[] updateRequest = getJsonFromResource(RESOURCE_DIRECTORY_NAME + GOOD_UPDATE_DOCUMENT_WITH_REPORTED_REQUEST_FILE_NAME);
-        byte[] updateDocument = getJsonFromResource(RESOURCE_DIRECTORY_NAME + GOOD_UPDATED_DOCUMENT_FILE_NAME);
+        byte[] updateDocument = getJsonFromResource(RESOURCE_DIRECTORY_NAME + GOOD_UPDATED_DOCUMENT_WITH_REPORTED_FILE_NAME);
         byte[] documentsPayload = getJsonFromResource(RESOURCE_DIRECTORY_NAME + "good_documents_payload_with_reported_updated.json");
         byte[] deltaPayload = getJsonFromResource(RESOURCE_DIRECTORY_NAME + GOOD_DELTA_FILE_NAME);
         UpdateThingShadowRequest request = new UpdateThingShadowRequest();
@@ -229,16 +239,22 @@ class UpdateThingShadowRequestHandlerTest {
         when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(new ShadowDocument(initialDocument)));
         when(mockDao.updateShadowThing(any(), any(), any(), anyLong())).thenReturn(Optional.of(updateDocument));
 
-        UpdateThingShadowResponse actualResponse = updateThingShadowIPCHandler.handleRequest(request, TEST_SERVICE);
-        Optional<JsonNode> updatedDocumentJson = JsonUtil.getPayloadJson(actualResponse.getPayload());
+        UpdateThingShadowHandlerResponse actualResponse = updateThingShadowIPCHandler.handleRequest(request, TEST_SERVICE);
+        Optional<JsonNode> updatedDocumentJson = JsonUtil.getPayloadJson(actualResponse.getUpdateThingShadowResponse().getPayload());
         assertThat("Retrieved updateDocumentJson", updatedDocumentJson.isPresent(), is(true));
         assertAndRemoveTsAndMetadata(updatedDocumentJson.get());
+        Optional<JsonNode> currentDocumentJson = JsonUtil.getPayloadJson(actualResponse.getCurrentDocument());
+        assertAndRemoveMetadata(currentDocumentJson.get());
 
         Optional<JsonNode> expectedAcceptedJson = JsonUtil.getPayloadJson(updateRequest);
         assertThat("Retrieved expectedAcceptedJson", expectedAcceptedJson.isPresent(), is(true));
         ((ObjectNode) expectedAcceptedJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(2));
-
         assertThat(updatedDocumentJson.get(), is(equalTo(expectedAcceptedJson.get())));
+
+        Optional<JsonNode> expectedUpdateDocument = JsonUtil.getPayloadJson(updateDocument);
+        assertThat("Retrieved expectedUpdateDocument", expectedUpdateDocument.isPresent(), is(true));
+        ((ObjectNode) currentDocumentJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(2));
+        assertThat(currentDocumentJson.get(), is(equalTo(expectedUpdateDocument.get())));
 
         verify(mockPubSubClientWrapper, times(1)).accept(pubSubRequestCaptor.capture());
         verify(mockPubSubClientWrapper, times(0)).delta(pubSubRequestCaptor.capture());
@@ -284,7 +300,7 @@ class UpdateThingShadowRequestHandlerTest {
     void GIVEN_update_thing_shadow_request_with_same_desired_and_reported_and_existing_shadow_WHEN_handle_request_THEN_update_thing_shadow(String shadowName) throws IOException, URISyntaxException {
         byte[] initialDocument = getJsonFromResource(RESOURCE_DIRECTORY_NAME + GOOD_INITIAL_DOCUMENT_FILE_NAME);
         byte[] updateRequest = getJsonFromResource(RESOURCE_DIRECTORY_NAME + GOOD_UPDATE_DOCUMENT_WITH_SAME_DESIRED_AND_REPORTED_FILE_NAME);
-        byte[] updateDocument = getJsonFromResource(RESOURCE_DIRECTORY_NAME + GOOD_UPDATED_DOCUMENT_FILE_NAME);
+        byte[] updateDocument = getJsonFromResource(RESOURCE_DIRECTORY_NAME + GOOD_UPDATED_DOCUMENT_WITH_SAME_DESIRED_AND_REPORTED_FILE_NAME);
         byte[] documentsPayload = getJsonFromResource(RESOURCE_DIRECTORY_NAME + "good_documents_payload_with_same_desired_and_reported.json");
         byte[] deltaPayload = getJsonFromResource(RESOURCE_DIRECTORY_NAME + GOOD_DELTA_FILE_NAME);
         UpdateThingShadowRequest request = new UpdateThingShadowRequest();
@@ -299,16 +315,22 @@ class UpdateThingShadowRequestHandlerTest {
         when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(new ShadowDocument(initialDocument)));
         when(mockDao.updateShadowThing(any(), any(), any(), anyLong())).thenReturn(Optional.of(updateDocument));
 
-        UpdateThingShadowResponse actualResponse = updateThingShadowIPCHandler.handleRequest(request, TEST_SERVICE);
-        Optional<JsonNode> updatedDocumentJson = JsonUtil.getPayloadJson(actualResponse.getPayload());
+        UpdateThingShadowHandlerResponse actualResponse = updateThingShadowIPCHandler.handleRequest(request, TEST_SERVICE);
+        Optional<JsonNode> updatedDocumentJson = JsonUtil.getPayloadJson(actualResponse.getUpdateThingShadowResponse().getPayload());
         assertThat("Retrieved updateDocumentJson", updatedDocumentJson.isPresent(), is(true));
         assertAndRemoveTsAndMetadata(updatedDocumentJson.get());
+        Optional<JsonNode> currentDocumentJson = JsonUtil.getPayloadJson(actualResponse.getCurrentDocument());
+        assertAndRemoveMetadata(currentDocumentJson.get());
 
         Optional<JsonNode> expectedAcceptedJson = JsonUtil.getPayloadJson(updateRequest);
         assertThat("Retrieved expectedAcceptedJson", expectedAcceptedJson.isPresent(), is(true));
         ((ObjectNode) expectedAcceptedJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(2));
-
         assertThat(updatedDocumentJson.get(), is(equalTo(expectedAcceptedJson.get())));
+
+        Optional<JsonNode> expectedUpdateDocument = JsonUtil.getPayloadJson(updateDocument);
+        assertThat("Retrieved expectedUpdateDocument", expectedUpdateDocument.isPresent(), is(true));
+        ((ObjectNode) currentDocumentJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(2));
+        assertThat(currentDocumentJson.get(), is(equalTo(expectedUpdateDocument.get())));
 
         verify(mockPubSubClientWrapper, times(1)).accept(pubSubRequestCaptor.capture());
         verify(mockPubSubClientWrapper, times(0)).delta(pubSubRequestCaptor.capture());
@@ -376,10 +398,17 @@ class UpdateThingShadowRequestHandlerTest {
         when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(new ShadowDocument(initialDocument)));
         when(mockDao.updateShadowThing(any(), any(), any(), anyLong())).thenReturn(Optional.of(updateDocument));
 
-        UpdateThingShadowResponse actualResponse = updateThingShadowIPCHandler.handleRequest(request, TEST_SERVICE);
-        Optional<JsonNode> updatedDocumentJson = JsonUtil.getPayloadJson(actualResponse.getPayload());
+        UpdateThingShadowHandlerResponse actualResponse = updateThingShadowIPCHandler.handleRequest(request, TEST_SERVICE);
+        Optional<JsonNode> updatedDocumentJson = JsonUtil.getPayloadJson(actualResponse.getUpdateThingShadowResponse().getPayload());
         assertThat("Retrieved updatedDocumentJson", updatedDocumentJson.isPresent(), is(true));
         assertAndRemoveTsAndMetadata(updatedDocumentJson.get());
+        Optional<JsonNode> currentDocumentJson = JsonUtil.getPayloadJson(actualResponse.getCurrentDocument());
+        assertAndRemoveMetadata(currentDocumentJson.get());
+
+        Optional<JsonNode> expectedUpdateDocument = JsonUtil.getPayloadJson(updateDocument);
+        assertThat("Retrieved expectedUpdateDocument", expectedUpdateDocument.isPresent(), is(true));
+        ((ObjectNode) currentDocumentJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(2));
+        assertThat(currentDocumentJson.get(), is(equalTo(expectedUpdateDocument.get())));
 
         assertThat(updatedDocumentJson.get(), is(equalTo(expectedAcceptedJson.get())));
 
@@ -425,7 +454,7 @@ class UpdateThingShadowRequestHandlerTest {
         JsonNode payloadJson = JsonUtil.getPayloadJson(updateRequest).get();
         ((ObjectNode) payloadJson).remove(SHADOW_DOCUMENT_VERSION);
         updateRequest = JsonUtil.getPayloadBytes(payloadJson);
-        byte[] updateDocument = getJsonFromResource(RESOURCE_DIRECTORY_NAME + GOOD_UPDATED_DOCUMENT_FILE_NAME);
+        byte[] updateDocument = getJsonFromResource(RESOURCE_DIRECTORY_NAME + GOOD_UPDATED_DOCUMENT_WITH_DESIRED_FILE_NAME);
         byte[] documentsPayload = getJsonFromResource(RESOURCE_DIRECTORY_NAME + GOOD_DOCUMENTS_PAYLOAD_WITH_NO_PREVIOUS_FILE_NAME);
         byte[] deltaPayload = getJsonFromResource(RESOURCE_DIRECTORY_NAME + GOOD_DELTA_FILE_NAME);
         UpdateThingShadowRequest request = new UpdateThingShadowRequest();
@@ -440,16 +469,22 @@ class UpdateThingShadowRequestHandlerTest {
         when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.empty());
         when(mockDao.updateShadowThing(any(), any(), any(), anyLong())).thenReturn(Optional.of(updateDocument));
 
-        UpdateThingShadowResponse actualResponse = updateThingShadowIPCHandler.handleRequest(request, TEST_SERVICE);
-        Optional<JsonNode> updatedDocumentJson = JsonUtil.getPayloadJson(actualResponse.getPayload());
+        UpdateThingShadowHandlerResponse actualResponse = updateThingShadowIPCHandler.handleRequest(request, TEST_SERVICE);
+        Optional<JsonNode> updatedDocumentJson = JsonUtil.getPayloadJson(actualResponse.getUpdateThingShadowResponse().getPayload());
         assertTrue(updatedDocumentJson.isPresent());
         assertAndRemoveTsAndMetadata(updatedDocumentJson.get());
+        Optional<JsonNode> currentDocumentJson = JsonUtil.getPayloadJson(actualResponse.getCurrentDocument());
+        assertAndRemoveMetadata(currentDocumentJson.get());
 
         Optional<JsonNode> expectedAcceptedJson = JsonUtil.getPayloadJson(updateRequest);
         assertTrue(expectedAcceptedJson.isPresent());
         ((ObjectNode) expectedAcceptedJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(1));
-
         assertThat(updatedDocumentJson.get(), is(expectedAcceptedJson.get()));
+
+        Optional<JsonNode> expectedUpdateDocument = JsonUtil.getPayloadJson(updateDocument);
+        assertThat("Retrieved expectedUpdateDocument", expectedUpdateDocument.isPresent(), is(true));
+        ((ObjectNode) currentDocumentJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(2));
+        assertThat(currentDocumentJson.get(), is(equalTo(expectedUpdateDocument.get())));
 
         verify(mockPubSubClientWrapper, times(1)).accept(pubSubRequestCaptor.capture());
         verify(mockPubSubClientWrapper, times(1)).delta(pubSubRequestCaptor.capture());

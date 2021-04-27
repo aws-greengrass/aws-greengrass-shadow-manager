@@ -46,6 +46,7 @@ import software.amazon.awssdk.eventstreamrpc.EventStreamRPCConnection;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
@@ -72,6 +73,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.anyOf;
 import static org.hamcrest.Matchers.arrayContaining;
+import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
@@ -563,6 +565,43 @@ class ShadowIPCTest {
 
     @Test
     @Order(9)
+    void GIVEN_shadow_client_list_request_with_page_size_WHEN_list_thing_shadow_THEN_correctly_gets_shadow_with_token() throws Exception {
+        try(EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
+            GreengrassCoreIPCClient ipcClient = new GreengrassCoreIPCClient(connection);
+            int pageSize = 1;
+
+            ListNamedShadowsForThingRequest request = new ListNamedShadowsForThingRequest();
+            request.setThingName(MOCK_THING_NAME);
+            request.setPageSize(pageSize);
+
+            ListNamedShadowsForThingResponse response = ipcClient.listNamedShadowsForThing(request, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS);
+            List<String> shadowNameResults = response.getResults();
+            assertThat(shadowNameResults.toArray(), arrayContaining(SHADOW_NAME_1));
+            assertThat(shadowNameResults.size(), is(equalTo(1)));
+            assertThat(response.getNextToken(), is(notNullValue()));
+            assertThat(response.getNextToken(), is("hh5oROXTiAG1Zw1yPAV+gg=="));
+        }
+    }
+
+    @Test
+    @Order(10)
+    void GIVEN_shadow_client_list_request_with_token_and_only_one_shadow_name_WHEN_list_thing_shadow_THEN_return_empty_list() throws Exception {
+        try(EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
+            GreengrassCoreIPCClient ipcClient = new GreengrassCoreIPCClient(connection);
+
+            ListNamedShadowsForThingRequest request = new ListNamedShadowsForThingRequest();
+            request.setThingName(MOCK_THING_NAME);
+            request.setNextToken("hh5oROXTiAG1Zw1yPAV+gg==");
+
+            ListNamedShadowsForThingResponse response = ipcClient.listNamedShadowsForThing(request, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS);
+            List<String> shadowNameResults = response.getResults();
+            assertThat(shadowNameResults.toArray(), is(notNullValue()));
+            assertThat(shadowNameResults.size(), is(equalTo(0)));
+        }
+    }
+
+    @Test
+    @Order(11)
     void GIVEN_shadow_client_WHEN_subscribed_to_accept_and_delete_shadow_THEN_correctly_deletes_shadow() throws Exception {
         try(EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
             final long currentEpochSeconds = Instant.now().getEpochSecond();
@@ -595,7 +634,7 @@ class ShadowIPCTest {
     }
 
     @Test
-    @Order(10)
+    @Order(12)
     void GIVEN_shadow_client_WHEN_get_shadow_with_deleted_shadow_and_subscribed_to_rejected_THEN_fails_and_receives_correct_message_over_pubsub(ExtensionContext context) throws Exception {
         try(EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
             ignoreExceptionUltimateCauseOfType(context, InvalidRequestParametersException.class);

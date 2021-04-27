@@ -12,6 +12,7 @@ import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
+import com.aws.greengrass.shadowmanager.model.UpdateThingShadowHandlerResponse;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientFactory;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
@@ -136,7 +137,7 @@ class FullShadowSyncRequestTest {
                 .lastSyncTime(epochSecondsMinus60)
                 .build()));
         when(mockUpdateThingShadowRequestHandler.handleRequest(localUpdateThingShadowRequestCaptor.capture(), anyString())).
-                thenReturn(mock(software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowResponse.class));
+                thenReturn(mock(UpdateThingShadowHandlerResponse.class));
         when(mockIotDataPlaneClient.updateThingShadow(cloudUpdateThingShadowRequestCaptor.capture())).thenReturn(mock(UpdateThingShadowResponse.class));
 
         FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME, mockDao, mockUpdateThingShadowRequestHandler, mockDeleteThingShadowRequestHandler, mockClientFactory);
@@ -321,7 +322,7 @@ class FullShadowSyncRequestTest {
                 .lastSyncTime(Instant.EPOCH.getEpochSecond())
                 .build()));
         when(mockUpdateThingShadowRequestHandler.handleRequest(localUpdateThingShadowRequestCaptor.capture(), anyString())).
-                thenReturn(mock(software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowResponse.class));
+                thenReturn(mock(UpdateThingShadowHandlerResponse.class));
 
         FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME, mockDao, mockUpdateThingShadowRequestHandler, mockDeleteThingShadowRequestHandler, mockClientFactory);
         fullShadowSyncRequest.execute();
@@ -671,7 +672,7 @@ class FullShadowSyncRequestTest {
                 .lastSyncTime(epochSecondsMinus60)
                 .build()));
         when(mockUpdateThingShadowRequestHandler.handleRequest(localUpdateThingShadowRequestCaptor.capture(), anyString())).
-                thenReturn(mock(software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowResponse.class));
+                thenReturn(mock(UpdateThingShadowHandlerResponse.class));
         when(mockIotDataPlaneClient.updateThingShadow(cloudUpdateThingShadowRequestCaptor.capture())).thenThrow(clazz);
 
         FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME, mockDao, mockUpdateThingShadowRequestHandler, mockDeleteThingShadowRequestHandler, mockClientFactory);
@@ -723,7 +724,7 @@ class FullShadowSyncRequestTest {
                 .lastSyncTime(epochSecondsMinus60)
                 .build()));
         when(mockUpdateThingShadowRequestHandler.handleRequest(localUpdateThingShadowRequestCaptor.capture(), anyString())).
-                thenReturn(mock(software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowResponse.class));
+                thenReturn(mock(UpdateThingShadowHandlerResponse.class));
         when(mockIotDataPlaneClient.updateThingShadow(cloudUpdateThingShadowRequestCaptor.capture())).thenThrow(ConflictException.class);
 
         FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME, mockDao, mockUpdateThingShadowRequestHandler, mockDeleteThingShadowRequestHandler, mockClientFactory);
@@ -818,7 +819,7 @@ class FullShadowSyncRequestTest {
                 .lastSyncTime(epochSecondsMinus60)
                 .build()));
         when(mockUpdateThingShadowRequestHandler.handleRequest(localUpdateThingShadowRequestCaptor.capture(), anyString())).
-                thenReturn(mock(software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowResponse.class));
+                thenReturn(mock(UpdateThingShadowHandlerResponse.class));
         when(mockIotDataPlaneClient.updateThingShadow(cloudUpdateThingShadowRequestCaptor.capture())).thenThrow(clazz);
 
         FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME, mockDao, mockUpdateThingShadowRequestHandler, mockDeleteThingShadowRequestHandler, mockClientFactory);
