@@ -22,10 +22,10 @@ public interface SyncRequest {
     /**
      * Executes sync request.
      *
-     * @throws SyncException            When error occurs in sync operation.
+     * @throws SyncException            When error occurs in sync operation
      * @throws RetryableException       When error occurs in sync operation indicating a request needs to be retried
      * @throws SkipSyncRequestException When error occurs in sync operation indicating a request needs to be skipped.
-     * @throws UnknownShadowException   When error occurs in sync operation where shadow was not found in sync table.
+     * @throws UnknownShadowException   When shadow not found in the sync table.
      */
     void execute() throws SyncException, RetryableException, SkipSyncRequestException, UnknownShadowException;
 }

@@ -269,7 +269,7 @@ public class CloudDataClient {
         ShadowRequest shadowRequest = extractShadowFromTopic(topic);
         String thingName = shadowRequest.getThingName();
         String shadowName = shadowRequest.getShadowName();
-        syncHandler.pushLocalDeleteSyncRequest(thingName, shadowName);
+        syncHandler.pushLocalDeleteSyncRequest(thingName, shadowName, message.getPayload());
     }
 
     /**
