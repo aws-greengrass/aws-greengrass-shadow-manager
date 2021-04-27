@@ -48,10 +48,14 @@
     </repositories>
     <pluginRepositories>
         <pluginRepository>
-            <id>maven-snapshots</id>
-            <name>Maven snapshots</name>
-            <layout>default</layout>
-            <url>https://repository.apache.org/content/repositories/snapshots/</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+            <id>central</id>
+            <url>https://repo1.maven.org/maven2</url>
         </pluginRepository>
         <pluginRepository>
             <id>yle-public</id>
@@ -469,6 +473,13 @@
             </plugin>
         </plugins>
     </build>
+    <distributionManagement>
+        <snapshotRepository>
+            <id>greengrass-dev-snapshot</id>
+            <name>greengrass Dev Snapshot</name>
+            <url>${dev-snapshot-repository-url}</url>
+        </snapshotRepository>
+    </distributionManagement>
     <dependencies>
         <dependency>
             <groupId>com.aws.greengrass</groupId>
