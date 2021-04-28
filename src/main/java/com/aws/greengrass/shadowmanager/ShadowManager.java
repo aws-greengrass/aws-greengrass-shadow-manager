@@ -327,10 +327,8 @@ public class ShadowManager extends PluginService {
         try {
             reportState(State.RUNNING);
 
-            if (mqttClient.connected()) {
-                startSyncHandler();
-                cloudDataClient.updateSubscriptions(syncConfiguration.getSyncShadows());
-            }
+            startSyncHandler();
+            cloudDataClient.updateSubscriptions(syncConfiguration.getSyncShadows());
         } catch (Exception e) {
             serviceErrored(e);
         }
@@ -352,7 +350,7 @@ public class ShadowManager extends PluginService {
     }
 
     private void startSyncHandler() {
-        if (!syncConfiguration.getSyncConfigurationList().isEmpty()) {
+        if (mqttClient.connected() && !syncConfiguration.getSyncConfigurationList().isEmpty()) {
             final SyncContext syncContext = new SyncContext(dao, getUpdateThingShadowRequestHandler(),
                     getDeleteThingShadowRequestHandler(),
                     iotDataPlaneClientFactory);
