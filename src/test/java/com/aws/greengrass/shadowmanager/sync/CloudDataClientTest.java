@@ -24,6 +24,7 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -136,13 +137,13 @@ public class CloudDataClientTest {
     }
 
     @Test
-    void GIVEN_existing_shadows_and_update_with_new_set_WHEN_clear_subscriptions_THEN_subscriptions_cleared(ExtensionContext context) throws InterruptedException, TimeoutException, ExecutionException {
+    void GIVEN_existing_shadows_and_update_with_no_shadows_WHEN_update_subscriptions_THEN_subscriptions_cleared(ExtensionContext context) throws InterruptedException, TimeoutException, ExecutionException {
         ignoreExceptionOfType(context, InterruptedException.class);
         CloudDataClient cloudDataClient = new CloudDataClient(mockSyncHandler, mockMqttClient);
         cloudDataClient.updateSubscriptions(SHADOW_SET);
         Thread.sleep(2000);
 
-        cloudDataClient.clearSubscriptions();
+        cloudDataClient.updateSubscriptions(Collections.emptySet());
         Thread.sleep(2000);
 
         verify(mockMqttClient, times(6)).subscribe(any(SubscribeRequest.class));
@@ -150,11 +151,11 @@ public class CloudDataClientTest {
     }
 
     @Test
-    void GIVEN_no_shadows_WHEN_clear_subscriptions_THEN_do_nothing(ExtensionContext context) throws InterruptedException, TimeoutException, ExecutionException {
+    void GIVEN_no_shadows_and_update_with_no_shadows_WHEN_update_subscriptions_THEN_do_nothing(ExtensionContext context) throws InterruptedException, TimeoutException, ExecutionException {
         ignoreExceptionOfType(context, InterruptedException.class);
         CloudDataClient cloudDataClient = new CloudDataClient(mockSyncHandler, mockMqttClient);
 
-        cloudDataClient.clearSubscriptions();
+        cloudDataClient.updateSubscriptions(Collections.emptySet());
         Thread.sleep(2000);
 
         verify(mockMqttClient, times(0)).subscribe(any(SubscribeRequest.class));
@@ -168,7 +169,7 @@ public class CloudDataClientTest {
 
         lenient().doReturn(false).when(mockMqttClient).connected();
 
-        cloudDataClient.clearSubscriptions();
+        cloudDataClient.updateSubscriptions(Collections.emptySet());
         cloudDataClient.updateSubscriptions(SHADOW_SET);
         Thread.sleep(2000);
 
@@ -190,7 +191,7 @@ public class CloudDataClientTest {
     }
 
     @Test
-    void GIVEN_interrupt_called_during_unsubscribe_WHEN_clear_subscriptions_THEN_exception_handled(ExtensionContext context) throws InterruptedException, TimeoutException, ExecutionException {
+    void GIVEN_interrupt_called_during_unsubscribe_WHEN_update_subscriptions_THEN_exception_handled(ExtensionContext context) throws InterruptedException, TimeoutException, ExecutionException {
         ignoreExceptionOfType(context, InterruptedException.class);
         doThrow(InterruptedException.class).when(mockMqttClient).unsubscribe(any(UnsubscribeRequest.class));
 
@@ -198,7 +199,7 @@ public class CloudDataClientTest {
         assertDoesNotThrow(() -> cloudDataClient.updateSubscriptions(SHADOW_SET));
         Thread.sleep(2000);
 
-        assertDoesNotThrow(cloudDataClient::clearSubscriptions);
+        assertDoesNotThrow(() -> cloudDataClient.updateSubscriptions(Collections.emptySet()));
         Thread.sleep(2000);
 
         verify(mockMqttClient, times(6)).subscribe(any(SubscribeRequest.class));
@@ -217,7 +218,7 @@ public class CloudDataClientTest {
         cloudDataClient.updateSubscriptions(SHADOW_SET);
         Thread.sleep(5000);
 
-        cloudDataClient.stop();
+        cloudDataClient.stopSubscribing();
 
         // expects that subscription call should be greater than 8 (expected without issues)
         verify(mockMqttClient, atLeast(9)).subscribe(any(SubscribeRequest.class));
@@ -226,7 +227,7 @@ public class CloudDataClientTest {
 
     @ParameterizedTest
     @ValueSource(classes = {TimeoutException.class, ExecutionException.class})
-    void GIVEN_poison_pill_unsubscription_WHEN_clear_subscriptions_THEN_does_not_end_until_stop_called(Class clazz, ExtensionContext context) throws InterruptedException, TimeoutException, ExecutionException {
+    void GIVEN_poison_pill_unsubscription_WHEN_update_subscriptions_THEN_does_not_end_until_stop_called(Class clazz, ExtensionContext context) throws InterruptedException, TimeoutException, ExecutionException {
         ignoreExceptionOfType(context, InterruptedException.class);
         ignoreExceptionOfType(context, SubscriptionRetryException.class);
         ignoreExceptionOfType(context, clazz);
@@ -237,10 +238,10 @@ public class CloudDataClientTest {
         cloudDataClient.updateSubscriptions(SHADOW_SET);
         Thread.sleep(2000);
 
-        cloudDataClient.clearSubscriptions();
+        cloudDataClient.updateSubscriptions(Collections.emptySet());
         Thread.sleep(5000);
 
-        cloudDataClient.stop();
+        cloudDataClient.stopSubscribing();
 
         // expects that unsubscription call should be greater than 8 (expected without issues)
         verify(mockMqttClient, times(6)).subscribe(any(SubscribeRequest.class));
