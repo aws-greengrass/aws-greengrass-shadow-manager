@@ -247,6 +247,7 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
                 .kv(LOG_SHADOW_NAME_KEY, getShadowName())
                 .kv(LOG_CLOUD_VERSION_KEY, cloudShadowDocument.getVersion())
                 .log("Syncing local shadow for the first time");
+
         ObjectNode updateDocument = (ObjectNode) cloudShadowDocument.toJson(false);
         long localDocumentVersion = updateLocalDocumentAndGetUpdatedVersion(updateDocument, Optional.empty());
         updateSyncInformation(updateDocument, localDocumentVersion, cloudShadowDocument.getVersion());

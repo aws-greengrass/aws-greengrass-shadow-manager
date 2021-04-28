@@ -11,6 +11,7 @@ import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowRequestHandler;
+import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.UpdateThingShadowHandlerResponse;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientFactory;
@@ -54,6 +55,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -319,5 +321,16 @@ public class LocalUpdateSyncRequestTest {
         verify(mockDao, times(0)).updateSyncInformation(any());
     }
 
+    @Test
+    void GIVEN_no_change_WHEN_execute_THEN_does_not_update_local_shadow_and_sync_information() throws IOException {
+        ShadowDocument shadowDocument = new ShadowDocument(UPDATE_DOCUMENT);
+        when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(shadowDocument));
 
+        LocalUpdateSyncRequest request = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, UPDATE_DOCUMENT);
+
+        assertDoesNotThrow(() -> request.execute(syncContext));
+
+        verify(mockDao, never()).updateSyncInformation(any());
+        verify(mockUpdateThingShadowRequestHandler, never()).handleRequest(any(), any());
+    }
 }
