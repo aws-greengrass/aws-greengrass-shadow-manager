@@ -7,11 +7,11 @@ package com.aws.greengrass.shadowmanager.sync.model;
 
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
-import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.exception.SyncException;
+import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.util.JsonMerger;
@@ -76,11 +76,12 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
      * @throws ConflictException        if cloud version is not the same as the version in the cloud.
      * @throws RetryableException       if the cloud is throttling the request or some other transient issue.
      * @throws SkipSyncRequestException if the update request on the cloud shadow failed for another 400 exception.
+     * @throws UnknownShadowException   if the shadow sync information is missing
      */
     @SuppressWarnings("PMD.PrematureDeclaration")
     @Override
     public void execute(SyncContext context) throws SyncException, RetryableException, SkipSyncRequestException,
-            ConflictException {
+            ConflictException, UnknownShadowException {
         Optional<ShadowDocument> shadowDocument = context.getDao().getShadowThing(getThingName(), getShadowName());
 
         if (!shadowDocument.isPresent()) {
@@ -90,7 +91,20 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
                     .log("Unable to sync shadow since shadow does not exist");
             return;
         }
-        long cloudVersion = getAndUpdateCloudVersionInRequest(context.getDao());
+
+        SyncInformation currentSyncInformation = context.getDao()
+                .getShadowSyncInformation(getThingName(), getShadowName())
+                .orElseThrow(() -> new UnknownShadowException("Shadow not found in sync table"));
+
+        if (!isUpdateNecessary(currentSyncInformation.getLastSyncedDocument(), updateDocument)) {
+            logger.atWarn()
+                    .kv(LOG_THING_NAME_KEY, getThingName())
+                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                    .log("Cloud shadow already contains update payload. No sync is necessary");
+            return;
+        }
+
+        long cloudVersion = getAndUpdateCloudVersionInRequest(currentSyncInformation);
 
         try {
             context.getIotDataPlaneClientFactory().getIotDataPlaneClient()
@@ -124,14 +138,8 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
         }
     }
 
-    private long getAndUpdateCloudVersionInRequest(ShadowManagerDAO dao) {
-        long cloudVersion = 0;
-        Optional<SyncInformation> syncInformation = dao.getShadowSyncInformation(getThingName(), getShadowName());
-
-        // If the sync information is correct
-        if (syncInformation.isPresent()) {
-            cloudVersion = syncInformation.get().getCloudVersion();
-        }
+    private long getAndUpdateCloudVersionInRequest(SyncInformation syncInformation) {
+        long cloudVersion = syncInformation.getCloudVersion();
         ((ObjectNode) updateDocument).set(SHADOW_DOCUMENT_VERSION, new LongNode(cloudVersion));
 
         return cloudVersion;

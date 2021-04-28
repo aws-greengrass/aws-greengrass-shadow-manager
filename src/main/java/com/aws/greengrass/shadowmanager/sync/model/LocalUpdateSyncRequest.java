@@ -5,6 +5,8 @@
 
 package com.aws.greengrass.shadowmanager.sync.model;
 
+import com.aws.greengrass.logging.api.Logger;
+import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.exception.SyncException;
@@ -26,6 +28,8 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.Optional;
 
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_VERSION;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_MANAGER_NAME;
 
@@ -33,6 +37,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_MANAGER_NA
  * Sync request to update locally stored shadow.
  */
 public class LocalUpdateSyncRequest extends BaseSyncRequest {
+    private static final Logger logger = LogManager.getLogger(LocalUpdateSyncRequest.class);
 
     private byte[] updateDocument;
 
@@ -58,6 +63,16 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
             shadowDocument = new ShadowDocument(updateDocument);
         } catch (IOException e) {
             throw new SkipSyncRequestException(e);
+        }
+
+        Optional<ShadowDocument> currentLocal = context.getDao().getShadowThing(getThingName(), getShadowName());
+        if (currentLocal.isPresent() && !isUpdateNecessary(currentLocal.get().toJson(false),
+                shadowDocument.toJson(false))) {
+            logger.atDebug()
+                    .kv(LOG_THING_NAME_KEY, getThingName())
+                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                    .log("Local shadow already contains update payload. No sync is necessary");
+            return;
         }
 
         SyncInformation currentSyncInformation = context.getDao()
