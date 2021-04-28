@@ -10,6 +10,7 @@ import com.aws.greengrass.dependency.State;
 import com.aws.greengrass.lifecyclemanager.GlobalStateChangeListener;
 import com.aws.greengrass.lifecyclemanager.GreengrassService;
 import com.aws.greengrass.lifecyclemanager.Kernel;
+import com.aws.greengrass.mqttclient.MqttClient;
 import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
 import com.aws.greengrass.shadowmanager.ShadowManager;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAOImpl;
@@ -58,6 +59,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
@@ -168,6 +171,10 @@ class ShadowManagerTest extends GGServiceTestUtil {
     @Test
     void GIVEN_existing_sync_information_WHEN_config_updates_THEN_removed_sync_information_for_removed_shadows(ExtensionContext context) throws Exception {
         ignoreExceptionOfType(context, SkipSyncRequestException.class);
+        MqttClient mqttClient = mock(MqttClient.class);
+        lenient().when(mqttClient.connected()).thenReturn(false);
+
+        kernel.getContext().put(MqttClient.class, mqttClient);
         startNucleusWithConfig(DEFAULT_CONFIG, State.RUNNING, false);
         ShadowManagerDAOImpl impl = kernel.getContext().get(ShadowManagerDAOImpl.class);
         createThingShadowSyncInfo(impl, THING_NAME);
