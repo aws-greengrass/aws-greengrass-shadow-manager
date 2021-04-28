@@ -169,6 +169,7 @@ class ShadowManagerTest extends GGServiceTestUtil {
     }
 
     @Test
+    @SuppressWarnings("PMD.CloseResource")
     void GIVEN_existing_sync_information_WHEN_config_updates_THEN_removed_sync_information_for_removed_shadows(ExtensionContext context) throws Exception {
         ignoreExceptionOfType(context, SkipSyncRequestException.class);
         MqttClient mqttClient = mock(MqttClient.class);
