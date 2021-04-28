@@ -31,6 +31,7 @@ public class ThingShadowSyncConfiguration {
     @Builder.Default
     private boolean syncClassicShadow = true;
     @JsonProperty(CONFIGURATION_NAMED_SHADOWS_TOPIC)
+    @Builder.Default
     private List<String> syncNamedShadows = Collections.emptyList();
     @Builder.Default
     private boolean isNucleusThing = false;
