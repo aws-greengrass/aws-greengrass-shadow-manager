@@ -21,14 +21,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.LongNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.NonNull;
-import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.exception.SdkServiceException;
 import software.amazon.awssdk.services.iotdataplane.model.ConflictException;
 import software.amazon.awssdk.services.iotdataplane.model.InternalFailureException;
 import software.amazon.awssdk.services.iotdataplane.model.ServiceUnavailableException;
 import software.amazon.awssdk.services.iotdataplane.model.ThrottlingException;
-import software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowRequest;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -107,12 +105,8 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
         long cloudVersion = getAndUpdateCloudVersionInRequest(currentSyncInformation);
 
         try {
-            context.getIotDataPlaneClientFactory().getIotDataPlaneClient()
-                    .updateThingShadow(UpdateThingShadowRequest.builder()
-                            .shadowName(getShadowName())
-                            .thingName(getThingName())
-                            .payload(SdkBytes.fromByteArray(JsonUtil.getPayloadBytes(updateDocument)))
-                            .build());
+            context.getIotDataPlaneClient().updateThingShadow(getThingName(), getShadowName(),
+                    JsonUtil.getPayloadBytes(updateDocument));
         } catch (ConflictException e) {  // NOPMD - Throw ConflictException instead of treated as SdkServiceException
             throw e;
         } catch (ThrottlingException | ServiceUnavailableException | InternalFailureException e) {

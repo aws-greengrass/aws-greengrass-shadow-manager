@@ -14,7 +14,6 @@ import com.aws.greengrass.shadowmanager.exception.SyncException;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.exception.SdkServiceException;
-import software.amazon.awssdk.services.iotdataplane.model.DeleteThingShadowRequest;
 import software.amazon.awssdk.services.iotdataplane.model.InternalFailureException;
 import software.amazon.awssdk.services.iotdataplane.model.ServiceUnavailableException;
 import software.amazon.awssdk.services.iotdataplane.model.ThrottlingException;
@@ -52,11 +51,7 @@ public class CloudDeleteSyncRequest extends BaseSyncRequest {
     @Override
     public void execute(SyncContext context) throws SyncException, RetryableException, SkipSyncRequestException {
         try {
-            context.getIotDataPlaneClientFactory().getIotDataPlaneClient().deleteThingShadow(DeleteThingShadowRequest
-                    .builder()
-                    .shadowName(getShadowName())
-                    .thingName(getThingName())
-                    .build());
+            context.getIotDataPlaneClient().deleteThingShadow(getThingName(), getShadowName());
         } catch (ThrottlingException | ServiceUnavailableException | InternalFailureException e) {
             throw new RetryableException(e);
         } catch (SdkServiceException | SdkClientException e) {
