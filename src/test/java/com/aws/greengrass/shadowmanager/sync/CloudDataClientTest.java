@@ -35,6 +35,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_UPDATE_SUB
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeast;
@@ -251,6 +252,15 @@ public class CloudDataClientTest {
         for (int i = 0; i < subscribeRequestCaptor.getAllValues().size(); i++) {
             assertThat(topicSet, hasItem(subscribeRequestCaptor.getAllValues().get(i).getTopic()));
         }
+    }
+
+    @Test
+    void GIVEN_good_shadow_topic_WHEN_extractShadowFromTopic_THEN_gets_correct_shadow_request() {
+        String topic = "$aws/things/MyThinge2e-1619675861291-941d61c9-c99c-43e1-bf31-411a58d1fc23/shadow/name/MyThingNamedShadowe2e-1619675861291-5d0fd60c-1ee6-4538-8876-825a/update/accepted";
+        CloudDataClient cloudDataClient = new CloudDataClient(mockSyncHandler, mockMqttClient);
+        ShadowRequest request = cloudDataClient.extractShadowFromTopic(topic);
+        assertThat(request.getThingName(), is("MyThinge2e-1619675861291-941d61c9-c99c-43e1-bf31-411a58d1fc23"));
+        assertThat(request.getShadowName(), is("MyThingNamedShadowe2e-1619675861291-5d0fd60c-1ee6-4538-8876-825a"));
     }
 
 }

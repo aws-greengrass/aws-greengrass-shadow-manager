@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -41,6 +42,32 @@ public class ShadowSyncConfiguration {
     private final boolean provideSyncStatus;
     @JsonProperty(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC)
     private final int maxOutboundSyncUpdatesPerSecond;
+
+    @Override
+    public boolean equals(Object o) {
+        // If the object is compared with itself then return true
+        if (o == this) {
+            return true;
+        }
+        /* Check if o is an instance of LoggerConfiguration or not "null instanceof [type]" also returns false */
+        if (!(o instanceof ShadowSyncConfiguration)) {
+            return false;
+        }
+
+        // typecast o to LoggerConfiguration so that we can compare data members
+        ShadowSyncConfiguration newConfiguration = (ShadowSyncConfiguration) o;
+
+        // Compare the data members and return accordingly
+        return Objects.equals(this.maxOutboundSyncUpdatesPerSecond, newConfiguration.maxOutboundSyncUpdatesPerSecond)
+                && Objects.equals(this.provideSyncStatus, newConfiguration.provideSyncStatus)
+                && Objects.equals(this.syncConfigurationList, newConfiguration.syncConfigurationList);
+    }
+
+    @SuppressWarnings("PMD.UselessOverridingMethod")
+    @Override
+    public int hashCode() {
+        return super.hashCode();
+    }
 
     /**
      * Processes the Shadow sync configuration from POJO.

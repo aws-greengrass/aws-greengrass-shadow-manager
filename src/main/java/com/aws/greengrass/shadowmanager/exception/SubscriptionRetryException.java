@@ -11,8 +11,4 @@ public class SubscriptionRetryException extends Exception {
     public SubscriptionRetryException(final String message) {
         super(message);
     }
-
-    public SubscriptionRetryException(final Throwable ex) {
-        super(ex);
-    }
 }

@@ -43,6 +43,7 @@ import java.util.Optional;
 import static com.aws.greengrass.ipc.common.ExceptionUtil.translateExceptions;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
+import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_METADATA;
 import static com.aws.greengrass.shadowmanager.util.JsonUtil.isNullOrMissing;
 import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.UPDATE_THING_SHADOW;
 
@@ -216,10 +217,12 @@ public class UpdateThingShadowRequestHandler {
 
                     UpdateThingShadowResponse updateThingShadowResponse = new UpdateThingShadowResponse();
                     updateThingShadowResponse.setPayload(responseNodeBytes);
-                    logger.atDebug()
+                    logger.atInfo()
                             .kv(LOG_THING_NAME_KEY, thingName)
                             .kv(LOG_SHADOW_NAME_KEY, shadowName)
+                            .kv("service-name", serviceName)
                             .log("Successfully updated shadow");
+                    removeMetadataNode(updateDocumentRequest);
                     this.syncHandler.pushCloudUpdateSyncRequest(thingName, shadowName, updateDocumentRequest);
                     return new UpdateThingShadowHandlerResponse(updateThingShadowResponse, updateDocumentBytes);
                 } catch (ShadowManagerDataException | IOException e) {
@@ -228,6 +231,10 @@ public class UpdateThingShadowRequestHandler {
                 return null;
             }
         });
+    }
+
+    private void removeMetadataNode(JsonNode updateDocumentRequest) {
+        ((ObjectNode) updateDocumentRequest).remove(SHADOW_DOCUMENT_METADATA);
     }
 
     /**

@@ -21,6 +21,8 @@ import com.github.fge.jsonschema.core.report.ProcessingReport;
 import com.github.fge.jsonschema.main.JsonSchema;
 import com.github.fge.jsonschema.main.JsonSchemaFactory;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import lombok.AccessLevel;
+import lombok.Setter;
 import software.amazon.awssdk.aws.greengrass.model.ConflictError;
 
 import java.io.IOException;
@@ -35,6 +37,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_V
 public final class JsonUtil {
     public static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
+    @Setter(AccessLevel.PACKAGE)
     private static JsonSchema updateShadowRequestJsonSchema;
     private static JsonSchema updateShadowPayloadJsonSchema;
 
@@ -191,7 +194,7 @@ public final class JsonUtil {
         // If there is no current version document, then this is the first version of the document and we only need
         // to en sure that if there is a version in the update request, it is 0.
         if (sourceDocument.isNewDocument()) {
-            if (updateVersion.asInt() != 0) {
+            if (updateVersion.asInt() != 1) {
                 throw new InvalidRequestParametersException(ErrorMessage.INVALID_VERSION_MESSAGE);
             }
             return;

@@ -53,7 +53,9 @@ import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
@@ -219,5 +221,21 @@ class CloudUpdateSyncRequestTest {
 
         verify(mockIotDataPlaneClient, never()).updateThingShadow(any(UpdateThingShadowRequest.class));
         verify(mockDao, never()).updateSyncInformation(any());
+    }
+
+    @Test
+    void GIVEN_different_cloud_update_WHEN_isUpdateNecessary_THEN_returns_false() throws IOException {
+        JsonNode j1 = JsonUtil.getPayloadJson("{\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":0,\"b\":0},\"SomeKey\":\"SomeValue\"}},\"metadata\":{\"reported\":{\"color\":{\"r\":{\"timestamp\":1619722006},\"g\":{\"timestamp\":1619722006},\"b\":{\"timestamp\":1619722006}},\"SomeKey\":{\"timestamp\":1619722006}}},\"version\":1,\"timestamp\":1619722006}".getBytes()).get();
+        JsonNode j2 = JsonUtil.getPayloadJson("{\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}},\"metadata\":{\"reported\":{\"color\":{\"r\":{\"timestamp\":1619722006},\"g\":{\"timestamp\":1619722006},\"b\":{\"timestamp\":1619722006}},\"SomeKey\":{\"timestamp\":1619722006}}},\"version\":1,\"timestamp\":1619722006}".getBytes()).get();
+        CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, baseDocumentJson);
+        assertTrue(request.isUpdateNecessary(j1, j2));
+    }
+
+    @Test
+    void GIVEN_same_cloud_update_WHEN_isUpdateNecessary_THEN_returns_false() throws IOException {
+        JsonNode j1 = JsonUtil.getPayloadJson("{\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}},\"metadata\":{\"reported\":{\"color\":{\"r\":{\"timestamp\":1619722006},\"g\":{\"timestamp\":1619722006},\"b\":{\"timestamp\":1619722006}},\"SomeKey\":{\"timestamp\":1619722006}}},\"version\":1,\"timestamp\":1619722006}".getBytes()).get();
+        JsonNode j2 = JsonUtil.getPayloadJson("{\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}},\"metadata\":{\"reported\":{\"color\":{\"r\":{\"timestamp\":1619722006},\"g\":{\"timestamp\":1619722006},\"b\":{\"timestamp\":1619722006}},\"SomeKey\":{\"timestamp\":1619722006}}},\"version\":1,\"timestamp\":1619722006}".getBytes()).get();
+        CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, baseDocumentJson);
+        assertFalse(request.isUpdateNecessary(j1, j2));
     }
 }
