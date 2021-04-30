@@ -166,7 +166,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      */
     @Override
     public boolean updateSyncInformation(final SyncInformation request) {
-        logger.atTrace()
+        logger.atInfo()
                 .kv(LOG_THING_NAME_KEY, request.getThingName())
                 .kv(LOG_SHADOW_NAME_KEY, request.getShadowName())
                 .kv(LOG_LOCAL_VERSION_KEY, request.getLocalVersion())

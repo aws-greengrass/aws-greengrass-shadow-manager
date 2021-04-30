@@ -90,9 +90,8 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
                 UpdateThingShadowRequest request = new UpdateThingShadowRequest();
                 request.setThingName(getThingName());
                 request.setShadowName(getShadowName());
-                request.setPayload(updateDocument);
+                request.setPayload(JsonUtil.getPayloadBytes(shadowDocument.toJson(false)));
 
-                // TODO: verify service name is authorized
                 UpdateThingShadowHandlerResponse updateThingShadowHandlerResponse =
                         context.getUpdateHandler().handleRequest(request, SHADOW_MANAGER_NAME);
 

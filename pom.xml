@@ -211,7 +211,6 @@
                     </execution>
                 </executions>
             </plugin>
-            <!--TODO: enable this. There are some failures we need to handle-->
             <plugin>
                 <groupId>com.github.spotbugs</groupId>
                 <artifactId>spotbugs-maven-plugin</artifactId>
