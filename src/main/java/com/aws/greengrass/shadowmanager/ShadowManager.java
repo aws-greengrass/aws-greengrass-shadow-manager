@@ -329,7 +329,7 @@ public class ShadowManager extends PluginService {
         registerHandlers();
 
         if (!deviceConfiguration.isDeviceConfiguredToTalkToCloud()) {
-            logger.atWarn().log("Device not configured to talk to AWS Iot cloud. Single device deployment is offline");
+            logger.atWarn().log("Device not configured to talk to AWS Iot cloud. Not syncing shadows to the cloud");
             // Right now the connection cannot be brought online without a restart.
             // Skip setting up scheduled upload and event triggered upload because they won't work
             return;
