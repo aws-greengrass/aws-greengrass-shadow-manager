@@ -7,9 +7,11 @@ package com.aws.greengrass.shadowmanager.sync;
 
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.services.iotdataplane.model.DeleteThingShadowRequest;
+import software.amazon.awssdk.services.iotdataplane.model.DeleteThingShadowResponse;
 import software.amazon.awssdk.services.iotdataplane.model.GetThingShadowRequest;
 import software.amazon.awssdk.services.iotdataplane.model.GetThingShadowResponse;
 import software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowRequest;
+import software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowResponse;
 import vendored.com.google.common.util.concurrent.RateLimiter;
 
 import javax.inject.Inject;
@@ -50,9 +52,9 @@ public class IotDataPlaneClient {
      * @param thingName  The thing name associated with the sync shadow update
      * @param shadowName The shadow name associated with the sync shadow update
      */
-    public void deleteThingShadow(String thingName, String shadowName) {
+    public DeleteThingShadowResponse deleteThingShadow(String thingName, String shadowName) {
         rateLimiter.acquire();
-        iotDataPlaneClientFactory.getIotDataPlaneClient().deleteThingShadow(DeleteThingShadowRequest.builder()
+        return iotDataPlaneClientFactory.getIotDataPlaneClient().deleteThingShadow(DeleteThingShadowRequest.builder()
                 .thingName(thingName)
                 .shadowName(shadowName)
                 .build());
@@ -65,9 +67,9 @@ public class IotDataPlaneClient {
      * @param shadowName The shadow name associated with the sync shadow update
      * @param payload    The update payload
      */
-    public void updateThingShadow(String thingName, String shadowName, byte[] payload) {
+    public UpdateThingShadowResponse updateThingShadow(String thingName, String shadowName, byte[] payload) {
         rateLimiter.acquire();
-        iotDataPlaneClientFactory.getIotDataPlaneClient().updateThingShadow(UpdateThingShadowRequest.builder()
+        return iotDataPlaneClientFactory.getIotDataPlaneClient().updateThingShadow(UpdateThingShadowRequest.builder()
                 .thingName(thingName)
                 .shadowName(shadowName)
                 .payload(SdkBytes.fromByteArray(payload)).build());

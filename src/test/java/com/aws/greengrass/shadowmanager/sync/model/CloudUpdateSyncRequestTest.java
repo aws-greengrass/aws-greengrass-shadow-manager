@@ -10,7 +10,7 @@ import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
-import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientFactory;
+import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClient;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -26,7 +26,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
 import software.amazon.awssdk.core.exception.SdkClientException;
-import software.amazon.awssdk.services.iotdataplane.IotDataPlaneClient;
 import software.amazon.awssdk.services.iotdataplane.model.ConflictException;
 import software.amazon.awssdk.services.iotdataplane.model.InternalFailureException;
 import software.amazon.awssdk.services.iotdataplane.model.InvalidRequestException;
@@ -36,7 +35,6 @@ import software.amazon.awssdk.services.iotdataplane.model.ServiceUnavailableExce
 import software.amazon.awssdk.services.iotdataplane.model.ThrottlingException;
 import software.amazon.awssdk.services.iotdataplane.model.UnauthorizedException;
 import software.amazon.awssdk.services.iotdataplane.model.UnsupportedDocumentEncodingException;
-import software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowRequest;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -56,6 +54,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -71,8 +70,6 @@ class CloudUpdateSyncRequestTest {
     @Mock
     private ShadowManagerDAO mockDao;
     @Mock
-    private IotDataPlaneClientFactory mockClientFactory;
-    @Mock
     private IotDataPlaneClient mockIotDataPlaneClient;
     @Captor
     private ArgumentCaptor<SyncInformation> syncInformationCaptor;
@@ -81,11 +78,10 @@ class CloudUpdateSyncRequestTest {
 
     @BeforeEach
     void setup() throws IOException {
-        lenient().when(mockClientFactory.getIotDataPlaneClient()).thenReturn(mockIotDataPlaneClient);
         lenient().when(mockDao.updateSyncInformation(syncInformationCaptor.capture())).thenReturn(true);
         baseDocumentJson = JsonUtil.getPayloadJson(BASE_DOCUMENT).get();
         lenient().when(mockContext.getDao()).thenReturn(mockDao);
-        lenient().when(mockContext.getIotDataPlaneClientFactory()).thenReturn(mockClientFactory);
+        lenient().when(mockContext.getIotDataPlaneClient()).thenReturn(mockIotDataPlaneClient);
         lenient().when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder().build()));
     }
 
@@ -109,10 +105,9 @@ class CloudUpdateSyncRequestTest {
 
         request.execute(mockContext);
 
-        verify(mockClientFactory, times(1)).getIotDataPlaneClient();
         verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
         verify(mockDao, times(1)).updateSyncInformation(any());
-        verify(mockIotDataPlaneClient, times(1)).updateThingShadow(any(UpdateThingShadowRequest.class));
+        verify(mockIotDataPlaneClient, times(1)).updateThingShadow(anyString(), anyString(), any(byte[].class));
 
         assertThat(syncInformationCaptor.getValue(), is(notNullValue()));
         assertThat(syncInformationCaptor.getValue().getLastSyncedDocument(), is(JsonUtil.getPayloadBytes(shadowDocument.toJson(false))));
@@ -131,10 +126,9 @@ class CloudUpdateSyncRequestTest {
 
         request.execute(mockContext);
 
-        verify(mockClientFactory, times(0)).getIotDataPlaneClient();
         verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
         verify(mockDao, times(0)).updateSyncInformation(any());
-        verify(mockIotDataPlaneClient, times(0)).updateThingShadow(any(UpdateThingShadowRequest.class));
+        verify(mockIotDataPlaneClient, times(0)).updateThingShadow(anyString(), anyString(), any(byte[].class));
     }
 
     @ParameterizedTest
@@ -143,16 +137,15 @@ class CloudUpdateSyncRequestTest {
         ignoreExceptionOfType(context, clazz);
         ShadowDocument shadowDocument = new ShadowDocument(BASE_DOCUMENT);
         when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.of(shadowDocument));
-        when(mockIotDataPlaneClient.updateThingShadow(any(UpdateThingShadowRequest.class))).thenThrow(clazz);
+        doThrow(clazz).when(mockIotDataPlaneClient).updateThingShadow(anyString(), anyString(), any(byte[].class));
         CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, baseDocumentJson);
 
         RetryableException thrown = assertThrows(RetryableException.class, () -> request.execute(mockContext));
         assertThat(thrown.getCause(), is(instanceOf(clazz)));
 
-        verify(mockClientFactory, times(1)).getIotDataPlaneClient();
         verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
         verify(mockDao, times(0)).updateSyncInformation(any());
-        verify(mockIotDataPlaneClient, times(1)).updateThingShadow(any(UpdateThingShadowRequest.class));
+        verify(mockIotDataPlaneClient, times(1)).updateThingShadow(anyString(), anyString(), any(byte[].class));
     }
 
     @Test
@@ -160,17 +153,17 @@ class CloudUpdateSyncRequestTest {
         ignoreExceptionOfType(context, ConflictException.class);
         ShadowDocument shadowDocument = new ShadowDocument(BASE_DOCUMENT);
         when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.of(shadowDocument));
-        when(mockIotDataPlaneClient.updateThingShadow(any(UpdateThingShadowRequest.class)))
-                .thenThrow(ConflictException.builder().message(SAMPLE_EXCEPTION_MESSAGE).build());
+        doThrow(ConflictException.builder().message(SAMPLE_EXCEPTION_MESSAGE).build())
+                .when(mockIotDataPlaneClient).updateThingShadow(anyString(), anyString(), any(byte[].class));
+
         CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, baseDocumentJson);
 
         ConflictException thrown = assertThrows(ConflictException.class, () -> request.execute(mockContext));
         assertThat(thrown.getMessage(), is(equalTo(SAMPLE_EXCEPTION_MESSAGE)));
 
-        verify(mockClientFactory, times(1)).getIotDataPlaneClient();
         verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
         verify(mockDao, times(0)).updateSyncInformation(any());
-        verify(mockIotDataPlaneClient, times(1)).updateThingShadow(any(UpdateThingShadowRequest.class));
+        verify(mockIotDataPlaneClient, times(1)).updateThingShadow(anyString(), anyString(), any(byte[].class));
     }
 
     @ParameterizedTest
@@ -180,17 +173,16 @@ class CloudUpdateSyncRequestTest {
         ignoreExceptionOfType(context, clazz);
         ShadowDocument shadowDocument = new ShadowDocument(BASE_DOCUMENT);
         when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.of(shadowDocument));
-        when(mockIotDataPlaneClient.updateThingShadow(any(UpdateThingShadowRequest.class))).thenThrow(clazz);
+        doThrow(clazz).when(mockIotDataPlaneClient).updateThingShadow(anyString(), anyString(), any(byte[].class));
         CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, baseDocumentJson);
 
         SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class,
                 () -> request.execute(mockContext));
         assertThat(thrown.getCause(), is(instanceOf(clazz)));
 
-        verify(mockClientFactory, times(1)).getIotDataPlaneClient();
         verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
         verify(mockDao, times(0)).updateSyncInformation(any());
-        verify(mockIotDataPlaneClient, times(1)).updateThingShadow(any(UpdateThingShadowRequest.class));
+        verify(mockIotDataPlaneClient, times(1)).updateThingShadow(anyString(), anyString(), any(byte[].class));
     }
 
     @Test
@@ -217,7 +209,7 @@ class CloudUpdateSyncRequestTest {
 
         assertDoesNotThrow(() -> request.execute(mockContext));
 
-        verify(mockIotDataPlaneClient, never()).updateThingShadow(any(UpdateThingShadowRequest.class));
+        verify(mockIotDataPlaneClient, never()).updateThingShadow(anyString(), anyString(), any(byte[].class));
         verify(mockDao, never()).updateSyncInformation(any());
     }
 }

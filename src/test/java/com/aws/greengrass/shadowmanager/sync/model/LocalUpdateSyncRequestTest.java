@@ -14,7 +14,7 @@ import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.UpdateThingShadowHandlerResponse;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
-import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientFactory;
+import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClient;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException;
 import org.hamcrest.Matchers;
@@ -80,7 +80,7 @@ public class LocalUpdateSyncRequestTest {
     @BeforeEach
     void setup() {
         syncContext = new SyncContext(mockDao, mockUpdateThingShadowRequestHandler,
-                mock(DeleteThingShadowRequestHandler.class), mock(IotDataPlaneClientFactory.class));
+                mock(DeleteThingShadowRequestHandler.class), mock(IotDataPlaneClient.class));
     }
 
     @Test

@@ -16,7 +16,7 @@ import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersExcept
 import com.aws.greengrass.shadowmanager.ipc.PubSubClientWrapper;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.CloudDataClient;
-import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientFactory;
+import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClient;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
 import com.aws.greengrass.shadowmanager.util.ShadowWriteSynchronizeHelper;
 import com.aws.greengrass.shadowmanager.util.Validator;
@@ -94,7 +94,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
     @Mock
     private SyncHandler mockSyncHandler;
     @Mock
-    private IotDataPlaneClientFactory mockIotDataPlaneClientFactory;
+    private IotDataPlaneClient mockIotDataPlaneClient;
     @Mock
     private CloudDataClient mockCloudDataClient;
     @Mock
@@ -111,7 +111,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         initializeMockedConfig();
         shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper,
                 mockPubSubClientWrapper, mockDeviceConfiguration, mockSynchronizeHelper,
-                mockIotDataPlaneClientFactory, mockSyncHandler, mockCloudDataClient, mockMqttClient);
+                mockIotDataPlaneClient, mockSyncHandler, mockCloudDataClient, mockMqttClient);
     }
 
     @ParameterizedTest
