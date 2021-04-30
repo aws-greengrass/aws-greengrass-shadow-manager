@@ -208,6 +208,7 @@ class ShadowManagerTest extends GGServiceTestUtil {
 
         shadowManager.getConfig().lookupTopics(CONFIGURATION_CONFIG_KEY).lookupTopics(CONFIGURATION_SYNCHRONIZATION_TOPIC)
                 .replaceAndWait(Collections.singletonMap(CONFIGURATION_SHADOW_DOCUMENTS_TOPIC, shadowDocumentsList));
+        //TimeUnit.SECONDS.sleep(20);
 
         allSyncedShadowNames = impl.listSyncedShadows();
         assertThat(allSyncedShadowNames, containsInAnyOrder(

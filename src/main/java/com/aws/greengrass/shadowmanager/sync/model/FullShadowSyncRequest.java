@@ -374,7 +374,15 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
                     .log("Could not deserialize last synced shadow document");
-            //TODO: Should we put the last synced as null? (we should not ever be in this situation though)
+            context.getDao().updateSyncInformation(SyncInformation.builder()
+                    .localVersion(syncInformation.getLocalVersion())
+                    .cloudVersion(syncInformation.getCloudVersion())
+                    .shadowName(getShadowName())
+                    .thingName(getThingName())
+                    .cloudUpdateTime(Instant.now().getEpochSecond())
+                    .lastSyncedDocument(null)
+                    .build());
+
             throw new SkipSyncRequestException(e);
         }
     }

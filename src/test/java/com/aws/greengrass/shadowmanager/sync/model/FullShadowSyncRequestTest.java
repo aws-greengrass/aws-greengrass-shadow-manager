@@ -928,7 +928,7 @@ class FullShadowSyncRequestTest {
 
         verify(mockClientFactory, times(1)).getIotDataPlaneClient();
         verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
-        verify(mockDao, times(0)).updateSyncInformation(any());
+        verify(mockDao, times(1)).updateSyncInformation(any());
         verify(mockUpdateThingShadowRequestHandler, times(0)).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest.class), anyString());
         verify(mockIotDataPlaneClient, times(0)).updateThingShadow(any(UpdateThingShadowRequest.class));
     }
