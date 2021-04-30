@@ -587,7 +587,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         shadowManager.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurationList(new ArrayList<>()).build());
         shadowManager.getSyncConfiguration().getSyncConfigurationList().add(mock(ThingShadowSyncConfiguration.class));
         when(mockMqttClient.connected()).thenReturn(true);
-        shadowManager.startSyncHandler();
+        shadowManager.startSyncingShadows();
 
         verify(mockCloudDataClient, times(1)).updateSubscriptions(anySet());
         verify(mockSyncHandler, times(1)).start(any(SyncContext.class), anyInt());

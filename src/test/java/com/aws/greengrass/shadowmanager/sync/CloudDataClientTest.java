@@ -254,9 +254,11 @@ public class CloudDataClientTest {
         }
     }
 
-    @Test
-    void GIVEN_good_shadow_topic_WHEN_extractShadowFromTopic_THEN_gets_correct_shadow_request() {
-        String topic = "$aws/things/MyThinge2e-1619675861291-941d61c9-c99c-43e1-bf31-411a58d1fc23/shadow/name/MyThingNamedShadowe2e-1619675861291-5d0fd60c-1ee6-4538-8876-825a/update/accepted";
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "$aws/things/MyThinge2e-1619675861291-941d61c9-c99c-43e1-bf31-411a58d1fc23/shadow/name/MyThingNamedShadowe2e-1619675861291-5d0fd60c-1ee6-4538-8876-825a/update/accepted",
+            "$aws/things/MyThinge2e-1619675861291-941d61c9-c99c-43e1-bf31-411a58d1fc23/shadow/name/MyThingNamedShadowe2e-1619675861291-5d0fd60c-1ee6-4538-8876-825a/delete/accepted"})
+    void GIVEN_good_shadow_topic_WHEN_extractShadowFromTopic_THEN_gets_correct_shadow_request(String topic) {
         CloudDataClient cloudDataClient = new CloudDataClient(mockSyncHandler, mockMqttClient);
         ShadowRequest request = cloudDataClient.extractShadowFromTopic(topic);
         assertThat(request.getThingName(), is("MyThinge2e-1619675861291-941d61c9-c99c-43e1-bf31-411a58d1fc23"));

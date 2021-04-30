@@ -97,7 +97,7 @@ public class ShadowManager extends PluginService {
         @Override
         public void onConnectionResumed(boolean sessionPresent) {
             if (getState() == State.RUNNING) {
-                startSyncHandler();
+                startSyncingShadows();
             }
         }
     };
@@ -225,7 +225,7 @@ public class ShadowManager extends PluginService {
 
                 // Initialize the sync information if the sync information does not exist.
                 initializeSyncInfo();
-                startSyncHandler();
+                startSyncingShadows();
             } catch (InvalidConfigurationException e) {
                 serviceErrored(e);
             }
@@ -343,7 +343,7 @@ public class ShadowManager extends PluginService {
         try {
             reportState(State.RUNNING);
 
-            startSyncHandler();
+            startSyncingShadows();
         } catch (Exception e) {
             serviceErrored(e);
         }
@@ -368,7 +368,7 @@ public class ShadowManager extends PluginService {
      * Starts the Sync handler and update the subscriptions for Cloud Data Client.
      * @implNote Making this package-private for unit tests.
      */
-    void startSyncHandler() {
+    void startSyncingShadows() {
         if (mqttClient.connected() && !syncConfiguration.getSyncConfigurationList().isEmpty()) {
             final SyncContext syncContext = new SyncContext(dao, getUpdateThingShadowRequestHandler(),
                     getDeleteThingShadowRequestHandler(),

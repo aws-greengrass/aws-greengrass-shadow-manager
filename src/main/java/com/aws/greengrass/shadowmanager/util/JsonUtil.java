@@ -192,7 +192,7 @@ public final class JsonUtil {
             return;
         }
         // If there is no current version document, then this is the first version of the document and we only need
-        // to en sure that if there is a version in the update request, it is 0.
+        // to ensure that if there is a version in the update request, it is 1.
         if (sourceDocument.isNewDocument()) {
             if (updateVersion.asInt() != 1) {
                 throw new InvalidRequestParametersException(ErrorMessage.INVALID_VERSION_MESSAGE);
