@@ -14,6 +14,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import java.io.IOException;
 import java.util.Optional;
 
+import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE;
+
 /**
  * Base class for all sync requests.
  */
@@ -39,7 +41,7 @@ public abstract class BaseSyncRequest extends ShadowRequest implements SyncReque
      */
     protected boolean isUpdateNecessary(JsonNode baseDocument, JsonNode update) {
         JsonNode merged = baseDocument.deepCopy();
-        JsonMerger.merge(merged, update);
+        JsonMerger.merge(merged.get(SHADOW_DOCUMENT_STATE), update.get(SHADOW_DOCUMENT_STATE));
         return !baseDocument.equals(merged);
     }
 

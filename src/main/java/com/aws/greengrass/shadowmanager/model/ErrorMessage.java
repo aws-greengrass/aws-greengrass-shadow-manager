@@ -8,8 +8,7 @@ package com.aws.greengrass.shadowmanager.model;
 import com.aws.greengrass.util.Utils;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.Getter;
 
 import java.io.Serializable;
 
@@ -17,14 +16,13 @@ import java.io.Serializable;
  * Class that manages error messages to send when a Shadow Operation is rejected.
  */
 @Builder
-@Data
-@NoArgsConstructor
 @AllArgsConstructor
+@Getter
 public class ErrorMessage implements Serializable {
     private static final long serialVersionUID = -1488980916089225328L;
 
-    private int errorCode;
-    private String message;
+    private final int errorCode;
+    private final String message;
 
     public static final ErrorMessage INVALID_VERSION_MESSAGE =
             ErrorMessage.builder().errorCode(400).message("Invalid version").build();

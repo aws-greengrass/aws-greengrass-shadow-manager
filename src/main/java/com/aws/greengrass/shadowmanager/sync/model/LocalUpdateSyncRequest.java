@@ -9,7 +9,6 @@ import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
-import com.aws.greengrass.shadowmanager.exception.SyncException;
 import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.UpdateThingShadowHandlerResponse;
@@ -56,7 +55,7 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
     }
 
     @Override
-    public void execute(SyncContext context) throws SyncException, SkipSyncRequestException, ConflictError,
+    public void execute(SyncContext context) throws SkipSyncRequestException, ConflictError,
             UnknownShadowException {
         ShadowDocument shadowDocument;
         try {

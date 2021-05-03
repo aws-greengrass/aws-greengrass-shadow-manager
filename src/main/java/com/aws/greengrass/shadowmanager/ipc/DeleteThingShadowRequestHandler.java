@@ -160,8 +160,6 @@ public class DeleteThingShadowRequestHandler {
                             .log("Not authorized to update shadow");
                     publishErrorMessage(thingName, shadowName, clientToken, ErrorMessage.UNAUTHORIZED_MESSAGE);
                     throw new UnauthorizedError(e.getMessage());
-                } catch (InvalidRequestParametersException e) {
-                    handleInvalidRequestParametersException(thingName, shadowName, clientToken, e);
                 } catch (ShadowManagerDataException | IOException e) {
                     logger.atError()
                             .setEventType(LogEvents.DELETE_THING_SHADOW.code())
@@ -174,7 +172,6 @@ public class DeleteThingShadowRequestHandler {
                     throw new ServiceError(e.getMessage());
                 }
             }
-            return null;
         });
     }
 

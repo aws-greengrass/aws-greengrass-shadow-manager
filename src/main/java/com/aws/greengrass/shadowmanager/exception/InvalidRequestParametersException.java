@@ -13,11 +13,6 @@ public class InvalidRequestParametersException extends RuntimeException {
     @Getter
     private final ErrorMessage errorMessage;
 
-    public InvalidRequestParametersException(String message, ErrorMessage errorMessage) {
-        super(message);
-        this.errorMessage = errorMessage;
-    }
-
     public InvalidRequestParametersException(ErrorMessage errorMessage) {
         super(errorMessage.getMessage());
         this.errorMessage = errorMessage;

@@ -14,6 +14,7 @@ import com.aws.greengrass.dependency.ImplementsService;
 import com.aws.greengrass.dependency.State;
 import com.aws.greengrass.deployment.DeviceConfiguration;
 import com.aws.greengrass.lifecyclemanager.PluginService;
+import com.aws.greengrass.mqttclient.CallbackEventManager;
 import com.aws.greengrass.mqttclient.MqttClient;
 import com.aws.greengrass.shadowmanager.exception.InvalidConfigurationException;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowIPCHandler;
@@ -39,6 +40,7 @@ import com.aws.greengrass.util.Pair;
 import com.github.fge.jsonschema.core.exceptions.ProcessingException;
 import lombok.AccessLevel;
 import lombok.Getter;
+import lombok.Setter;
 import org.flywaydb.core.api.FlywayException;
 import software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService;
 import software.amazon.awssdk.crt.mqtt.MqttClientConnectionEvents;
@@ -85,12 +87,28 @@ public class ShadowManager extends PluginService {
     private final SyncHandler syncHandler;
     private final CloudDataClient cloudDataClient;
     private final MqttClient mqttClient;
+    public final MqttClientConnectionEvents callbacks = new MqttClientConnectionEvents() {
+        @Override
+        public void onConnectionInterrupted(int errorCode) {
+            cloudDataClient.stopSubscribing();
+            syncHandler.stop();
+        }
 
-    //TODO: Move this to sync handler?
+        @Override
+        public void onConnectionResumed(boolean sessionPresent) {
+            if (getState() == State.RUNNING) {
+                startSyncingShadows();
+            }
+        }
+    };
+    private final CallbackEventManager.OnConnectCallback onConnect = callbacks::onConnectionResumed;
+
     @Getter(AccessLevel.PACKAGE)
+    @Setter(AccessLevel.PACKAGE)
     private ShadowSyncConfiguration syncConfiguration;
 
     @Inject
+    @Setter
     private GreengrassCoreIPCService greengrassCoreIPCService;
     private final ChildChanged deviceThingNameWatcher;
 
@@ -185,7 +203,12 @@ public class ShadowManager extends PluginService {
             try {
                 Topic thingNameTopic = this.deviceConfiguration.getThingName();
                 String thingName = Coerce.toString(thingNameTopic);
-                syncConfiguration = ShadowSyncConfiguration.processConfiguration(configTopicsPojo, thingName);
+                ShadowSyncConfiguration newSyncConfiguration =
+                        ShadowSyncConfiguration.processConfiguration(configTopicsPojo, thingName);
+                if (this.syncConfiguration != null && this.syncConfiguration.equals(newSyncConfiguration)) {
+                    return;
+                }
+                this.syncConfiguration = newSyncConfiguration;
 
                 // Subscribe to the thing name topic if the Nucleus thing shadows have been synced.
                 Optional<ThingShadowSyncConfiguration> nucleusThingConfig = getNucleusThingShadowSyncConfiguration();
@@ -202,8 +225,7 @@ public class ShadowManager extends PluginService {
 
                 // Initialize the sync information if the sync information does not exist.
                 initializeSyncInfo();
-                startSyncHandler();
-                cloudDataClient.updateSubscriptions(syncConfiguration.getSyncShadows());
+                startSyncingShadows();
             } catch (InvalidConfigurationException e) {
                 serviceErrored(e);
             }
@@ -306,19 +328,13 @@ public class ShadowManager extends PluginService {
         // Register IPC and Authorization
         registerHandlers();
 
-        mqttClient.addToCallbackEvents(new MqttClientConnectionEvents() {
-            @Override
-            public void onConnectionInterrupted(int errorCode) {
-                syncHandler.stop();
-            }
-
-            @Override
-            public void onConnectionResumed(boolean sessionPresent) {
-                if (getState() == State.RUNNING) {
-                    startSyncHandler();
-                }
-            }
-        });
+        if (!deviceConfiguration.isDeviceConfiguredToTalkToCloud()) {
+            logger.atWarn().log("Device not configured to talk to AWS Iot cloud. Not syncing shadows to the cloud");
+            // Right now the connection cannot be brought online without a restart.
+            // Skip setting up scheduled upload and event triggered upload because they won't work
+            return;
+        }
+        mqttClient.addToCallbackEvents(onConnect, callbacks);
     }
 
     @Override
@@ -327,8 +343,7 @@ public class ShadowManager extends PluginService {
         try {
             reportState(State.RUNNING);
 
-            startSyncHandler();
-            cloudDataClient.updateSubscriptions(syncConfiguration.getSyncShadows());
+            startSyncingShadows();
         } catch (Exception e) {
             serviceErrored(e);
         }
@@ -349,12 +364,22 @@ public class ShadowManager extends PluginService {
         }
     }
 
-    private void startSyncHandler() {
+    /**
+     * Starts the Sync handler and update the subscriptions for Cloud Data Client.
+     * @implNote Making this package-private for unit tests.
+     */
+    void startSyncingShadows() {
         if (mqttClient.connected() && !syncConfiguration.getSyncConfigurationList().isEmpty()) {
             final SyncContext syncContext = new SyncContext(dao, getUpdateThingShadowRequestHandler(),
                     getDeleteThingShadowRequestHandler(),
                     iotDataPlaneClientFactory);
             syncHandler.start(syncContext, SyncHandler.DEFAULT_PARALLELISM);
+            cloudDataClient.updateSubscriptions(syncConfiguration.getSyncShadows());
+        } else {
+            logger.atTrace()
+                    .kv("connected", mqttClient.connected())
+                    .kv("sync configuration list count", syncConfiguration.getSyncConfigurationList().size())
+                    .log("Not starting sync loop");
         }
     }
 }

@@ -628,4 +628,30 @@ class ShadowManagerDAOImplTest {
         ShadowManagerDAOImpl impl = new ShadowManagerDAOImpl(mockDatabase);
         assertThrows(ShadowManagerDataException.class, impl::listSyncedShadows);
     }
+
+    @Test
+    void GIVEN_existing_shadow_WHEN_getShadowDocumentVersion_THEN_gets_the_correct_version() throws SQLException {
+        when(mockResultSet.getLong(1)).thenReturn(1L);
+        when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+        when(mockResultSet.next()).thenReturn(true);
+        ShadowManagerDAOImpl impl = new ShadowManagerDAOImpl(mockDatabase);
+        Optional<Long> version = impl.getShadowDocumentVersion(THING_NAME, SHADOW_NAME);
+        assertThat(version, is(Optional.of(1L)));
+    }
+
+    @Test
+    void GIVEN_non_existing_shadow_WHEN_getShadowDocumentVersion_THEN_gets_an_empty_optional() throws SQLException {
+        when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+        when(mockResultSet.next()).thenReturn(false);
+        ShadowManagerDAOImpl impl = new ShadowManagerDAOImpl(mockDatabase);
+        Optional<Long> version = impl.getShadowDocumentVersion(THING_NAME, SHADOW_NAME);
+        assertThat(version, is(Optional.empty()));
+    }
+
+    @Test
+    void GIVEN_existing_shadow_WHEN_getShadowDocumentVersion_throws_sql_excpetion_THEN_throws_sql_exception() throws SQLException {
+        when(mockPreparedStatement.executeQuery()).thenThrow(SQLException.class);
+        ShadowManagerDAOImpl impl = new ShadowManagerDAOImpl(mockDatabase);
+        assertThrows(ShadowManagerDataException.class, () -> impl.getShadowDocumentVersion(THING_NAME, SHADOW_NAME));
+    }
 }

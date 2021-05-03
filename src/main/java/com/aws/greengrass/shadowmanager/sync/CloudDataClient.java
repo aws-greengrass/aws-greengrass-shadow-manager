@@ -15,7 +15,6 @@ import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.model.ShadowRequest;
 import com.aws.greengrass.util.Pair;
 import com.aws.greengrass.util.RetryUtils;
-import software.amazon.awssdk.crt.mqtt.MqttClientConnectionEvents;
 import software.amazon.awssdk.crt.mqtt.MqttMessage;
 
 import java.time.Duration;
@@ -30,6 +29,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.inject.Inject;
 
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DELETE_SUBSCRIPTION_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_UPDATE_SUBSCRIPTION_TOPIC;
@@ -41,10 +42,10 @@ public class CloudDataClient {
     private static final Logger logger = LogManager.getLogger(CloudDataClient.class);
     private final SyncHandler syncHandler;
     private final MqttClient mqttClient;
-    private Set<Pair<String, String>> targetShadowSet = new HashSet<>();
     private final Set<String> subscribedUpdateShadowTopics = new HashSet<>();
     private final Set<String> subscribedDeleteShadowTopics = new HashSet<>();
-    private final Pattern shadowPattern = Pattern.compile("\\$aws\\/things\\/(.*)\\/shadow(\\/name\\/(.*))?\\/");
+    private final Pattern shadowPattern = Pattern.compile("\\$aws\\/things\\/(.*)\\/shadow(\\/name\\/(.*))?"
+            + "\\/(update|delete)\\/(accepted|rejected|delta|documents)");
     // TODO: use ExecutorService for managing threads
     private Thread subscriberThread;
     private static final RetryUtils.RetryConfig RETRY_CONFIG = RetryUtils.RetryConfig.builder()
@@ -65,18 +66,6 @@ public class CloudDataClient {
                            MqttClient mqttClient) {
         this.syncHandler = syncHandler;
         this.mqttClient = mqttClient;
-
-        mqttClient.addToCallbackEvents(new MqttClientConnectionEvents() {
-            @Override
-            public void onConnectionInterrupted(int errorCode) {
-                stopSubscribing();
-            }
-
-            @Override
-            public void onConnectionResumed(boolean sessionPresent) {
-                updateSubscriptions(targetShadowSet);
-            }
-        });
     }
 
     /**
@@ -94,7 +83,6 @@ public class CloudDataClient {
      * @param shadowSet Set of shadow topic prefixes to subscribe to the update/delete topic
      */
     public void updateSubscriptions(Set<Pair<String, String>> shadowSet) {
-        targetShadowSet = new HashSet<>(shadowSet);
         Set<String> newUpdateTopics = new HashSet<>();
         Set<String> newDeleteTopics = new HashSet<>();
 
@@ -116,7 +104,6 @@ public class CloudDataClient {
      * @param deleteTopics Set of delete shadow topics to subscribe to
      */
     private synchronized void updateSubscriptions(Set<String> updateTopics, Set<String> deleteTopics) {
-
         if (!mqttClient.connected()) {
             logger.atWarn()
                     .setEventType(LogEvents.CLOUD_DATA_CLIENT_SUBSCRIPTION_ERROR.code())
@@ -203,6 +190,7 @@ public class CloudDataClient {
                 mqttClient.unsubscribe(UnsubscribeRequest.builder().topic(topic).callback(callback).build());
                 topicsToUnsubscribe.remove(topic);
                 currentTopics.remove(topic);
+                logger.atDebug().log("Unsubscribed to {}", topic);
             } catch (TimeoutException | ExecutionException e) {
                 logger.atWarn()
                         .setEventType(LogEvents.CLOUD_DATA_CLIENT_SUBSCRIPTION_ERROR.code())
@@ -224,11 +212,13 @@ public class CloudDataClient {
     private void subscribeToShadows(Set<String> currentTopics, Set<String> topicsToSubscribe,
                                     Consumer<MqttMessage> callback) throws InterruptedException {
         Set<String> tempHashSet = new HashSet<>(topicsToSubscribe);
+
         for (String topic : tempHashSet) {
             try {
                 mqttClient.subscribe(SubscribeRequest.builder().topic(topic).callback(callback).build());
                 topicsToSubscribe.remove(topic);
                 currentTopics.add(topic);
+                logger.atDebug().log("Subscribed to {}", topic);
             } catch (TimeoutException | ExecutionException e) {
                 logger.atWarn()
                         .setEventType(LogEvents.CLOUD_DATA_CLIENT_SUBSCRIPTION_ERROR.code())
@@ -249,6 +239,8 @@ public class CloudDataClient {
         ShadowRequest shadowRequest = extractShadowFromTopic(topic);
         String thingName = shadowRequest.getThingName();
         String shadowName = shadowRequest.getShadowName();
+        logger.atDebug().kv(LOG_THING_NAME_KEY, thingName).kv(LOG_SHADOW_NAME_KEY, shadowName)
+                .log("Received cloud update request");
         syncHandler.pushLocalUpdateSyncRequest(thingName, shadowName, message.getPayload());
     }
 
@@ -262,6 +254,8 @@ public class CloudDataClient {
         ShadowRequest shadowRequest = extractShadowFromTopic(topic);
         String thingName = shadowRequest.getThingName();
         String shadowName = shadowRequest.getShadowName();
+        logger.atDebug().kv(LOG_THING_NAME_KEY, thingName).kv(LOG_SHADOW_NAME_KEY, shadowName)
+                .log("Received cloud delete request");
         syncHandler.pushLocalDeleteSyncRequest(thingName, shadowName, message.getPayload());
     }
 
@@ -271,10 +265,17 @@ public class CloudDataClient {
      * @param topic MQTT message from shadow topic
      * @return ShadowRequest object with shadow details
      */
-    private ShadowRequest extractShadowFromTopic(String topic) {
-        Matcher m = shadowPattern.matcher(topic);
-        String thingName = m.group(1);
-        String shadowName = m.group(3);
-        return new ShadowRequest(thingName, shadowName);
+    ShadowRequest extractShadowFromTopic(String topic) {
+        final Matcher matcher = shadowPattern.matcher(topic);
+
+        if (matcher.find()) {
+            String thingName = matcher.group(1);
+            String shadowName = matcher.group(3);
+            return new ShadowRequest(thingName, shadowName);
+        }
+        logger.atWarn()
+                .kv("topic", topic)
+                .log("Unable to parse shadow topic for thing name and shadow name");
+        throw new IllegalArgumentException("Unable to parse shadow topic for thing name and shadow name");
     }
 }

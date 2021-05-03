@@ -7,7 +7,6 @@ package com.aws.greengrass.shadowmanager;
 
 import com.aws.greengrass.lifecyclemanager.Kernel;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import lombok.Getter;
 import org.flywaydb.core.Flyway;
 import org.h2.jdbcx.JdbcDataSource;
 
@@ -30,7 +29,9 @@ public class ShadowManagerDatabase implements Closeable {
     private static final String DATABASE_FORMAT = "jdbc:h2:%s/shadow";
     private final JdbcDataSource dataSource;
     private Connection connection;
-    @Getter
+    //TODO: Use this when we implement [GG-35347]
+    @SuppressWarnings("PMD.UnusedPrivateField")
+    @SuppressFBWarnings(value = "URF_UNREAD_FIELD", justification = "Will be used when we implement [GG-35347]")
     private long maxDiskUtilization;
 
     /**

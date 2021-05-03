@@ -10,7 +10,6 @@ import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
-import com.aws.greengrass.shadowmanager.exception.SyncException;
 import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
@@ -72,7 +71,6 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
     /**
      * Executes a cloud shadow update after a successful local shadow update.
      *
-     * @throws SyncException            if there is any exception while making the HTTP shadow request to the cloud.
      * @throws ConflictException        if cloud version is not the same as the version in the cloud.
      * @throws RetryableException       if the cloud is throttling the request or some other transient issue.
      * @throws SkipSyncRequestException if the update request on the cloud shadow failed for another 400 exception.
@@ -80,7 +78,7 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
      */
     @SuppressWarnings("PMD.PrematureDeclaration")
     @Override
-    public void execute(SyncContext context) throws SyncException, RetryableException, SkipSyncRequestException,
+    public void execute(SyncContext context) throws RetryableException, SkipSyncRequestException,
             ConflictException, UnknownShadowException {
         Optional<ShadowDocument> shadowDocument = context.getDao().getShadowThing(getThingName(), getShadowName());
 
@@ -107,6 +105,11 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
         long cloudVersion = getAndUpdateCloudVersionInRequest(currentSyncInformation);
 
         try {
+            logger.atDebug()
+                    .kv(LOG_THING_NAME_KEY, getThingName())
+                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                    .log("Updating cloud shadow document");
+
             context.getIotDataPlaneClientFactory().getIotDataPlaneClient()
                     .updateThingShadow(UpdateThingShadowRequest.builder()
                             .shadowName(getShadowName())
@@ -140,7 +143,9 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
 
     private long getAndUpdateCloudVersionInRequest(SyncInformation syncInformation) {
         long cloudVersion = syncInformation.getCloudVersion();
-        ((ObjectNode) updateDocument).set(SHADOW_DOCUMENT_VERSION, new LongNode(cloudVersion));
+        if (cloudVersion != 0) {
+            ((ObjectNode) updateDocument).set(SHADOW_DOCUMENT_VERSION, new LongNode(cloudVersion));
+        }
 
         return cloudVersion;
     }

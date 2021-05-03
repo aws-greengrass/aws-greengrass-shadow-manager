@@ -9,7 +9,6 @@ import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
-import com.aws.greengrass.shadowmanager.exception.SyncException;
 import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
@@ -51,7 +50,7 @@ public class LocalDeleteSyncRequest extends BaseSyncRequest {
     }
 
     @Override
-    public void execute(SyncContext context) throws SyncException, SkipSyncRequestException, UnknownShadowException {
+    public void execute(SyncContext context) throws SkipSyncRequestException, UnknownShadowException {
         Long deletedCloudVersion;
         try {
             deletedCloudVersion = JsonUtil.getPayloadJson(deletePayload)

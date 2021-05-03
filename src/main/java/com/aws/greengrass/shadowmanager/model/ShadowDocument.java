@@ -18,6 +18,7 @@ import java.util.Optional;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_METADATA;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE;
+import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_TIMESTAMP;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_VERSION;
 
 /**
@@ -33,6 +34,9 @@ public class ShadowDocument {
 
     @JsonProperty(SHADOW_DOCUMENT_VERSION)
     private Long version;
+
+    @JsonProperty(SHADOW_DOCUMENT_TIMESTAMP)
+    private Long timestamp;
 
     /**
      * Constructor needed for deserializing from JSON node.
