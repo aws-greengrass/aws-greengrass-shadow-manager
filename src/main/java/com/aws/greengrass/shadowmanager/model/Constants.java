@@ -66,6 +66,8 @@ public final class Constants {
     public static final String CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC = "maxOutboundSyncUpdatesPerSecond";
     public static final String CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC = "shadowDocumentSizeLimitBytes";
     public static final String CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC = "maxDiskUtilizationMegaBytes";
+    public static final String UNEXPECTED_TYPE_FORMAT = "Unexpected type in %s: %s";
+    public static final String UNEXPECTED_VALUE_FORMAT = "Unexpected value in %s: %s";
 
     private Constants() {
     }
