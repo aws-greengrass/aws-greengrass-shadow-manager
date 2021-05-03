@@ -5,19 +5,24 @@
 
 package com.aws.greengrass.shadowmanager;
 
+import com.aws.greengrass.authorization.exceptions.AuthorizationException;
 import com.aws.greengrass.config.Topic;
 import com.aws.greengrass.config.Topics;
 import com.aws.greengrass.config.UnsupportedInputTypeException;
 import com.aws.greengrass.config.WhatHappened;
 import com.aws.greengrass.deployment.DeviceConfiguration;
+import com.aws.greengrass.mqttclient.CallbackEventManager;
 import com.aws.greengrass.mqttclient.MqttClient;
 import com.aws.greengrass.shadowmanager.exception.InvalidConfigurationException;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.ipc.PubSubClientWrapper;
+import com.aws.greengrass.shadowmanager.model.configuration.ShadowSyncConfiguration;
+import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.CloudDataClient;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClient;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
+import com.aws.greengrass.shadowmanager.sync.model.SyncContext;
 import com.aws.greengrass.shadowmanager.util.ShadowWriteSynchronizeHelper;
 import com.aws.greengrass.shadowmanager.util.Validator;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
@@ -36,7 +41,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService;
+import software.amazon.awssdk.crt.mqtt.MqttClientConnectionEvents;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -45,9 +53,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 import static com.aws.greengrass.componentmanager.KernelConfigResolver.CONFIGURATION_CONFIG_KEY;
 import static com.aws.greengrass.deployment.DeviceConfiguration.DEVICE_PARAM_THING_NAME;
+import static com.aws.greengrass.shadowmanager.ShadowManager.SERVICE_NAME;
 import static com.aws.greengrass.shadowmanager.model.Constants.CLASSIC_SHADOW_IDENTIFIER;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_CLASSIC_SHADOW_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC;
@@ -65,14 +75,24 @@ import static com.aws.greengrass.shadowmanager.model.Constants.MAX_SHADOW_DOCUME
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anySet;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.DELETE_THING_SHADOW;
+import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.GET_THING_SHADOW;
+import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.LIST_NAMED_SHADOWS_FOR_THING;
+import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.UPDATE_THING_SHADOW;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 class ShadowManagerUnitTest extends GGServiceTestUtil {
@@ -99,9 +119,15 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
     private CloudDataClient mockCloudDataClient;
     @Mock
     private MqttClient mockMqttClient;
+    @Mock
+    private GreengrassCoreIPCService mockGreengrassCoreIPCService;
 
     @Captor
     private ArgumentCaptor<Integer> intObjectCaptor;
+    @Captor
+    private ArgumentCaptor<MqttClientConnectionEvents> mqttCallbacksCaptor;
+    @Captor
+    private ArgumentCaptor<CallbackEventManager.OnConnectCallback> mqtOnConnectCallbackCaptor;
 
     private ShadowManager shadowManager;
 
@@ -532,5 +558,45 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         shadowManager.install();
         assertTrue(shadowManager.isErrored());
         verify(mockDao, times(0)).insertSyncInfoIfNotExists(any(SyncInformation.class));
+    }
+
+    @Test
+    void GIVEN_mqtt_client_callbacks_WHEN_onConnectionInterrupted_THEN_stops_sync_handler_and_unsubscribes() throws AuthorizationException {
+        shadowManager.setGreengrassCoreIPCService(mockGreengrassCoreIPCService);
+        shadowManager.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurationList(new ArrayList<>()).build());
+        shadowManager.getSyncConfiguration().getSyncConfigurationList().add(mock(ThingShadowSyncConfiguration.class));
+        doNothing().when(mockMqttClient).addToCallbackEvents(mqtOnConnectCallbackCaptor.capture(), mqttCallbacksCaptor.capture());
+        when(mockDeviceConfiguration.isDeviceConfiguredToTalkToCloud()).thenReturn(true);
+        shadowManager.postInject();
+        verify(mockAuthorizationHandlerWrapper, times(1)).registerComponent(eq(SERVICE_NAME), anySet());
+        verify(mockGreengrassCoreIPCService, times(1)).setOperationHandler(eq(GET_THING_SHADOW), any(Function.class));
+        verify(mockGreengrassCoreIPCService, times(1)).setOperationHandler(eq(DELETE_THING_SHADOW), any(Function.class));
+        verify(mockGreengrassCoreIPCService, times(1)).setOperationHandler(eq(UPDATE_THING_SHADOW), any(Function.class));
+        verify(mockGreengrassCoreIPCService, times(1)).setOperationHandler(eq(LIST_NAMED_SHADOWS_FOR_THING), any(Function.class));
+
+        assertThat(mqttCallbacksCaptor.getValue(), is(notNullValue()));
+        assertThat(mqtOnConnectCallbackCaptor.getValue(), is(notNullValue()));
+
+        mqttCallbacksCaptor.getValue().onConnectionInterrupted(0);
+        verify(mockCloudDataClient, times(1)).stopSubscribing();
+        verify(mockSyncHandler, times(1)).stop();
+    }
+
+    @Test
+    void GIVEN_shadow_manager_WHEN_startSyncHandler_THEN_starts_sync_handler_and_unsubscribes() throws AuthorizationException {
+        shadowManager.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurationList(new ArrayList<>()).build());
+        shadowManager.getSyncConfiguration().getSyncConfigurationList().add(mock(ThingShadowSyncConfiguration.class));
+        when(mockMqttClient.connected()).thenReturn(true);
+        shadowManager.startSyncingShadows();
+
+        verify(mockCloudDataClient, times(1)).updateSubscriptions(anySet());
+        verify(mockSyncHandler, times(1)).start(any(SyncContext.class), anyInt());
+    }
+
+    @Test
+    void GIVEN_shadow_manager_db_WHEN_shutdown_throws_io_exception_THEN_catches_exception(ExtensionContext extensionContext) throws IOException {
+        ignoreExceptionOfType(extensionContext, IOException.class);
+        doThrow(IOException.class).when(mockDatabase).close();
+        assertDoesNotThrow(() -> shadowManager.shutdown());
     }
 }

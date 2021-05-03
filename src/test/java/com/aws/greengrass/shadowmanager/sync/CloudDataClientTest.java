@@ -30,11 +30,13 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 
+import static com.aws.greengrass.shadowmanager.model.Constants.CLASSIC_SHADOW_IDENTIFIER;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DELETE_SUBSCRIPTION_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_UPDATE_SUBSCRIPTION_TOPIC;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeast;
@@ -253,4 +255,25 @@ public class CloudDataClientTest {
         }
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "$aws/things/MyThinge2e-1619675861291-941d61c9-c99c-43e1-bf31-411a58d1fc23/shadow/name/MyThingNamedShadowe2e-1619675861291-5d0fd60c-1ee6-4538-8876-825a/update/accepted",
+            "$aws/things/MyThinge2e-1619675861291-941d61c9-c99c-43e1-bf31-411a58d1fc23/shadow/name/MyThingNamedShadowe2e-1619675861291-5d0fd60c-1ee6-4538-8876-825a/delete/accepted"})
+    void GIVEN_good_shadow_topic_WHEN_extractShadowFromTopic_THEN_gets_correct_shadow_request(String topic) {
+        CloudDataClient cloudDataClient = new CloudDataClient(mockSyncHandler, mockMqttClient);
+        ShadowRequest request = cloudDataClient.extractShadowFromTopic(topic);
+        assertThat(request.getThingName(), is("MyThinge2e-1619675861291-941d61c9-c99c-43e1-bf31-411a58d1fc23"));
+        assertThat(request.getShadowName(), is("MyThingNamedShadowe2e-1619675861291-5d0fd60c-1ee6-4538-8876-825a"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "$aws/things/MyThinge2e-1619675861291-941d61c9-c99c-43e1-bf31-411a58d1fc23/shadow/update/accepted",
+            "$aws/things/MyThinge2e-1619675861291-941d61c9-c99c-43e1-bf31-411a58d1fc23/shadow/delete/accepted"})
+    void GIVEN_good_shadow_topic_for_classic_shadow_WHEN_extractShadowFromTopic_THEN_gets_correct_shadow_request(String topic) {
+        CloudDataClient cloudDataClient = new CloudDataClient(mockSyncHandler, mockMqttClient);
+        ShadowRequest request = cloudDataClient.extractShadowFromTopic(topic);
+        assertThat(request.getThingName(), is("MyThinge2e-1619675861291-941d61c9-c99c-43e1-bf31-411a58d1fc23"));
+        assertThat(request.getShadowName(), is(CLASSIC_SHADOW_IDENTIFIER));
+    }
 }

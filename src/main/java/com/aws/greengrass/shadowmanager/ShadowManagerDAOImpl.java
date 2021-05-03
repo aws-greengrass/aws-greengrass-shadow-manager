@@ -6,6 +6,8 @@
 package com.aws.greengrass.shadowmanager;
 
 
+import com.aws.greengrass.logging.api.Logger;
+import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
@@ -21,8 +23,13 @@ import java.util.List;
 import java.util.Optional;
 import javax.inject.Inject;
 
-// TODO: record UTC epoch seconds when updating/deleting shadow
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_CLOUD_VERSION_KEY;
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_LOCAL_VERSION_KEY;
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
+
 public class ShadowManagerDAOImpl implements ShadowManagerDAO {
+    private static final Logger logger = LogManager.getLogger(ShadowManagerDAOImpl.class);
     private final ShadowManagerDatabase database;
 
     @FunctionalInterface
@@ -73,7 +80,10 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
     public Optional<ShadowDocument> deleteShadowThing(String thingName, String shadowName) {
         // To be consistent with cloud, subsequent updates to the shadow should not start from version 0
         // https://docs.aws.amazon.com/iot/latest/developerguide/device-shadow-data-flow.html
-
+        logger.atDebug()
+                .kv(LOG_THING_NAME_KEY, thingName)
+                .kv(LOG_SHADOW_NAME_KEY, shadowName)
+                .log("Deleting shadow");
         return getShadowThing(thingName, shadowName)
                 .flatMap(shadowDocument ->
                         execute("UPDATE documents SET deleted = 1, document = null, updateTime = ?"
@@ -101,6 +111,10 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      */
     @Override
     public Optional<byte[]> updateShadowThing(String thingName, String shadowName, byte[] newDocument, long version) {
+        logger.atTrace()
+                .kv(LOG_THING_NAME_KEY, thingName)
+                .kv(LOG_SHADOW_NAME_KEY, shadowName)
+                .log("Updating shadow");
         return execute("MERGE INTO documents(thingName, shadowName, document, version, deleted, updateTime) "
                         + "KEY (thingName, shadowName) VALUES (?, ?, ?, ?, ?, ?)",
                 preparedStatement -> {
@@ -152,6 +166,12 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      */
     @Override
     public boolean updateSyncInformation(final SyncInformation request) {
+        logger.atTrace()
+                .kv(LOG_THING_NAME_KEY, request.getThingName())
+                .kv(LOG_SHADOW_NAME_KEY, request.getShadowName())
+                .kv(LOG_LOCAL_VERSION_KEY, request.getLocalVersion())
+                .kv(LOG_CLOUD_VERSION_KEY, request.getCloudVersion())
+                .log("Updating sync info");
         return execute("MERGE INTO sync(thingName, shadowName, lastSyncedDocument, cloudVersion, cloudDeleted, "
                         + "cloudUpdateTime, lastSyncTime, localVersion) KEY (thingName, shadowName) "
                         + "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -231,6 +251,10 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      */
     @Override
     public boolean deleteSyncInformation(String thingName, String shadowName) {
+        logger.atDebug()
+                .kv(LOG_THING_NAME_KEY, thingName)
+                .kv(LOG_SHADOW_NAME_KEY, shadowName)
+                .log("Deleting sync info");
         return execute("DELETE FROM sync WHERE thingName = ? AND shadowName = ?",
                 preparedStatement -> {
                     preparedStatement.setString(1, thingName);
@@ -271,6 +295,12 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      */
     @Override
     public boolean insertSyncInfoIfNotExists(SyncInformation request) {
+        logger.atTrace()
+                .kv(LOG_THING_NAME_KEY, request.getThingName())
+                .kv(LOG_SHADOW_NAME_KEY, request.getShadowName())
+                .kv(LOG_LOCAL_VERSION_KEY, request.getLocalVersion())
+                .kv(LOG_CLOUD_VERSION_KEY, request.getCloudVersion())
+                .log("Inserting sync info");
         String sql = "INSERT INTO sync(thingName, shadowName, lastSyncedDocument, cloudVersion, cloudDeleted, "
                 + "cloudUpdateTime, lastSyncTime, localVersion) SELECT ?, ?, ?, ?, ?, ?, ?, ? "
                 + "WHERE NOT EXISTS(SELECT 1 FROM sync WHERE thingName = ? AND shadowName = ?)";

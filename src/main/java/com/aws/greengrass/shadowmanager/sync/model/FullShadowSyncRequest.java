@@ -11,7 +11,6 @@ import com.aws.greengrass.shadowmanager.ShadowManager;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
-import com.aws.greengrass.shadowmanager.exception.SyncException;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.ShadowState;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
@@ -71,13 +70,12 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
      * Executes a full shadow sync.
      *
      * @param  context                  the execution context.
-     * @throws SyncException            if there is any exception while making the HTTP shadow request to the cloud.
      * @throws RetryableException       if the cloud version is not the same as the version of the shadow on the cloud
      *                                  or if the cloud is throttling the request.
      * @throws SkipSyncRequestException if the update request on the cloud shadow failed for another 400 exception.
      */
     @Override
-    public void execute(SyncContext context) throws SyncException, RetryableException, SkipSyncRequestException {
+    public void execute(SyncContext context) throws RetryableException, SkipSyncRequestException {
         Optional<SyncInformation> syncInformation = context.getDao().getShadowSyncInformation(getThingName(),
                 getShadowName());
 
@@ -97,7 +95,8 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
                     .kv(LOG_LOCAL_VERSION_KEY, syncInformation.get().getLocalVersion())
                     .kv(LOG_CLOUD_VERSION_KEY, syncInformation.get().getCloudVersion())
-                    .log("Not performing full sync since both local and cloud versions are already in sync");
+                    .log("Not performing full sync since both local and cloud versions are already in sync since "
+                            + "they don't exist in local and cloud");
             context.getDao().updateSyncInformation(SyncInformation.builder()
                     .localVersion(syncInformation.get().getLocalVersion())
                     .cloudVersion(syncInformation.get().getCloudVersion())
