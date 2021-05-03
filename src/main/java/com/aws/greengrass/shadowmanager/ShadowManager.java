@@ -216,6 +216,7 @@ public class ShadowManager extends PluginService {
                     return;
                 }
                 this.syncConfiguration = newSyncConfiguration;
+                this.syncHandler.setSyncConfiguration(this.syncConfiguration.getSyncConfigurations());
 
                 // Subscribe to the thing name topic if the Nucleus thing shadows have been synced.
                 Optional<ThingShadowSyncConfiguration> nucleusThingConfig =

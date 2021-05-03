@@ -27,7 +27,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -67,6 +66,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.after;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -79,6 +79,7 @@ class SyncTest extends GGServiceTestUtil  {
     private static final long TEST_TIME_OUT_SEC = 30L;
     public static final String MOCK_THING_NAME = "Thing1";
     public static final String CLASSIC_SHADOW = "";
+    public static final String RANDOM_SHADOW = "badShadowName";
     private static final String cloudShadowContentV10 = "{\"version\":10,\"state\":{\"desired\":{\"SomeKey\":\"foo\"}}}";
     private static final String cloudShadowContentV1 = "{\"version\":1,\"state\":{\"desired\":{\"SomeKey\":\"foo\"}}}";
     private static final String localShadowContentV1 = "{\"state\":{\"desired\":{\"SomeKey\":\"foo\"}},\"metadata\":{}}";
@@ -144,18 +145,18 @@ class SyncTest extends GGServiceTestUtil  {
         assertTrue(shadowManagerRunning.await(TEST_TIME_OUT_SEC, TimeUnit.SECONDS));
     }
 
-    void eventually(Supplier<Void> supplier, long timeout, ChronoUnit unit) throws InterruptedException {
+    boolean eventually(Supplier<Void> supplier, long timeout, ChronoUnit unit) throws InterruptedException {
         Instant expire = Instant.now().plus(Duration.of(timeout, unit));
         while (expire.isAfter(Instant.now())) {
             try {
                 supplier.get();
-                return;
+                return true;
             } catch (MockitoException | AssertionError e) {
                 // ignore
             }
-            Thread.sleep(500);
+            TimeUnit.MILLISECONDS.sleep(500);
         }
-        supplier.get();
+        return false;
     }
 
     @Test
@@ -369,20 +370,113 @@ class SyncTest extends GGServiceTestUtil  {
                 any(software.amazon.awssdk.services.iotdataplane.model.DeleteThingShadowRequest.class));
     }
 
-    @Disabled
     @Test
     void GIVEN_synced_shadow_WHEN_cloud_delete_THEN_local_deletes(ExtensionContext context) throws IOException, InterruptedException {
+        ignoreExceptionOfType(context, InterruptedException.class);
+        ignoreExceptionOfType(context, ResourceNotFoundException.class);
 
+        when(iotDataPlaneClientFactory.getIotDataPlaneClient().deleteThingShadow(cloudDeleteThingShadowRequestCaptor.capture()))
+                .thenReturn(mock(software.amazon.awssdk.services.iotdataplane.model.DeleteThingShadowResponse.class));
+        when(iotDataPlaneClientFactory.getIotDataPlaneClient().getThingShadow(any(GetThingShadowRequest.class)))
+                .thenThrow(ResourceNotFoundException.class);
+
+        startNucleusWithConfig("sync.yaml", true, false);
+
+        // Sleep here so that there is no race condition between executing the initial full sync
+        TimeUnit.SECONDS.sleep(2L);
+
+        ShadowManagerDAO dao = kernel.getContext().get(ShadowManagerDAOImpl.class);
+        dao.updateSyncInformation(SyncInformation.builder()
+                .localVersion(1L)
+                .cloudVersion(1L)
+                .lastSyncedDocument(localShadowContentV1.getBytes(UTF_8))
+                .cloudUpdateTime(Instant.now().getEpochSecond())
+                .cloudDeleted(false)
+                .lastSyncTime(Instant.now().getEpochSecond())
+                .shadowName(CLASSIC_SHADOW)
+                .thingName(MOCK_THING_NAME)
+                .build());
+        dao.updateShadowThing(MOCK_THING_NAME, CLASSIC_SHADOW, localShadowContentV1.getBytes(UTF_8), 1L);
+
+        SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
+        syncHandler.pushLocalDeleteSyncRequest(MOCK_THING_NAME, CLASSIC_SHADOW, "{\"version\": 1}".getBytes(UTF_8));
+
+        eventually(() -> {
+            Optional<SyncInformation> syncInformation =
+                    dao.getShadowSyncInformation(MOCK_THING_NAME, CLASSIC_SHADOW);
+            assertThat("sync info exists", syncInformation.isPresent(), is(true));
+            assertThat(syncInformation.get().getCloudVersion(), is(1L));
+            assertThat(syncInformation.get().getLocalVersion(), is(1L));
+            assertThat(syncInformation.get().getLastSyncedDocument(), is(nullValue()));
+            assertThat(syncInformation.get().isCloudDeleted(), is(true));
+
+            Optional<ShadowDocument> shadow = dao.getShadowThing(MOCK_THING_NAME, CLASSIC_SHADOW);
+            assertThat("local shadow should not exist", shadow.isPresent(), is(false));
+            return null;
+        }, 10, ChronoUnit.SECONDS);
+        verify(iotDataPlaneClientFactory.getIotDataPlaneClient(), never()).deleteThingShadow(
+                any(software.amazon.awssdk.services.iotdataplane.model.DeleteThingShadowRequest.class));
     }
 
-    @Disabled
     @Test
-    void GIVEN_unsynced_shadow_WHEN_cloud_updates_THEN_no_local_update(ExtensionContext context) throws IOException, InterruptedException {
+    void GIVEN_unsynced_shadow_WHEN_local_deletes_THEN_no_cloud_delete(ExtensionContext context) throws IOException, InterruptedException {
+        ignoreExceptionOfType(context, ResourceNotFoundException.class);
+        ignoreExceptionOfType(context, InterruptedException.class);
 
+        when(iotDataPlaneClientFactory.getIotDataPlaneClient().deleteThingShadow(cloudDeleteThingShadowRequestCaptor.capture()))
+                .thenReturn(mock(software.amazon.awssdk.services.iotdataplane.model.DeleteThingShadowResponse.class));
+        when(iotDataPlaneClientFactory.getIotDataPlaneClient().getThingShadow(any(GetThingShadowRequest.class)))
+                .thenThrow(ResourceNotFoundException.class);
+
+        startNucleusWithConfig("sync.yaml", true, false);
+
+        // Sleep here so that there is no race condition between executing the initial full sync
+        TimeUnit.SECONDS.sleep(2L);
+
+        ShadowManagerDAO dao = kernel.getContext().get(ShadowManagerDAOImpl.class);
+        dao.updateSyncInformation(SyncInformation.builder()
+                .localVersion(1L)
+                .cloudVersion(1L)
+                .lastSyncedDocument(localShadowContentV1.getBytes(UTF_8))
+                .cloudUpdateTime(Instant.now().getEpochSecond())
+                .cloudDeleted(false)
+                .lastSyncTime(Instant.now().getEpochSecond())
+                .shadowName(RANDOM_SHADOW)
+                .thingName(MOCK_THING_NAME)
+                .build());
+        dao.updateShadowThing(MOCK_THING_NAME, RANDOM_SHADOW, localShadowContentV1.getBytes(UTF_8), 1L);
+
+        DeleteThingShadowRequestHandler deleteHandler = shadowManager.getDeleteThingShadowRequestHandler();
+
+        DeleteThingShadowRequest request = new DeleteThingShadowRequest();
+        request.setThingName(MOCK_THING_NAME);
+        request.setShadowName(RANDOM_SHADOW);
+
+        deleteHandler.handleRequest(request, "DoAll");
+        verify(iotDataPlaneClientFactory.getIotDataPlaneClient(), after(Duration.ofSeconds(10).toMillis()).never()).deleteThingShadow(
+                any(software.amazon.awssdk.services.iotdataplane.model.DeleteThingShadowRequest.class));
     }
-    @Disabled
+
     @Test
     void GIVEN_unsynced_shadow_WHEN_local_updates_THEN_no_cloud_update(ExtensionContext context) throws IOException, InterruptedException {
+        ignoreExceptionOfType(context, ResourceNotFoundException.class);
+        ignoreExceptionOfType(context, InterruptedException.class);
 
-    }
+        when(iotDataPlaneClientFactory.getIotDataPlaneClient().updateThingShadow(cloudUpdateThingShadowRequestCaptor.capture()))
+                .thenReturn(mock(software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowResponse.class));
+        when(iotDataPlaneClientFactory.getIotDataPlaneClient().getThingShadow(any(GetThingShadowRequest.class)))
+                .thenThrow(ResourceNotFoundException.class);
+
+        startNucleusWithConfig("sync.yaml", true, false);
+
+        UpdateThingShadowRequestHandler updateHandler = shadowManager.getUpdateThingShadowRequestHandler();
+
+        UpdateThingShadowRequest request = new UpdateThingShadowRequest();
+        request.setThingName(MOCK_THING_NAME);
+        request.setShadowName(RANDOM_SHADOW);
+        request.setPayload(localShadowContentV1.getBytes(UTF_8));
+        updateHandler.handleRequest(request, "DoAll");
+
+        verify(iotDataPlaneClientFactory.getIotDataPlaneClient(), after(Duration.ofSeconds(10).toMillis()).never()).updateThingShadow(
+                any(software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowRequest.class));    }
 }

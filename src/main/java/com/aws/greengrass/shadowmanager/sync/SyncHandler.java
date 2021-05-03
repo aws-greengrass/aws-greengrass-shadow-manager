@@ -9,6 +9,7 @@ import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
+import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.sync.model.CloudDeleteSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.CloudUpdateSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.FullShadowSyncRequest;
@@ -28,6 +29,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -96,17 +98,21 @@ public class SyncHandler {
      */
     private SyncContext context;
 
+    /**
+     * Context object containing sync configurations.
+     */
+    private Set<ThingShadowSyncConfiguration> syncConfigurations;
 
 
     /**
      * Construct a new instance.
      *
-     * @param syncQueue the queue for storing sync requests
+     * @param syncQueue       the queue for storing sync requests
      * @param executorService provider of threads for syncing
      */
     @Inject
     public SyncHandler(RequestBlockingQueue syncQueue, ExecutorService executorService) {
-        this (syncQueue, executorService,
+        this(syncQueue, executorService,
                 // retry wrapper so that requests can be mocked
                 (config, request, context) ->
                         RetryUtils.runWithRetry(config,
@@ -118,10 +124,20 @@ public class SyncHandler {
     }
 
     SyncHandler(RequestBlockingQueue syncQueue, ExecutorService executorService,
-            Retryer retryer) {
+                Retryer retryer) {
         this.syncQueue = syncQueue;
         this.syncExecutorService = executorService;
         this.retryer = retryer;
+    }
+
+    /**
+     * Sets the sync configuration list.
+     *
+     * @param syncConfigurations the sync configuration list.
+     */
+    //TODO: Figure out a better way to set this configuration in only one place.
+    public void setSyncConfiguration(Set<ThingShadowSyncConfiguration> syncConfigurations) {
+        this.syncConfigurations = syncConfigurations;
     }
 
     /**
@@ -159,6 +175,7 @@ public class SyncHandler {
 
     /**
      * Start sync threads to process sync requests. This automatically starts a full sync for all shadows.
+     *
      * @param context         an context object for syncing
      * @param syncParallelism number of threads to use for syncing
      */
@@ -293,6 +310,7 @@ public class SyncHandler {
      * throttled.
      * <p/>
      * Synchronized so that there is at most only one put in progress waiting to be added if queue is full
+     *
      * @param request the request to add.
      */
     synchronized void putSyncRequest(SyncRequest request) {
@@ -321,6 +339,19 @@ public class SyncHandler {
     }
 
     /**
+     * Checks if the shadow is supposed to be synced or not.
+     *
+     * @param thingName  The thing name associated with the sync shadow update
+     * @param shadowName The shadow name associated with the sync shadow update
+     * @return true if the shadow is supposed to be synced; Else false.
+     */
+    private boolean isShadowSynced(String thingName, String shadowName) {
+        return this.syncConfigurations != null && this.syncConfigurations.stream()
+                .anyMatch(configuration -> configuration.getThingName().equals(thingName)
+                        && configuration.getShadowName().equals(shadowName));
+    }
+
+    /**
      * Pushes an update sync request to the request queue to update shadow in the cloud after a local shadow has
      * been successfully updated.
      *
@@ -329,7 +360,9 @@ public class SyncHandler {
      * @param updateDocument The update shadow request
      */
     public void pushCloudUpdateSyncRequest(String thingName, String shadowName, JsonNode updateDocument) {
-        putSyncRequest(new CloudUpdateSyncRequest(thingName, shadowName, updateDocument));
+        if (isShadowSynced(thingName, shadowName)) {
+            putSyncRequest(new CloudUpdateSyncRequest(thingName, shadowName, updateDocument));
+        }
     }
 
     /**
@@ -341,7 +374,9 @@ public class SyncHandler {
      * @param updateDocument Update document to be applied to local shadow
      */
     public void pushLocalUpdateSyncRequest(String thingName, String shadowName, byte[] updateDocument) {
-        putSyncRequest(new LocalUpdateSyncRequest(thingName, shadowName, updateDocument));
+        if (isShadowSynced(thingName, shadowName)) {
+            putSyncRequest(new LocalUpdateSyncRequest(thingName, shadowName, updateDocument));
+        }
     }
 
     /**
@@ -352,7 +387,9 @@ public class SyncHandler {
      * @param shadowName The shadow name associated with the sync shadow update
      */
     public void pushCloudDeleteSyncRequest(String thingName, String shadowName) {
-        putSyncRequest(new CloudDeleteSyncRequest(thingName, shadowName));
+        if (isShadowSynced(thingName, shadowName)) {
+            putSyncRequest(new CloudDeleteSyncRequest(thingName, shadowName));
+        }
     }
 
     /**
@@ -364,7 +401,9 @@ public class SyncHandler {
      * @param deletePayload Delete response payload containing the deleted shadow version
      */
     public void pushLocalDeleteSyncRequest(String thingName, String shadowName, byte[] deletePayload) {
-        putSyncRequest(new LocalDeleteSyncRequest(thingName, shadowName, deletePayload));
+        if (isShadowSynced(thingName, shadowName)) {
+            putSyncRequest(new LocalDeleteSyncRequest(thingName, shadowName, deletePayload));
+        }
     }
 
     /**
@@ -374,6 +413,8 @@ public class SyncHandler {
      * @param shadowName The shadow name associated with the sync shadow update
      */
     public void fullSyncOnShadow(String thingName, String shadowName) {
-        putSyncRequest(new FullShadowSyncRequest(thingName, shadowName));
+        if (isShadowSynced(thingName, shadowName)) {
+            putSyncRequest(new FullShadowSyncRequest(thingName, shadowName));
+        }
     }
 }

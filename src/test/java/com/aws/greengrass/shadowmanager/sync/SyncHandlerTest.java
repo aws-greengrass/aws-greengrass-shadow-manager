@@ -8,6 +8,7 @@ package com.aws.greengrass.shadowmanager.sync;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
+import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.sync.model.CloudDeleteSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.CloudUpdateSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.FullShadowSyncRequest;
@@ -37,9 +38,11 @@ import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -63,7 +66,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
-public class SyncHandlerTest {
+class SyncHandlerTest {
 
     @Mock
     RequestBlockingQueue queue;
@@ -315,7 +318,7 @@ public class SyncHandlerTest {
             executeLatch.countDown();
             // sleep here so we can ensure the latch finishes without multiple retries of request2
             try {
-                Thread.sleep(Duration.of(5, ChronoUnit.SECONDS).toMillis());
+                TimeUnit.SECONDS.sleep(5);
             } catch (InterruptedException e) {
                 // ignore this - we expect to be interupted when stopping
             }
@@ -421,12 +424,18 @@ public class SyncHandlerTest {
 
     @Test
     void GIVEN_syncing_WHEN_push_requests_THEN_requests_added() throws InterruptedException {
+        Set<ThingShadowSyncConfiguration> syncConfigurations = new HashSet<>();
+        syncConfigurations.add(ThingShadowSyncConfiguration.builder().thingName("thing1").shadowName("shadow1").build());
+        syncConfigurations.add(ThingShadowSyncConfiguration.builder().thingName("thing2").shadowName("shadow2").build());
+        syncConfigurations.add(ThingShadowSyncConfiguration.builder().thingName("thing3").shadowName("shadow3").build());
+        syncConfigurations.add(ThingShadowSyncConfiguration.builder().thingName("thing4").shadowName("shadow4").build());
+        syncConfigurations.add(ThingShadowSyncConfiguration.builder().thingName("thing5").shadowName("shadow5").build());
+        syncHandler.setSyncConfiguration(syncConfigurations);
         syncHandler.syncing.set(true);
 
         JsonNode node = mock(JsonNode.class);
 
         ArgumentCaptor<SyncRequest> requestCaptor = ArgumentCaptor.forClass(SyncRequest.class);
-
 
         syncHandler.pushLocalUpdateSyncRequest("thing1", "shadow1", "".getBytes(StandardCharsets.UTF_8));
         syncHandler.pushCloudUpdateSyncRequest("thing2", "shadow2", node);
