@@ -263,15 +263,15 @@ public class ShadowManager extends PluginService {
     }
 
     private void deleteRemovedSyncInformation() {
-        Set<Pair<String, String>> removedShadowList = new HashSet<>(this.dao.listSyncedShadows());
-        removedShadowList.removeAll(syncConfiguration.getSyncShadows());
-        removedShadowList.forEach(shadowThingPair ->
+        Set<Pair<String, String>> removedShadows = new HashSet<>(this.dao.listSyncedShadows());
+        removedShadows.removeAll(syncConfiguration.getSyncShadows());
+        removedShadows.forEach(shadowThingPair ->
                 dao.deleteSyncInformation(shadowThingPair.getLeft(), shadowThingPair.getRight()));
     }
 
     private void initializeSyncInfo() {
         long epochSeconds = Instant.EPOCH.getEpochSecond();
-        for (ThingShadowSyncConfiguration configuration : syncConfiguration.getSyncConfigurationSet()) {
+        for (ThingShadowSyncConfiguration configuration : syncConfiguration.getSyncConfigurations()) {
             insertSyncInfoIfNotPresent(epochSeconds, configuration);
         }
     }
@@ -290,7 +290,7 @@ public class ShadowManager extends PluginService {
     }
 
     private Optional<ThingShadowSyncConfiguration> getNucleusThingShadowSyncConfiguration(String thingName) {
-        return syncConfiguration.getSyncConfigurationSet()
+        return syncConfiguration.getSyncConfigurations()
                 .stream()
                 .filter(thingShadowSyncConfiguration -> thingName.equals(thingShadowSyncConfiguration.getThingName()))
                 .findAny();
@@ -345,7 +345,7 @@ public class ShadowManager extends PluginService {
      * @implNote Making this package-private for unit tests.
      */
     void startSyncingShadows() {
-        if (mqttClient.connected() && !syncConfiguration.getSyncConfigurationSet().isEmpty()) {
+        if (mqttClient.connected() && !syncConfiguration.getSyncConfigurations().isEmpty()) {
             final SyncContext syncContext = new SyncContext(dao, getUpdateThingShadowRequestHandler(),
                     getDeleteThingShadowRequestHandler(),
                     iotDataPlaneClientFactory);
@@ -354,7 +354,7 @@ public class ShadowManager extends PluginService {
         } else {
             logger.atTrace()
                     .kv("connected", mqttClient.connected())
-                    .kv("sync configuration list count", syncConfiguration.getSyncConfigurationSet().size())
+                    .kv("sync configuration list count", syncConfiguration.getSyncConfigurations().size())
                     .log("Not starting sync loop");
         }
     }

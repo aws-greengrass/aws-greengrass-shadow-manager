@@ -41,7 +41,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.UNEXPECTED_VALUE_
 @Builder
 @Getter
 public class ShadowSyncConfiguration {
-    private final Set<ThingShadowSyncConfiguration> syncConfigurationSet;
+    private final Set<ThingShadowSyncConfiguration> syncConfigurations;
     @JsonProperty(CONFIGURATION_PROVIDE_SYNC_STATUS_TOPIC)
     private final boolean provideSyncStatus;
     @JsonProperty(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC)
@@ -64,7 +64,7 @@ public class ShadowSyncConfiguration {
         // Compare the data members and return accordingly
         return Objects.equals(this.maxOutboundSyncUpdatesPerSecond, newConfiguration.maxOutboundSyncUpdatesPerSecond)
                 && Objects.equals(this.provideSyncStatus, newConfiguration.provideSyncStatus)
-                && Objects.equals(this.syncConfigurationSet, newConfiguration.syncConfigurationSet);
+                && Objects.equals(this.syncConfigurations, newConfiguration.syncConfigurations);
     }
 
     @SuppressWarnings("PMD.UselessOverridingMethod")
@@ -104,7 +104,7 @@ public class ShadowSyncConfiguration {
                 .orElse(DEFAULT_PROVIDE_SYNC_STATUS);
 
         return ShadowSyncConfiguration.builder()
-                .syncConfigurationSet(syncConfigurationSet)
+                .syncConfigurations(syncConfigurationSet)
                 .maxOutboundSyncUpdatesPerSecond(maxOutboundSyncUpdatesPerSecond)
                 .provideSyncStatus(provideSyncStatus)
                 .build();
@@ -218,7 +218,7 @@ public class ShadowSyncConfiguration {
      * @return Set of shadows to be synced.
      */
     public Set<Pair<String, String>> getSyncShadows() {
-        return syncConfigurationSet.stream().map(thingShadowSyncConfiguration2 ->
+        return syncConfigurations.stream().map(thingShadowSyncConfiguration2 ->
                 new Pair<>(thingShadowSyncConfiguration2.getThingName(),
                         thingShadowSyncConfiguration2.getShadowName()))
                 .collect(Collectors.toSet());

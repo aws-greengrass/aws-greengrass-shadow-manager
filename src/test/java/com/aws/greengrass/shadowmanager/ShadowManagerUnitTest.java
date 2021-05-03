@@ -244,7 +244,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         verify(thingNameTopic, times(0)).remove(any());
         assertFalse(shadowManager.isErrored());
 
-        assertThat(shadowManager.getSyncConfiguration().getSyncConfigurationSet(),
+        assertThat(shadowManager.getSyncConfiguration().getSyncConfigurations(),
                 containsInAnyOrder(
                         ThingShadowSyncConfiguration.builder().thingName(KERNEL_THING).shadowName("").build(),
                         ThingShadowSyncConfiguration.builder().thingName(KERNEL_THING).shadowName("boo2").build(),
@@ -290,7 +290,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         verify(thingNameTopic, times(0)).subscribeGeneric(any());
         verify(thingNameTopic, times(1)).remove(any());
         assertFalse(shadowManager.isErrored());
-        assertThat(shadowManager.getSyncConfiguration().getSyncConfigurationSet(),
+        assertThat(shadowManager.getSyncConfiguration().getSyncConfigurations(),
                 containsInAnyOrder(
                         ThingShadowSyncConfiguration.builder().thingName(THING_NAME_A).shadowName("foo").build(),
                         ThingShadowSyncConfiguration.builder().thingName(THING_NAME_A).shadowName("bar").build(),
@@ -322,7 +322,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         shadowManager.install();
 
         assertFalse(shadowManager.isErrored());
-        assertThat(shadowManager.getSyncConfiguration().getSyncConfigurationSet(),
+        assertThat(shadowManager.getSyncConfiguration().getSyncConfigurations(),
                 containsInAnyOrder(
                         ThingShadowSyncConfiguration.builder().thingName(KERNEL_THING).shadowName("").build(),
                         ThingShadowSyncConfiguration.builder().thingName(KERNEL_THING).shadowName("boo2").build()));
@@ -508,8 +508,8 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
     @Test
     void GIVEN_mqtt_client_callbacks_WHEN_onConnectionInterrupted_THEN_stops_sync_handler_and_unsubscribes() throws AuthorizationException {
         shadowManager.setGreengrassCoreIPCService(mockGreengrassCoreIPCService);
-        shadowManager.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurationSet(new HashSet<>()).build());
-        shadowManager.getSyncConfiguration().getSyncConfigurationSet().add(mock(ThingShadowSyncConfiguration.class));
+        shadowManager.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurations(new HashSet<>()).build());
+        shadowManager.getSyncConfiguration().getSyncConfigurations().add(mock(ThingShadowSyncConfiguration.class));
         doNothing().when(mockMqttClient).addToCallbackEvents(mqtOnConnectCallbackCaptor.capture(), mqttCallbacksCaptor.capture());
         when(mockDeviceConfiguration.isDeviceConfiguredToTalkToCloud()).thenReturn(true);
         shadowManager.postInject();
@@ -529,8 +529,8 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
 
     @Test
     void GIVEN_shadow_manager_WHEN_startSyncHandler_THEN_starts_sync_handler_and_unsubscribes() {
-        shadowManager.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurationSet(new HashSet<>()).build());
-        shadowManager.getSyncConfiguration().getSyncConfigurationSet().add(mock(ThingShadowSyncConfiguration.class));
+        shadowManager.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurations(new HashSet<>()).build());
+        shadowManager.getSyncConfiguration().getSyncConfigurations().add(mock(ThingShadowSyncConfiguration.class));
         when(mockMqttClient.connected()).thenReturn(true);
         shadowManager.startSyncingShadows();
 
