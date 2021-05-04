@@ -6,15 +6,20 @@
 package com.aws.greengrass.shadowmanager;
 
 import com.aws.greengrass.lifecyclemanager.Kernel;
+import com.aws.greengrass.shadowmanager.db.DiskCapacityMonitor;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import lombok.Getter;
+import lombok.Synchronized;
 import org.flywaydb.core.Flyway;
 import org.h2.jdbcx.JdbcDataSource;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Objects;
+import java.util.concurrent.ExecutorService;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
@@ -29,24 +34,25 @@ public class ShadowManagerDatabase implements Closeable {
     private static final String DATABASE_FORMAT = "jdbc:h2:%s/shadow";
     private final JdbcDataSource dataSource;
     private Connection connection;
-    //TODO: Use this when we implement [GG-35347]
-    @SuppressWarnings("PMD.UnusedPrivateField")
-    @SuppressFBWarnings(value = "URF_UNREAD_FIELD", justification = "Will be used when we implement [GG-35347]")
-    private long maxDiskUtilization;
+    @Getter
+    private final DiskCapacityMonitor capacityMonitor;
 
     /**
      * Creates a database with a {@link javax.sql.DataSource} using the kernel config.
      *
      * @param kernel Kernel config for the database manager.
+     * @param executorService executor service for managing threads/tasks.
      */
     @Inject
-    public ShadowManagerDatabase(final Kernel kernel) {
+    public ShadowManagerDatabase(final Kernel kernel, final ExecutorService executorService) {
         this.dataSource = new JdbcDataSource();
-        this.dataSource.setURL(
-                String.format(DATABASE_FORMAT, kernel.getNucleusPaths().workPath().resolve(SERVICE_NAME)));
+        Path path = kernel.getNucleusPaths().workPath().resolve(SERVICE_NAME);
+        this.dataSource.setURL(String.format(DATABASE_FORMAT, path));
+        this.capacityMonitor = new DiskCapacityMonitor(executorService, path);
     }
 
-    public synchronized Connection connection() {
+    @Synchronized
+    public Connection connection() throws SQLException {
         return connection;
     }
 
@@ -55,20 +61,22 @@ public class ShadowManagerDatabase implements Closeable {
      *
      * @throws SQLException When a connection to the local db fails for any reason.
      */
-    public synchronized void install() throws SQLException {
+    @Synchronized
+    public void install() throws SQLException {
         if (Objects.isNull(connection)) {
             connection = dataSource.getConnection();
         }
         Flyway flyway = Flyway.configure(getClass().getClassLoader())
-                .locations("db/migration")
-                .dataSource(dataSource)
-                .load();
+                .locations("db/migration").dataSource(dataSource).load();
         flyway.migrate();
+        capacityMonitor.start();
     }
 
     @Override
     @SuppressFBWarnings(value = "UWF_FIELD_NOT_INITIALIZED_IN_CONSTRUCTOR", justification = "We check for null.")
-    public synchronized void close() throws IOException {
+    @Synchronized
+    public void close() throws IOException {
+        capacityMonitor.stop();
         if (Objects.nonNull(connection)) {
             try {
                 connection.close();
@@ -81,9 +89,9 @@ public class ShadowManagerDatabase implements Closeable {
     /**
      * Sets the max disk utilization.
      *
-     * @param newMaxDiskUtilization the new max disk utilization.
+     * @param maxDiskUtilization the max disk utilization in bytes.
      */
-    public void setMaxDiskUtilization(int newMaxDiskUtilization) {
-        maxDiskUtilization = newMaxDiskUtilization;
+    public void setMaxDiskUtilization(int maxDiskUtilization) {
+        this.capacityMonitor.setMaxDiskUsage(maxDiskUtilization);
     }
 }

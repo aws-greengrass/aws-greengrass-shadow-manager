@@ -20,6 +20,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.nio.charset.StandardCharsets;
@@ -31,6 +32,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -51,7 +53,8 @@ class ShadowManagerDatabaseTest extends GGServiceTestUtil {
 
     private Kernel kernel;
     private GlobalStateChangeListener listener;
-
+    @Mock
+    private ExecutorService executorService;
     @TempDir
     Path rootDir;
 
@@ -82,7 +85,7 @@ class ShadowManagerDatabaseTest extends GGServiceTestUtil {
 
     private ShadowManagerDatabase initializeShadowManagerDatabase() throws InterruptedException, SQLException {
         startNucleusWithConfig("config.yaml", State.RUNNING);
-        ShadowManagerDatabase shadowManagerDatabase = new ShadowManagerDatabase(kernel);
+        ShadowManagerDatabase shadowManagerDatabase = new ShadowManagerDatabase(kernel, executorService);
         shadowManagerDatabase.install();
         return shadowManagerDatabase;
     }
@@ -153,7 +156,7 @@ class ShadowManagerDatabaseTest extends GGServiceTestUtil {
     @Test
     void GIVEN_shadow_manager_database_not_connected_WHEN_close_THEN_shadow_manager_database_connection_does_nothing() throws Exception {
         startNucleusWithConfig("config.yaml", State.RUNNING);
-        ShadowManagerDatabase shadowManagerDatabase = new ShadowManagerDatabase(kernel);
+        ShadowManagerDatabase shadowManagerDatabase = new ShadowManagerDatabase(kernel, executorService);
         assertNull(shadowManagerDatabase.connection());
         shadowManagerDatabase.close();
         assertNull(shadowManagerDatabase.connection());

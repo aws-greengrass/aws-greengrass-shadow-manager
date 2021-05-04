@@ -25,7 +25,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KE
 
 public class BaseRequestHandler {
     private static final Logger logger = LogManager.getLogger(BaseRequestHandler.class);
-    private final PubSubClientWrapper pubSubClientWrapper;
+    protected final PubSubClientWrapper pubSubClientWrapper;
 
     BaseRequestHandler(PubSubClientWrapper pubSubClientWrapper) {
         this.pubSubClientWrapper = pubSubClientWrapper;

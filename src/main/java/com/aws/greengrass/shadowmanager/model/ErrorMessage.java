@@ -46,6 +46,10 @@ public class ErrorMessage implements Serializable {
     public static final ErrorMessage PAYLOAD_TOO_LARGE_MESSAGE =
             ErrorMessage.builder().errorCode(413).message("The payload exceeds the maximum size allowed").build();
 
+    public static final ErrorMessage DISK_USAGE_EXCEEDED_MESSAGE =
+            ErrorMessage.builder().errorCode(413).message("The total disk usage for the local shadow service is "
+                    + "greater than the configured limit").build();
+
     public static final ErrorMessage VERSION_CONFLICT_MESSAGE =
             ErrorMessage.builder().errorCode(409).message("Version conflict").build();
 

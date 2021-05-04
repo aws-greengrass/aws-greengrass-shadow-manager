@@ -10,7 +10,7 @@ services:
         shadowDocuments:
           - thingName: Thing1
             classic: true
-
+      maxDiskUtilizationMegabytes: 1
   main:
     dependencies:
       - DoAll

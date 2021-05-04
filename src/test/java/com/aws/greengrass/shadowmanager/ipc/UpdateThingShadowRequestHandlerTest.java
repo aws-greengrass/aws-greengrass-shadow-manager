@@ -6,8 +6,10 @@
 package com.aws.greengrass.shadowmanager.ipc;
 
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
+import com.aws.greengrass.shadowmanager.db.CapacityMonitor;
 import com.aws.greengrass.shadowmanager.ipc.model.PubSubRequest;
 import com.aws.greengrass.shadowmanager.model.Constants;
+import com.aws.greengrass.shadowmanager.model.ErrorMessage;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.ShadowRequest;
 import com.aws.greengrass.shadowmanager.model.UpdateThingShadowHandlerResponse;
@@ -117,6 +119,11 @@ class UpdateThingShadowRequestHandlerTest {
     @Captor
     ArgumentCaptor<PubSubRequest> pubSubRequestCaptor;
 
+    @Mock
+    CapacityMonitor mockCapacityMonitor;
+
+    UpdateThingShadowRequestHandler handler;
+
     private byte[] getJsonFromResource(String fileName) throws IOException, URISyntaxException {
         File f = new File(getClass().getResource(fileName).toURI());
         return Files.readAllBytes(f.toPath());
@@ -137,6 +144,9 @@ class UpdateThingShadowRequestHandlerTest {
     void setup() throws IOException {
         lenient().when(mockSynchronizeHelper.getThingShadowLock(any())).thenReturn(Object.class);
         JsonUtil.loadSchema();
+
+        handler = new UpdateThingShadowRequestHandler(mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper,
+                mockSynchronizeHelper, mockSyncHandler, mockCapacityMonitor);
     }
 
     @ParameterizedTest
@@ -156,11 +166,10 @@ class UpdateThingShadowRequestHandlerTest {
         UpdateThingShadowResponse expectedResponse = new UpdateThingShadowResponse();
         expectedResponse.setPayload(updateDocument);
 
-        UpdateThingShadowRequestHandler updateThingShadowIPCHandler = new UpdateThingShadowRequestHandler(mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockSynchronizeHelper, mockSyncHandler);
         when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(new ShadowDocument(initialDocument)));
         when(mockDao.updateShadowThing(any(), any(), any(), anyLong())).thenReturn(Optional.of(updateDocument));
 
-        UpdateThingShadowHandlerResponse actualResponse = updateThingShadowIPCHandler.handleRequest(request, TEST_SERVICE);
+        UpdateThingShadowHandlerResponse actualResponse = handler.handleRequest(request, TEST_SERVICE);
         Optional<JsonNode> updatedDocumentJson = JsonUtil.getPayloadJson(actualResponse.getUpdateThingShadowResponse().getPayload());
         assertThat("Retrieved updateDocumentJson", updatedDocumentJson.isPresent(), is(true));
         assertAndRemoveTsAndMetadata(updatedDocumentJson.get());
@@ -234,11 +243,10 @@ class UpdateThingShadowRequestHandlerTest {
         UpdateThingShadowResponse expectedResponse = new UpdateThingShadowResponse();
         expectedResponse.setPayload(updateDocument);
 
-        UpdateThingShadowRequestHandler updateThingShadowIPCHandler = new UpdateThingShadowRequestHandler(mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockSynchronizeHelper, mockSyncHandler);
         when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(new ShadowDocument(initialDocument)));
         when(mockDao.updateShadowThing(any(), any(), any(), anyLong())).thenReturn(Optional.of(updateDocument));
 
-        UpdateThingShadowHandlerResponse actualResponse = updateThingShadowIPCHandler.handleRequest(request, TEST_SERVICE);
+        UpdateThingShadowHandlerResponse actualResponse = handler.handleRequest(request, TEST_SERVICE);
         Optional<JsonNode> updatedDocumentJson = JsonUtil.getPayloadJson(actualResponse.getUpdateThingShadowResponse().getPayload());
         assertThat("Retrieved updateDocumentJson", updatedDocumentJson.isPresent(), is(true));
         assertAndRemoveTsAndMetadata(updatedDocumentJson.get());
@@ -309,11 +317,10 @@ class UpdateThingShadowRequestHandlerTest {
         UpdateThingShadowResponse expectedResponse = new UpdateThingShadowResponse();
         expectedResponse.setPayload(updateDocument);
 
-        UpdateThingShadowRequestHandler updateThingShadowIPCHandler = new UpdateThingShadowRequestHandler(mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockSynchronizeHelper, mockSyncHandler);
         when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(new ShadowDocument(initialDocument)));
         when(mockDao.updateShadowThing(any(), any(), any(), anyLong())).thenReturn(Optional.of(updateDocument));
 
-        UpdateThingShadowHandlerResponse actualResponse = updateThingShadowIPCHandler.handleRequest(request, TEST_SERVICE);
+        UpdateThingShadowHandlerResponse actualResponse = handler.handleRequest(request, TEST_SERVICE);
         Optional<JsonNode> updatedDocumentJson = JsonUtil.getPayloadJson(actualResponse.getUpdateThingShadowResponse().getPayload());
         assertThat("Retrieved updateDocumentJson", updatedDocumentJson.isPresent(), is(true));
         assertAndRemoveTsAndMetadata(updatedDocumentJson.get());
@@ -392,11 +399,10 @@ class UpdateThingShadowRequestHandlerTest {
         UpdateThingShadowResponse expectedResponse = new UpdateThingShadowResponse();
         expectedResponse.setPayload(updateDocument);
 
-        UpdateThingShadowRequestHandler updateThingShadowIPCHandler = new UpdateThingShadowRequestHandler(mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockSynchronizeHelper, mockSyncHandler);
         when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(new ShadowDocument(initialDocument)));
         when(mockDao.updateShadowThing(any(), any(), any(), anyLong())).thenReturn(Optional.of(updateDocument));
 
-        UpdateThingShadowHandlerResponse actualResponse = updateThingShadowIPCHandler.handleRequest(request, TEST_SERVICE);
+        UpdateThingShadowHandlerResponse actualResponse = handler.handleRequest(request, TEST_SERVICE);
         Optional<JsonNode> updatedDocumentJson = JsonUtil.getPayloadJson(actualResponse.getUpdateThingShadowResponse().getPayload());
         assertThat("Retrieved updatedDocumentJson", updatedDocumentJson.isPresent(), is(true));
         assertAndRemoveTsAndMetadata(updatedDocumentJson.get());
@@ -463,11 +469,10 @@ class UpdateThingShadowRequestHandlerTest {
         UpdateThingShadowResponse expectedResponse = new UpdateThingShadowResponse();
         expectedResponse.setPayload(updateDocument);
 
-        UpdateThingShadowRequestHandler updateThingShadowIPCHandler = new UpdateThingShadowRequestHandler(mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockSynchronizeHelper, mockSyncHandler);
         when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.empty());
         when(mockDao.updateShadowThing(any(), any(), any(), anyLong())).thenReturn(Optional.of(updateDocument));
 
-        UpdateThingShadowHandlerResponse actualResponse = updateThingShadowIPCHandler.handleRequest(request, TEST_SERVICE);
+        UpdateThingShadowHandlerResponse actualResponse = handler.handleRequest(request, TEST_SERVICE);
         Optional<JsonNode> updatedDocumentJson = JsonUtil.getPayloadJson(actualResponse.getUpdateThingShadowResponse().getPayload());
         assertTrue(updatedDocumentJson.isPresent());
         assertAndRemoveTsAndMetadata(updatedDocumentJson.get());
@@ -534,10 +539,9 @@ class UpdateThingShadowRequestHandlerTest {
         request.setShadowName(SHADOW_NAME);
         request.setPayload(updateRequest);
 
-        UpdateThingShadowRequestHandler updateThingShadowIPCHandler = new UpdateThingShadowRequestHandler(mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockSynchronizeHelper, mockSyncHandler);
         when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(new ShadowDocument(initialDocument)));
         doThrow(new ShadowManagerDataException(new Exception(SAMPLE_EXCEPTION_MESSAGE))).when(mockDao).updateShadowThing(any(), any(), any(), anyLong());
-        ServiceError thrown = assertThrows(ServiceError.class, () -> updateThingShadowIPCHandler.handleRequest(request, TEST_SERVICE));
+        ServiceError thrown = assertThrows(ServiceError.class, () -> handler.handleRequest(request, TEST_SERVICE));
         assertThat(thrown.getMessage(), containsString(SAMPLE_EXCEPTION_MESSAGE));
 
         verify(mockPubSubClientWrapper, times(1)).reject(pubSubRequestCaptor.capture());
@@ -562,9 +566,8 @@ class UpdateThingShadowRequestHandlerTest {
         request.setShadowName(SHADOW_NAME);
         request.setPayload(updateRequest);
 
-        UpdateThingShadowRequestHandler updateThingShadowIPCHandler = new UpdateThingShadowRequestHandler(mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockSynchronizeHelper, mockSyncHandler);
         doThrow(new ShadowManagerDataException(new Exception(SAMPLE_EXCEPTION_MESSAGE))).when(mockDao).getShadowThing(any(), any());
-        ServiceError thrown = assertThrows(ServiceError.class, () -> updateThingShadowIPCHandler.handleRequest(request, TEST_SERVICE));
+        ServiceError thrown = assertThrows(ServiceError.class, () -> handler.handleRequest(request, TEST_SERVICE));
         assertThat(thrown.getMessage(), containsString(SAMPLE_EXCEPTION_MESSAGE));
 
         verify(mockPubSubClientWrapper, times(1)).reject(pubSubRequestCaptor.capture());
@@ -586,9 +589,9 @@ class UpdateThingShadowRequestHandlerTest {
         UpdateThingShadowRequest request = new UpdateThingShadowRequest();
         request.setThingName(THING_NAME);
         request.setShadowName(SHADOW_NAME);
-        UpdateThingShadowRequestHandler updateThingShadowIPCHandler = new UpdateThingShadowRequestHandler(mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockSynchronizeHelper, mockSyncHandler);
 
-        InvalidArgumentsError thrown = assertThrows(InvalidArgumentsError.class, () -> updateThingShadowIPCHandler.handleRequest(request, TEST_SERVICE));
+        InvalidArgumentsError thrown = assertThrows(InvalidArgumentsError.class, () -> handler
+                .handleRequest(request, TEST_SERVICE));
         assertThat(thrown.getMessage(), is("Missing update payload"));
 
         verify(mockPubSubClientWrapper, times(1)).reject(pubSubRequestCaptor.capture());
@@ -614,8 +617,8 @@ class UpdateThingShadowRequestHandlerTest {
         request.setPayload(updateRequest);
         doThrow(new AuthorizationException(SAMPLE_EXCEPTION_MESSAGE)).when(mockAuthorizationHandlerWrapper).doAuthorization(any(), any(), any(ShadowRequest.class));
 
-        UpdateThingShadowRequestHandler updateThingShadowIPCHandler = new UpdateThingShadowRequestHandler(mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockSynchronizeHelper, mockSyncHandler);
-        UnauthorizedError thrown = assertThrows(UnauthorizedError.class, () -> updateThingShadowIPCHandler.handleRequest(request, TEST_SERVICE));
+        UnauthorizedError thrown = assertThrows(UnauthorizedError.class, () -> handler
+                .handleRequest(request, TEST_SERVICE));
         assertThat(thrown.getMessage(), is(equalTo(SAMPLE_EXCEPTION_MESSAGE)));
 
         verify(mockPubSubClientWrapper, times(1)).reject(pubSubRequestCaptor.capture());
@@ -641,8 +644,8 @@ class UpdateThingShadowRequestHandlerTest {
         request.setShadowName(shadowName);
         request.setPayload(updateRequest);
 
-        UpdateThingShadowRequestHandler updateThingShadowIPCHandler = new UpdateThingShadowRequestHandler(mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockSynchronizeHelper, mockSyncHandler);
-        InvalidArgumentsError thrown = assertThrows(InvalidArgumentsError.class, () -> updateThingShadowIPCHandler.handleRequest(request, TEST_SERVICE));
+        InvalidArgumentsError thrown = assertThrows(InvalidArgumentsError.class, () -> handler
+                .handleRequest(request, TEST_SERVICE));
         assertThat(thrown.getMessage(), either(startsWith("ShadowName")).or(startsWith("ThingName")));
 
         verify(mockPubSubClientWrapper, times(1)).reject(pubSubRequestCaptor.capture());
@@ -668,11 +671,10 @@ class UpdateThingShadowRequestHandlerTest {
         request.setShadowName(SHADOW_NAME);
         request.setPayload(updateRequest);
 
-        UpdateThingShadowRequestHandler updateThingShadowIPCHandler = new UpdateThingShadowRequestHandler(mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockSynchronizeHelper, mockSyncHandler);
         when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(new ShadowDocument(initialDocument)));
         when(mockDao.updateShadowThing(any(), any(), any(), anyLong())).thenReturn(Optional.empty());
 
-        ServiceError thrown = assertThrows(ServiceError.class, () -> updateThingShadowIPCHandler.handleRequest(request, TEST_SERVICE));
+        ServiceError thrown = assertThrows(ServiceError.class, () -> handler.handleRequest(request, TEST_SERVICE));
         assertThat(thrown.getMessage(), startsWith("Unexpected error"));
 
         verify(mockPubSubClientWrapper, times(1))
@@ -701,9 +703,9 @@ class UpdateThingShadowRequestHandlerTest {
             when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(new ShadowDocument(initialDocument)));
         }
 
-        UpdateThingShadowRequestHandler updateThingShadowIPCHandler = new UpdateThingShadowRequestHandler(mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockSynchronizeHelper, mockSyncHandler);
 
-        InvalidArgumentsError thrown = assertThrows(InvalidArgumentsError.class, () -> updateThingShadowIPCHandler.handleRequest(request, TEST_SERVICE));
+        InvalidArgumentsError thrown = assertThrows(InvalidArgumentsError.class, () -> handler
+                .handleRequest(request, TEST_SERVICE));
         assertThat(thrown.getMessage().trim(), containsString(expectedErrorMessage));
 
         verify(mockPubSubClientWrapper, times(1))
@@ -758,9 +760,7 @@ class UpdateThingShadowRequestHandlerTest {
 
         when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(new ShadowDocument(initialDocument)));
 
-        UpdateThingShadowRequestHandler updateThingShadowIPCHandler = new UpdateThingShadowRequestHandler(mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockSynchronizeHelper, mockSyncHandler);
-
-        ConflictError thrown = assertThrows(ConflictError.class, () -> updateThingShadowIPCHandler.handleRequest(request, TEST_SERVICE));
+        ConflictError thrown = assertThrows(ConflictError.class, () -> handler.handleRequest(request, TEST_SERVICE));
         assertThat(thrown.getMessage().trim(), is(equalTo("Version conflict")));
 
         verify(mockPubSubClientWrapper, times(1))
@@ -805,5 +805,16 @@ class UpdateThingShadowRequestHandlerTest {
         String expectedErrorString = "The payload exceeds the maximum size allowed";
         int expectedErrorCode = 413;
         assertInvalidArgumentsErrorFromPayloadUpdate(initialDocument, badUpdateRequest, expectedErrorString, expectedErrorCode, context);
+    }
+
+    @Test
+    void GIVEN_update_to_new_shadow_WHEN_disk_at_capacity_THEN_throw_invalid_argument_error_and_send_message_on_rejected_topic(ExtensionContext context)
+            throws IOException, URISyntaxException {
+        byte[] initialDocument = null;
+        byte[] updateRequest = getJsonFromResource(RESOURCE_DIRECTORY_NAME + GOOD_UPDATE_DOCUMENT_WITH_DESIRED_REQUEST_FILE_NAME);
+        String expectedErrorString = ErrorMessage.DISK_USAGE_EXCEEDED_MESSAGE.getMessage();
+        int expectedErrorCode = ErrorMessage.DISK_USAGE_EXCEEDED_MESSAGE.getErrorCode();
+        when(mockCapacityMonitor.isCapacityExceeded()).thenReturn(true);
+        assertInvalidArgumentsErrorFromPayloadUpdate(initialDocument, updateRequest, expectedErrorString, expectedErrorCode, context);
     }
 }

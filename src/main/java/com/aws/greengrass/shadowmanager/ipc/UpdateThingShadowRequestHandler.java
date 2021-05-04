@@ -10,6 +10,7 @@ import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
+import com.aws.greengrass.shadowmanager.db.CapacityMonitor;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.ipc.model.Operation;
@@ -53,33 +54,39 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
 
     private final ShadowManagerDAO dao;
     private final AuthorizationHandlerWrapper authorizationHandlerWrapper;
-    private final PubSubClientWrapper pubSubClientWrapper;
     private final ShadowWriteSynchronizeHelper synchronizeHelper;
     private final SyncHandler syncHandler;
+
     @Setter
     @Getter
     private int maxShadowSize = DEFAULT_DOCUMENT_SIZE;
 
+    private final CapacityMonitor capacityMonitor;
+
+
     /**
-     * IPC Handler class for responding to UpdateThingShadow requests.
+     * Handler class for responding to UpdateThingShadow requests.
      *
      * @param dao                         Local shadow database management
      * @param authorizationHandlerWrapper The authorization handler wrapper
      * @param pubSubClientWrapper         The PubSub client wrapper
      * @param synchronizeHelper           The shadow write operation synchronizer helper.
      * @param syncHandler                 The handler class to perform shadow sync operations.
+     * @param capacityMonitor             Monitor for database.
      */
     public UpdateThingShadowRequestHandler(
             ShadowManagerDAO dao,
             AuthorizationHandlerWrapper authorizationHandlerWrapper,
             PubSubClientWrapper pubSubClientWrapper,
-            ShadowWriteSynchronizeHelper synchronizeHelper, SyncHandler syncHandler) {
+            ShadowWriteSynchronizeHelper synchronizeHelper,
+            SyncHandler syncHandler,
+            CapacityMonitor capacityMonitor) {
         super(pubSubClientWrapper);
         this.authorizationHandlerWrapper = authorizationHandlerWrapper;
         this.dao = dao;
-        this.pubSubClientWrapper = pubSubClientWrapper;
         this.synchronizeHelper = synchronizeHelper;
         this.syncHandler = syncHandler;
+        this.capacityMonitor = capacityMonitor;
     }
 
 
@@ -117,7 +124,6 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
 
             synchronized (synchronizeHelper.getThingShadowLock(shadowRequest)) {
                 try {
-
                     if (updatedDocumentRequestBytes == null || updatedDocumentRequestBytes.length == 0) {
                         throw new InvalidRequestParametersException(ErrorMessage.PAYLOAD_MISSING_MESSAGE);
                     }
@@ -136,6 +142,12 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
                     // invalid parameters error for payload too large.
                     if (updatedDocumentRequestBytes.length > maxShadowSize) {
                         throw new InvalidRequestParametersException(ErrorMessage.PAYLOAD_TOO_LARGE_MESSAGE);
+                    }
+
+                    // only throw this for new docs as we should still be able to edit existing docs (e.g. we might be
+                    // making the document smaller)
+                    if (currentDocument.isNewDocument() && capacityMonitor.isCapacityExceeded()) {
+                        throw new InvalidRequestParametersException(ErrorMessage.DISK_USAGE_EXCEEDED_MESSAGE);
                     }
                     updateDocumentRequest = JsonUtil.getPayloadJson(updatedDocumentRequestBytes)
                             .filter(d -> !isNullOrMissing(d))

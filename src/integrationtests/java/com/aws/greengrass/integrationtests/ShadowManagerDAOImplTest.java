@@ -19,21 +19,29 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import javax.inject.Inject;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.sql.SQLException;
 import java.time.Instant;
-import java.util.*;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.ExecutorService;
 import java.util.stream.Stream;
+import javax.inject.Inject;
 
 import static com.aws.greengrass.shadowmanager.TestUtils.SHADOW_NAME;
 import static com.aws.greengrass.shadowmanager.TestUtils.THING_NAME;
 import static com.aws.greengrass.shadowmanager.model.Constants.CLASSIC_SHADOW_IDENTIFIER;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.*;
+import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
@@ -58,6 +66,9 @@ class ShadowManagerDAOImplTest {
     private ShadowManagerDatabase database;
     private ShadowManagerDAOImpl dao;
 
+    @Mock
+    private ExecutorService executorService;
+
     @Inject
     public ShadowManagerDAOImplTest() {
     }
@@ -68,7 +79,7 @@ class ShadowManagerDAOImplTest {
         // Might need to start the kernel here
         kernel.parseArgs("-r", rootDir.toAbsolutePath().toString());
 
-        database = new ShadowManagerDatabase(kernel);
+        database = new ShadowManagerDatabase(kernel, executorService);
         database.install();
         dao = new ShadowManagerDAOImpl(database);
     }
