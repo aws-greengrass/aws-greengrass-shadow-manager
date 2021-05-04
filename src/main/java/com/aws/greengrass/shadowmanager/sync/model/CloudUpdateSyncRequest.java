@@ -132,6 +132,7 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
                     .shadowName(getShadowName())
                     .thingName(getThingName())
                     .cloudUpdateTime(Instant.now().getEpochSecond())
+                    .localVersion(shadowDocument.get().getVersion())
                     .build());
         } catch (JsonProcessingException | ShadowManagerDataException e) {
             logger.atError()

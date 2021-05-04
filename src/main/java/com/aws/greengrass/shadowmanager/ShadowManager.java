@@ -20,6 +20,7 @@ import com.aws.greengrass.shadowmanager.exception.InvalidConfigurationException;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowIPCHandler;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.ipc.GetThingShadowIPCHandler;
+import com.aws.greengrass.shadowmanager.ipc.GetThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.ipc.ListNamedShadowsForThingIPCHandler;
 import com.aws.greengrass.shadowmanager.ipc.PubSubClientWrapper;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowIPCHandler;
@@ -76,12 +77,12 @@ public class ShadowManager extends PluginService {
     private final ShadowManagerDAO dao;
     private final ShadowManagerDatabase database;
     private final AuthorizationHandlerWrapper authorizationHandlerWrapper;
-    private final PubSubClientWrapper pubSubClientWrapper;
     private final DeviceConfiguration deviceConfiguration;
     @Getter
     private final DeleteThingShadowRequestHandler deleteThingShadowRequestHandler;
     @Getter
     private final UpdateThingShadowRequestHandler updateThingShadowRequestHandler;
+    private final GetThingShadowRequestHandler getThingShadowRequestHandler;
     private final IotDataPlaneClientFactory iotDataPlaneClientFactory;
     private final SyncHandler syncHandler;
     private final CloudDataClient cloudDataClient;
@@ -146,7 +147,6 @@ public class ShadowManager extends PluginService {
         this.database = database;
         this.authorizationHandlerWrapper = authorizationHandlerWrapper;
         this.dao = dao;
-        this.pubSubClientWrapper = pubSubClientWrapper;
         this.deviceConfiguration = deviceConfiguration;
         this.iotDataPlaneClientFactory = iotDataPlaneClientFactory;
         this.syncHandler = syncHandler;
@@ -156,6 +156,8 @@ public class ShadowManager extends PluginService {
                 pubSubClientWrapper, synchronizeHelper, this.syncHandler);
         this.updateThingShadowRequestHandler = new UpdateThingShadowRequestHandler(dao, authorizationHandlerWrapper,
                 pubSubClientWrapper, synchronizeHelper, this.syncHandler);
+        this.getThingShadowRequestHandler = new GetThingShadowRequestHandler(dao, authorizationHandlerWrapper,
+                pubSubClientWrapper);
         this.deviceThingNameWatcher = this::handleDeviceThingNameChange;
     }
 
@@ -170,7 +172,7 @@ public class ShadowManager extends PluginService {
         }
 
         greengrassCoreIPCService.setOperationHandler(GET_THING_SHADOW, context -> new GetThingShadowIPCHandler(context,
-                dao, authorizationHandlerWrapper, pubSubClientWrapper));
+                getThingShadowRequestHandler));
         greengrassCoreIPCService.setOperationHandler(DELETE_THING_SHADOW, context ->
                 new DeleteThingShadowIPCHandler(context, deleteThingShadowRequestHandler));
         greengrassCoreIPCService.setOperationHandler(UPDATE_THING_SHADOW, context ->
@@ -344,7 +346,7 @@ public class ShadowManager extends PluginService {
      *
      * @implNote Making this package-private for unit tests.
      */
-    void startSyncingShadows() {
+    public void startSyncingShadows() {
         if (mqttClient.connected() && !syncConfiguration.getSyncConfigurations().isEmpty()) {
             final SyncContext syncContext = new SyncContext(dao, getUpdateThingShadowRequestHandler(),
                     getDeleteThingShadowRequestHandler(),

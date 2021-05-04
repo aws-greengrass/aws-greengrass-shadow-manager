@@ -26,8 +26,8 @@ public class DeleteThingShadowIPCHandler extends GeneratedAbstractDeleteThingSha
     /**
      * IPC Handler class for responding to DeleteThingShadow requests.
      *
-     * @param context                     topics passed by the Nucleus
-     * @param handler Update handler class to handle the Update Shadow request.
+     * @param context topics passed by the Nucleus
+     * @param handler handler class to handle the Delete Shadow request.
      */
     public DeleteThingShadowIPCHandler(OperationContinuationHandlerContext context,
                                        DeleteThingShadowRequestHandler handler) {
