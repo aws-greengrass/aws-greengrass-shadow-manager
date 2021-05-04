@@ -12,6 +12,7 @@ import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
+import com.aws.greengrass.shadowmanager.exception.ThrottledRequestException;
 import com.aws.greengrass.shadowmanager.ipc.model.Operation;
 import com.aws.greengrass.shadowmanager.ipc.model.PubSubRequest;
 import com.aws.greengrass.shadowmanager.model.Constants;
@@ -51,7 +52,6 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
 
     private final ShadowManagerDAO dao;
     private final AuthorizationHandlerWrapper authorizationHandlerWrapper;
-    private final PubSubClientWrapper pubSubClientWrapper;
     private final ShadowWriteSynchronizeHelper synchronizeHelper;
     private final SyncHandler syncHandler;
 
@@ -61,6 +61,7 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
      * @param dao                         Local shadow database management
      * @param authorizationHandlerWrapper The authorization handler wrapper
      * @param pubSubClientWrapper         The PubSub client wrapper
+     * @param inboundRateLimiter          The inbound rate limiter class for throttling local requests
      * @param synchronizeHelper           The shadow write operation synchronizer helper.
      * @param syncHandler                 The handler class to perform shadow sync operations.
      */
@@ -68,11 +69,11 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
             ShadowManagerDAO dao,
             AuthorizationHandlerWrapper authorizationHandlerWrapper,
             PubSubClientWrapper pubSubClientWrapper,
+            InboundRateLimiter inboundRateLimiter,
             ShadowWriteSynchronizeHelper synchronizeHelper, SyncHandler syncHandler) {
-        super(pubSubClientWrapper);
+        super(pubSubClientWrapper, inboundRateLimiter);
         this.authorizationHandlerWrapper = authorizationHandlerWrapper;
         this.dao = dao;
-        this.pubSubClientWrapper = pubSubClientWrapper;
         this.synchronizeHelper = synchronizeHelper;
         this.syncHandler = syncHandler;
     }
@@ -105,9 +106,18 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
 
             ShadowRequest shadowRequest = new ShadowRequest(thingName, shadowName);
             try {
+                inboundRateLimiter.acquireLockForThing(thingName);
                 Validator.validateShadowRequest(shadowRequest);
             } catch (InvalidRequestParametersException e) {
-                throwInvalidArgumentsError(thingName, shadowName, clientToken, e, Operation.UPDATE_SHADOW);
+                throwInvalidArgumentsError(thingName, shadowName, Optional.empty(), e, Operation.DELETE_SHADOW);
+            } catch (ThrottledRequestException e) {
+                logger.atError()
+                        .setEventType(LogEvents.DELETE_THING_SHADOW.code())
+                        .setCause(e)
+                        .kv(LOG_THING_NAME_KEY, thingName)
+                        .kv(LOG_SHADOW_NAME_KEY, shadowName)
+                        .log("Local UpdateThingShadow request throttled");
+                throw new ServiceError(e.getMessage());
             }
 
             synchronized (synchronizeHelper.getThingShadowLock(shadowRequest)) {

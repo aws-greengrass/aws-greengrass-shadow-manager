@@ -21,6 +21,7 @@ import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowIPCHandler;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.ipc.GetThingShadowIPCHandler;
 import com.aws.greengrass.shadowmanager.ipc.GetThingShadowRequestHandler;
+import com.aws.greengrass.shadowmanager.ipc.InboundRateLimiter;
 import com.aws.greengrass.shadowmanager.ipc.ListNamedShadowsForThingIPCHandler;
 import com.aws.greengrass.shadowmanager.ipc.PubSubClientWrapper;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowIPCHandler;
@@ -60,9 +61,11 @@ import javax.inject.Inject;
 import static com.aws.greengrass.componentmanager.KernelConfigResolver.CONFIGURATION_CONFIG_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC;
+import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_LOCAL_REQUESTS_PER_THING_PS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SYNCHRONIZATION_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_DISK_UTILIZATION_SIZE_B;
 import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_DOCUMENT_SIZE;
+import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_LOCAL_SHADOW_REQUESTS_PER_THING_PS;
 import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.DELETE_THING_SHADOW;
 import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.GET_THING_SHADOW;
 import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.LIST_NAMED_SHADOWS_FOR_THING;
@@ -77,6 +80,7 @@ public class ShadowManager extends PluginService {
     private final ShadowManagerDAO dao;
     private final ShadowManagerDatabase database;
     private final AuthorizationHandlerWrapper authorizationHandlerWrapper;
+    private final InboundRateLimiter inboundRateLimiter;
     private final DeviceConfiguration deviceConfiguration;
     @Getter
     private final DeleteThingShadowRequestHandler deleteThingShadowRequestHandler;
@@ -122,6 +126,7 @@ public class ShadowManager extends PluginService {
      * @param dao                         local shadow database management
      * @param authorizationHandlerWrapper the authorization handler wrapper
      * @param pubSubClientWrapper         The PubSub client wrapper
+     * @param inboundRateLimiter          The inbound rate limiter class for throttling local requests
      * @param deviceConfiguration         the device configuration
      * @param synchronizeHelper           the shadow write operation synchronizer helper
      * @param iotDataPlaneClient          the iot data plane client
@@ -137,6 +142,7 @@ public class ShadowManager extends PluginService {
             ShadowManagerDAOImpl dao,
             AuthorizationHandlerWrapper authorizationHandlerWrapper,
             PubSubClientWrapper pubSubClientWrapper,
+            InboundRateLimiter inboundRateLimiter,
             DeviceConfiguration deviceConfiguration,
             ShadowWriteSynchronizeHelper synchronizeHelper,
             IotDataPlaneClient iotDataPlaneClient,
@@ -146,6 +152,7 @@ public class ShadowManager extends PluginService {
         super(topics);
         this.database = database;
         this.authorizationHandlerWrapper = authorizationHandlerWrapper;
+        this.inboundRateLimiter = inboundRateLimiter;
         this.dao = dao;
         this.deviceConfiguration = deviceConfiguration;
         this.iotDataPlaneClient = iotDataPlaneClient;
@@ -153,11 +160,11 @@ public class ShadowManager extends PluginService {
         this.cloudDataClient = cloudDataClient;
         this.mqttClient = mqttClient;
         this.deleteThingShadowRequestHandler = new DeleteThingShadowRequestHandler(dao, authorizationHandlerWrapper,
-                pubSubClientWrapper, synchronizeHelper, this.syncHandler);
+                pubSubClientWrapper, inboundRateLimiter, synchronizeHelper, this.syncHandler);
         this.updateThingShadowRequestHandler = new UpdateThingShadowRequestHandler(dao, authorizationHandlerWrapper,
-                pubSubClientWrapper, synchronizeHelper, this.syncHandler);
+                pubSubClientWrapper, inboundRateLimiter, synchronizeHelper, this.syncHandler);
         this.getThingShadowRequestHandler = new GetThingShadowRequestHandler(dao, authorizationHandlerWrapper,
-                pubSubClientWrapper);
+                pubSubClientWrapper, inboundRateLimiter);
         this.deviceThingNameWatcher = this::handleDeviceThingNameChange;
     }
 
@@ -227,6 +234,8 @@ public class ShadowManager extends PluginService {
                 }
 
                 iotDataPlaneClient.setRate(syncConfiguration.getMaxOutboundSyncUpdatesPerSecond());
+                // TODO: determine where to place config field for inbound updates
+                // inboundRateLimiter.setRate(syncConfiguration.getMaxOutboundSyncUpdatesPerSecond());
 
                 cloudDataClient.stopSubscribing();
                 syncHandler.stop();
@@ -260,6 +269,18 @@ public class ShadowManager extends PluginService {
                         int newMaxDiskUtilization = Coerce.toInt(newv);
                         Validator.validateMaxDiskUtilization(newMaxDiskUtilization);
                         this.database.setMaxDiskUtilization(Coerce.toInt(newv));
+                    } catch (InvalidConfigurationException e) {
+                        serviceErrored(e);
+                    }
+                });
+
+        config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_LOCAL_REQUESTS_PER_THING_PS_TOPIC)
+                .dflt(DEFAULT_LOCAL_SHADOW_REQUESTS_PER_THING_PS)
+                .subscribe((why, newv) -> {
+                    try {
+                        int maxLocalShadowUpdatesPerThingPerSecond = Coerce.toInt(newv);
+                        Validator.validateLocalShadowRequestsPerThingPerSecond(maxLocalShadowUpdatesPerThingPerSecond);
+                        this.inboundRateLimiter.setRate(maxLocalShadowUpdatesPerThingPerSecond);
                     } catch (InvalidConfigurationException e) {
                         serviceErrored(e);
                     }

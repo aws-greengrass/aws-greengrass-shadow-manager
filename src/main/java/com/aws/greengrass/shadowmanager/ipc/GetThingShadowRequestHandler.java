@@ -12,6 +12,7 @@ import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
+import com.aws.greengrass.shadowmanager.exception.ThrottledRequestException;
 import com.aws.greengrass.shadowmanager.ipc.model.Operation;
 import com.aws.greengrass.shadowmanager.ipc.model.PubSubRequest;
 import com.aws.greengrass.shadowmanager.model.ErrorMessage;
@@ -43,7 +44,6 @@ public class GetThingShadowRequestHandler extends BaseRequestHandler {
     private static final Logger logger = LogManager.getLogger(GetThingShadowRequestHandler.class);
     private final ShadowManagerDAO dao;
     private final AuthorizationHandlerWrapper authorizationHandlerWrapper;
-    private final PubSubClientWrapper pubSubClientWrapper;
 
     /**
      * IPC Handler class for responding to GetThingShadow requests.
@@ -51,14 +51,15 @@ public class GetThingShadowRequestHandler extends BaseRequestHandler {
      * @param dao                         Local shadow database management
      * @param authorizationHandlerWrapper The authorization handler wrapper
      * @param pubSubClientWrapper         The PubSub client wrapper
+     * @param inboundRateLimiter          The inbound rate limiter class for throttling local requests
      */
     public GetThingShadowRequestHandler(ShadowManagerDAO dao,
                                         AuthorizationHandlerWrapper authorizationHandlerWrapper,
-                                        PubSubClientWrapper pubSubClientWrapper) {
-        super(pubSubClientWrapper);
+                                        PubSubClientWrapper pubSubClientWrapper,
+                                        InboundRateLimiter inboundRateLimiter) {
+        super(pubSubClientWrapper, inboundRateLimiter);
         this.authorizationHandlerWrapper = authorizationHandlerWrapper;
         this.dao = dao;
-        this.pubSubClientWrapper = pubSubClientWrapper;
     }
 
     /**
@@ -85,7 +86,21 @@ public class GetThingShadowRequestHandler extends BaseRequestHandler {
                         .log();
 
                 ShadowRequest shadowRequest = new ShadowRequest(thingName, shadowName);
-                Validator.validateShadowRequest(shadowRequest);
+                try {
+                    inboundRateLimiter.acquireLockForThing(thingName);
+                    Validator.validateShadowRequest(shadowRequest);
+                } catch (InvalidRequestParametersException e) {
+                    throwInvalidArgumentsError(thingName, shadowName, Optional.empty(), e, Operation.DELETE_SHADOW);
+                } catch (ThrottledRequestException e) {
+                    logger.atError()
+                            .setEventType(LogEvents.DELETE_THING_SHADOW.code())
+                            .setCause(e)
+                            .kv(LOG_THING_NAME_KEY, thingName)
+                            .kv(LOG_SHADOW_NAME_KEY, shadowName)
+                            .log("Local GetThingShadow request throttled");
+                    throw new ServiceError(e.getMessage());
+                }
+
                 authorizationHandlerWrapper.doAuthorization(GET_THING_SHADOW, serviceName, shadowRequest);
 
                 Optional<ShadowDocument> currentShadowDocument = dao.getShadowThing(thingName, shadowName);
@@ -144,7 +159,7 @@ public class GetThingShadowRequestHandler extends BaseRequestHandler {
                         .setCause(e)
                         .kv(LOG_THING_NAME_KEY, thingName)
                         .kv(LOG_SHADOW_NAME_KEY, shadowName)
-                        .log("Could not process UpdateThingShadow Request due to internal service error");
+                        .log("Could not process GetThingShadow Request due to internal service error");
                 publishErrorMessage(thingName, shadowName, Optional.empty(),
                         ErrorMessage.INTERNAL_SERVICE_FAILURE_MESSAGE, Operation.GET_SHADOW);
                 throw new ServiceError(e.getMessage());

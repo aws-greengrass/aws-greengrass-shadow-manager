@@ -137,4 +137,19 @@ public final class Validator {
         }
 
     }
+
+    /**
+     * Validates the maximum outbound sync updates per second is within the appropriate limits.
+     *
+     * @param maxLocalShadowRequestsPerThingPerSecond The new max local shadow requests limit per thing per second
+     * @throws InvalidConfigurationException if the new local shadow requests limit per thing per second is less than 0.
+     */
+    public static void validateLocalShadowRequestsPerThingPerSecond(int maxLocalShadowRequestsPerThingPerSecond) {
+        if (maxLocalShadowRequestsPerThingPerSecond <= 0) {
+            throw new InvalidConfigurationException(String.format(
+                    "Maximum local shadow requests per thing per second provided %dd is invalid. It should be "
+                            + "greater than 0.", maxLocalShadowRequestsPerThingPerSecond));
+        }
+    }
+
 }
