@@ -896,7 +896,7 @@ class FullShadowSyncRequestTest {
         assertThat(thrown.getCause(), is(instanceOf(IOException.class)));
 
         verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
-        verify(mockDao, times(0)).updateSyncInformation(any());
+        verify(mockDao, times(1)).updateSyncInformation(any());
         verify(mockUpdateThingShadowRequestHandler, times(0)).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest.class), anyString());
         verify(mockIotDataPlaneClient, times(0)).updateThingShadow(anyString(), anyString(), any(byte[].class));
     }

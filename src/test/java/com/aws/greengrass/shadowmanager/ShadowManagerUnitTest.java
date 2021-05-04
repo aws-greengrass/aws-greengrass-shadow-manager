@@ -9,7 +9,6 @@ import com.aws.greengrass.authorization.exceptions.AuthorizationException;
 import com.aws.greengrass.config.Topic;
 import com.aws.greengrass.config.Topics;
 import com.aws.greengrass.config.UnsupportedInputTypeException;
-import com.aws.greengrass.config.WhatHappened;
 import com.aws.greengrass.deployment.DeviceConfiguration;
 import com.aws.greengrass.mqttclient.CallbackEventManager;
 import com.aws.greengrass.mqttclient.MqttClient;
@@ -27,7 +26,6 @@ import com.aws.greengrass.shadowmanager.util.ShadowWriteSynchronizeHelper;
 import com.aws.greengrass.shadowmanager.util.Validator;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.testcommons.testutilities.GGServiceTestUtil;
-import com.aws.greengrass.util.Pair;
 import com.fasterxml.jackson.databind.exc.MismatchedInputException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -52,13 +50,11 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.Function;
 
 import static com.aws.greengrass.componentmanager.KernelConfigResolver.CONFIGURATION_CONFIG_KEY;
 import static com.aws.greengrass.deployment.DeviceConfiguration.DEVICE_PARAM_THING_NAME;
 import static com.aws.greengrass.shadowmanager.ShadowManager.SERVICE_NAME;
-import static com.aws.greengrass.shadowmanager.model.Constants.CLASSIC_SHADOW_IDENTIFIER;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_CLASSIC_SHADOW_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC;
@@ -78,7 +74,6 @@ import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anySet;
@@ -248,26 +243,15 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         verify(thingNameTopic, times(1)).subscribeGeneric(any());
         verify(thingNameTopic, times(0)).remove(any());
         assertFalse(shadowManager.isErrored());
-        assertThat(shadowManager.getSyncConfiguration().getSyncConfigurationList().size(), is(3));
-        Set<Pair<String,String>> foundSyncShadowSet = new HashSet<>();
-        shadowManager.getSyncConfiguration().getSyncConfigurationList().forEach(thingShadowSyncConfiguration -> {
-            if (thingShadowSyncConfiguration.isSyncClassicShadow()) {
-                foundSyncShadowSet.add(new Pair<>(thingShadowSyncConfiguration.getThingName(), CLASSIC_SHADOW_IDENTIFIER));
-            }
-            thingShadowSyncConfiguration.getSyncNamedShadows().forEach(shadowName ->
-                    foundSyncShadowSet.add(new Pair<>(thingShadowSyncConfiguration.getThingName(), shadowName)));
 
-            if (KERNEL_THING.equals(thingShadowSyncConfiguration.getThingName())) {
-                assertThat(thingShadowSyncConfiguration.getSyncNamedShadows(), is(Collections.singletonList("boo2")));
-            } else if (THING_NAME_A.equals(thingShadowSyncConfiguration.getThingName())) {
-                assertThat(thingShadowSyncConfiguration.getSyncNamedShadows(), is(Arrays.asList("foo", "bar")));
-            } else if (THING_NAME_B.equals(thingShadowSyncConfiguration.getThingName())) {
-                assertThat(thingShadowSyncConfiguration.getSyncNamedShadows(), is(Collections.singletonList("foo2")));
-            } else {
-                fail("Encountered unknown thing in sync configurations list: " + thingShadowSyncConfiguration.getThingName());
-            }
-        });
-        assertThat(foundSyncShadowSet, is(equalTo(shadowManager.getSyncConfiguration().getSyncShadows())));
+        assertThat(shadowManager.getSyncConfiguration().getSyncConfigurations(),
+                containsInAnyOrder(
+                        ThingShadowSyncConfiguration.builder().thingName(KERNEL_THING).shadowName("").build(),
+                        ThingShadowSyncConfiguration.builder().thingName(KERNEL_THING).shadowName("boo2").build(),
+                        ThingShadowSyncConfiguration.builder().thingName(THING_NAME_A).shadowName("foo").build(),
+                        ThingShadowSyncConfiguration.builder().thingName(THING_NAME_A).shadowName("bar").build(),
+                        ThingShadowSyncConfiguration.builder().thingName(THING_NAME_B).shadowName("").build(),
+                        ThingShadowSyncConfiguration.builder().thingName(THING_NAME_B).shadowName("foo2").build()));
         assertThat(shadowManager.getSyncConfiguration().getMaxOutboundSyncUpdatesPerSecond(), is(500));
         assertThat(shadowManager.getSyncConfiguration().isProvideSyncStatus(), is(true));
         verify(mockDao, times(6)).insertSyncInfoIfNotExists(any(SyncInformation.class));
@@ -292,9 +276,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         configTopics.createLeafChild(CONFIGURATION_SHADOW_DOCUMENTS_TOPIC).withValueChecked(shadowDocumentsList);
         configTopics.createLeafChild(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC).withValueChecked(500);
         configTopics.createLeafChild(CONFIGURATION_PROVIDE_SYNC_STATUS_TOPIC).withValueChecked(true);
-        Topics systemConfigTopics = configTopics.createInteriorChild(CONFIGURATION_NUCLEUS_THING_TOPIC);
-        systemConfigTopics.createLeafChild(CONFIGURATION_CLASSIC_SHADOW_TOPIC).withValue("true");
-        systemConfigTopics.createLeafChild(CONFIGURATION_NAMED_SHADOWS_TOPIC).withValue(Collections.singletonList("boo2"));
 
         when(thingNameTopic.getOnce()).thenReturn(KERNEL_THING);
         when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC))
@@ -306,31 +287,17 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         when(mockDeviceConfiguration.getThingName()).thenReturn(thingNameTopic);
         shadowManager.install();
 
-        verify(thingNameTopic, times(1)).subscribeGeneric(any());
-        verify(thingNameTopic, times(0)).remove(any());
+        verify(thingNameTopic, times(0)).subscribeGeneric(any());
+        verify(thingNameTopic, times(1)).remove(any());
         assertFalse(shadowManager.isErrored());
-        assertThat(shadowManager.getSyncConfiguration().getSyncConfigurationList().size(), is(3));
-        Set<Pair<String,String>> foundSyncShadowSet = new HashSet<>();
-        shadowManager.getSyncConfiguration().getSyncConfigurationList().forEach(thingShadowSyncConfiguration -> {
-            if (thingShadowSyncConfiguration.isSyncClassicShadow()) {
-                foundSyncShadowSet.add(new Pair<>(thingShadowSyncConfiguration.getThingName(), CLASSIC_SHADOW_IDENTIFIER));
-            }
-            thingShadowSyncConfiguration.getSyncNamedShadows().forEach(shadowName ->
-                    foundSyncShadowSet.add(new Pair<>(thingShadowSyncConfiguration.getThingName(), shadowName)));
-
-            if (KERNEL_THING.equals(thingShadowSyncConfiguration.getThingName())) {
-                assertThat(thingShadowSyncConfiguration.getSyncNamedShadows(), is(Collections.singletonList("boo2")));
-            } else if (THING_NAME_A.equals(thingShadowSyncConfiguration.getThingName())) {
-                assertThat(thingShadowSyncConfiguration.getSyncNamedShadows(), is(Arrays.asList("foo", "bar")));
-            } else if (THING_NAME_B.equals(thingShadowSyncConfiguration.getThingName())) {
-                assertThat(thingShadowSyncConfiguration.getSyncNamedShadows(), is(Collections.singletonList("foo2")));
-            } else {
-                fail("Encountered unknown thing in sync configurations list: " + thingShadowSyncConfiguration.getThingName());
-            }
-        });
-        assertThat(foundSyncShadowSet, is(equalTo(shadowManager.getSyncConfiguration().getSyncShadows())));
+        assertThat(shadowManager.getSyncConfiguration().getSyncConfigurations(),
+                containsInAnyOrder(
+                        ThingShadowSyncConfiguration.builder().thingName(THING_NAME_A).shadowName("foo").build(),
+                        ThingShadowSyncConfiguration.builder().thingName(THING_NAME_A).shadowName("bar").build(),
+                        ThingShadowSyncConfiguration.builder().thingName(THING_NAME_B).shadowName("").build(),
+                        ThingShadowSyncConfiguration.builder().thingName(THING_NAME_B).shadowName("foo2").build()));
         assertThat(shadowManager.getSyncConfiguration().isProvideSyncStatus(), is(true));
-        verify(mockDao, times(6)).insertSyncInfoIfNotExists(any(SyncInformation.class));
+        verify(mockDao, times(4)).insertSyncInfoIfNotExists(any(SyncInformation.class));
     }
 
     @Test
@@ -355,35 +322,11 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         shadowManager.install();
 
         assertFalse(shadowManager.isErrored());
-        assertThat(shadowManager.getSyncConfiguration().getSyncConfigurationList().size(), is(1));
-        shadowManager.getSyncConfiguration().getSyncConfigurationList().forEach(thingShadowSyncConfiguration -> {
-            if (KERNEL_THING.equals(thingShadowSyncConfiguration.getThingName())) {
-                assertThat(thingShadowSyncConfiguration.getSyncNamedShadows(), is(Collections.singletonList("boo2")));
-            } else {
-                fail("Encountered unknown thing in sync configurations list: " + thingShadowSyncConfiguration.getThingName());
-            }
-        });
-        assertThat(shadowManager.getSyncConfiguration().getMaxOutboundSyncUpdatesPerSecond(), is(500));
-        assertThat(shadowManager.getSyncConfiguration().isProvideSyncStatus(), is(true));
+        assertThat(shadowManager.getSyncConfiguration().getSyncConfigurations(),
+                containsInAnyOrder(
+                        ThingShadowSyncConfiguration.builder().thingName(KERNEL_THING).shadowName("").build(),
+                        ThingShadowSyncConfiguration.builder().thingName(KERNEL_THING).shadowName("boo2").build()));
 
-        String newThingName = "newKernelThing";
-        thingNameTopic = thingNameTopic.withValue(newThingName);
-        shadowManager.handleDeviceThingNameChange(WhatHappened.changed, thingNameTopic);
-        assertThat(shadowManager.getSyncConfiguration().getSyncConfigurationList().size(), is(1));
-        Set<Pair<String,String>> foundSyncShadowSet = new HashSet<>();
-        shadowManager.getSyncConfiguration().getSyncConfigurationList().forEach(thingShadowSyncConfiguration -> {
-            if (thingShadowSyncConfiguration.isSyncClassicShadow()) {
-                foundSyncShadowSet.add(new Pair<>(thingShadowSyncConfiguration.getThingName(), CLASSIC_SHADOW_IDENTIFIER));
-            }
-            thingShadowSyncConfiguration.getSyncNamedShadows().forEach(shadowName ->
-                    foundSyncShadowSet.add(new Pair<>(thingShadowSyncConfiguration.getThingName(), shadowName)));
-            if (newThingName.equals(thingShadowSyncConfiguration.getThingName())) {
-                assertThat(thingShadowSyncConfiguration.getSyncNamedShadows(), is(Collections.singletonList("boo2")));
-            } else {
-                fail("Encountered unknown thing in sync configurations list: " + thingShadowSyncConfiguration.getThingName());
-            }
-        });
-        assertThat(foundSyncShadowSet, is(equalTo(shadowManager.getSyncConfiguration().getSyncShadows())));
         verify(mockDao, times(2)).insertSyncInfoIfNotExists(any(SyncInformation.class));
 
     }
@@ -431,6 +374,8 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         shadowDocumentsList.add(thingAMap);
         configTopics.createLeafChild(CONFIGURATION_SHADOW_DOCUMENTS_TOPIC).withValueChecked(shadowDocumentsList);
 
+        Topic thingNameTopic = Topic.of(context, DEVICE_PARAM_THING_NAME, KERNEL_THING);
+        when(mockDeviceConfiguration.getThingName()).thenReturn(thingNameTopic);
         when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC))
                 .thenReturn(maxDiskUtilizationMBTopic);
         when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC))
@@ -563,8 +508,8 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
     @Test
     void GIVEN_mqtt_client_callbacks_WHEN_onConnectionInterrupted_THEN_stops_sync_handler_and_unsubscribes() throws AuthorizationException {
         shadowManager.setGreengrassCoreIPCService(mockGreengrassCoreIPCService);
-        shadowManager.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurationList(new ArrayList<>()).build());
-        shadowManager.getSyncConfiguration().getSyncConfigurationList().add(mock(ThingShadowSyncConfiguration.class));
+        shadowManager.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurations(new HashSet<>()).build());
+        shadowManager.getSyncConfiguration().getSyncConfigurations().add(mock(ThingShadowSyncConfiguration.class));
         doNothing().when(mockMqttClient).addToCallbackEvents(mqtOnConnectCallbackCaptor.capture(), mqttCallbacksCaptor.capture());
         when(mockDeviceConfiguration.isDeviceConfiguredToTalkToCloud()).thenReturn(true);
         shadowManager.postInject();
@@ -583,9 +528,9 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
     }
 
     @Test
-    void GIVEN_shadow_manager_WHEN_startSyncHandler_THEN_starts_sync_handler_and_unsubscribes() throws AuthorizationException {
-        shadowManager.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurationList(new ArrayList<>()).build());
-        shadowManager.getSyncConfiguration().getSyncConfigurationList().add(mock(ThingShadowSyncConfiguration.class));
+    void GIVEN_shadow_manager_WHEN_startSyncHandler_THEN_starts_sync_handler_and_unsubscribes() {
+        shadowManager.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurations(new HashSet<>()).build());
+        shadowManager.getSyncConfiguration().getSyncConfigurations().add(mock(ThingShadowSyncConfiguration.class));
         when(mockMqttClient.connected()).thenReturn(true);
         shadowManager.startSyncingShadows();
 

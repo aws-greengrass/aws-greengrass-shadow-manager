@@ -48,16 +48,15 @@ import software.amazon.awssdk.crt.mqtt.MqttClientConnectionEvents;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import javax.inject.Inject;
 
 import static com.aws.greengrass.componentmanager.KernelConfigResolver.CONFIGURATION_CONFIG_KEY;
-import static com.aws.greengrass.shadowmanager.model.Constants.CLASSIC_SHADOW_IDENTIFIER;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SYNCHRONIZATION_TOPIC;
@@ -111,6 +110,7 @@ public class ShadowManager extends PluginService {
     @Setter
     private GreengrassCoreIPCService greengrassCoreIPCService;
     private final ChildChanged deviceThingNameWatcher;
+    private String thingName;
 
 
     /**
@@ -183,9 +183,14 @@ public class ShadowManager extends PluginService {
         if (!(changedNode instanceof Topic)) {
             return;
         }
-        String newThingName = Coerce.toString(this.deviceConfiguration.getThingName());
-        getNucleusThingShadowSyncConfiguration().ifPresent(thingShadowSyncConfiguration ->
-                thingShadowSyncConfiguration.setThingName(newThingName));
+        String oldThingName = thingName;
+        thingName = Coerce.toString(this.deviceConfiguration.getThingName());
+        if (oldThingName == null) {
+            // First time.
+            return;
+        }
+        getNucleusThingShadowSyncConfiguration(oldThingName).ifPresent(thingShadowSyncConfiguration ->
+                thingShadowSyncConfiguration.setThingName(thingName));
     }
 
     @Override
@@ -211,7 +216,8 @@ public class ShadowManager extends PluginService {
                 this.syncConfiguration = newSyncConfiguration;
 
                 // Subscribe to the thing name topic if the Nucleus thing shadows have been synced.
-                Optional<ThingShadowSyncConfiguration> nucleusThingConfig = getNucleusThingShadowSyncConfiguration();
+                Optional<ThingShadowSyncConfiguration> nucleusThingConfig =
+                        getNucleusThingShadowSyncConfiguration(thingName);
                 if (nucleusThingConfig.isPresent()) {
                     thingNameTopic.subscribeGeneric(this.deviceThingNameWatcher);
                 } else {
@@ -259,54 +265,23 @@ public class ShadowManager extends PluginService {
     }
 
     private void deleteRemovedSyncInformation() {
-        List<Pair<String, String>> removedShadowList = new ArrayList<>();
-        this.dao.listSyncedShadows().forEach(shadowThingPair -> {
-            // Let's assume the shadow was removed from being synced.
-            boolean present = false;
-
-            // Iterate over the configuration to check if that particular shadow is still being synced.
-            for (ThingShadowSyncConfiguration configuration : syncConfiguration.getSyncConfigurationList()) {
-                if (configuration.getThingName().equals(shadowThingPair.getLeft())) {
-                    for (String shadowName : configuration.getSyncNamedShadows()) {
-                        // If the shadow is present, don't need to iterate over other shadows.
-                        if (shadowName.equals(shadowThingPair.getRight())) {
-                            present = true;
-                            break;
-                        }
-                    }
-                }
-
-                // If the shadow is present, don't need to iterate over other things.
-                if (present) {
-                    break;
-                }
-            }
-            if (!present) {
-                removedShadowList.add(shadowThingPair);
-            }
-        });
-
-        removedShadowList.forEach(shadowThingPair ->
+        Set<Pair<String, String>> removedShadows = new HashSet<>(this.dao.listSyncedShadows());
+        removedShadows.removeAll(syncConfiguration.getSyncShadows());
+        removedShadows.forEach(shadowThingPair ->
                 dao.deleteSyncInformation(shadowThingPair.getLeft(), shadowThingPair.getRight()));
     }
 
     private void initializeSyncInfo() {
         long epochSeconds = Instant.EPOCH.getEpochSecond();
-        for (ThingShadowSyncConfiguration configuration : syncConfiguration.getSyncConfigurationList()) {
-            if (configuration.isSyncClassicShadow()) {
-                insertSyncInfoIfNotPresent(epochSeconds, configuration, CLASSIC_SHADOW_IDENTIFIER);
-            }
-            for (String shadowName : configuration.getSyncNamedShadows()) {
-                insertSyncInfoIfNotPresent(epochSeconds, configuration, shadowName);
-            }
+        for (ThingShadowSyncConfiguration configuration : syncConfiguration.getSyncConfigurations()) {
+            insertSyncInfoIfNotPresent(epochSeconds, configuration);
         }
     }
 
-    private void insertSyncInfoIfNotPresent(long epochSeconds, ThingShadowSyncConfiguration configuration,
-                                            String shadowName) {
+    private void insertSyncInfoIfNotPresent(long epochSeconds, ThingShadowSyncConfiguration configuration) {
         this.dao.insertSyncInfoIfNotExists(SyncInformation.builder()
                 .thingName(configuration.getThingName())
-                .shadowName(shadowName)
+                .shadowName(configuration.getShadowName())
                 .cloudDeleted(false)
                 .cloudVersion(0)
                 .cloudUpdateTime(epochSeconds)
@@ -316,10 +291,10 @@ public class ShadowManager extends PluginService {
                 .build());
     }
 
-    private Optional<ThingShadowSyncConfiguration> getNucleusThingShadowSyncConfiguration() {
-        return syncConfiguration.getSyncConfigurationList()
+    private Optional<ThingShadowSyncConfiguration> getNucleusThingShadowSyncConfiguration(String thingName) {
+        return syncConfiguration.getSyncConfigurations()
                 .stream()
-                .filter(ThingShadowSyncConfiguration::isNucleusThing)
+                .filter(thingShadowSyncConfiguration -> thingName.equals(thingShadowSyncConfiguration.getThingName()))
                 .findAny();
     }
 
@@ -368,10 +343,11 @@ public class ShadowManager extends PluginService {
 
     /**
      * Starts the Sync handler and update the subscriptions for Cloud Data Client.
+     *
      * @implNote Making this package-private for unit tests.
      */
     void startSyncingShadows() {
-        if (mqttClient.connected() && !syncConfiguration.getSyncConfigurationList().isEmpty()) {
+        if (mqttClient.connected() && !syncConfiguration.getSyncConfigurations().isEmpty()) {
             final SyncContext syncContext = new SyncContext(dao, getUpdateThingShadowRequestHandler(),
                     getDeleteThingShadowRequestHandler(),
                     iotDataPlaneClient);
@@ -380,7 +356,7 @@ public class ShadowManager extends PluginService {
         } else {
             logger.atTrace()
                     .kv("connected", mqttClient.connected())
-                    .kv("sync configuration list count", syncConfiguration.getSyncConfigurationList().size())
+                    .kv("sync configuration list count", syncConfiguration.getSyncConfigurations().size())
                     .log("Not starting sync loop");
         }
     }
