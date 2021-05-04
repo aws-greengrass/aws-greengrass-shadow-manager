@@ -10,6 +10,7 @@ import com.aws.greengrass.config.ChildChanged;
 import com.aws.greengrass.config.Node;
 import com.aws.greengrass.config.Topic;
 import com.aws.greengrass.config.Topics;
+import com.aws.greengrass.config.WhatHappened;
 import com.aws.greengrass.dependency.ImplementsService;
 import com.aws.greengrass.dependency.State;
 import com.aws.greengrass.deployment.DeviceConfiguration;
@@ -111,7 +112,6 @@ public class ShadowManager extends PluginService {
     private GreengrassCoreIPCService greengrassCoreIPCService;
     private final ChildChanged deviceThingNameWatcher;
     private String thingName;
-
 
     /**
      * Ctr for ShadowManager.
@@ -240,10 +240,16 @@ public class ShadowManager extends PluginService {
         config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC)
                 .dflt(DEFAULT_DOCUMENT_SIZE)
                 .subscribe((why, newv) -> {
-                    int newMaxShadowSize = Coerce.toInt(newv);
+                    int newMaxShadowSize;
+                    if (WhatHappened.removed.equals(why)) {
+                        newMaxShadowSize = DEFAULT_DOCUMENT_SIZE;
+                    } else {
+                        newMaxShadowSize = Coerce.toInt(newv);
+                    }
                     try {
                         Validator.validateMaxShadowSize(newMaxShadowSize);
                         Validator.setMaxShadowDocumentSize(newMaxShadowSize);
+                        updateThingShadowRequestHandler.setMaxShadowSize(newMaxShadowSize);
                     } catch (InvalidConfigurationException e) {
                         serviceErrored(e);
                     }

@@ -14,7 +14,6 @@ import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersExcept
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.ipc.model.Operation;
 import com.aws.greengrass.shadowmanager.ipc.model.PubSubRequest;
-import com.aws.greengrass.shadowmanager.model.Constants;
 import com.aws.greengrass.shadowmanager.model.ErrorMessage;
 import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.model.ResponseMessageBuilder;
@@ -29,6 +28,8 @@ import com.aws.greengrass.util.Pair;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import lombok.Getter;
+import lombok.Setter;
 import software.amazon.awssdk.aws.greengrass.model.ConflictError;
 import software.amazon.awssdk.aws.greengrass.model.InvalidArgumentsError;
 import software.amazon.awssdk.aws.greengrass.model.ServiceError;
@@ -41,6 +42,7 @@ import java.time.Instant;
 import java.util.Optional;
 
 import static com.aws.greengrass.ipc.common.ExceptionUtil.translateExceptions;
+import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_DOCUMENT_SIZE;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_METADATA;
@@ -55,6 +57,9 @@ public class UpdateThingShadowRequestHandler {
     private final PubSubClientWrapper pubSubClientWrapper;
     private final ShadowWriteSynchronizeHelper synchronizeHelper;
     private final SyncHandler syncHandler;
+    @Setter
+    @Getter
+    private int maxShadowSize = DEFAULT_DOCUMENT_SIZE;
 
     /**
      * IPC Handler class for responding to UpdateThingShadow requests.
@@ -129,8 +134,7 @@ public class UpdateThingShadowRequestHandler {
 
                     // If the payload size is greater than the maximum default shadow document size, then raise an
                     // invalid parameters error for payload too large.
-                    //TODO: get the max doc size from config.
-                    if (updatedDocumentRequestBytes.length > Constants.DEFAULT_DOCUMENT_SIZE) {
+                    if (updatedDocumentRequestBytes.length > maxShadowSize) {
                         throw new InvalidRequestParametersException(ErrorMessage.PAYLOAD_TOO_LARGE_MESSAGE);
                     }
                     updateDocumentRequest = JsonUtil.getPayloadJson(updatedDocumentRequestBytes)
