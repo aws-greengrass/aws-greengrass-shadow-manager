@@ -16,6 +16,7 @@ import com.aws.greengrass.shadowmanager.sync.model.FullShadowSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.LocalDeleteSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.LocalUpdateSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.SyncRequest;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 /**
  * Merge requests that can be combined together. Falls back to FullSync if requests cannot be combined in a
@@ -39,6 +40,7 @@ class RequestMerger {
      * @return a merged request
      */
     @SuppressWarnings({"PMD.EmptyIfStmt"})
+    @SuppressFBWarnings("UCF_USELESS_CONTROL_FLOW")
     public SyncRequest merge(SyncRequest oldValue, SyncRequest value) {
         if (oldValue instanceof FullShadowSyncRequest) {
             return oldValue;
@@ -75,7 +77,7 @@ class RequestMerger {
             return oldValue;
         } else if (oldValue instanceof CloudDeleteSyncRequest && value instanceof LocalDeleteSyncRequest
                 || oldValue instanceof LocalDeleteSyncRequest && value instanceof CloudDeleteSyncRequest) {
-            // TODO: support simultaneous delete without full sync
+            logEvent.log("Merge simultaneous deletes for shadow from local and cloud");
         } else if (oldValue instanceof CloudUpdateSyncRequest && value instanceof LocalUpdateSyncRequest
                 || oldValue instanceof LocalUpdateSyncRequest && value instanceof CloudUpdateSyncRequest) {
             // TODO: merge bi-directional updates like this without full sync - this is almost

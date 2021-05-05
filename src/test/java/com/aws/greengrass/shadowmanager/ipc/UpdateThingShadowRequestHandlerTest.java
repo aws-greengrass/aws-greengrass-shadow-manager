@@ -282,8 +282,7 @@ class UpdateThingShadowRequestHandlerTest {
         // verify pubsub payloads match expected output
         assertThat(acceptedJson.get(), is(equalTo(expectedAcceptedJson.get())));
 
-        // TODO: broken until partial update PR added, uncomment once added
-        // assertThat(documentsJson.get(), is(equalTo(expectedDocumentsJson.get())));
+        assertThat(documentsJson.get(), is(equalTo(expectedDocumentsJson.get())));
 
         // verify each pubsub call (accept, documents) had expected values
         for (int i = 0; i < pubSubRequestCaptor.getAllValues().size(); i++) {

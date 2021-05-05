@@ -25,7 +25,6 @@ import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.shadowmanager.util.ShadowWriteSynchronizeHelper;
 import com.aws.greengrass.shadowmanager.util.Validator;
 import com.aws.greengrass.util.Pair;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.Getter;
@@ -49,7 +48,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_M
 import static com.aws.greengrass.shadowmanager.util.JsonUtil.isNullOrMissing;
 import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.UPDATE_THING_SHADOW;
 
-public class UpdateThingShadowRequestHandler {
+public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
     private static final Logger logger = LogManager.getLogger(UpdateThingShadowRequestHandler.class);
 
     private final ShadowManagerDAO dao;
@@ -75,6 +74,7 @@ public class UpdateThingShadowRequestHandler {
             AuthorizationHandlerWrapper authorizationHandlerWrapper,
             PubSubClientWrapper pubSubClientWrapper,
             ShadowWriteSynchronizeHelper synchronizeHelper, SyncHandler syncHandler) {
+        super(pubSubClientWrapper);
         this.authorizationHandlerWrapper = authorizationHandlerWrapper;
         this.dao = dao;
         this.pubSubClientWrapper = pubSubClientWrapper;
@@ -112,7 +112,7 @@ public class UpdateThingShadowRequestHandler {
             try {
                 Validator.validateShadowRequest(shadowRequest);
             } catch (InvalidRequestParametersException e) {
-                throwInvalidArgumentsError(thingName, shadowName, clientToken, e);
+                throwInvalidArgumentsError(thingName, shadowName, clientToken, e, Operation.UPDATE_SHADOW);
             }
 
             synchronized (synchronizeHelper.getThingShadowLock(shadowRequest)) {
@@ -156,7 +156,8 @@ public class UpdateThingShadowRequestHandler {
                             .kv(LOG_THING_NAME_KEY, thingName)
                             .kv(LOG_SHADOW_NAME_KEY, shadowName)
                             .log("Not authorized to update shadow");
-                    publishErrorMessage(thingName, shadowName, clientToken, ErrorMessage.UNAUTHORIZED_MESSAGE);
+                    publishErrorMessage(thingName, shadowName, clientToken, ErrorMessage.UNAUTHORIZED_MESSAGE,
+                            Operation.UPDATE_SHADOW);
                     throw new UnauthorizedError(e.getMessage());
                 } catch (ConflictError e) {
                     logger.atWarn()
@@ -165,10 +166,11 @@ public class UpdateThingShadowRequestHandler {
                             .kv(LOG_THING_NAME_KEY, thingName)
                             .kv(LOG_SHADOW_NAME_KEY, shadowName)
                             .log("Conflicting version in shadow update message");
-                    publishErrorMessage(thingName, shadowName, clientToken, ErrorMessage.VERSION_CONFLICT_MESSAGE);
+                    publishErrorMessage(thingName, shadowName, clientToken, ErrorMessage.VERSION_CONFLICT_MESSAGE,
+                            Operation.UPDATE_SHADOW);
                     throw e;
                 } catch (InvalidRequestParametersException e) {
-                    throwInvalidArgumentsError(thingName, shadowName, clientToken, e);
+                    throwInvalidArgumentsError(thingName, shadowName, clientToken, e, Operation.UPDATE_SHADOW);
                 } catch (ShadowManagerDataException | IOException e) {
                     throwServiceError(thingName, shadowName, clientToken, e);
                 }
@@ -193,7 +195,7 @@ public class UpdateThingShadowRequestHandler {
                                 .setCause(error)
                                 .log();
                         publishErrorMessage(thingName, shadowName, clientToken,
-                                ErrorMessage.INTERNAL_SERVICE_FAILURE_MESSAGE);
+                                ErrorMessage.INTERNAL_SERVICE_FAILURE_MESSAGE, Operation.UPDATE_SHADOW);
                         throw error;
                     }
 
@@ -259,64 +261,9 @@ public class UpdateThingShadowRequestHandler {
                 .kv(LOG_THING_NAME_KEY, thingName)
                 .kv(LOG_SHADOW_NAME_KEY, shadowName)
                 .log("Could not process UpdateThingShadow Request due to internal service error");
-        publishErrorMessage(thingName, shadowName, clientToken, ErrorMessage.INTERNAL_SERVICE_FAILURE_MESSAGE);
+        publishErrorMessage(thingName, shadowName, clientToken, ErrorMessage.INTERNAL_SERVICE_FAILURE_MESSAGE,
+                Operation.UPDATE_SHADOW);
         throw new ServiceError(e.getMessage());
-    }
-
-    /**
-     * Raises a Invalid Arguments error based for a Invalid Request Parameters Exception.
-     *
-     * @param thingName   The thing name.
-     * @param shadowName  The shadow name.
-     * @param clientToken The client token.
-     * @param e           The Exception thrown
-     * @throws InvalidRequestParametersException always
-     */
-    @SuppressWarnings("PMD.AvoidUncheckedExceptionsInSignatures")
-    private void throwInvalidArgumentsError(String thingName, String shadowName, Optional<String> clientToken,
-                                            InvalidRequestParametersException e)
-            throws InvalidArgumentsError {
-        logger.atWarn()
-                .setEventType(LogEvents.DELETE_THING_SHADOW.code())
-                .setCause(e)
-                .kv(LOG_THING_NAME_KEY, thingName)
-                .kv(LOG_SHADOW_NAME_KEY, shadowName)
-                .log();
-        publishErrorMessage(thingName, shadowName, clientToken, e.getErrorMessage());
-        throw new InvalidArgumentsError(e.getMessage());
-    }
-
-    /**
-     * Build the error response message and publish the error message over PubSub.
-     *
-     * @param thingName    The thing name.
-     * @param shadowName   The shadow name.
-     * @param clientToken  The client token if present in the update shadow request.
-     * @param errorMessage The error message containing error information.
-     */
-    //TODO: Maybe move this class into a util class?
-    private void publishErrorMessage(String thingName, String shadowName, Optional<String> clientToken,
-                                     ErrorMessage errorMessage) {
-        JsonNode errorResponse = ResponseMessageBuilder.builder()
-                .withTimestamp(Instant.now())
-                .withClientToken(clientToken)
-                .withError(errorMessage).build();
-
-        try {
-            pubSubClientWrapper.reject(PubSubRequest.builder()
-                    .thingName(thingName)
-                    .shadowName(shadowName)
-                    .payload(JsonUtil.getPayloadBytes(errorResponse))
-                    .publishOperation(Operation.UPDATE_SHADOW)
-                    .build());
-        } catch (JsonProcessingException e) {
-            logger.atError()
-                    .setEventType(Operation.UPDATE_SHADOW.getLogEventType())
-                    .kv(LOG_THING_NAME_KEY, thingName)
-                    .kv(LOG_SHADOW_NAME_KEY, shadowName)
-                    .cause(e)
-                    .log("Unable to publish reject message");
-        }
     }
 
     private void publishDeltaMessage(String thingName, String shadowName, Optional<String> clientToken,

@@ -66,7 +66,6 @@ public class LocalDeleteSyncRequest extends BaseSyncRequest {
 
         long currentCloudVersion = syncInformation.getCloudVersion();
 
-        // TODO: add smarter way to check if there were local updates since last sync and push local update to cloud
         if (deletedCloudVersion >= currentCloudVersion) {
             try {
                 DeleteThingShadowRequest request = new DeleteThingShadowRequest();
