@@ -221,7 +221,7 @@ public class ShadowStateMetadata {
             return false;
         }
 
-        return timestamp.isLong();
+        return timestamp.isIntegralNumber();
     }
 
     /**
@@ -295,5 +295,65 @@ public class ShadowStateMetadata {
             result.set(fieldName, buildMetadata(deltaField, metadataField));
         }
         return result;
+    }
+
+    /**
+     * Gets the latest updated timestamp from the metadata reported and desired nodes.
+     *
+     * @return the latest timestamp from the reported and desired nodes.
+     */
+    public long getLatestUpdatedTimestamp() {
+        long desiredMax = 0L;
+        if (desired != null && desired.isObject()) {
+            desiredMax = getLatestUpdatedTimestamp((ObjectNode) desired);
+        }
+        long reportedMax = 0L;
+        if (reported != null && reported.isObject()) {
+            reportedMax = getLatestUpdatedTimestamp((ObjectNode) reported);
+        }
+        long overAllMax = Math.max(desiredMax, reportedMax);
+        return overAllMax == 0 ? this.clock.instant().getEpochSecond() : overAllMax;
+    }
+
+    private long getLatestUpdatedTimestamp(JsonNode node) {
+        long maxVal = 0L;
+        if (isNullOrMissing(node)) {
+            return maxVal;
+        }
+        if (node.isObject() && !isMetadataNode(node)) {
+            maxVal = getLatestUpdatedTimestamp((ObjectNode) node);
+        } else if (node.isArray()) {
+            maxVal = getLatestUpdatedTimestamp((ArrayNode) node);
+        } else if (node.isObject() && isMetadataNode(node)) {
+            maxVal = node.get(SHADOW_DOCUMENT_TIMESTAMP).asLong();
+        }
+        return maxVal;
+    }
+
+    private long getLatestUpdatedTimestamp(ArrayNode node) {
+        long overAllMaxVal = 0;
+        for (JsonNode arrayNode : node) {
+            long maxVal = getLatestUpdatedTimestamp(arrayNode);
+
+            if (overAllMaxVal < maxVal) {
+                overAllMaxVal = maxVal;
+            }
+        }
+        return overAllMaxVal;
+    }
+
+    private long getLatestUpdatedTimestamp(ObjectNode node) {
+        long overAllMaxVal = 0;
+        final Iterator<Map.Entry<String, JsonNode>> fieldIter = node.fields();
+        while (fieldIter.hasNext()) {
+            final Map.Entry<String, JsonNode> entry = fieldIter.next();
+            final JsonNode entryNode = entry.getValue();
+            long maxVal = getLatestUpdatedTimestamp(entryNode);
+
+            if (overAllMaxVal < maxVal) {
+                overAllMaxVal = maxVal;
+            }
+        }
+        return overAllMaxVal;
     }
 }
