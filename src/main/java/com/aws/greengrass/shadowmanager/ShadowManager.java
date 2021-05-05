@@ -160,11 +160,11 @@ public class ShadowManager extends PluginService {
         this.cloudDataClient = cloudDataClient;
         this.mqttClient = mqttClient;
         this.deleteThingShadowRequestHandler = new DeleteThingShadowRequestHandler(dao, authorizationHandlerWrapper,
-                pubSubClientWrapper, inboundRateLimiter, synchronizeHelper, this.syncHandler);
+                pubSubClientWrapper, synchronizeHelper, this.syncHandler);
         this.updateThingShadowRequestHandler = new UpdateThingShadowRequestHandler(dao, authorizationHandlerWrapper,
-                pubSubClientWrapper, inboundRateLimiter, synchronizeHelper, this.syncHandler);
+                pubSubClientWrapper, synchronizeHelper, this.syncHandler);
         this.getThingShadowRequestHandler = new GetThingShadowRequestHandler(dao, authorizationHandlerWrapper,
-                pubSubClientWrapper, inboundRateLimiter);
+                pubSubClientWrapper);
         this.deviceThingNameWatcher = this::handleDeviceThingNameChange;
     }
 
@@ -179,11 +179,11 @@ public class ShadowManager extends PluginService {
         }
 
         greengrassCoreIPCService.setOperationHandler(GET_THING_SHADOW, context -> new GetThingShadowIPCHandler(context,
-                getThingShadowRequestHandler));
+                inboundRateLimiter, getThingShadowRequestHandler));
         greengrassCoreIPCService.setOperationHandler(DELETE_THING_SHADOW, context ->
-                new DeleteThingShadowIPCHandler(context, deleteThingShadowRequestHandler));
+                new DeleteThingShadowIPCHandler(context, inboundRateLimiter, deleteThingShadowRequestHandler));
         greengrassCoreIPCService.setOperationHandler(UPDATE_THING_SHADOW, context ->
-                new UpdateThingShadowIPCHandler(context, updateThingShadowRequestHandler));
+                new UpdateThingShadowIPCHandler(context, inboundRateLimiter, updateThingShadowRequestHandler));
         greengrassCoreIPCService.setOperationHandler(LIST_NAMED_SHADOWS_FOR_THING, context ->
                 new ListNamedShadowsForThingIPCHandler(context, dao, authorizationHandlerWrapper));
     }

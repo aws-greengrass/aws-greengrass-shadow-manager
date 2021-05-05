@@ -26,12 +26,9 @@ import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KE
 public class BaseRequestHandler {
     private static final Logger logger = LogManager.getLogger(BaseRequestHandler.class);
     protected final PubSubClientWrapper pubSubClientWrapper;
-    protected final InboundRateLimiter inboundRateLimiter;
 
-    BaseRequestHandler(PubSubClientWrapper pubSubClientWrapper,
-                       InboundRateLimiter inboundRateLimiter) {
+    BaseRequestHandler(PubSubClientWrapper pubSubClientWrapper) {
         this.pubSubClientWrapper = pubSubClientWrapper;
-        this.inboundRateLimiter = inboundRateLimiter;
     }
 
     /**
@@ -78,7 +75,7 @@ public class BaseRequestHandler {
      */
     @SuppressWarnings("PMD.AvoidUncheckedExceptionsInSignatures")
     void throwInvalidArgumentsError(String thingName, String shadowName, Optional<String> clientToken,
-                                            InvalidRequestParametersException e, Operation op)
+                                    InvalidRequestParametersException e, Operation op)
             throws InvalidArgumentsError {
         logger.atWarn()
                 .setEventType(op.getLogEventType())

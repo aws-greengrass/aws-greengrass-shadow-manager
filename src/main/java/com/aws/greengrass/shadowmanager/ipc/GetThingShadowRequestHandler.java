@@ -12,7 +12,6 @@ import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
-import com.aws.greengrass.shadowmanager.exception.ThrottledRequestException;
 import com.aws.greengrass.shadowmanager.ipc.model.Operation;
 import com.aws.greengrass.shadowmanager.ipc.model.PubSubRequest;
 import com.aws.greengrass.shadowmanager.model.ErrorMessage;
@@ -51,13 +50,11 @@ public class GetThingShadowRequestHandler extends BaseRequestHandler {
      * @param dao                         Local shadow database management
      * @param authorizationHandlerWrapper The authorization handler wrapper
      * @param pubSubClientWrapper         The PubSub client wrapper
-     * @param inboundRateLimiter          The inbound rate limiter class for throttling local requests
      */
     public GetThingShadowRequestHandler(ShadowManagerDAO dao,
                                         AuthorizationHandlerWrapper authorizationHandlerWrapper,
-                                        PubSubClientWrapper pubSubClientWrapper,
-                                        InboundRateLimiter inboundRateLimiter) {
-        super(pubSubClientWrapper, inboundRateLimiter);
+                                        PubSubClientWrapper pubSubClientWrapper) {
+        super(pubSubClientWrapper);
         this.authorizationHandlerWrapper = authorizationHandlerWrapper;
         this.dao = dao;
     }
@@ -86,21 +83,7 @@ public class GetThingShadowRequestHandler extends BaseRequestHandler {
                         .log();
 
                 ShadowRequest shadowRequest = new ShadowRequest(thingName, shadowName);
-                try {
-                    inboundRateLimiter.acquireLockForThing(thingName);
-                    Validator.validateShadowRequest(shadowRequest);
-                } catch (InvalidRequestParametersException e) {
-                    throwInvalidArgumentsError(thingName, shadowName, Optional.empty(), e, Operation.DELETE_SHADOW);
-                } catch (ThrottledRequestException e) {
-                    logger.atError()
-                            .setEventType(LogEvents.DELETE_THING_SHADOW.code())
-                            .setCause(e)
-                            .kv(LOG_THING_NAME_KEY, thingName)
-                            .kv(LOG_SHADOW_NAME_KEY, shadowName)
-                            .log("Local GetThingShadow request throttled");
-                    throw new ServiceError(e.getMessage());
-                }
-
+                Validator.validateShadowRequest(shadowRequest);
                 authorizationHandlerWrapper.doAuthorization(GET_THING_SHADOW, serviceName, shadowRequest);
 
                 Optional<ShadowDocument> currentShadowDocument = dao.getShadowThing(thingName, shadowName);
@@ -140,7 +123,7 @@ public class GetThingShadowRequestHandler extends BaseRequestHandler {
                         .setCause(e)
                         .kv(LOG_THING_NAME_KEY, thingName)
                         .kv(LOG_SHADOW_NAME_KEY, shadowName)
-                        .log("Not authorized to update shadow");
+                        .log("Not authorized to get shadow");
                 publishErrorMessage(thingName, shadowName, Optional.empty(), ErrorMessage.UNAUTHORIZED_MESSAGE,
                         Operation.GET_SHADOW);
                 throw new UnauthorizedError(e.getMessage());

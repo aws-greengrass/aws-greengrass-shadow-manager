@@ -6,6 +6,10 @@
 package com.aws.greengrass.shadowmanager.ipc;
 
 
+import com.aws.greengrass.logging.api.Logger;
+import com.aws.greengrass.logging.impl.LogManager;
+import com.aws.greengrass.shadowmanager.exception.ThrottledRequestException;
+import com.aws.greengrass.shadowmanager.model.LogEvents;
 import software.amazon.awssdk.aws.greengrass.GeneratedAbstractDeleteThingShadowOperationHandler;
 import software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowRequest;
 import software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowResponse;
@@ -16,22 +20,31 @@ import software.amazon.awssdk.aws.greengrass.model.UnauthorizedError;
 import software.amazon.awssdk.eventstreamrpc.OperationContinuationHandlerContext;
 import software.amazon.awssdk.eventstreamrpc.model.EventStreamJsonMessage;
 
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
+
 /**
  * Handler class with business logic for all DeleteThingShadow requests over IPC.
  */
 public class DeleteThingShadowIPCHandler extends GeneratedAbstractDeleteThingShadowOperationHandler {
+    private static final Logger logger = LogManager.getLogger(DeleteThingShadowIPCHandler.class);
+
     private final String serviceName;
+    private final InboundRateLimiter inboundRateLimiter;
     private final DeleteThingShadowRequestHandler handler;
 
     /**
      * IPC Handler class for responding to DeleteThingShadow requests.
      *
-     * @param context topics passed by the Nucleus
-     * @param handler handler class to handle the Delete Shadow request.
+     * @param context            topics passed by the Nucleus
+     * @param inboundRateLimiter the rate limiter for local shadow requests
+     * @param handler            handler class to handle the Delete Shadow request.
      */
     public DeleteThingShadowIPCHandler(OperationContinuationHandlerContext context,
+                                       InboundRateLimiter inboundRateLimiter,
                                        DeleteThingShadowRequestHandler handler) {
         super(context);
+        this.inboundRateLimiter = inboundRateLimiter;
         this.handler = handler;
         this.serviceName = context.getAuthenticationData().getIdentityLabel();
     }
@@ -53,6 +66,18 @@ public class DeleteThingShadowIPCHandler extends GeneratedAbstractDeleteThingSha
      */
     @Override
     public DeleteThingShadowResponse handleRequest(DeleteThingShadowRequest request) {
+        try {
+            inboundRateLimiter.acquireLockForThing(request.getThingName());
+        } catch (ThrottledRequestException e) {
+            logger.atWarn()
+                    .setEventType(LogEvents.DELETE_THING_SHADOW.code())
+                    .setCause(e)
+                    .kv(LOG_THING_NAME_KEY, request.getThingName())
+                    .kv(LOG_SHADOW_NAME_KEY, request.getShadowName())
+                    .log();
+            throw new ServiceError("Local DeleteThingShadow request throttled");
+        }
+
         return this.handler.handleRequest(request, serviceName);
     }
 
