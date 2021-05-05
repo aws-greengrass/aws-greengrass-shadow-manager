@@ -59,7 +59,7 @@ public class ErrorMessage implements Serializable {
      * @return the ErrorMessage object for thing Not Found exception.
      */
     public static ErrorMessage createInvalidPayloadJsonMessage(String errorMessages) {
-        return ErrorMessage.builder().errorCode(400).message(String.format("Invalid JSON%n%s", errorMessages)).build();
+        return ErrorMessage.builder().errorCode(400).message(String.format("Invalid JSON: %s", errorMessages)).build();
     }
 
     /**
