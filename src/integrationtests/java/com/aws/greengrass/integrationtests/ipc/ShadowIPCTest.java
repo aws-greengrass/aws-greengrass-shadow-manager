@@ -21,6 +21,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
@@ -169,6 +170,12 @@ class ShadowIPCTest {
         expectedDeltaMessageV2Json = MAPPER.readTree(expectedDeltaMessageV2Str);
         invalidVersionMessageJson = MAPPER.readTree(invalidVersionMessageStr);
         invalidVersionMessageJson2 = MAPPER.readTree(invalidVersionMessageStr2);
+    }
+
+    @BeforeEach
+    void setup() throws InterruptedException {
+        // sleep to let rate limiter cool off from consecutive requests
+        Thread.sleep(1500);
     }
 
     @AfterAll

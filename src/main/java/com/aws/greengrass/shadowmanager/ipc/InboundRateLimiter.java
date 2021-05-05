@@ -9,9 +9,7 @@ package com.aws.greengrass.shadowmanager.ipc;
 import com.aws.greengrass.shadowmanager.exception.ThrottledRequestException;
 import vendored.com.google.common.util.concurrent.RateLimiter;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import javax.inject.Inject;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_LOCAL_SHADOW_REQUESTS_PER_THING_PS;
@@ -20,8 +18,8 @@ import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_LOCAL_SHA
  * Class which handles request throttling for all inbound local shadow requests.
  */
 public class InboundRateLimiter {
-    private static final Map<String, RateLimiter> rateLimiterMap = new HashMap<>();
-    private static double rate = DEFAULT_LOCAL_SHADOW_REQUESTS_PER_THING_PS;
+    private final ConcurrentHashMap<String, RateLimiter> rateLimiterMap = new ConcurrentHashMap<>();
+    private double rate = DEFAULT_LOCAL_SHADOW_REQUESTS_PER_THING_PS;
 
     /**
      * Ctr for InboundRateLimiter.
@@ -38,6 +36,12 @@ public class InboundRateLimiter {
      * @throws ThrottledRequestException Max requests per thing per second exceeded
      */
     public void acquireLockForThing(String thingName) throws ThrottledRequestException {
+
+        // TODO: have calling class validate thingName prior to getting lock
+        if (thingName == null || thingName.isEmpty()) {
+            return;
+        }
+
         RateLimiter rateLimiter = rateLimiterMap.computeIfAbsent(thingName, k -> RateLimiter.create(rate));
 
         if (!rateLimiter.tryAcquire()) {
@@ -46,12 +50,10 @@ public class InboundRateLimiter {
     }
 
     /**
-     * Removes any inbound rate limiters no longer being supported.
-     *
-     * @param things New set of things to track rate limiters for
+     * Clears all inbound rate limiters.
      */
-    public void resetRateLimiters(Set<String> things) {
-        rateLimiterMap.entrySet().removeIf(entry -> things.contains(entry.getKey()));
+    public void clear() {
+        rateLimiterMap.clear();
     }
 
     /**
@@ -59,8 +61,8 @@ public class InboundRateLimiter {
      *
      * @param rate Max inbound requests per second per thing
      */
-    public void setRate(double rate) {
-        InboundRateLimiter.rate = rate;
+    public void setRate(int rate) {
+        this.rate = rate;
         rateLimiterMap.forEach((k, v) -> v.setRate(rate));
     }
 }

@@ -211,6 +211,8 @@ public class ShadowManager extends PluginService {
             serviceErrored(e);
         }
 
+        inboundRateLimiter.clear();
+
         Topics configTopics = config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC);
         configTopics.subscribe((what, newv) -> {
             Map<String, Object> configTopicsPojo = configTopics.toPOJO();
@@ -234,8 +236,6 @@ public class ShadowManager extends PluginService {
                 }
 
                 iotDataPlaneClient.setRate(syncConfiguration.getMaxOutboundSyncUpdatesPerSecond());
-                // TODO: determine where to place config field for inbound updates
-                // inboundRateLimiter.setRate(syncConfiguration.getMaxOutboundSyncUpdatesPerSecond());
 
                 cloudDataClient.stopSubscribing();
                 syncHandler.stop();
@@ -280,7 +280,7 @@ public class ShadowManager extends PluginService {
                     try {
                         int maxLocalShadowUpdatesPerThingPerSecond = Coerce.toInt(newv);
                         Validator.validateLocalShadowRequestsPerThingPerSecond(maxLocalShadowUpdatesPerThingPerSecond);
-                        this.inboundRateLimiter.setRate(maxLocalShadowUpdatesPerThingPerSecond);
+                        inboundRateLimiter.setRate(maxLocalShadowUpdatesPerThingPerSecond);
                     } catch (InvalidConfigurationException e) {
                         serviceErrored(e);
                     }

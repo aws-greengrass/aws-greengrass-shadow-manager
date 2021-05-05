@@ -65,8 +65,10 @@ public class UpdateThingShadowIPCHandler extends GeneratedAbstractUpdateThingSha
      * @throws ServiceError          if database error occurs
      */
     @Override
+    @SuppressWarnings("PMD.PreserveStackTrace")
     public UpdateThingShadowResponse handleRequest(UpdateThingShadowRequest request) {
         try {
+            // TODO: refactor request handler class so that SyncHandler can retry throttled requests
             inboundRateLimiter.acquireLockForThing(request.getThingName());
         } catch (ThrottledRequestException e) {
             logger.atWarn()
