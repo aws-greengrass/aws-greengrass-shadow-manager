@@ -75,7 +75,7 @@ public class CloudDataClient {
      * Stops the mqtt subscriber thread.
      */
     public void stopSubscribing() {
-        if (syncLoopFuture != null && !syncLoopFuture.isCancelled()) {
+        if (syncLoopFuture != null && !syncLoopFuture.isDone()) {
             syncLoopFuture.cancel(true);
         }
     }
