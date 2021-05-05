@@ -106,7 +106,8 @@ class SyncTest extends GGServiceTestUtil  {
     private ArgumentCaptor<software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowRequest> cloudUpdateThingShadowRequestCaptor;
     @Captor
     private ArgumentCaptor<software.amazon.awssdk.services.iotdataplane.model.DeleteThingShadowRequest> cloudDeleteThingShadowRequestCaptor;
-
+    @Captor
+    ArgumentCaptor<String> message;
 
     @BeforeEach
     void setup() {
@@ -158,6 +159,7 @@ class SyncTest extends GGServiceTestUtil  {
         }
         return false;
     }
+
 
     @Test
     void GIVEN_sync_config_and_no_local_WHEN_startup_THEN_local_version_updated_via_full_sync(ExtensionContext context) throws Exception {
@@ -331,8 +333,11 @@ class SyncTest extends GGServiceTestUtil  {
 
         startNucleusWithConfig("sync.yaml", true, false);
 
-        // Sleep here so that there is no race condition between executing the initial full sync
-        TimeUnit.SECONDS.sleep(2L);
+        SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
+        eventually(() -> {
+            assertThat(syncHandler.getSyncQueue().size(), is(0));
+            return null;
+        }, 10, ChronoUnit.SECONDS);
 
         ShadowManagerDAO dao = kernel.getContext().get(ShadowManagerDAOImpl.class);
         dao.updateSyncInformation(SyncInformation.builder()
@@ -382,8 +387,11 @@ class SyncTest extends GGServiceTestUtil  {
 
         startNucleusWithConfig("sync.yaml", true, false);
 
-        // Sleep here so that there is no race condition between executing the initial full sync
-        TimeUnit.SECONDS.sleep(2L);
+        SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
+        eventually(() -> {
+            assertThat(syncHandler.getSyncQueue().size(), is(0));
+            return null;
+        }, 10, ChronoUnit.SECONDS);
 
         ShadowManagerDAO dao = kernel.getContext().get(ShadowManagerDAOImpl.class);
         dao.updateSyncInformation(SyncInformation.builder()
@@ -398,9 +406,7 @@ class SyncTest extends GGServiceTestUtil  {
                 .build());
         dao.updateShadowThing(MOCK_THING_NAME, CLASSIC_SHADOW, localShadowContentV1.getBytes(UTF_8), 1L);
 
-        SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
         syncHandler.pushLocalDeleteSyncRequest(MOCK_THING_NAME, CLASSIC_SHADOW, "{\"version\": 1}".getBytes(UTF_8));
-
         eventually(() -> {
             Optional<SyncInformation> syncInformation =
                     dao.getShadowSyncInformation(MOCK_THING_NAME, CLASSIC_SHADOW);
@@ -429,9 +435,12 @@ class SyncTest extends GGServiceTestUtil  {
                 .thenThrow(ResourceNotFoundException.class);
 
         startNucleusWithConfig("sync.yaml", true, false);
+        SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
 
-        // Sleep here so that there is no race condition between executing the initial full sync
-        TimeUnit.SECONDS.sleep(2L);
+        eventually(() -> {
+            assertThat(syncHandler.getSyncQueue().size(), is(0));
+            return null;
+        }, 10, ChronoUnit.SECONDS);
 
         ShadowManagerDAO dao = kernel.getContext().get(ShadowManagerDAOImpl.class);
         dao.updateSyncInformation(SyncInformation.builder()

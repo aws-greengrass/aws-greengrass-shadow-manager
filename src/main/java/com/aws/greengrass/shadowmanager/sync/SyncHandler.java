@@ -20,6 +20,7 @@ import com.aws.greengrass.shadowmanager.sync.model.SyncRequest;
 import com.aws.greengrass.util.Pair;
 import com.aws.greengrass.util.RetryUtils;
 import com.fasterxml.jackson.databind.JsonNode;
+import lombok.Getter;
 import software.amazon.awssdk.aws.greengrass.model.ConflictError;
 import software.amazon.awssdk.services.iotdataplane.model.ConflictException;
 
@@ -72,6 +73,7 @@ public class SyncHandler {
      */
     public static final int DEFAULT_PARALLELISM = 1;
 
+    @Getter
     private final RequestBlockingQueue syncQueue;
 
     private final ExecutorService syncExecutorService;
