@@ -48,9 +48,8 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.atMost;
+import static org.mockito.Mockito.after;
 import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 
@@ -131,7 +130,7 @@ public class IotDataPlaneClientTest {
     }
 
     @Test
-    void GIVEN_rate_limit_not_triggered_WHEN_get_thing_shadow_THEN_requests_not_throttled() throws InterruptedException {
+    void GIVEN_rate_limit_not_triggered_WHEN_get_thing_shadow_THEN_requests_not_throttled() {
         // GIVEN
         final int maxRequestCalls = 10;
         when(mockIotDataPlaneClient.getThingShadow(getThingShadowRequestArgumentCaptor.capture())).thenReturn(GetThingShadowResponse.builder().build());
@@ -145,20 +144,22 @@ public class IotDataPlaneClientTest {
                 iotDataPlaneClient.getThingShadow(THING_NAME, SHADOW_NAME);
             });
         }
-        Thread.sleep(1000);
 
         //THEN
-        verify(mockIotDataPlaneClient, times(maxRequestCalls)).getThingShadow(any(GetThingShadowRequest.class));
+
+        // sleep for less than a second to verify calls do not exceed rate
+        verify(mockIotDataPlaneClient, after(500).times(maxRequestCalls)).getThingShadow(any(GetThingShadowRequest.class));
         executor.shutdownNow();
     }
 
     @Test
-    void GIVEN_rate_limiter_limit_reached_WHEN_get_thing_shadow_THEN_requests_are_throttled() throws InterruptedException {
+    void GIVEN_rate_limiter_limit_reached_WHEN_get_thing_shadow_THEN_requests_are_throttled() {
         // GIVEN
         final int maxRequestCalls = 10;
+        final int rate = 2;
         when(mockIotDataPlaneClient.getThingShadow(getThingShadowRequestArgumentCaptor.capture())).thenReturn(GetThingShadowResponse.builder().build());
         IotDataPlaneClient iotDataPlaneClient = new IotDataPlaneClient(iotDataPlaneClientFactory);
-        iotDataPlaneClient.setRate(2);
+        iotDataPlaneClient.setRate(rate);
         ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(maxRequestCalls);
 
         // WHEN
@@ -167,16 +168,14 @@ public class IotDataPlaneClientTest {
                iotDataPlaneClient.getThingShadow(THING_NAME, SHADOW_NAME);
             });
         }
-        Thread.sleep(1000);
 
         //THEN
 
-        // check that requests have been throttled
-        verify(mockIotDataPlaneClient, atMost(3)).getThingShadow(any(GetThingShadowRequest.class));
+        // sleep for less than a second to verify that rate limiter throttled requests after 2 calls
+        verify(mockIotDataPlaneClient, after(500).times(rate)).getThingShadow(any(GetThingShadowRequest.class));
 
         // check that requests are eventually processed
-        Thread.sleep(5000);
-        verify(mockIotDataPlaneClient, times(maxRequestCalls)).getThingShadow(any(GetThingShadowRequest.class));
+        verify(mockIotDataPlaneClient, after(5000).times(maxRequestCalls)).getThingShadow(any(GetThingShadowRequest.class));
         executor.shutdownNow();
     }
 

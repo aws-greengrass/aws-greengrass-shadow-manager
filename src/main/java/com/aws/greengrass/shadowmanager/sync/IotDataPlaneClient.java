@@ -21,7 +21,6 @@ import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_MAX_OUTBO
 /**
  * Class which acts as the interface between ShadowManager and the IoT Data Plane.
  */
-@SuppressWarnings("PMD")
 public class IotDataPlaneClient {
     private final IotDataPlaneClientFactory iotDataPlaneClientFactory;
     private final RateLimiter rateLimiter;
