@@ -28,6 +28,9 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.CLASSIC_SHADOW_IDENTIFIER;
@@ -46,8 +49,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
-public class CloudDataClientTest {
-
+class CloudDataClientTest {
+    private final ExecutorService executorService = Executors.newSingleThreadExecutor();
     private static final Set<Pair<String, String>> SHADOW_SET = new HashSet<Pair<String, String>>() {{
         add(new Pair<>("thing1", "shadow1"));
         add(new Pair<>("thing2", "shadow2"));
@@ -87,9 +90,9 @@ public class CloudDataClientTest {
     @Test
     void GIVEN_set_of_shadows_when_empty_shadows_WHEN_update_subscriptions_THEN_subscriptions_updated() throws InterruptedException, TimeoutException, ExecutionException {
         Set<String> topicSet = getTopicSet(SHADOW_SET);
-        CloudDataClient cloudDataClient = new CloudDataClient(mockSyncHandler, mockMqttClient);
+        CloudDataClient cloudDataClient = new CloudDataClient(mockSyncHandler, mockMqttClient, executorService);
         cloudDataClient.updateSubscriptions(SHADOW_SET);
-        Thread.sleep(2000);
+        TimeUnit.MILLISECONDS.sleep(2000);
 
         verify(mockMqttClient, times(6)).subscribe(any(SubscribeRequest.class));
         verify(mockMqttClient, times(0)).unsubscribe(any(UnsubscribeRequest.class));
@@ -117,13 +120,13 @@ public class CloudDataClientTest {
         Set<String> topicSet = getTopicSet(newShadowSet);
         topicSet.addAll(getTopicSet(SHADOW_SET));
 
-        CloudDataClient cloudDataClient = new CloudDataClient(mockSyncHandler, mockMqttClient);
+        CloudDataClient cloudDataClient = new CloudDataClient(mockSyncHandler, mockMqttClient, executorService);
         cloudDataClient.updateSubscriptions(SHADOW_SET);
-        Thread.sleep(2000);
+        TimeUnit.MILLISECONDS.sleep(2000);
 
         // update subscriptions again
         cloudDataClient.updateSubscriptions(newShadowSet);
-        Thread.sleep(2000);
+        TimeUnit.MILLISECONDS.sleep(2000);
 
         verify(mockMqttClient, times(8)).subscribe(any(SubscribeRequest.class));
         verify(mockMqttClient, times(2)).unsubscribe(any(UnsubscribeRequest.class));
@@ -141,12 +144,12 @@ public class CloudDataClientTest {
     @Test
     void GIVEN_existing_shadows_and_update_with_no_shadows_WHEN_update_subscriptions_THEN_subscriptions_cleared(ExtensionContext context) throws InterruptedException, TimeoutException, ExecutionException {
         ignoreExceptionOfType(context, InterruptedException.class);
-        CloudDataClient cloudDataClient = new CloudDataClient(mockSyncHandler, mockMqttClient);
+        CloudDataClient cloudDataClient = new CloudDataClient(mockSyncHandler, mockMqttClient, executorService);
         cloudDataClient.updateSubscriptions(SHADOW_SET);
-        Thread.sleep(2000);
+        TimeUnit.MILLISECONDS.sleep(2000);
 
         cloudDataClient.updateSubscriptions(Collections.emptySet());
-        Thread.sleep(2000);
+        TimeUnit.MILLISECONDS.sleep(2000);
 
         verify(mockMqttClient, times(6)).subscribe(any(SubscribeRequest.class));
         verify(mockMqttClient, times(6)).unsubscribe(any(UnsubscribeRequest.class));
@@ -155,10 +158,10 @@ public class CloudDataClientTest {
     @Test
     void GIVEN_no_shadows_and_update_with_no_shadows_WHEN_update_subscriptions_THEN_do_nothing(ExtensionContext context) throws InterruptedException, TimeoutException, ExecutionException {
         ignoreExceptionOfType(context, InterruptedException.class);
-        CloudDataClient cloudDataClient = new CloudDataClient(mockSyncHandler, mockMqttClient);
+        CloudDataClient cloudDataClient = new CloudDataClient(mockSyncHandler, mockMqttClient, executorService);
 
         cloudDataClient.updateSubscriptions(Collections.emptySet());
-        Thread.sleep(2000);
+        TimeUnit.MILLISECONDS.sleep(2000);
 
         verify(mockMqttClient, times(0)).subscribe(any(SubscribeRequest.class));
         verify(mockMqttClient, times(0)).unsubscribe(any(UnsubscribeRequest.class));
@@ -167,13 +170,13 @@ public class CloudDataClientTest {
     @Test
     void GIVEN_update_subscriptions_offline_WHEN_update_subscriptions_THEN_do_nothing(ExtensionContext context) throws InterruptedException, TimeoutException, ExecutionException {
         ignoreExceptionOfType(context, InterruptedException.class);
-        CloudDataClient cloudDataClient = new CloudDataClient(mockSyncHandler, mockMqttClient);
+        CloudDataClient cloudDataClient = new CloudDataClient(mockSyncHandler, mockMqttClient, executorService);
 
         lenient().doReturn(false).when(mockMqttClient).connected();
 
         cloudDataClient.updateSubscriptions(Collections.emptySet());
         cloudDataClient.updateSubscriptions(SHADOW_SET);
-        Thread.sleep(2000);
+        TimeUnit.MILLISECONDS.sleep(2000);
 
         verify(mockMqttClient, times(0)).subscribe(any(SubscribeRequest.class));
         verify(mockMqttClient, times(0)).unsubscribe(any(UnsubscribeRequest.class));
@@ -184,9 +187,9 @@ public class CloudDataClientTest {
         ignoreExceptionOfType(context, InterruptedException.class);
         doThrow(InterruptedException.class).when(mockMqttClient).subscribe(any(SubscribeRequest.class));
 
-        CloudDataClient cloudDataClient = new CloudDataClient(mockSyncHandler, mockMqttClient);
+        CloudDataClient cloudDataClient = new CloudDataClient(mockSyncHandler, mockMqttClient, executorService);
         assertDoesNotThrow(() -> cloudDataClient.updateSubscriptions(SHADOW_SET));
-        Thread.sleep(2000);
+        TimeUnit.MILLISECONDS.sleep(2000);
 
         verify(mockMqttClient, times(1)).subscribe(any(SubscribeRequest.class));
         verify(mockMqttClient, times(0)).unsubscribe(any(UnsubscribeRequest.class));
@@ -197,12 +200,12 @@ public class CloudDataClientTest {
         ignoreExceptionOfType(context, InterruptedException.class);
         doThrow(InterruptedException.class).when(mockMqttClient).unsubscribe(any(UnsubscribeRequest.class));
 
-        CloudDataClient cloudDataClient = new CloudDataClient(mockSyncHandler, mockMqttClient);
+        CloudDataClient cloudDataClient = new CloudDataClient(mockSyncHandler, mockMqttClient, executorService);
         assertDoesNotThrow(() -> cloudDataClient.updateSubscriptions(SHADOW_SET));
-        Thread.sleep(2000);
+        TimeUnit.MILLISECONDS.sleep(2000);
 
         assertDoesNotThrow(() -> cloudDataClient.updateSubscriptions(Collections.emptySet()));
-        Thread.sleep(2000);
+        TimeUnit.MILLISECONDS.sleep(2000);
 
         verify(mockMqttClient, times(6)).subscribe(any(SubscribeRequest.class));
         verify(mockMqttClient, times(1)).unsubscribe(any(UnsubscribeRequest.class));
@@ -216,9 +219,9 @@ public class CloudDataClientTest {
         ignoreExceptionOfType(context, clazz);
         doThrow(clazz).when(mockMqttClient).subscribe(any(SubscribeRequest.class));
 
-        CloudDataClient cloudDataClient = new CloudDataClient(mockSyncHandler, mockMqttClient);
+        CloudDataClient cloudDataClient = new CloudDataClient(mockSyncHandler, mockMqttClient, executorService);
         cloudDataClient.updateSubscriptions(SHADOW_SET);
-        Thread.sleep(5000);
+        TimeUnit.MILLISECONDS.sleep(5000);
 
         cloudDataClient.stopSubscribing();
 
@@ -236,12 +239,12 @@ public class CloudDataClientTest {
         Set<String> topicSet = getTopicSet(SHADOW_SET);
         doThrow(clazz).when(mockMqttClient).unsubscribe(any(UnsubscribeRequest.class));
 
-        CloudDataClient cloudDataClient = new CloudDataClient(mockSyncHandler, mockMqttClient);
+        CloudDataClient cloudDataClient = new CloudDataClient(mockSyncHandler, mockMqttClient, executorService);
         cloudDataClient.updateSubscriptions(SHADOW_SET);
-        Thread.sleep(2000);
+        TimeUnit.MILLISECONDS.sleep(2000);
 
         cloudDataClient.updateSubscriptions(Collections.emptySet());
-        Thread.sleep(5000);
+        TimeUnit.MILLISECONDS.sleep(5000);
 
         cloudDataClient.stopSubscribing();
 
@@ -260,7 +263,7 @@ public class CloudDataClientTest {
             "$aws/things/MyThinge2e-1619675861291-941d61c9-c99c-43e1-bf31-411a58d1fc23/shadow/name/MyThingNamedShadowe2e-1619675861291-5d0fd60c-1ee6-4538-8876-825a/update/accepted",
             "$aws/things/MyThinge2e-1619675861291-941d61c9-c99c-43e1-bf31-411a58d1fc23/shadow/name/MyThingNamedShadowe2e-1619675861291-5d0fd60c-1ee6-4538-8876-825a/delete/accepted"})
     void GIVEN_good_shadow_topic_WHEN_extractShadowFromTopic_THEN_gets_correct_shadow_request(String topic) {
-        CloudDataClient cloudDataClient = new CloudDataClient(mockSyncHandler, mockMqttClient);
+        CloudDataClient cloudDataClient = new CloudDataClient(mockSyncHandler, mockMqttClient, executorService);
         ShadowRequest request = cloudDataClient.extractShadowFromTopic(topic);
         assertThat(request.getThingName(), is("MyThinge2e-1619675861291-941d61c9-c99c-43e1-bf31-411a58d1fc23"));
         assertThat(request.getShadowName(), is("MyThingNamedShadowe2e-1619675861291-5d0fd60c-1ee6-4538-8876-825a"));
@@ -271,7 +274,7 @@ public class CloudDataClientTest {
             "$aws/things/MyThinge2e-1619675861291-941d61c9-c99c-43e1-bf31-411a58d1fc23/shadow/update/accepted",
             "$aws/things/MyThinge2e-1619675861291-941d61c9-c99c-43e1-bf31-411a58d1fc23/shadow/delete/accepted"})
     void GIVEN_good_shadow_topic_for_classic_shadow_WHEN_extractShadowFromTopic_THEN_gets_correct_shadow_request(String topic) {
-        CloudDataClient cloudDataClient = new CloudDataClient(mockSyncHandler, mockMqttClient);
+        CloudDataClient cloudDataClient = new CloudDataClient(mockSyncHandler, mockMqttClient, executorService);
         ShadowRequest request = cloudDataClient.extractShadowFromTopic(topic);
         assertThat(request.getThingName(), is("MyThinge2e-1619675861291-941d61c9-c99c-43e1-bf31-411a58d1fc23"));
         assertThat(request.getShadowName(), is(CLASSIC_SHADOW_IDENTIFIER));
