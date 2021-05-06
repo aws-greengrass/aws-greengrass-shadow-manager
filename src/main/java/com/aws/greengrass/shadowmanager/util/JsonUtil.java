@@ -9,37 +9,34 @@ import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersExcept
 import com.aws.greengrass.shadowmanager.model.Constants;
 import com.aws.greengrass.shadowmanager.model.ErrorMessage;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
-import com.aws.greengrass.util.Utils;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.github.fge.jackson.JsonLoader;
-import com.github.fge.jsonschema.core.exceptions.ProcessingException;
-import com.github.fge.jsonschema.core.report.ProcessingReport;
-import com.github.fge.jsonschema.main.JsonSchema;
-import com.github.fge.jsonschema.main.JsonSchemaFactory;
+import com.networknt.schema.JsonSchema;
+import com.networknt.schema.JsonSchemaFactory;
+import com.networknt.schema.SpecVersionDetector;
+import com.networknt.schema.ValidationMessage;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import lombok.AccessLevel;
-import lombok.Setter;
 import software.amazon.awssdk.aws.greengrass.model.ConflictError;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Iterator;
 import java.util.Optional;
+import java.util.Set;
 import java.util.StringJoiner;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_CLIENT_TOKEN;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_VERSION;
+import static com.aws.greengrass.shadowmanager.model.ErrorMessage.createInvalidPayloadJsonMessage;
 
 public final class JsonUtil {
     public static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
-    @Setter(AccessLevel.PACKAGE)
-    private static JsonSchema updateShadowRequestJsonSchema;
-    private static JsonSchema updateShadowPayloadJsonSchema;
+    private static JsonSchema updateRequestSchema;
 
     static {
         OBJECT_MAPPER.setSerializationInclusion(JsonInclude.Include.NON_NULL);
@@ -50,18 +47,16 @@ public final class JsonUtil {
     }
 
     /**
-     * Sets up the shadow document request and state schema objects by reading from the resources file.
+     * Load the update schema so it can be used for validation.
      *
-     * @throws IOException         if the resource file does not exist.
-     * @throws ProcessingException if the resource file has corrupted data which cannot be converted to JsonSchema.
+     * @throws IOException if an error occurs loading or parsing the JSON schema
      */
-    public static void setUpdateShadowJsonSchema() throws IOException, ProcessingException {
-        final JsonSchemaFactory factory = JsonSchemaFactory.byDefault();
-        final JsonNode updateRequestJsonNode = JsonLoader.fromResource("/json/schema/update_payload_schema.json");
-        updateShadowRequestJsonSchema = factory.getJsonSchema(updateRequestJsonNode);
-        final JsonNode updatePayloadJsonNode = JsonLoader.fromResource("/json/schema/update_payload_state_schema.json");
-        updateShadowPayloadJsonSchema = factory.getJsonSchema(updatePayloadJsonNode);
-
+    public static void loadSchema() throws IOException {
+        try (InputStream schema = JsonUtil.class.getResourceAsStream("/json/schema/update_payload_schema.json")) {
+            JsonNode updateRequest = OBJECT_MAPPER.reader().readTree(schema);
+            updateRequestSchema =
+                    JsonSchemaFactory.getInstance(SpecVersionDetector.detect(updateRequest)).getSchema(updateRequest);
+        }
     }
 
     /**
@@ -73,45 +68,17 @@ public final class JsonUtil {
      */
     @SuppressWarnings("PMD.PreserveStackTrace")
     public static void validatePayloadSchema(JsonNode payload) throws InvalidRequestParametersException {
-        ProcessingReport report;
-        try {
-            report = updateShadowRequestJsonSchema.validate(payload);
-            if (report.isSuccess()) {
-                JsonNode state = payload.get(SHADOW_DOCUMENT_STATE);
-                report = updateShadowPayloadJsonSchema.validate(state);
-                if (report.isSuccess()) {
-                    return;
-                }
-                throw new InvalidRequestParametersException(ErrorMessage
-                        .createInvalidPayloadJsonMessage(getAllValidationErrors(report)));
-            }
-            throw new InvalidRequestParametersException(ErrorMessage
-                    .createInvalidPayloadJsonMessage(getAllValidationErrors(report)));
-        } catch (ProcessingException e) {
-            throw new InvalidRequestParametersException(ErrorMessage.INTERNAL_SERVICE_FAILURE_MESSAGE);
+        Set<ValidationMessage> errors = updateRequestSchema.validate(payload);
+        if (errors.isEmpty()) {
+            return;
         }
-    }
 
-    @SuppressWarnings("PMD.AvoidDeeplyNestedIfStmts")
-    private static String getAllValidationErrors(ProcessingReport report) {
-        StringJoiner errorMessages = new StringJoiner("\r\n");
-        if (report != null) {
+        StringJoiner message = new StringJoiner(". ");
+        // library adds "$" as the root node so to clean up the error messages we remove it
+        // e.g. $.state.reported becomes state.reported
+        errors.stream().map(ValidationMessage::getMessage).map(m -> m.replace("$.", "")).forEach(message::add);
 
-            report.forEach(processingMessage -> {
-                // Make sure the error messages contain the field name.
-                JsonNode instance = processingMessage.asJson().get("instance");
-                if (!isNullOrMissing(instance)) {
-                    JsonNode pointer = instance.get("pointer");
-                    if (!isNullOrMissing(pointer) && !Utils.isEmpty(pointer.asText())) {
-                        String fieldName = pointer.asText().substring(1);
-                        processingMessage.setMessage(String.format("Invalid %s. %s", fieldName,
-                                processingMessage.getMessage()));
-                    }
-                }
-                errorMessages.add(processingMessage.getMessage());
-            });
-        }
-        return errorMessages.toString();
+        throw new InvalidRequestParametersException(createInvalidPayloadJsonMessage(message.toString()));
     }
 
     /**
@@ -178,7 +145,7 @@ public final class JsonUtil {
      * @throws ConflictError                     when the version number sent in the update request is not exactly one
      *                                           higher than the current shadow version
      * @throws InvalidRequestParametersException when the payload sent in the update request has bad data.
-     * @throws IOException                       when the payload is not deserizable as JSON node.
+     * @throws IOException                       when the payload is not deserializable as JSON node.
      */
     public static void validatePayload(ShadowDocument sourceDocument, JsonNode updatedDocument)
             throws ConflictError, InvalidRequestParametersException, IOException {
