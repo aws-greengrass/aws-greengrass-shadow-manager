@@ -9,60 +9,88 @@ import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersExcept
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.github.fge.jsonschema.core.exceptions.ProcessingException;
-import com.github.fge.jsonschema.main.JsonSchema;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
+import static com.aws.greengrass.shadowmanager.util.JsonUtil.getPayloadJson;
+import static com.aws.greengrass.shadowmanager.util.JsonUtil.validatePayloadSchema;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 class JsonUtilTest {
+    private static final String NAME_A = "{\"name\": \"A\"}";
+    private static final String NAME_B = "{\"name\": \"B\"}";
 
-    @Test
-    void GIVEN_bad_state_node_WHEN_validatePayloadSchema_THEN_throws_invalid_request_parameters_exception() throws IOException, ProcessingException {
-        JsonUtil.setUpdateShadowJsonSchema();
-        JsonNode node = JsonUtil.getPayloadJson("{\"version\": 6, \"state\": {\"desired\": [\"Pink Floyd\", \"The Beatles\"]}}".getBytes()).get();
-        InvalidRequestParametersException thrown = assertThrows(InvalidRequestParametersException.class, () -> JsonUtil.validatePayloadSchema(node));
-        assertThat(thrown.getErrorMessage(), is(notNullValue()));
-        assertThat(thrown.getErrorMessage().getMessage(), is("Invalid JSON\n"
-                + "Invalid desired. instance type (array) does not match any allowed primitive type (allowed: [\"null\",\"object\"])"));
+    @BeforeEach
+    void setup() throws IOException {
+        JsonUtil.loadSchema();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings={
+            "{\"version\": 1}",
+            "{}",
+            "{\"state\": {}}",
+            "{\"state\": {\"reported\": 1}}",
+            "{\"state\": {\"desired\": 1}}",
+            "{\"state\": {\"delta\": 1}}",
+            "{\"version\": 1, \"state\": {\"foo\": {\"name\": \"The Beatles\"}}}",
+            "{\"version\": \"foo\", \"state\": {\"foo\": {\"name\": \"The Beatles\"}}}"
+            })
+    void GIVEN_bad_payload_WHEN_validate_THEN_throws_invalid_request_exception(String json) {
+        InvalidRequestParametersException thrown = assertThrows(InvalidRequestParametersException.class,
+                () -> {
+                    validatePayloadSchema(getPayloadJson(json.getBytes(StandardCharsets.UTF_8)).get());
+                });
+        assertThat(thrown.getErrorMessage().getMessage(), containsString("Invalid JSON"));
         assertThat(thrown.getErrorMessage().getErrorCode(), is(400));
     }
 
-    @Test
-    void GIVEN_bad_state_node_WHEN_validate_throws_processingException_THEN_throws_invalid_request_parameters_exception() throws IOException, ProcessingException {
-        JsonSchema mockJsonSchema = mock(JsonSchema.class);
-        when(mockJsonSchema.validate(any(JsonNode.class))).thenThrow(ProcessingException.class);
-        JsonUtil.setUpdateShadowRequestJsonSchema(mockJsonSchema);
-        JsonNode node = JsonUtil.getPayloadJson("{\"version\": 6, \"state\": {\"desired\": [\"Pink Floyd\", \"The Beatles\"]}}".getBytes()).get();
-        InvalidRequestParametersException thrown = assertThrows(InvalidRequestParametersException.class, () -> JsonUtil.validatePayloadSchema(node));
-        assertThat(thrown.getErrorMessage(), is(notNullValue()));
-        assertThat(thrown.getErrorMessage().getErrorCode(), is(500));
-        assertThat(thrown.getErrorMessage().getMessage(), is("Internal service failure"));
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "{\"state\": {\"desired\":" + NAME_A + ", \"reported\":" + NAME_B + ", \"delta\":" + NAME_A + "}}",
+            "{\"state\": {\"desired\":" + NAME_A + ", \"reported\":" + NAME_A + "}}",
+            "{\"state\": {\"desired\":" + NAME_A + "}}",
+            "{\"state\": {\"desired\":" + NAME_A + ", \"reported\": null}}",
+            "{\"state\": {\"reported\":" + NAME_A + "}}",
+            "{\"state\": {\"reported\":" + NAME_A + ", \"desired\": null}}",
+
+            "{\"version\": 1, \"state\": {\"desired\":" + NAME_A + ", \"reported\":" + NAME_B + ", \"delta\":" + NAME_A + "}}",
+            "{\"version\": 1, \"state\": {\"desired\":" + NAME_A + ", \"reported\":" + NAME_A + "}}",
+            "{\"version\": 1, \"state\": {\"desired\":" + NAME_A + "}}",
+            "{\"version\": 1, \"state\": {\"desired\":" + NAME_A + ", \"reported\": null}}",
+            "{\"version\": 1, \"state\": {\"reported\":" + NAME_A + "}}",
+            "{\"version\": 1, \"state\": {\"reported\":" + NAME_A + ", \"desired\": null}}",
+    })
+    void GIVEN_valid_request_WHEN_validatePayloadSchema_THEN_does_not_throw(String json) throws IOException {
+        assertDoesNotThrow(() -> {
+            validatePayloadSchema(getPayloadJson(json.getBytes(StandardCharsets.UTF_8)).get());
+        });
     }
 
     @Test
     void GIVEN_no_source_node_and_good_update_node_WHEN_validatePayload_THEN_successfully_validates() throws IOException {
         ShadowDocument source = new ShadowDocument();
-        JsonNode updateNode = JsonUtil.getPayloadJson("{\"version\": 1, \"state\": {\"desired\": {\"name\": \"The Beatles\"}}}".getBytes()).get();
+        JsonNode updateNode = getPayloadJson("{\"version\": 1, \"state\": {\"desired\": {\"name\": \"The Beatles\"}}}".getBytes()).get();
         assertDoesNotThrow(() -> JsonUtil.validatePayload(source, updateNode));
     }
 
     @Test
     void GIVEN_no_source_node_and_bad_update_node_WHEN_validatePayload_THEN_throws_invalid_request_parameters_exception() throws IOException {
         ShadowDocument source = new ShadowDocument();
-        JsonNode updateNode = JsonUtil.getPayloadJson("{\"version\": 2, \"state\": {\"desired\": {\"name\": \"The Beatles\"}}}".getBytes()).get();
+        JsonNode updateNode = getPayloadJson("{\"version\": 2, \"state\": {\"desired\": {\"name\": \"The Beatles\"}}}".getBytes()).get();
         InvalidRequestParametersException thrown =  assertThrows(InvalidRequestParametersException.class, () -> JsonUtil.validatePayload(source, updateNode));
         assertThat(thrown.getErrorMessage(), is(notNullValue()));
         assertThat(thrown.getErrorMessage().getErrorCode(), is(400));

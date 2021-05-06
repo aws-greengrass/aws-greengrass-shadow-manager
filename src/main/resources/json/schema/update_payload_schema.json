@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-04/schema#",
   "title": "Update Shadow Payload Schema",
-  "description": "Schema to validate the payload recieved for update shadow",
+  "description": "Schema to validate the payload received for update shadow",
   "type": "object",
   "properties": {
     "clientToken": {
@@ -10,8 +10,30 @@
       "maxLength": 64
     },
     "state": {
-      "description": "The state node containing the shadow state.",
-      "type": "object"
+      "description": "The state node containing the desired, reported, and delta shadow state.",
+      "type": "object",
+      "properties": {
+        "reported": {
+          "description": "The shadow document state reported by the components.",
+          "type": ["object", "null"]
+        },
+        "desired": {
+          "description": "The desired change in the shadow document state by the components.",
+          "type": ["object", "null"]
+        },
+        "delta": {
+          "description": "The difference between the desired and reported nodes.",
+          "type": ["object", "null"]
+        }
+      },
+      "anyOf": [
+        {
+          "required": [ "reported" ]
+        },
+        {
+          "required": [ "desired" ]
+        }
+      ]
     },
     "version": {
       "description": "The version of the shadow update request.",
