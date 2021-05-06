@@ -93,7 +93,7 @@ class ShadowIPCTest {
     public static final String MOCK_THING_NAME = "mockThing";
     public static final String SHADOW_NAME_1 = "testShadowName";
     private static Kernel kernel;
-    private static final String nullVersionErrorMessage = "Invalid JSON\\nInvalid version. instance type (null) does not match any allowed primitive type (allowed: [\\\"integer\\\",\\\"number\\\"])";
+    private static final String nullVersionErrorMessage = "Invalid JSON: version: null found, number expected";
     private static final String expectedShadowDocumentV1Str = "{\"version\":1,\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}}}";
     private static final String expectedShadowDocumentV2Str = "{\"state\":{\"desired\":{\"color\":{\"r\":0,\"a\":255,\"g\":255},\"NewArray\":[1,2,3,5,8,13]},\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}},\"version\":2}";
     private static final String expectedShadowDocumentV3Str = "{\"version\":3,\"state\":{\"reported\":{\"color\":{\"r\":0,\"g\":255,\"b\":255,\"a\":255},\"SomeKey\":\"SomeValue\",\"NewArray\": [1,2,3,5,8,13]}}}";

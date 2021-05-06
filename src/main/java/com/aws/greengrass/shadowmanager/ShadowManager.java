@@ -39,7 +39,6 @@ import com.aws.greengrass.shadowmanager.util.ShadowWriteSynchronizeHelper;
 import com.aws.greengrass.shadowmanager.util.Validator;
 import com.aws.greengrass.util.Coerce;
 import com.aws.greengrass.util.Pair;
-import com.github.fge.jsonschema.core.exceptions.ProcessingException;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
@@ -199,8 +198,8 @@ public class ShadowManager extends PluginService {
     protected void install() {
         try {
             database.install();
-            JsonUtil.setUpdateShadowJsonSchema();
-        } catch (SQLException | FlywayException | IOException | ProcessingException e) {
+            JsonUtil.loadSchema();
+        } catch (SQLException | FlywayException | IOException e) {
             serviceErrored(e);
         }
 
