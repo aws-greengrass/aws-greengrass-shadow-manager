@@ -23,6 +23,8 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
@@ -42,38 +44,39 @@ public class CloudDataClient {
     private static final Logger logger = LogManager.getLogger(CloudDataClient.class);
     private final SyncHandler syncHandler;
     private final MqttClient mqttClient;
+    private final ExecutorService executorService;
     private final Set<String> subscribedUpdateShadowTopics = new HashSet<>();
     private final Set<String> subscribedDeleteShadowTopics = new HashSet<>();
     private final Pattern shadowPattern = Pattern.compile("\\$aws\\/things\\/(.*)\\/shadow(\\/name\\/(.*))?"
             + "\\/(update|delete)\\/(accepted|rejected|delta|documents)");
-    // TODO: use ExecutorService for managing threads
-    private Thread subscriberThread;
     private static final RetryUtils.RetryConfig RETRY_CONFIG = RetryUtils.RetryConfig.builder()
             .maxAttempt(Integer.MAX_VALUE)
             .initialRetryInterval(Duration.of(3, ChronoUnit.SECONDS))
             .maxRetryInterval(Duration.of(1, ChronoUnit.MINUTES))
             .retryableExceptions(Collections.singletonList(SubscriptionRetryException.class))
             .build();
+    private Future<?> syncLoopFuture;
 
     /**
      * Ctr for CloudDataClient.
      *
-     * @param syncHandler Reference to the SyncHandler
-     * @param mqttClient  MQTT client to connect to IoT Core
+     * @param syncHandler     Reference to the SyncHandler
+     * @param mqttClient      MQTT client to connect to IoT Core
+     * @param executorService Executor Service
      */
     @Inject
-    public CloudDataClient(SyncHandler syncHandler,
-                           MqttClient mqttClient) {
+    public CloudDataClient(SyncHandler syncHandler, MqttClient mqttClient, ExecutorService executorService) {
         this.syncHandler = syncHandler;
         this.mqttClient = mqttClient;
+        this.executorService = executorService;
     }
 
     /**
      * Stops the mqtt subscriber thread.
      */
     public void stopSubscribing() {
-        if (subscriberThread != null && subscriberThread.isAlive()) {
-            subscriberThread.interrupt();
+        if (syncLoopFuture != null && !syncLoopFuture.isDone()) {
+            syncLoopFuture.cancel(true);
         }
     }
 
@@ -93,8 +96,7 @@ public class CloudDataClient {
         }
 
         stopSubscribing();
-        subscriberThread = new Thread(() -> updateSubscriptions(newUpdateTopics, newDeleteTopics));
-        subscriberThread.start();
+        syncLoopFuture = this.executorService.submit(() -> updateSubscriptions(newUpdateTopics, newDeleteTopics));
     }
 
     /**
