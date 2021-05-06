@@ -348,9 +348,8 @@ public class SyncHandler {
      * @return true if the shadow is supposed to be synced; Else false.
      */
     private boolean isShadowSynced(String thingName, String shadowName) {
-        return this.syncConfigurations != null && this.syncConfigurations.stream()
-                .anyMatch(configuration -> configuration.getThingName().equals(thingName)
-                        && configuration.getShadowName().equals(shadowName));
+        return this.syncConfigurations != null && this.syncConfigurations
+                .contains(ThingShadowSyncConfiguration.builder().shadowName(shadowName).thingName(thingName).build());
     }
 
     /**
