@@ -25,6 +25,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_S
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE_REPORTED;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_TIMESTAMP;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -150,37 +151,37 @@ class ShadowStateMetadataTest {
         JsonNode patchToCheck = patchMetadata.get(SHADOW_DOCUMENT_STATE_DESIRED);
         assertTrue(patchToCheck.has("SomeObject"));
         assertTrue(ShadowStateMetadata.isMetadataNode(patchToCheck.get("SomeObject")));
-        assertThat(patchToCheck.get("SomeObject").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), Matchers.is(timestamp));
+        assertThat(patchToCheck.get("SomeObject").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(timestamp));
 
         assertTrue(patchToCheck.has("id"));
         assertFalse(ShadowStateMetadata.isMetadataNode(patchToCheck.get("id")));
         assertTrue(patchToCheck.get("id").has("NewIdChild"));
         assertTrue(ShadowStateMetadata.isMetadataNode(patchToCheck.get("id").get("NewIdChild")));
-        assertThat(patchToCheck.get("id").get("NewIdChild").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), Matchers.is(timestamp));
+        assertThat(patchToCheck.get("id").get("NewIdChild").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(timestamp));
 
         assertTrue(patchToCheck.has("NewObject"));
         assertFalse(ShadowStateMetadata.isMetadataNode(patchToCheck.get("NewObject")));
         assertTrue(patchToCheck.get("NewObject").has("NewObjectChild"));
         assertTrue(ShadowStateMetadata.isMetadataNode(patchToCheck.get("NewObject").get("NewObjectChild")));
-        assertThat(patchToCheck.get("NewObject").get("NewObjectChild").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), Matchers.is(timestamp));
+        assertThat(patchToCheck.get("NewObject").get("NewObjectChild").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(timestamp));
     }
 
     private void checkNodeForMetadata(JsonNode patchToCheck) {
         assertTrue(patchToCheck.has("id"));
         assertTrue(ShadowStateMetadata.isMetadataNode(patchToCheck.get("id")));
-        assertThat(patchToCheck.get("id").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), Matchers.is(timestamp));
+        assertThat(patchToCheck.get("id").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(timestamp));
 
         assertTrue(patchToCheck.has("SomeObject"));
         assertFalse(ShadowStateMetadata.isMetadataNode(patchToCheck.get("SomeObject")));
         assertTrue(patchToCheck.get("SomeObject").has("SomeChild1"));
         assertTrue(ShadowStateMetadata.isMetadataNode(patchToCheck.get("SomeObject").get("SomeChild1")));
-        assertThat(patchToCheck.get("SomeObject").get("SomeChild1").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), Matchers.is(timestamp));
+        assertThat(patchToCheck.get("SomeObject").get("SomeChild1").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(timestamp));
 
         assertTrue(patchToCheck.get("SomeObject").has("SomeChild2"));
         assertFalse(ShadowStateMetadata.isMetadataNode(patchToCheck.get("SomeObject").get("SomeChild2")));
         assertTrue(patchToCheck.get("SomeObject").get("SomeChild2").has("SomeChild3"));
         assertTrue(ShadowStateMetadata.isMetadataNode(patchToCheck.get("SomeObject").get("SomeChild2").get("SomeChild3")));
-        assertThat(patchToCheck.get("SomeObject").get("SomeChild2").get("SomeChild3").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), Matchers.is(timestamp));
+        assertThat(patchToCheck.get("SomeObject").get("SomeChild2").get("SomeChild3").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(timestamp));
     }
 
     @Test
@@ -200,7 +201,7 @@ class ShadowStateMetadataTest {
         assertTrue(shadowStateMetadata.getDesired().has("SomeArray"));
         shadowStateMetadata.getDesired().get("SomeArray").forEach(jsonNode -> {
             assertTrue(ShadowStateMetadata.isMetadataNode(jsonNode));
-            assertThat(jsonNode.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), Matchers.is(timestamp));
+            assertThat(jsonNode.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(timestamp));
         });
 
         assertTrue(JsonUtil.isNullOrMissing(shadowStateMetadata.getReported()));
@@ -209,7 +210,7 @@ class ShadowStateMetadataTest {
         assertTrue(patchMetadata.get(SHADOW_DOCUMENT_STATE_DESIRED).has("SomeArray"));
         patchMetadata.get(SHADOW_DOCUMENT_STATE_DESIRED).get("SomeArray").forEach(jsonNode -> {
             assertTrue(ShadowStateMetadata.isMetadataNode(jsonNode));
-            assertThat(jsonNode.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), Matchers.is(timestamp));
+            assertThat(jsonNode.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(timestamp));
         });
     }
 
@@ -233,7 +234,7 @@ class ShadowStateMetadataTest {
         assertFalse(JsonUtil.isNullOrMissing(patchMetadata));
         assertTrue(patchMetadata.has(SHADOW_DOCUMENT_STATE_DESIRED));
         assertTrue(patchMetadata.get(SHADOW_DOCUMENT_STATE_DESIRED).has("SomObject"));
-        assertThat(patchMetadata.get(SHADOW_DOCUMENT_STATE_DESIRED).get("SomObject").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), Matchers.is(timestamp));
+        assertThat(patchMetadata.get(SHADOW_DOCUMENT_STATE_DESIRED).get("SomObject").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(timestamp));
     }
 
     @Test
@@ -245,7 +246,7 @@ class ShadowStateMetadataTest {
         expectedMetadataJson.set(SHADOW_DOCUMENT_STATE_REPORTED, patchMetadataJson.get());
         ShadowStateMetadata shadowStateMetadata = new ShadowStateMetadata(patchMetadataJson.get(), patchMetadataJson.get(), mockClock);
         JsonNode metadataJson = shadowStateMetadata.toJson();
-        assertThat(metadataJson, Matchers.is(expectedMetadataJson));
+        assertThat(metadataJson, is(expectedMetadataJson));
     }
 
     @Test
@@ -267,24 +268,24 @@ class ShadowStateMetadataTest {
         JsonNode deltaMetadata = shadowStateMetadata.getDeltaMetadata(deltaJson.get());
         assertFalse(JsonUtil.isNullOrMissing(deltaMetadata));
         assertTrue(deltaMetadata.has("id"));
-        assertThat(deltaMetadata.get("id").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), Matchers.is(12345L));
+        assertThat(deltaMetadata.get("id").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(12345L));
 
         assertTrue(deltaMetadata.has("SomeObject"));
         assertFalse(ShadowStateMetadata.isMetadataNode(deltaMetadata.get("SomeObject")));
         assertTrue(deltaMetadata.get("SomeObject").has("SomeChild1"));
-        assertThat(deltaMetadata.get("SomeObject").get("SomeChild1").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), Matchers.is(12345L));
+        assertThat(deltaMetadata.get("SomeObject").get("SomeChild1").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(12345L));
         assertEquals(12345, deltaMetadata.get("SomeObject").get("SomeChild1").get(SHADOW_DOCUMENT_TIMESTAMP).asLong());
 
         assertTrue(deltaMetadata.get("SomeObject").has("SomeChild2"));
         assertFalse(ShadowStateMetadata.isMetadataNode(deltaMetadata.get("SomeObject").get("SomeChild2")));
         assertTrue(deltaMetadata.get("SomeObject").get("SomeChild2").has("SomeChild3"));
-        assertThat(deltaMetadata.get("SomeObject").get("SomeChild2").get("SomeChild3").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), Matchers.is(12345L));
+        assertThat(deltaMetadata.get("SomeObject").get("SomeChild2").get("SomeChild3").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(12345L));
         assertEquals(12345, deltaMetadata.get("SomeObject").get("SomeChild2").get("SomeChild3").get(SHADOW_DOCUMENT_TIMESTAMP).asLong());
 
         assertTrue(deltaMetadata.has("SomeArray"));
         deltaMetadata.get("SomeArray").forEach(jsonNode -> {
             assertEquals(12345, jsonNode.get(SHADOW_DOCUMENT_TIMESTAMP).asLong());
-            assertThat(jsonNode.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), Matchers.is(12345L));
+            assertThat(jsonNode.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(12345L));
         });
 
 
@@ -302,17 +303,17 @@ class ShadowStateMetadataTest {
         JsonNode deltaMetadata = shadowStateMetadata.getDeltaMetadata(deltaJson.get());
         assertFalse(JsonUtil.isNullOrMissing(deltaMetadata));
         assertTrue(deltaMetadata.has("id"));
-        assertThat(deltaMetadata.get("id").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), Matchers.is(12345L));
+        assertThat(deltaMetadata.get("id").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(12345L));
 
         assertTrue(deltaMetadata.has("SomeObject"));
         assertFalse(ShadowStateMetadata.isMetadataNode(deltaMetadata.get("SomeObject")));
         assertTrue(deltaMetadata.get("SomeObject").has("SomeChild1"));
-        assertThat(deltaMetadata.get("SomeObject").get("SomeChild1").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), Matchers.is(12345L));
+        assertThat(deltaMetadata.get("SomeObject").get("SomeChild1").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(12345L));
 
         assertTrue(deltaMetadata.get("SomeObject").has("SomeChild2"));
         assertFalse(ShadowStateMetadata.isMetadataNode(deltaMetadata.get("SomeObject").get("SomeChild2")));
         assertTrue(deltaMetadata.get("SomeObject").get("SomeChild2").has("SomeChild3"));
-        assertThat(deltaMetadata.get("SomeObject").get("SomeChild2").get("SomeChild3").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), Matchers.is(12345L));
+        assertThat(deltaMetadata.get("SomeObject").get("SomeChild2").get("SomeChild3").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(12345L));
 
     }
 
@@ -324,8 +325,17 @@ class ShadowStateMetadataTest {
         assertTrue(patchMetadataJson.isPresent());
         ShadowStateMetadata shadowStateMetadata = new ShadowStateMetadata(patchMetadataJson.get(), null, mockClock);
         ShadowStateMetadata deepCopiedMetadata = shadowStateMetadata.deepCopy();
-        assertThat(deepCopiedMetadata, Matchers.is(Matchers.not(shadowStateMetadata)));
-        assertThat(deepCopiedMetadata.toJson(), Matchers.is(shadowStateMetadata.toJson()));
+        assertThat(deepCopiedMetadata, is(Matchers.not(shadowStateMetadata)));
+        assertThat(deepCopiedMetadata.toJson(), is(shadowStateMetadata.toJson()));
     }
 
+    @Test
+    void GIVEN_reported_and_desired_metadata_WHEN_getLatestUpdated_THEN_gets_the_correct_latest_updated_timestamp() throws IOException {
+        final String desired = "{\"id\": {\"timestamp\": 1}, \"SomeObject\": {\"SomeChild1\": {\"timestamp\": 2}, \"SomeChild2\": {\"SomeChild3\": {\"timestamp\": 4}}}}";
+        final String reported = "{\"id2\": [{\"timestamp\": 10}, {\"timestamp\": 9}, {\"timestamp\": 2}, {\"timestamp\": 1620163568}]}";
+        Optional<JsonNode> desiredJson = JsonUtil.getPayloadJson(desired.getBytes());
+        Optional<JsonNode> reportedJson = JsonUtil.getPayloadJson(reported.getBytes());
+        ShadowStateMetadata shadowStateMetadata = new ShadowStateMetadata(desiredJson.get(), reportedJson.get(), mockClock);
+        assertThat(shadowStateMetadata.getLatestUpdatedTimestamp(), is(1620163568L));
+    }
 }

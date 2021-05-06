@@ -24,7 +24,6 @@ import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.IntNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.github.fge.jsonschema.core.exceptions.ProcessingException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -135,9 +134,9 @@ class UpdateThingShadowRequestHandlerTest {
     }
 
     @BeforeEach
-    void setup() throws IOException, ProcessingException {
+    void setup() throws IOException {
         lenient().when(mockSynchronizeHelper.getThingShadowLock(any())).thenReturn(Object.class);
-        JsonUtil.setUpdateShadowJsonSchema();
+        JsonUtil.loadSchema();
     }
 
     @ParameterizedTest
@@ -705,7 +704,7 @@ class UpdateThingShadowRequestHandlerTest {
         UpdateThingShadowRequestHandler updateThingShadowIPCHandler = new UpdateThingShadowRequestHandler(mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockSynchronizeHelper, mockSyncHandler);
 
         InvalidArgumentsError thrown = assertThrows(InvalidArgumentsError.class, () -> updateThingShadowIPCHandler.handleRequest(request, TEST_SERVICE));
-        assertThat(thrown.getMessage().trim(), is(equalTo(expectedErrorMessage)));
+        assertThat(thrown.getMessage().trim(), containsString(expectedErrorMessage));
 
         verify(mockPubSubClientWrapper, times(1))
                 .reject(pubSubRequestCaptor.capture());
@@ -718,7 +717,7 @@ class UpdateThingShadowRequestHandlerTest {
         JsonNode errorNode = JsonUtil.getPayloadJson(pubSubRequestCaptor.getValue().getPayload()).get();
         assertThat(errorNode.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(not(equalTo(Instant.EPOCH.toEpochMilli()))));
         assertThat(errorNode.get(ERROR_CODE_FIELD_NAME).asInt(), is(expectedErrorCode));
-        assertThat(errorNode.get(ERROR_MESSAGE_FIELD_NAME).asText(), is(equalTo(expectedErrorMessage)));
+        assertThat(errorNode.get(ERROR_MESSAGE_FIELD_NAME).asText(), containsString(expectedErrorMessage));
     }
 
     @ParameterizedTest
@@ -732,7 +731,7 @@ class UpdateThingShadowRequestHandlerTest {
     @Test
     void GIVEN_bad_update_document_with_no_state_node_WHEN_handle_request_THEN_throw_invalid_argument_error_and_send_message_on_rejected_topic(ExtensionContext context) throws IOException, URISyntaxException {
         byte[] badUpdateRequest = getJsonFromResource(RESOURCE_DIRECTORY_NAME + BAD_UPDATE_DOCUMENT_WITHOUT_STATE_NODE_FILE_NAME);
-        String expectedErrorString = "Invalid JSON\nobject has missing required properties ([\"state\"])";
+        String expectedErrorString = "Invalid JSON: state";
         int expectedErrorCode = 400;
         assertInvalidArgumentsErrorFromPayloadUpdate(null, badUpdateRequest, expectedErrorString, expectedErrorCode, context);
     }
@@ -741,7 +740,7 @@ class UpdateThingShadowRequestHandlerTest {
     void GIVEN_bad_update_with_non_int_version_WHEN_handle_request_THEN_throw_invalid_argument_error_and_send_message_on_rejected_topic(ExtensionContext context)
             throws IOException, URISyntaxException {
         byte[] badUpdateRequest = getJsonFromResource(RESOURCE_DIRECTORY_NAME + "bad_version_update_document.json");
-        String expectedErrorString = "Invalid JSON\nInvalid version. instance type (string) does not match any allowed primitive type (allowed: [\"integer\",\"number\"])";
+        String expectedErrorString = "Invalid JSON: version";
         int expectedErrorCode = 400;
         assertInvalidArgumentsErrorFromPayloadUpdate(null, badUpdateRequest, expectedErrorString, expectedErrorCode, context);
     }
@@ -783,7 +782,7 @@ class UpdateThingShadowRequestHandlerTest {
             throws IOException, URISyntaxException {
         byte[] initialDocument = getJsonFromResource(RESOURCE_DIRECTORY_NAME + GOOD_INITIAL_DOCUMENT_FILE_NAME);
         byte[] badUpdateRequest = getJsonFromResource(RESOURCE_DIRECTORY_NAME + "bad_update_document_with_state_node_as_value_node.json");
-        String expectedErrorString = "Invalid JSON\nInvalid state. instance type (string) does not match any allowed primitive type (allowed: [\"object\"])";
+        String expectedErrorString = "Invalid JSON: state";
         int expectedErrorCode = 400;
         assertInvalidArgumentsErrorFromPayloadUpdate(initialDocument, badUpdateRequest, expectedErrorString, expectedErrorCode, context);
     }

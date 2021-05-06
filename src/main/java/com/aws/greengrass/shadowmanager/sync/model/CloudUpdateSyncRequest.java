@@ -28,7 +28,6 @@ import software.amazon.awssdk.services.iotdataplane.model.ServiceUnavailableExce
 import software.amazon.awssdk.services.iotdataplane.model.ThrottlingException;
 
 import java.io.IOException;
-import java.time.Instant;
 import java.util.Optional;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
@@ -125,7 +124,7 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
                     .cloudDeleted(false)
                     .shadowName(getShadowName())
                     .thingName(getThingName())
-                    .cloudUpdateTime(Instant.now().getEpochSecond())
+                    .cloudUpdateTime(shadowDocument.get().getMetadata().getLatestUpdatedTimestamp())
                     .localVersion(shadowDocument.get().getVersion())
                     .build());
         } catch (JsonProcessingException | ShadowManagerDataException e) {

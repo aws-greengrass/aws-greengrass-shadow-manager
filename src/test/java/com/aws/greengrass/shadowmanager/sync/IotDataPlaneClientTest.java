@@ -172,7 +172,7 @@ public class IotDataPlaneClientTest {
         //THEN
 
         // sleep for less than a second to verify that rate limiter throttled requests after 2 calls
-        verify(mockIotDataPlaneClient, after(500).times(rate)).getThingShadow(any(GetThingShadowRequest.class));
+        verify(mockIotDataPlaneClient, after(700).times(rate)).getThingShadow(any(GetThingShadowRequest.class));
 
         // check that requests are eventually processed
         verify(mockIotDataPlaneClient, after(5000).times(maxRequestCalls)).getThingShadow(any(GetThingShadowRequest.class));
