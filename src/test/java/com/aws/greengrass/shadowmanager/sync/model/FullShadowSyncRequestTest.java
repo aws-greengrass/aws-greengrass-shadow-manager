@@ -299,7 +299,7 @@ class FullShadowSyncRequestTest {
         assertThat(syncInformationCaptor.getValue().getLastSyncedDocument(), is(nullValue()));
         assertThat(syncInformationCaptor.getValue().getCloudVersion(), is(1L));
         assertThat(syncInformationCaptor.getValue().getLocalVersion(), is(10L));
-        assertThat(syncInformationCaptor.getValue().getCloudUpdateTime(), is(greaterThanOrEqualTo(epochSeconds)));
+        assertThat(syncInformationCaptor.getValue().getCloudUpdateTime(), is(greaterThanOrEqualTo(epochSecondsMinus60)));
         assertThat(syncInformationCaptor.getValue().getLastSyncTime(), is(greaterThanOrEqualTo(epochSeconds)));
         assertThat(syncInformationCaptor.getValue().getShadowName(), is(SHADOW_NAME));
         assertThat(syncInformationCaptor.getValue().getThingName(), is(THING_NAME));
