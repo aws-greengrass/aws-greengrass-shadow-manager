@@ -18,7 +18,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_LOCAL_SHA
  * Class which handles request throttling for all inbound local shadow requests.
  */
 public class InboundRateLimiter {
-    private final ConcurrentHashMap<String, RateLimiter> rateLimiterMap = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, RateLimiter> rateLimiterMap;
     private double rate = DEFAULT_LOCAL_SHADOW_REQUESTS_PER_THING_PS;
 
     /**
@@ -26,7 +26,11 @@ public class InboundRateLimiter {
      */
     @Inject
     public InboundRateLimiter() {
+        this(new ConcurrentHashMap<>());
+    }
 
+    InboundRateLimiter(ConcurrentHashMap<String, RateLimiter> rateLimiterMap) {
+        this.rateLimiterMap = rateLimiterMap;
     }
 
     /**
