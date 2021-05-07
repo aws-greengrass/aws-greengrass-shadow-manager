@@ -59,8 +59,8 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
     /**
      * Ctr for FullShadowSyncRequest.
      *
-     * @param thingName                   The thing name associated with the sync shadow update
-     * @param shadowName                  The shadow name associated with the sync shadow update
+     * @param thingName  The thing name associated with the sync shadow update
+     * @param shadowName The shadow name associated with the sync shadow update
      */
     public FullShadowSyncRequest(String thingName, String shadowName) {
         super(thingName, shadowName);
@@ -69,7 +69,7 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
     /**
      * Executes a full shadow sync.
      *
-     * @param  context                  the execution context.
+     * @param context the execution context.
      * @throws RetryableException       if the cloud version is not the same as the version of the shadow on the cloud
      *                                  or if the cloud is throttling the request.
      * @throws SkipSyncRequestException if the update request on the cloud shadow failed for another 400 exception.
@@ -102,7 +102,6 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
                     .cloudVersion(syncInformation.get().getCloudVersion())
                     .shadowName(getShadowName())
                     .thingName(getThingName())
-                    // TODO: get the latest from metadata?
                     .cloudUpdateTime(Instant.now().getEpochSecond())
                     .lastSyncedDocument(null)
                     .build());
@@ -121,12 +120,17 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
             return;
         }
 
+        long cloudUpdateTime = Instant.now().getEpochSecond();
+        if (cloudShadowDocument.get().getMetadata() != null) {
+            cloudUpdateTime = cloudShadowDocument.get().getMetadata().getLatestUpdatedTimestamp();
+        }
+
         // If only the local document does not exist, check if this is the first time we are syncing this shadow. If we
         // are, go ahead and update the local with the cloud document and update the sync information.
         // If it's not the first time for sync, go ahead and delete the cloud shadow and update the sync info.
         if (!localShadowDocument.isPresent()) {
             if (isFirstSync(syncInformation.get())) {
-                handleFirstLocalSync(cloudShadowDocument.get());
+                handleFirstLocalSync(cloudShadowDocument.get(), cloudUpdateTime);
             } else {
                 handleCloudDelete(cloudShadowDocument.get(), syncInformation.get());
             }
@@ -186,7 +190,7 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
 
         if (!isDocVersionSame(localShadowDocument.get(), syncInformation.get(), DataOwner.LOCAL)
                 || !isDocVersionSame(cloudShadowDocument.get(), syncInformation.get(), DataOwner.CLOUD)) {
-            updateSyncInformation(updateDocument, localDocumentVersion, cloudDocumentVersion);
+            updateSyncInformation(updateDocument, localDocumentVersion, cloudDocumentVersion, cloudUpdateTime);
         }
         logger.atTrace()
                 .kv(LOG_THING_NAME_KEY, getThingName())
@@ -223,7 +227,6 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
                 .cloudVersion(cloudShadowDocument.getVersion())
                 .shadowName(getShadowName())
                 .thingName(getThingName())
-                // TODO: get the latest from metadata?
                 .cloudUpdateTime(Instant.now().getEpochSecond())
                 .lastSyncedDocument(null)
                 .build());
@@ -233,9 +236,10 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
      * Create the local shadow using the request handlers and then update the sync information.
      *
      * @param cloudShadowDocument The current cloud document.
+     * @param cloudUpdateTime     The cloud update timestamp.
      * @throws SkipSyncRequestException if the update request encountered a skipable exception.
      */
-    private void handleFirstLocalSync(@NonNull ShadowDocument cloudShadowDocument)
+    private void handleFirstLocalSync(@NonNull ShadowDocument cloudShadowDocument, long cloudUpdateTime)
             throws SkipSyncRequestException {
         logger.atInfo()
                 .kv(LOG_THING_NAME_KEY, getThingName())
@@ -245,7 +249,7 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
 
         ObjectNode updateDocument = (ObjectNode) cloudShadowDocument.toJson(false);
         long localDocumentVersion = updateLocalDocumentAndGetUpdatedVersion(updateDocument, Optional.empty());
-        updateSyncInformation(updateDocument, localDocumentVersion, cloudShadowDocument.getVersion());
+        updateSyncInformation(updateDocument, localDocumentVersion, cloudShadowDocument.getVersion(), cloudUpdateTime);
     }
 
     /**
@@ -263,14 +267,14 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
                 .cloudVersion(syncInformation.getCloudVersion())
                 .shadowName(getShadowName())
                 .thingName(getThingName())
-                // TODO: get the latest from metadata?
-                .cloudUpdateTime(Instant.now().getEpochSecond())
+                .cloudUpdateTime(syncInformation.getCloudUpdateTime())
                 .lastSyncedDocument(null)
                 .build());
     }
 
     /**
      * Create the cloud shadow using the IoT Data plane client and then update the sync information.
+     *
      * @param localShadowDocument The current local document.
      * @throws SkipSyncRequestException if the update request to cloud encountered a skipable exception.
      */
@@ -283,7 +287,8 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
                 .log("Syncing cloud shadow for the first time");
         ObjectNode updateDocument = (ObjectNode) localShadowDocument.toJson(false);
         long cloudDocumentVersion = updateCloudDocumentAndGetUpdatedVersion(updateDocument, Optional.empty());
-        updateSyncInformation(updateDocument, localShadowDocument.getVersion(), cloudDocumentVersion);
+        updateSyncInformation(updateDocument, localShadowDocument.getVersion(), cloudDocumentVersion,
+                Instant.now().getEpochSecond());
     }
 
     /**
@@ -311,9 +316,11 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
      * @param updateDocument       The update request payload.
      * @param localDocumentVersion The current local document version.
      * @param cloudDocumentVersion The current cloud document version.
+     * @param cloudUpdateTime      The cloud document latest update time.
      * @throws SkipSyncRequestException if the serialization of the update request payload failed.
      */
-    private void updateSyncInformation(ObjectNode updateDocument, long localDocumentVersion, long cloudDocumentVersion)
+    private void updateSyncInformation(ObjectNode updateDocument, long localDocumentVersion, long cloudDocumentVersion,
+                                       long cloudUpdateTime)
             throws SkipSyncRequestException {
         logger.atTrace()
                 .kv(LOG_THING_NAME_KEY, getThingName())
@@ -328,8 +335,7 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
                 .cloudVersion(cloudDocumentVersion)
                 .shadowName(getShadowName())
                 .thingName(getThingName())
-                // TODO: get the latest from metadata?
-                .cloudUpdateTime(Instant.now().getEpochSecond())
+                .cloudUpdateTime(cloudUpdateTime)
                 .lastSyncedDocument(getPayloadBytes(updateDocument))
                 .build());
     }
