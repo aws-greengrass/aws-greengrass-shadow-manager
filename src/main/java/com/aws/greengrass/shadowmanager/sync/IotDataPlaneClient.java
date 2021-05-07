@@ -32,8 +32,12 @@ public class IotDataPlaneClient {
      */
     @Inject
     public IotDataPlaneClient(IotDataPlaneClientFactory iotDataPlaneClientFactory) {
+        this(iotDataPlaneClientFactory, RateLimiter.create(DEFAULT_MAX_OUTBOUND_SYNC_UPDATES_PS));
+    }
+
+    IotDataPlaneClient(IotDataPlaneClientFactory iotDataPlaneClientFactory, RateLimiter rateLimiter) {
         this.iotDataPlaneClientFactory = iotDataPlaneClientFactory;
-        this.rateLimiter = RateLimiter.create(DEFAULT_MAX_OUTBOUND_SYNC_UPDATES_PS);
+        this.rateLimiter = rateLimiter;
     }
 
     /**
