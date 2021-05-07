@@ -89,7 +89,7 @@ public class InboundRateLimiterTest {
     }
 
     @Test
-    void GIVEN_existing_rate_limiters_for_things_WHEN_clear_THEN_rate_limiters_cleared() throws ThrottledRequestException {
+    void GIVEN_existing_rate_limiters_for_things_WHEN_clear_THEN_rate_limiters_cleared() {
         inboundRateLimiter.clear();
         verify(mockRateLimiterMap, times(1)).clear();
     }

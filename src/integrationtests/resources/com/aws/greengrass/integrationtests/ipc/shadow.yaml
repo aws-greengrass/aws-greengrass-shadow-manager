@@ -4,7 +4,9 @@ services:
     configuration:
       runWithDefault:
         posixUser: nobody
-
+  aws.greengrass.ShadowManager:
+    configuration:
+      maxLocalShadowRequestsPerThingPerSecond: 100
   main:
     dependencies:
       - DoAll

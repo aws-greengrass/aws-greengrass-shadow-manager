@@ -46,7 +46,7 @@ import static com.aws.greengrass.shadowmanager.TestUtils.SHADOW_NAME;
 import static com.aws.greengrass.shadowmanager.TestUtils.THING_NAME;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.greaterThan;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -153,7 +153,7 @@ public class IotDataPlaneClientTest {
 
         //THEN
         long current = Instant.now().toEpochMilli();
-        assertThat("Retrieved lock after 5 seconds", current - start, is(greaterThan(5000L)));
+        assertThat("Retrieved lock after 5 seconds", current - start, is(greaterThanOrEqualTo(5000L)));
         verify(mockIotDataPlaneClient, times(1)).getThingShadow(any(GetThingShadowRequest.class));
         verify(mockRateLimiter, times(1)).acquire();
     }
