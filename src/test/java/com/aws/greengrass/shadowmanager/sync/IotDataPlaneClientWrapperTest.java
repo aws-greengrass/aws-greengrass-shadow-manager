@@ -15,7 +15,9 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
+import org.mockito.invocation.InvocationOnMock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.stubbing.Answer;
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.exception.SdkException;
@@ -36,25 +38,27 @@ import software.amazon.awssdk.services.iotdataplane.model.UnauthorizedException;
 import software.amazon.awssdk.services.iotdataplane.model.UnsupportedDocumentEncodingException;
 import software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowRequest;
 import software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowResponse;
+import vendored.com.google.common.util.concurrent.RateLimiter;
 
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadPoolExecutor;
+import java.time.Instant;
 
 import static com.aws.greengrass.shadowmanager.TestUtils.SHADOW_NAME;
 import static com.aws.greengrass.shadowmanager.TestUtils.THING_NAME;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.after;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
-public class IotDataPlaneClientTest {
+public class IotDataPlaneClientWrapperTest {
     private static final byte[] UPDATE_PAYLOAD = "{\"version\": 1, \"state\": {\"reported\": {\"name\": \"The Beatles\"}}}".getBytes();
 
     @Mock
@@ -82,10 +86,10 @@ public class IotDataPlaneClientTest {
     void GIVEN_valid_request_WHEN_update_thing_shadow_THEN_returns_update_thing_shadow_response() {
         // GIVEN
         when(mockIotDataPlaneClient.updateThingShadow(updateThingShadowRequestArgumentCaptor.capture())).thenReturn(UpdateThingShadowResponse.builder().build());
-        IotDataPlaneClient iotDataPlaneClient = new IotDataPlaneClient(iotDataPlaneClientFactory);
+        IotDataPlaneClientWrapper iotDataPlaneClientWrapper = new IotDataPlaneClientWrapper(iotDataPlaneClientFactory);
 
         // WHEN
-        UpdateThingShadowResponse updateThingShadowResponse = iotDataPlaneClient.updateThingShadow(THING_NAME, SHADOW_NAME, UPDATE_PAYLOAD);
+        UpdateThingShadowResponse updateThingShadowResponse = iotDataPlaneClientWrapper.updateThingShadow(THING_NAME, SHADOW_NAME, UPDATE_PAYLOAD);
 
         //THEN
         UpdateThingShadowRequest updateThingShadowRequest = updateThingShadowRequestArgumentCaptor.getValue();
@@ -99,10 +103,10 @@ public class IotDataPlaneClientTest {
     void GIVEN_valid_request_WHEN_get_thing_shadow_THEN_returns_get_thing_shadow_response() {
         // GIVEN
         when(mockIotDataPlaneClient.getThingShadow(getThingShadowRequestArgumentCaptor.capture())).thenReturn(GetThingShadowResponse.builder().build());
-        IotDataPlaneClient iotDataPlaneClient = new IotDataPlaneClient(iotDataPlaneClientFactory);
+        IotDataPlaneClientWrapper iotDataPlaneClientWrapper = new IotDataPlaneClientWrapper(iotDataPlaneClientFactory);
 
         // WHEN
-        GetThingShadowResponse getThingShadowResponse = iotDataPlaneClient.getThingShadow(THING_NAME, SHADOW_NAME);
+        GetThingShadowResponse getThingShadowResponse = iotDataPlaneClientWrapper.getThingShadow(THING_NAME, SHADOW_NAME);
 
         //THEN
         GetThingShadowRequest getThingShadowRequest = getThingShadowRequestArgumentCaptor.getValue();
@@ -116,10 +120,10 @@ public class IotDataPlaneClientTest {
     void GIVEN_valid_request_WHEN_delete_thing_shadow_THEN_returns_delete_thing_shadow_response() {
         // GIVEN
         when(mockIotDataPlaneClient.deleteThingShadow(deleteThingShadowRequestArgumentCaptor.capture())).thenReturn(DeleteThingShadowResponse.builder().build());
-        IotDataPlaneClient iotDataPlaneClient = new IotDataPlaneClient(iotDataPlaneClientFactory);
+        IotDataPlaneClientWrapper iotDataPlaneClientWrapper = new IotDataPlaneClientWrapper(iotDataPlaneClientFactory);
 
         // WHEN
-        DeleteThingShadowResponse deleteThingShadowResponse = iotDataPlaneClient.deleteThingShadow(THING_NAME, SHADOW_NAME);
+        DeleteThingShadowResponse deleteThingShadowResponse = iotDataPlaneClientWrapper.deleteThingShadow(THING_NAME, SHADOW_NAME);
 
         //THEN
         DeleteThingShadowRequest deleteThingShadowRequest = deleteThingShadowRequestArgumentCaptor.getValue();
@@ -130,53 +134,28 @@ public class IotDataPlaneClientTest {
     }
 
     @Test
-    void GIVEN_rate_limit_not_triggered_WHEN_get_thing_shadow_THEN_requests_not_throttled() {
+    void GIVEN_valid_request_throttled_WHEN_get_thing_shadow_THEN_request_executed_when_lock_acquired() {
         // GIVEN
-        final int maxRequestCalls = 10;
+        RateLimiter mockRateLimiter = mock(RateLimiter.class);
         when(mockIotDataPlaneClient.getThingShadow(getThingShadowRequestArgumentCaptor.capture())).thenReturn(GetThingShadowResponse.builder().build());
-        IotDataPlaneClient iotDataPlaneClient = new IotDataPlaneClient(iotDataPlaneClientFactory);
-        ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(maxRequestCalls);
-        iotDataPlaneClient.setRate(100);
+        when(mockRateLimiter.acquire()).thenAnswer(new Answer<Double>() {
+            @Override
+            public Double answer(InvocationOnMock invocationOnMock) throws Throwable {
+                Thread.sleep(5000L);
+                return 5000D;
+            }
+        });
 
         // WHEN
-        for(int i = 0; i < maxRequestCalls; i++) {
-            executor.submit(() -> {
-                iotDataPlaneClient.getThingShadow(THING_NAME, SHADOW_NAME);
-            });
-        }
+        long start = Instant.now().toEpochMilli();
+        IotDataPlaneClientWrapper iotDataPlaneClientWrapper = new IotDataPlaneClientWrapper(iotDataPlaneClientFactory, mockRateLimiter);
+        iotDataPlaneClientWrapper.getThingShadow(THING_NAME, SHADOW_NAME);
 
         //THEN
-
-        // sleep for less than a second to verify calls do not exceed rate
-        verify(mockIotDataPlaneClient, after(500).times(maxRequestCalls)).getThingShadow(any(GetThingShadowRequest.class));
-        executor.shutdownNow();
-    }
-
-    @Test
-    void GIVEN_rate_limiter_limit_reached_WHEN_get_thing_shadow_THEN_requests_are_throttled() {
-        // GIVEN
-        final int maxRequestCalls = 10;
-        final int rate = 2;
-        when(mockIotDataPlaneClient.getThingShadow(getThingShadowRequestArgumentCaptor.capture())).thenReturn(GetThingShadowResponse.builder().build());
-        IotDataPlaneClient iotDataPlaneClient = new IotDataPlaneClient(iotDataPlaneClientFactory);
-        iotDataPlaneClient.setRate(rate);
-        ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(maxRequestCalls);
-
-        // WHEN
-        for(int i = 0; i < maxRequestCalls; i++) {
-            executor.submit(() -> {
-               iotDataPlaneClient.getThingShadow(THING_NAME, SHADOW_NAME);
-            });
-        }
-
-        //THEN
-
-        // sleep for less than a second to verify that rate limiter throttled requests after 2 calls
-        verify(mockIotDataPlaneClient, after(700).times(rate)).getThingShadow(any(GetThingShadowRequest.class));
-
-        // check that requests are eventually processed
-        verify(mockIotDataPlaneClient, after(5000).times(maxRequestCalls)).getThingShadow(any(GetThingShadowRequest.class));
-        executor.shutdownNow();
+        long current = Instant.now().toEpochMilli();
+        assertThat("Retrieved lock after 5 seconds", current - start, is(greaterThan(5000L)));
+        verify(mockIotDataPlaneClient, times(1)).getThingShadow(any(GetThingShadowRequest.class));
+        verify(mockRateLimiter, times(1)).acquire();
     }
 
     @ParameterizedTest
@@ -186,10 +165,10 @@ public class IotDataPlaneClientTest {
     void GIVEN_exception_during_update_WHEN_update_thing_shadow_THEN_throw_sdk_exception(Class clazz, ExtensionContext context) {
         // GIVEN
         when(mockIotDataPlaneClient.getThingShadow(getThingShadowRequestArgumentCaptor.capture())).thenReturn(GetThingShadowResponse.builder().build());
-        IotDataPlaneClient iotDataPlaneClient = new IotDataPlaneClient(iotDataPlaneClientFactory);
+        IotDataPlaneClientWrapper iotDataPlaneClientWrapper = new IotDataPlaneClientWrapper(iotDataPlaneClientFactory);
 
         // WHEN
-        GetThingShadowResponse getThingShadowResponse = iotDataPlaneClient.getThingShadow(THING_NAME, SHADOW_NAME);
+        GetThingShadowResponse getThingShadowResponse = iotDataPlaneClientWrapper.getThingShadow(THING_NAME, SHADOW_NAME);
 
         //THEN
         GetThingShadowRequest getThingShadowRequest = getThingShadowRequestArgumentCaptor.getValue();
@@ -207,10 +186,10 @@ public class IotDataPlaneClientTest {
         // GIVEN
         ignoreExceptionOfType(context, clazz);
         when(mockIotDataPlaneClient.deleteThingShadow(deleteThingShadowRequestArgumentCaptor.capture())).thenThrow(clazz);
-        IotDataPlaneClient iotDataPlaneClient = new IotDataPlaneClient(iotDataPlaneClientFactory);
+        IotDataPlaneClientWrapper iotDataPlaneClientWrapper = new IotDataPlaneClientWrapper(iotDataPlaneClientFactory);
 
         // WHEN
-        SdkException thrown = assertThrows(SdkException.class, () -> iotDataPlaneClient.deleteThingShadow(THING_NAME, SHADOW_NAME));
+        SdkException thrown = assertThrows(SdkException.class, () -> iotDataPlaneClientWrapper.deleteThingShadow(THING_NAME, SHADOW_NAME));
 
         //THEN
         assertThat(thrown.getClass(), is(clazz));
@@ -228,10 +207,10 @@ public class IotDataPlaneClientTest {
         // GIVEN
         ignoreExceptionOfType(context, clazz);
         when(mockIotDataPlaneClient.getThingShadow(getThingShadowRequestArgumentCaptor.capture())).thenThrow(clazz);
-        IotDataPlaneClient iotDataPlaneClient = new IotDataPlaneClient(iotDataPlaneClientFactory);
+        IotDataPlaneClientWrapper iotDataPlaneClientWrapper = new IotDataPlaneClientWrapper(iotDataPlaneClientFactory);
 
         // WHEN
-        SdkException thrown = assertThrows(SdkException.class, () -> iotDataPlaneClient.getThingShadow(THING_NAME, SHADOW_NAME));
+        SdkException thrown = assertThrows(SdkException.class, () -> iotDataPlaneClientWrapper.getThingShadow(THING_NAME, SHADOW_NAME));
 
         //THEN
         assertThat(thrown.getClass(), is(clazz));

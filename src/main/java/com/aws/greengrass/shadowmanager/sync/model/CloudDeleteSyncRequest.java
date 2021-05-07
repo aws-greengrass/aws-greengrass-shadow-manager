@@ -54,7 +54,7 @@ public class CloudDeleteSyncRequest extends BaseSyncRequest {
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
                     .log("Deleting cloud shadow document");
 
-            context.getIotDataPlaneClient().deleteThingShadow(getThingName(), getShadowName());
+            context.getIotDataPlaneClientWrapper().deleteThingShadow(getThingName(), getShadowName());
         } catch (ThrottlingException | ServiceUnavailableException | InternalFailureException e) {
             throw new RetryableException(e);
         } catch (SdkServiceException | SdkClientException e) {
