@@ -9,8 +9,16 @@ services:
       synchronize:
         maxOutboundSyncUpdatesPerSecond: 2
         shadowDocuments:
-          - thingName: Thing1
-            classic: true
+          - thingName: "0"
+          - thingName: "1"
+          - thingName: "2"
+          - thingName: "3"
+          - thingName: "4"
+          - thingName: "5"
+          - thingName: "6"
+          - thingName: "7"
+          - thingName: "8"
+          - thingName: "9"
 
   main:
     dependencies:
