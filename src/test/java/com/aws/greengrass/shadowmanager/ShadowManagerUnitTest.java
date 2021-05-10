@@ -19,7 +19,7 @@ import com.aws.greengrass.shadowmanager.model.configuration.ShadowSyncConfigurat
 import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.CloudDataClient;
-import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientFactory;
+import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientWrapper;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
 import com.aws.greengrass.shadowmanager.sync.model.SyncContext;
 import com.aws.greengrass.shadowmanager.util.ShadowWriteSynchronizeHelper;
@@ -109,7 +109,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
     @Mock
     private SyncHandler mockSyncHandler;
     @Mock
-    private IotDataPlaneClientFactory mockIotDataPlaneClientFactory;
+    private IotDataPlaneClientWrapper mockIotDataPlaneClientWrapper;
     @Mock
     private CloudDataClient mockCloudDataClient;
     @Mock
@@ -132,7 +132,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         initializeMockedConfig();
         shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper,
                 mockPubSubClientWrapper, mockDeviceConfiguration, mockSynchronizeHelper,
-                mockIotDataPlaneClientFactory, mockSyncHandler, mockCloudDataClient, mockMqttClient);
+                mockIotDataPlaneClientWrapper, mockSyncHandler, mockCloudDataClient, mockMqttClient);
     }
 
     @ParameterizedTest

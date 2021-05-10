@@ -1,0 +1,56 @@
+---
+services:
+  aws.greengrass.Nucleus:
+    configuration:
+      runWithDefault:
+        posixUser: nobody
+  aws.greengrass.ShadowManager:
+    configuration:
+      synchronize:
+        maxOutboundSyncUpdatesPerSecond: 2
+        shadowDocuments:
+          - thingName: "0"
+          - thingName: "1"
+          - thingName: "2"
+          - thingName: "3"
+          - thingName: "4"
+          - thingName: "5"
+          - thingName: "6"
+          - thingName: "7"
+          - thingName: "8"
+          - thingName: "9"
+
+  main:
+    dependencies:
+      - DoAll
+  DoAll:
+    lifecycle:
+      all:
+        run:
+          echo "Running"
+    dependencies:
+      - aws.greengrass.ShadowManager
+    configuration:
+      accessControl:
+        aws.greengrass.ShadowManager:
+          policyId1:
+            policyDescription: access to CRUD shadow operations
+            operations:
+              - 'aws.greengrass#GetThingShadow'
+              - 'aws.greengrass#UpdateThingShadow'
+              - 'aws.greengrass#DeleteThingShadow'
+            resources:
+              - '*'
+          policyId2:
+            policyDescription: access to list named shadows
+            operations:
+              - 'aws.greengrass#ListNamedShadowsForThing'
+            resources:
+              - '*'
+        aws.greengrass.ipc.pubsub:
+          policyId3:
+            policyDescription: access to pubsub topics
+            operations:
+              - 'aws.greengrass#SubscribeToTopic'
+            resources:
+              - '*'

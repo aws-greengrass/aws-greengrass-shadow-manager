@@ -31,7 +31,7 @@ import com.aws.greengrass.shadowmanager.model.configuration.ShadowSyncConfigurat
 import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.CloudDataClient;
-import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientFactory;
+import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientWrapper;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
 import com.aws.greengrass.shadowmanager.sync.model.SyncContext;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
@@ -83,7 +83,7 @@ public class ShadowManager extends PluginService {
     @Getter
     private final UpdateThingShadowRequestHandler updateThingShadowRequestHandler;
     private final GetThingShadowRequestHandler getThingShadowRequestHandler;
-    private final IotDataPlaneClientFactory iotDataPlaneClientFactory;
+    private final IotDataPlaneClientWrapper iotDataPlaneClientWrapper;
     private final SyncHandler syncHandler;
     private final CloudDataClient cloudDataClient;
     private final MqttClient mqttClient;
@@ -123,7 +123,7 @@ public class ShadowManager extends PluginService {
      * @param pubSubClientWrapper         The PubSub client wrapper
      * @param deviceConfiguration         the device configuration
      * @param synchronizeHelper           the shadow write operation synchronizer helper
-     * @param iotDataPlaneClientFactory   factory for the IoT data plane client
+     * @param iotDataPlaneClientWrapper   the iot data plane client
      * @param syncHandler                 a synchronization handler
      * @param cloudDataClient             the data client subscribing to cloud shadow topics
      * @param mqttClient                  the mqtt client connected to IoT Core
@@ -138,7 +138,7 @@ public class ShadowManager extends PluginService {
             PubSubClientWrapper pubSubClientWrapper,
             DeviceConfiguration deviceConfiguration,
             ShadowWriteSynchronizeHelper synchronizeHelper,
-            IotDataPlaneClientFactory iotDataPlaneClientFactory,
+            IotDataPlaneClientWrapper iotDataPlaneClientWrapper,
             SyncHandler syncHandler,
             CloudDataClient cloudDataClient,
             MqttClient mqttClient) {
@@ -147,7 +147,7 @@ public class ShadowManager extends PluginService {
         this.authorizationHandlerWrapper = authorizationHandlerWrapper;
         this.dao = dao;
         this.deviceConfiguration = deviceConfiguration;
-        this.iotDataPlaneClientFactory = iotDataPlaneClientFactory;
+        this.iotDataPlaneClientWrapper = iotDataPlaneClientWrapper;
         this.syncHandler = syncHandler;
         this.cloudDataClient = cloudDataClient;
         this.mqttClient = mqttClient;
@@ -225,6 +225,8 @@ public class ShadowManager extends PluginService {
                 } else {
                     thingNameTopic.remove(this.deviceThingNameWatcher);
                 }
+
+                iotDataPlaneClientWrapper.setRate(syncConfiguration.getMaxOutboundSyncUpdatesPerSecond());
 
                 cloudDataClient.stopSubscribing();
                 syncHandler.stop();
@@ -356,7 +358,7 @@ public class ShadowManager extends PluginService {
         if (mqttClient.connected() && !syncConfiguration.getSyncConfigurations().isEmpty()) {
             final SyncContext syncContext = new SyncContext(dao, getUpdateThingShadowRequestHandler(),
                     getDeleteThingShadowRequestHandler(),
-                    iotDataPlaneClientFactory);
+                    iotDataPlaneClientWrapper);
             syncHandler.start(syncContext, SyncHandler.DEFAULT_PARALLELISM);
             cloudDataClient.updateSubscriptions(syncConfiguration.getSyncShadows());
         } else {
