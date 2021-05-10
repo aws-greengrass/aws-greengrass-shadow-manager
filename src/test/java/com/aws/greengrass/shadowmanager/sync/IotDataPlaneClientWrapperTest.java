@@ -15,7 +15,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
-import org.mockito.invocation.InvocationOnMock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.stubbing.Answer;
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
@@ -41,12 +40,13 @@ import software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowRespo
 import vendored.com.google.common.util.concurrent.RateLimiter;
 
 import java.time.Instant;
+import java.util.concurrent.TimeUnit;
 
 import static com.aws.greengrass.shadowmanager.TestUtils.SHADOW_NAME;
 import static com.aws.greengrass.shadowmanager.TestUtils.THING_NAME;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.greaterThan;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -58,7 +58,7 @@ import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
-public class IotDataPlaneClientWrapperTest {
+class IotDataPlaneClientWrapperTest {
     private static final byte[] UPDATE_PAYLOAD = "{\"version\": 1, \"state\": {\"reported\": {\"name\": \"The Beatles\"}}}".getBytes();
 
     @Mock
@@ -138,12 +138,9 @@ public class IotDataPlaneClientWrapperTest {
         // GIVEN
         RateLimiter mockRateLimiter = mock(RateLimiter.class);
         when(mockIotDataPlaneClient.getThingShadow(getThingShadowRequestArgumentCaptor.capture())).thenReturn(GetThingShadowResponse.builder().build());
-        when(mockRateLimiter.acquire()).thenAnswer(new Answer<Double>() {
-            @Override
-            public Double answer(InvocationOnMock invocationOnMock) throws Throwable {
-                Thread.sleep(5000L);
-                return 5000D;
-            }
+        when(mockRateLimiter.acquire()).thenAnswer((Answer<Double>) invocationOnMock -> {
+            TimeUnit.SECONDS.sleep(5);
+            return 5000D;
         });
 
         // WHEN
@@ -153,7 +150,7 @@ public class IotDataPlaneClientWrapperTest {
 
         //THEN
         long current = Instant.now().toEpochMilli();
-        assertThat("Retrieved lock after 5 seconds", current - start, is(greaterThan(5000L)));
+        assertThat("Retrieved lock after 5 seconds", current - start, is(greaterThanOrEqualTo(5000L)));
         verify(mockIotDataPlaneClient, times(1)).getThingShadow(any(GetThingShadowRequest.class));
         verify(mockRateLimiter, times(1)).acquire();
     }
@@ -164,18 +161,18 @@ public class IotDataPlaneClientWrapperTest {
             UnsupportedDocumentEncodingException.class, AwsServiceException.class, SdkClientException.class, IotDataPlaneException.class})
     void GIVEN_exception_during_update_WHEN_update_thing_shadow_THEN_throw_sdk_exception(Class clazz, ExtensionContext context) {
         // GIVEN
-        when(mockIotDataPlaneClient.getThingShadow(getThingShadowRequestArgumentCaptor.capture())).thenReturn(GetThingShadowResponse.builder().build());
+        ignoreExceptionOfType(context, clazz);
+        when(mockIotDataPlaneClient.updateThingShadow(updateThingShadowRequestArgumentCaptor.capture())).thenThrow(clazz);
         IotDataPlaneClientWrapper iotDataPlaneClientWrapper = new IotDataPlaneClientWrapper(iotDataPlaneClientFactory);
 
         // WHEN
-        GetThingShadowResponse getThingShadowResponse = iotDataPlaneClientWrapper.getThingShadow(THING_NAME, SHADOW_NAME);
+        SdkException thrown = assertThrows(SdkException.class, () -> iotDataPlaneClientWrapper.updateThingShadow(THING_NAME, SHADOW_NAME, UPDATE_PAYLOAD));
 
         //THEN
-        GetThingShadowRequest getThingShadowRequest = getThingShadowRequestArgumentCaptor.getValue();
-        assertThat(getThingShadowRequest.thingName(), is(THING_NAME));
-        assertThat(getThingShadowRequest.shadowName(), is(SHADOW_NAME));
-
-        assertThat(getThingShadowResponse, is(notNullValue()));
+        assertThat(thrown.getClass(), is(clazz));
+        UpdateThingShadowRequest updateThingShadowRequest = updateThingShadowRequestArgumentCaptor.getValue();
+        assertThat(updateThingShadowRequest.thingName(), is(THING_NAME));
+        assertThat(updateThingShadowRequest.shadowName(), is(SHADOW_NAME));
     }
 
     @ParameterizedTest

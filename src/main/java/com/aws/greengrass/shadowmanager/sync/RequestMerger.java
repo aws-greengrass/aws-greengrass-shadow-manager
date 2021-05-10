@@ -53,7 +53,7 @@ class RequestMerger {
 
         LogEventBuilder logEvent = logger.atDebug(LogEvents.SYNC.code())
                 .addKeyValue(Constants.LOG_THING_NAME_KEY, oldValue.getThingName())
-                .addKeyValue(Constants.LOG_THING_NAME_KEY, oldValue.getShadowName());
+                .addKeyValue(Constants.LOG_SHADOW_NAME_KEY, oldValue.getShadowName());
 
         if (oldValue instanceof CloudUpdateSyncRequest && value instanceof CloudUpdateSyncRequest) {
             logEvent.log("Merge cloud update requests");
@@ -67,7 +67,7 @@ class RequestMerger {
             } catch (IOException e) {
                 logger.atWarn(LogEvents.SYNC.code())
                         .addKeyValue(Constants.LOG_THING_NAME_KEY, oldValue.getThingName())
-                        .addKeyValue(Constants.LOG_THING_NAME_KEY, oldValue.getShadowName())
+                        .addKeyValue(Constants.LOG_SHADOW_NAME_KEY, oldValue.getShadowName())
                         .cause(e)
                         .log("Unable to merge local update requests");
             }
@@ -92,11 +92,9 @@ class RequestMerger {
             logEvent.log("Merge simultaneous deletes for shadow from local and cloud");
         } else if (oldValue instanceof CloudUpdateSyncRequest && value instanceof LocalUpdateSyncRequest
                 || oldValue instanceof LocalUpdateSyncRequest && value instanceof CloudUpdateSyncRequest) {
-            // TODO: merge bi-directional updates like this without full sync - this is almost
-            // the same as a full sync but with partial updates
             logger.atDebug(LogEvents.SYNC.code())
                     .addKeyValue(Constants.LOG_THING_NAME_KEY, oldValue.getThingName())
-                    .addKeyValue(Constants.LOG_THING_NAME_KEY, oldValue.getShadowName())
+                    .addKeyValue(Constants.LOG_SHADOW_NAME_KEY, oldValue.getShadowName())
                     .log("Received bi-directional updates. Converting to a full shadow sync request");
         }
 
