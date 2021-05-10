@@ -12,14 +12,14 @@ import vendored.com.google.common.util.concurrent.RateLimiter;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.inject.Inject;
 
-import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_LOCAL_SHADOW_REQUESTS_PER_THING_PS;
+import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_LOCAL_REQUESTS_RATE;
 
 /**
  * Class which handles request throttling for all inbound local shadow requests.
  */
 public class InboundRateLimiter {
     private final ConcurrentHashMap<String, RateLimiter> rateLimiterMap;
-    private double rate = DEFAULT_LOCAL_SHADOW_REQUESTS_PER_THING_PS;
+    private double rate = DEFAULT_LOCAL_REQUESTS_RATE;
 
     /**
      * Ctr for InboundRateLimiter.

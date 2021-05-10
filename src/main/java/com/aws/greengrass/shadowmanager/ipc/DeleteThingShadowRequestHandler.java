@@ -124,7 +124,7 @@ public class DeleteThingShadowRequestHandler extends BaseRequestHandler {
                             .withVersion(deletedShadowDocument.get().getVersion())
                             .withTimestamp(Instant.now())
                             .build();
-                    pubSubClientWrapper.accept(PubSubRequest.builder()
+                    getPubSubClientWrapper().accept(PubSubRequest.builder()
                             .thingName(thingName)
                             .shadowName(shadowName)
                             .payload(JsonUtil.getPayloadBytes(responseNode))

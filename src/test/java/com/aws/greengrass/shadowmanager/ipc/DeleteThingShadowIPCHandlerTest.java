@@ -70,7 +70,7 @@ class DeleteThingShadowIPCHandlerTest {
 
         try (DeleteThingShadowIPCHandler deleteThingShadowIPCHandler = new DeleteThingShadowIPCHandler(mockContext, mockInboundRateLimiter, mockDeleteThingShadowRequestHandler)) {
             ServiceError thrown = assertThrows(ServiceError.class, () -> deleteThingShadowIPCHandler.handleRequest(mock(DeleteThingShadowRequest.class)));
-            assertThat(thrown.getMessage(), is(equalTo("Local DeleteThingShadow request throttled")));
+            assertThat(thrown.getMessage(), is(equalTo("Too Many Requests")));
 
             verify(mockDeleteThingShadowRequestHandler, times(0)).handleRequest(any(DeleteThingShadowRequest.class), anyString());
         }

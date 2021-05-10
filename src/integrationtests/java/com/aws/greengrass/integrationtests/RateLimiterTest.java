@@ -178,7 +178,7 @@ public class RateLimiterTest {
                     ipcClient.getThingShadow(getShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS);
                 } catch (ExecutionException e) {
                     assertThat(e.getCause(), instanceOf(ServiceError.class));
-                    assertThat(e.getMessage(), containsString("request throttled"));
+                    assertThat(e.getMessage(), containsString("Too Many Requests"));
                     callsLeft = MAX_CALLS - i;
                     exceptionTriggered = true;
                     break;
@@ -216,7 +216,7 @@ public class RateLimiterTest {
                     ipcClient.getThingShadow(getShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS);
                 } catch (ExecutionException e) {
                     assertThat(e.getCause(), instanceOf(ServiceError.class));
-                    assertThat(e.getMessage(), containsString("request throttled"));
+                    assertThat(e.getMessage(), containsString("Too Many Requests"));
 
                     getShadowRequest.setShadowName(CLASSIC_SHADOW_IDENTIFIER);
                     ExecutionException err = assertThrows(ExecutionException.class, () -> ipcClient.getThingShadow(getShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS));
@@ -260,7 +260,7 @@ public class RateLimiterTest {
                     ipcClient.getThingShadow(originalThingShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS);
                 } catch (ExecutionException e) {
                     assertThat(e.getCause(), instanceOf(ServiceError.class));
-                    assertThat(e.getMessage(), containsString("request throttled"));
+                    assertThat(e.getMessage(), containsString("Too Many Requests"));
                     exceptionTriggered = true;
 
                     assertDoesNotThrow(() -> ipcClient.getThingShadow(newThingShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS));

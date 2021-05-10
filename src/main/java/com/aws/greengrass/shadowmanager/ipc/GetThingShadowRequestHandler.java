@@ -109,7 +109,7 @@ public class GetThingShadowRequestHandler extends BaseRequestHandler {
 
                 byte[] responseNodeBytes = JsonUtil.getPayloadBytes(responseNode);
 
-                pubSubClientWrapper.accept(PubSubRequest.builder().thingName(thingName).shadowName(shadowName)
+                getPubSubClientWrapper().accept(PubSubRequest.builder().thingName(thingName).shadowName(shadowName)
                         .payload(responseNodeBytes)
                         .publishOperation(Operation.GET_SHADOW)
                         .build());

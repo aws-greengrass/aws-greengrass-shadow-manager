@@ -77,7 +77,7 @@ public class DeleteThingShadowIPCHandler extends GeneratedAbstractDeleteThingSha
                     .kv(LOG_THING_NAME_KEY, request.getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, request.getShadowName())
                     .log();
-            throw new ServiceError("Local DeleteThingShadow request throttled");
+            throw new ServiceError("Too Many Requests");
         }
 
         return this.handler.handleRequest(request, serviceName);

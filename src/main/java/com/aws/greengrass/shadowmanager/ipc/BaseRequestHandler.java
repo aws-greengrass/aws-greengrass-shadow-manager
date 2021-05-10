@@ -15,6 +15,7 @@ import com.aws.greengrass.shadowmanager.model.ResponseMessageBuilder;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
+import lombok.Getter;
 import software.amazon.awssdk.aws.greengrass.model.InvalidArgumentsError;
 
 import java.time.Instant;
@@ -25,7 +26,8 @@ import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KE
 
 public class BaseRequestHandler {
     private static final Logger logger = LogManager.getLogger(BaseRequestHandler.class);
-    protected final PubSubClientWrapper pubSubClientWrapper;
+    @Getter
+    private final PubSubClientWrapper pubSubClientWrapper;
 
     BaseRequestHandler(PubSubClientWrapper pubSubClientWrapper) {
         this.pubSubClientWrapper = pubSubClientWrapper;

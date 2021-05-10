@@ -74,7 +74,7 @@ class UpdateThingShadowIPCHandlerTest {
 
         try (UpdateThingShadowIPCHandler updateThingShadowIPCHandler = new UpdateThingShadowIPCHandler(mockContext, mockInboundRateLimiter, mockUpdateThingShadowRequestHandler)) {
             ServiceError thrown = assertThrows(ServiceError.class, () -> updateThingShadowIPCHandler.handleRequest(mock(UpdateThingShadowRequest.class)));
-            assertThat(thrown.getMessage(), is(equalTo("Local UpdateThingShadow request throttled")));
+            assertThat(thrown.getMessage(), is(equalTo("Too Many Requests")));
 
             verify(mockUpdateThingShadowRequestHandler, times(0)).handleRequest(any(UpdateThingShadowRequest.class), anyString());
         }

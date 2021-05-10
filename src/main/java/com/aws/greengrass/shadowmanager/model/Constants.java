@@ -39,7 +39,7 @@ public final class Constants {
     public static final int DEFAULT_MAX_OUTBOUND_SYNC_UPDATES_PS = 400;
     public static final boolean DEFAULT_PROVIDE_SYNC_STATUS = false;
     public static final int DEFAULT_DISK_UTILIZATION_SIZE_B = 16 * 1024 * 1024;
-    public static final int DEFAULT_LOCAL_SHADOW_REQUESTS_PER_THING_PS = 20;
+    public static final int DEFAULT_LOCAL_REQUESTS_RATE = 20;
     public static final String LOG_NEXT_TOKEN_KEY = "nextToken";
     public static final String LOG_PAGE_SIZE_KEY = "pageSize";
     public static final String CLASSIC_SHADOW_IDENTIFIER = "";
@@ -67,8 +67,8 @@ public final class Constants {
     public static final String CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC = "maxOutboundSyncUpdatesPerSecond";
     public static final String CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC = "shadowDocumentSizeLimitBytes";
     public static final String CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC = "maxDiskUtilizationMegaBytes";
-    public static final String CONFIGURATION_MAX_LOCAL_REQUESTS_PER_THING_PS_TOPIC =
-            "maxLocalShadowRequestsPerThingPerSecond";
+    public static final String CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC =
+            "maxLocalRequestsPerSecondPerThing";
     public static final String UNEXPECTED_TYPE_FORMAT = "Unexpected type in %s: %s";
     public static final String UNEXPECTED_VALUE_FORMAT = "Unexpected value in %s: %s";
 

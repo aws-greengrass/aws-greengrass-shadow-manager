@@ -147,7 +147,7 @@ public final class Validator {
     public static void validateLocalShadowRequestsPerThingPerSecond(int maxLocalShadowRequestsPerThingPerSecond) {
         if (maxLocalShadowRequestsPerThingPerSecond <= 0) {
             throw new InvalidConfigurationException(String.format(
-                    "Maximum local shadow requests per thing per second provided %dd is invalid. It should be "
+                    "Maximum local shadow requests per thing per second provided %d is invalid. It should be "
                             + "greater than 0.", maxLocalShadowRequestsPerThingPerSecond));
         }
     }
