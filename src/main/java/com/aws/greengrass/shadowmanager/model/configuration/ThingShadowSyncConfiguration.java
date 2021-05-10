@@ -40,7 +40,7 @@ public class ThingShadowSyncConfiguration {
     @SuppressWarnings("PMD.UselessOverridingMethod")
     @Override
     public int hashCode() {
-        return super.hashCode();
+        return Objects.hashCode(toString());
     }
 
     @Override
