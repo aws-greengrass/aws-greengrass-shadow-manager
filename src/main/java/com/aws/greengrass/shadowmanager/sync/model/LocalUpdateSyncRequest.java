@@ -13,10 +13,12 @@ import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.UpdateThingShadowHandlerResponse;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
+import com.aws.greengrass.shadowmanager.util.JsonMerger;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.LongNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import lombok.Getter;
 import software.amazon.awssdk.aws.greengrass.model.ConflictError;
 import software.amazon.awssdk.aws.greengrass.model.InvalidArgumentsError;
 import software.amazon.awssdk.aws.greengrass.model.ServiceError;
@@ -38,6 +40,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_MANAGER_NA
 public class LocalUpdateSyncRequest extends BaseSyncRequest {
     private static final Logger logger = LogManager.getLogger(LocalUpdateSyncRequest.class);
 
+    @Getter
     private byte[] updateDocument;
 
     /**
@@ -52,6 +55,26 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
                                   byte[] updateDocument) {
         super(thingName, shadowName);
         this.updateDocument = updateDocument;
+    }
+
+    /**
+     * Merge the sync requests together.
+     *
+     * @param other the newer request to merge
+     * @throws IOException if unable to serialize the update document payload bytes.
+     */
+    public void merge(LocalUpdateSyncRequest other) throws IOException {
+        Optional<JsonNode> oldValueJson = JsonUtil.getPayloadJson(updateDocument);
+        Optional<JsonNode> newValueJson = JsonUtil.getPayloadJson(other.getUpdateDocument());
+        if (!oldValueJson.isPresent() && newValueJson.isPresent()) {
+            updateDocument = other.getUpdateDocument();
+            return;
+        }
+        if (!newValueJson.isPresent()) {
+            return;
+        }
+        JsonMerger.merge(oldValueJson.get(), newValueJson.get());
+        updateDocument = JsonUtil.getPayloadBytes(oldValueJson.get());
     }
 
     @Override
@@ -112,7 +135,7 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
                 throw new SkipSyncRequestException(e);
             }
 
-        // edge case where might have missed sync update from cloud
+            // edge case where might have missed sync update from cloud
         } else if (cloudUpdateVersion > currentCloudVersion + 1) {
             throw new ConflictError("Missed update(s) from the cloud");
         }
