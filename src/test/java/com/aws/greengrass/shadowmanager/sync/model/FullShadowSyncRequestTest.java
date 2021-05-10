@@ -14,7 +14,7 @@ import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.UpdateThingShadowHandlerResponse;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
-import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClient;
+import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientWrapper;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -88,7 +88,7 @@ class FullShadowSyncRequestTest {
     @Mock
     private ShadowManagerDAO mockDao;
     @Mock
-    private IotDataPlaneClient mockIotDataPlaneClient;
+    private IotDataPlaneClientWrapper mockIotDataPlaneClientWrapper;
     @Mock
     private UpdateThingShadowRequestHandler mockUpdateThingShadowRequestHandler;
     @Mock
@@ -113,7 +113,7 @@ class FullShadowSyncRequestTest {
     void setup() {
         lenient().when(mockDao.updateSyncInformation(syncInformationCaptor.capture())).thenReturn(true);
         syncContext = new SyncContext(mockDao, mockUpdateThingShadowRequestHandler, mockDeleteThingShadowRequestHandler,
-                mockIotDataPlaneClient);
+                mockIotDataPlaneClientWrapper);
     }
 
     @Test
@@ -126,7 +126,7 @@ class FullShadowSyncRequestTest {
         GetThingShadowResponse response = GetThingShadowResponse.builder()
                 .payload(SdkBytes.fromByteArray(CLOUD_DOCUMENT))
                 .build();
-        when(mockIotDataPlaneClient.getThingShadow(anyString(), anyString())).thenReturn(response);
+        when(mockIotDataPlaneClientWrapper.getThingShadow(anyString(), anyString())).thenReturn(response);
         when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder()
                 .cloudUpdateTime(epochSecondsMinus60)
                 .thingName(THING_NAME)
@@ -139,7 +139,7 @@ class FullShadowSyncRequestTest {
                 .build()));
         when(mockUpdateThingShadowRequestHandler.handleRequest(localUpdateThingShadowRequestCaptor.capture(), anyString())).
                 thenReturn(mock(UpdateThingShadowHandlerResponse.class));
-        when(mockIotDataPlaneClient.updateThingShadow(thingNameCaptor.capture(), shadowNameCaptor.capture(), payloadCaptor.capture()))
+        when(mockIotDataPlaneClientWrapper.updateThingShadow(thingNameCaptor.capture(), shadowNameCaptor.capture(), payloadCaptor.capture()))
                 .thenReturn(UpdateThingShadowResponse.builder().build());
 
         FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME);
@@ -148,7 +148,7 @@ class FullShadowSyncRequestTest {
         verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
         verify(mockDao, times(1)).updateSyncInformation(any());
         verify(mockUpdateThingShadowRequestHandler, times(1)).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest.class), anyString());
-        verify(mockIotDataPlaneClient, times(1)).updateThingShadow(anyString(), anyString(), any(byte[].class));
+        verify(mockIotDataPlaneClientWrapper, times(1)).updateThingShadow(anyString(), anyString(), any(byte[].class));
 
         software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest localDocumentUpdateRequest = localUpdateThingShadowRequestCaptor.getValue();
         assertThat(localDocumentUpdateRequest.getShadowName(), is(SHADOW_NAME));
@@ -184,7 +184,7 @@ class FullShadowSyncRequestTest {
         GetThingShadowResponse response = GetThingShadowResponse.builder()
                 .payload(SdkBytes.fromByteArray(CLOUD_DOCUMENT))
                 .build();
-        when(mockIotDataPlaneClient.getThingShadow(anyString(), anyString())).thenReturn(response);
+        when(mockIotDataPlaneClientWrapper.getThingShadow(anyString(), anyString())).thenReturn(response);
         when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.empty());
         when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder()
                 .cloudUpdateTime(epochSecondsMinus60)
@@ -196,7 +196,7 @@ class FullShadowSyncRequestTest {
                 .localVersion(1L)
                 .lastSyncTime(epochSecondsMinus60)
                 .build()));
-        when(mockIotDataPlaneClient.deleteThingShadow(thingNameCaptor.capture(), shadowNameCaptor.capture()))
+        when(mockIotDataPlaneClientWrapper.deleteThingShadow(thingNameCaptor.capture(), shadowNameCaptor.capture()))
                 .thenReturn(DeleteThingShadowResponse.builder().build());
 
         FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME);
@@ -205,8 +205,8 @@ class FullShadowSyncRequestTest {
         verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
         verify(mockDao, times(1)).updateSyncInformation(any());
         verify(mockUpdateThingShadowRequestHandler, times(0)).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest.class), anyString());
-        verify(mockIotDataPlaneClient, times(0)).updateThingShadow(anyString(), anyString(), any(byte[].class));
-        verify(mockIotDataPlaneClient, times(1)).deleteThingShadow(anyString(), anyString());
+        verify(mockIotDataPlaneClientWrapper, times(0)).updateThingShadow(anyString(), anyString(), any(byte[].class));
+        verify(mockIotDataPlaneClientWrapper, times(1)).deleteThingShadow(anyString(), anyString());
 
         assertThat(thingNameCaptor.getValue(), is(THING_NAME));
         assertThat(shadowNameCaptor.getValue(), is(SHADOW_NAME));
@@ -229,7 +229,7 @@ class FullShadowSyncRequestTest {
                 .payload(SdkBytes.fromByteArray(CLOUD_DOCUMENT))
                 .build();
         ShadowDocument shadowDocument = new ShadowDocument(LOCAL_DOCUMENT);
-        when(mockIotDataPlaneClient.getThingShadow(anyString(), anyString())).thenReturn(response);
+        when(mockIotDataPlaneClientWrapper.getThingShadow(anyString(), anyString())).thenReturn(response);
         when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.of(shadowDocument));
         when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder()
                 .cloudUpdateTime(epochSecondsMinus60)
@@ -248,8 +248,8 @@ class FullShadowSyncRequestTest {
         verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
         verify(mockDao, times(0)).updateSyncInformation(any());
         verify(mockUpdateThingShadowRequestHandler, times(0)).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest.class), anyString());
-        verify(mockIotDataPlaneClient, times(0)).updateThingShadow(anyString(), anyString(), any(byte[].class));
-        verify(mockIotDataPlaneClient, times(0)).deleteThingShadow(anyString(), anyString());
+        verify(mockIotDataPlaneClientWrapper, times(0)).updateThingShadow(anyString(), anyString(), any(byte[].class));
+        verify(mockIotDataPlaneClientWrapper, times(0)).deleteThingShadow(anyString(), anyString());
     }
 
     @Test
@@ -258,7 +258,7 @@ class FullShadowSyncRequestTest {
         long epochSeconds = Instant.now().getEpochSecond();
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
         ShadowDocument shadowDocument = new ShadowDocument(LOCAL_DOCUMENT);
-        when(mockIotDataPlaneClient.getThingShadow(anyString(), anyString())).thenThrow(ResourceNotFoundException.class);
+        when(mockIotDataPlaneClientWrapper.getThingShadow(anyString(), anyString())).thenThrow(ResourceNotFoundException.class);
         when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.of(shadowDocument));
         when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder()
                 .cloudUpdateTime(epochSecondsMinus60)
@@ -280,8 +280,8 @@ class FullShadowSyncRequestTest {
         verify(mockDao, times(1)).updateSyncInformation(any());
         verify(mockUpdateThingShadowRequestHandler, times(0)).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest.class), anyString());
         verify(mockDeleteThingShadowRequestHandler, times(1)).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowRequest.class), anyString());
-        verify(mockIotDataPlaneClient, times(0)).updateThingShadow(anyString(), anyString(), any(byte[].class));
-        verify(mockIotDataPlaneClient, times(0)).deleteThingShadow(anyString(), anyString());
+        verify(mockIotDataPlaneClientWrapper, times(0)).updateThingShadow(anyString(), anyString(), any(byte[].class));
+        verify(mockIotDataPlaneClientWrapper, times(0)).deleteThingShadow(anyString(), anyString());
 
         software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowRequest localDocumentDeleteRequest = localDeleteThingShadowRequest.getValue();
         assertThat(localDocumentDeleteRequest.getShadowName(), is(SHADOW_NAME));
@@ -307,7 +307,7 @@ class FullShadowSyncRequestTest {
         GetThingShadowResponse response = GetThingShadowResponse.builder()
                 .payload(SdkBytes.fromByteArray(CLOUD_DOCUMENT))
                 .build();
-        when(mockIotDataPlaneClient.getThingShadow(anyString(), anyString())).thenReturn(response);
+        when(mockIotDataPlaneClientWrapper.getThingShadow(anyString(), anyString())).thenReturn(response);
         when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder()
                 .cloudUpdateTime(Instant.EPOCH.getEpochSecond())
                 .thingName(THING_NAME)
@@ -327,7 +327,7 @@ class FullShadowSyncRequestTest {
         verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
         verify(mockDao, times(1)).updateSyncInformation(any());
         verify(mockUpdateThingShadowRequestHandler, times(1)).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest.class), anyString());
-        verify(mockIotDataPlaneClient, times(0)).updateThingShadow(anyString(), anyString(), any(byte[].class));
+        verify(mockIotDataPlaneClientWrapper, times(0)).updateThingShadow(anyString(), anyString(), any(byte[].class));
 
         software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest localDocumentUpdateRequest = localUpdateThingShadowRequestCaptor.getValue();
         assertThat(localDocumentUpdateRequest.getShadowName(), is(SHADOW_NAME));
@@ -359,7 +359,7 @@ class FullShadowSyncRequestTest {
         ((ObjectNode)expectedMergedDocument).remove(SHADOW_DOCUMENT_VERSION);
 
         ShadowDocument shadowDocument = new ShadowDocument(LOCAL_DOCUMENT);
-        when(mockIotDataPlaneClient.getThingShadow(anyString(), anyString())).thenThrow(ResourceNotFoundException.class);
+        when(mockIotDataPlaneClientWrapper.getThingShadow(anyString(), anyString())).thenThrow(ResourceNotFoundException.class);
         when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.of(shadowDocument));
         when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder()
                 .cloudUpdateTime(Instant.EPOCH.getEpochSecond())
@@ -371,7 +371,7 @@ class FullShadowSyncRequestTest {
                 .localVersion(0L)
                 .lastSyncTime(Instant.EPOCH.getEpochSecond())
                 .build()));
-        when(mockIotDataPlaneClient.updateThingShadow(thingNameCaptor.capture(), shadowNameCaptor.capture(), payloadCaptor.capture()))
+        when(mockIotDataPlaneClientWrapper.updateThingShadow(thingNameCaptor.capture(), shadowNameCaptor.capture(), payloadCaptor.capture()))
                 .thenReturn(UpdateThingShadowResponse.builder().build());
 
         FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME);
@@ -381,9 +381,9 @@ class FullShadowSyncRequestTest {
         verify(mockDao, times(1)).updateSyncInformation(any());
         verify(mockUpdateThingShadowRequestHandler, times(0)).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest.class), anyString());
         verify(mockDeleteThingShadowRequestHandler, times(0)).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowRequest.class), anyString());
-        verify(mockIotDataPlaneClient, times(1)).getThingShadow(anyString(), anyString());
-        verify(mockIotDataPlaneClient, times(1)).updateThingShadow(anyString(), anyString(), any(byte[].class));
-        verify(mockIotDataPlaneClient, times(0)).deleteThingShadow(anyString(), anyString());
+        verify(mockIotDataPlaneClientWrapper, times(1)).getThingShadow(anyString(), anyString());
+        verify(mockIotDataPlaneClientWrapper, times(1)).updateThingShadow(anyString(), anyString(), any(byte[].class));
+        verify(mockIotDataPlaneClientWrapper, times(0)).deleteThingShadow(anyString(), anyString());
 
         assertThat(thingNameCaptor.getValue(), is(THING_NAME));
         assertThat(shadowNameCaptor.getValue(), is(SHADOW_NAME));
@@ -410,7 +410,7 @@ class FullShadowSyncRequestTest {
         ignoreExceptionOfType(context, ResourceNotFoundException.class);
         long epochSeconds = Instant.now().getEpochSecond();
 
-        when(mockIotDataPlaneClient.getThingShadow(anyString(), anyString())).thenThrow(ResourceNotFoundException.class);
+        when(mockIotDataPlaneClientWrapper.getThingShadow(anyString(), anyString())).thenThrow(ResourceNotFoundException.class);
         when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.empty());
         when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder()
                 .cloudUpdateTime(Instant.EPOCH.getEpochSecond())
@@ -430,9 +430,9 @@ class FullShadowSyncRequestTest {
         verify(mockDao, times(1)).updateSyncInformation(any());
         verify(mockUpdateThingShadowRequestHandler, times(0)).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest.class), anyString());
         verify(mockDeleteThingShadowRequestHandler, times(0)).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowRequest.class), anyString());
-        verify(mockIotDataPlaneClient, times(1)).getThingShadow(anyString(), anyString());
-        verify(mockIotDataPlaneClient, times(0)).updateThingShadow(anyString(), anyString(), any(byte[].class));
-        verify(mockIotDataPlaneClient, times(0)).deleteThingShadow(anyString(), anyString());
+        verify(mockIotDataPlaneClientWrapper, times(1)).getThingShadow(anyString(), anyString());
+        verify(mockIotDataPlaneClientWrapper, times(0)).updateThingShadow(anyString(), anyString(), any(byte[].class));
+        verify(mockIotDataPlaneClientWrapper, times(0)).deleteThingShadow(anyString(), anyString());
 
         assertThat(syncInformationCaptor.getValue(), is(notNullValue()));
         assertThat(syncInformationCaptor.getValue().getLastSyncedDocument(), is(nullValue()));
@@ -459,8 +459,8 @@ class FullShadowSyncRequestTest {
         verify(mockDao, times(0)).updateSyncInformation(any());
         verify(mockUpdateThingShadowRequestHandler, times(0)).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest.class), anyString());
         verify(mockDeleteThingShadowRequestHandler, times(0)).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowRequest.class), anyString());
-        verify(mockIotDataPlaneClient, times(0)).updateThingShadow(anyString(), anyString(), any(byte[].class));
-        verify(mockIotDataPlaneClient, times(0)).deleteThingShadow(anyString(), anyString());
+        verify(mockIotDataPlaneClientWrapper, times(0)).updateThingShadow(anyString(), anyString(), any(byte[].class));
+        verify(mockIotDataPlaneClientWrapper, times(0)).deleteThingShadow(anyString(), anyString());
     }
 
     @ParameterizedTest
@@ -471,7 +471,7 @@ class FullShadowSyncRequestTest {
         GetThingShadowResponse response = GetThingShadowResponse.builder()
                 .payload(SdkBytes.fromByteArray(CLOUD_DOCUMENT))
                 .build();
-        when(mockIotDataPlaneClient.getThingShadow(anyString(), anyString())).thenReturn(response);
+        when(mockIotDataPlaneClientWrapper.getThingShadow(anyString(), anyString())).thenReturn(response);
         when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.empty());
         when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder()
                 .cloudUpdateTime(epochSecondsMinus60)
@@ -483,7 +483,7 @@ class FullShadowSyncRequestTest {
                 .localVersion(1L)
                 .lastSyncTime(epochSecondsMinus60)
                 .build()));
-        doThrow(clazz).when(mockIotDataPlaneClient).deleteThingShadow(thingNameCaptor.capture(), shadowNameCaptor.capture());
+        doThrow(clazz).when(mockIotDataPlaneClientWrapper).deleteThingShadow(thingNameCaptor.capture(), shadowNameCaptor.capture());
 
         FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME);
         RetryableException thrown = assertThrows(RetryableException.class,
@@ -493,8 +493,8 @@ class FullShadowSyncRequestTest {
         verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
         verify(mockDao, times(0)).updateSyncInformation(any());
         verify(mockUpdateThingShadowRequestHandler, times(0)).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest.class), anyString());
-        verify(mockIotDataPlaneClient, times(0)).updateThingShadow(anyString(), anyString(), any(byte[].class));
-        verify(mockIotDataPlaneClient, times(1)).deleteThingShadow(anyString(), anyString());
+        verify(mockIotDataPlaneClientWrapper, times(0)).updateThingShadow(anyString(), anyString(), any(byte[].class));
+        verify(mockIotDataPlaneClientWrapper, times(1)).deleteThingShadow(anyString(), anyString());
 
         assertThat(thingNameCaptor.getValue(), is(THING_NAME));
         assertThat(shadowNameCaptor.getValue(), is(SHADOW_NAME));
@@ -509,7 +509,7 @@ class FullShadowSyncRequestTest {
         GetThingShadowResponse response = GetThingShadowResponse.builder()
                 .payload(SdkBytes.fromByteArray(CLOUD_DOCUMENT))
                 .build();
-        when(mockIotDataPlaneClient.getThingShadow(anyString(), anyString())).thenReturn(response);
+        when(mockIotDataPlaneClientWrapper.getThingShadow(anyString(), anyString())).thenReturn(response);
         when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.empty());
         when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder()
                 .cloudUpdateTime(epochSecondsMinus60)
@@ -521,7 +521,7 @@ class FullShadowSyncRequestTest {
                 .localVersion(1L)
                 .lastSyncTime(epochSecondsMinus60)
                 .build()));
-        doThrow(clazz).when(mockIotDataPlaneClient).deleteThingShadow(thingNameCaptor.capture(), shadowNameCaptor.capture());
+        doThrow(clazz).when(mockIotDataPlaneClientWrapper).deleteThingShadow(thingNameCaptor.capture(), shadowNameCaptor.capture());
 
         FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME);
         SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class,
@@ -531,8 +531,8 @@ class FullShadowSyncRequestTest {
         verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
         verify(mockDao, times(0)).updateSyncInformation(any());
         verify(mockUpdateThingShadowRequestHandler, times(0)).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest.class), anyString());
-        verify(mockIotDataPlaneClient, times(0)).updateThingShadow(anyString(), anyString(), any(byte[].class));
-        verify(mockIotDataPlaneClient, times(1)).deleteThingShadow(anyString(), anyString());
+        verify(mockIotDataPlaneClientWrapper, times(0)).updateThingShadow(anyString(), anyString(), any(byte[].class));
+        verify(mockIotDataPlaneClientWrapper, times(1)).deleteThingShadow(anyString(), anyString());
 
         assertThat(thingNameCaptor.getValue(), is(THING_NAME));
         assertThat(shadowNameCaptor.getValue(), is(SHADOW_NAME));
@@ -545,7 +545,7 @@ class FullShadowSyncRequestTest {
         ignoreExceptionOfType(context, clazz);
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
         ShadowDocument shadowDocument = new ShadowDocument(LOCAL_DOCUMENT);
-        when(mockIotDataPlaneClient.getThingShadow(anyString(), anyString())).thenThrow(ResourceNotFoundException.class);
+        when(mockIotDataPlaneClientWrapper.getThingShadow(anyString(), anyString())).thenThrow(ResourceNotFoundException.class);
         when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.of(shadowDocument));
         when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder()
                 .cloudUpdateTime(epochSecondsMinus60)
@@ -568,8 +568,8 @@ class FullShadowSyncRequestTest {
         verify(mockDao, times(0)).updateSyncInformation(any());
         verify(mockUpdateThingShadowRequestHandler, times(0)).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest.class), anyString());
         verify(mockDeleteThingShadowRequestHandler, times(1)).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowRequest.class), anyString());
-        verify(mockIotDataPlaneClient, times(0)).updateThingShadow(anyString(), anyString(), any(byte[].class));
-        verify(mockIotDataPlaneClient, times(0)).deleteThingShadow(anyString(), anyString());
+        verify(mockIotDataPlaneClientWrapper, times(0)).updateThingShadow(anyString(), anyString(), any(byte[].class));
+        verify(mockIotDataPlaneClientWrapper, times(0)).deleteThingShadow(anyString(), anyString());
 
         software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowRequest localDocumentDeleteRequest = localDeleteThingShadowRequest.getValue();
         assertThat(localDocumentDeleteRequest.getShadowName(), is(SHADOW_NAME));
@@ -581,7 +581,7 @@ class FullShadowSyncRequestTest {
     void GIVEN_updated_cloud_document_and_no_local_document_WHEN_execute_and_getThingShadow_throws_retryable_error_THEN_does_not_update_cloud_shadow_and_sync_information(Class clazz, ExtensionContext context) throws RetryableException, SkipSyncRequestException {
         ignoreExceptionOfType(context, clazz);
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
-        when(mockIotDataPlaneClient.getThingShadow(anyString(), anyString())).thenThrow(clazz);
+        when(mockIotDataPlaneClientWrapper.getThingShadow(anyString(), anyString())).thenThrow(clazz);
         when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.empty());
         when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder()
                 .cloudUpdateTime(epochSecondsMinus60)
@@ -601,8 +601,8 @@ class FullShadowSyncRequestTest {
         verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
         verify(mockDao, times(0)).updateSyncInformation(any());
         verify(mockUpdateThingShadowRequestHandler, times(0)).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest.class), anyString());
-        verify(mockIotDataPlaneClient, times(0)).updateThingShadow(anyString(), anyString(), any(byte[].class));
-        verify(mockIotDataPlaneClient, times(0)).deleteThingShadow(anyString(), anyString());
+        verify(mockIotDataPlaneClientWrapper, times(0)).updateThingShadow(anyString(), anyString(), any(byte[].class));
+        verify(mockIotDataPlaneClientWrapper, times(0)).deleteThingShadow(anyString(), anyString());
     }
 
     @ParameterizedTest
@@ -611,7 +611,7 @@ class FullShadowSyncRequestTest {
     void GIVEN_updated_cloud_document_and_no_local_document_WHEN_execute_and_getThingShadow_throws_skipable_error_THEN_does_not_update_cloud_shadow_and_sync_information(Class clazz, ExtensionContext context) throws IOException {
         ignoreExceptionOfType(context, clazz);
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
-        when(mockIotDataPlaneClient.getThingShadow(anyString(), anyString())).thenThrow(clazz);
+        when(mockIotDataPlaneClientWrapper.getThingShadow(anyString(), anyString())).thenThrow(clazz);
         when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.empty());
         when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder()
                 .cloudUpdateTime(epochSecondsMinus60)
@@ -631,8 +631,8 @@ class FullShadowSyncRequestTest {
         verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
         verify(mockDao, times(0)).updateSyncInformation(any());
         verify(mockUpdateThingShadowRequestHandler, times(0)).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest.class), anyString());
-        verify(mockIotDataPlaneClient, times(0)).updateThingShadow(anyString(), anyString(), any(byte[].class));
-        verify(mockIotDataPlaneClient, times(0)).deleteThingShadow(anyString(), anyString());
+        verify(mockIotDataPlaneClientWrapper, times(0)).updateThingShadow(anyString(), anyString(), any(byte[].class));
+        verify(mockIotDataPlaneClientWrapper, times(0)).deleteThingShadow(anyString(), anyString());
     }
 
     @ParameterizedTest
@@ -646,7 +646,7 @@ class FullShadowSyncRequestTest {
         GetThingShadowResponse response = GetThingShadowResponse.builder()
                 .payload(SdkBytes.fromByteArray(CLOUD_DOCUMENT))
                 .build();
-        when(mockIotDataPlaneClient.getThingShadow(anyString(), anyString())).thenReturn(response);
+        when(mockIotDataPlaneClientWrapper.getThingShadow(anyString(), anyString())).thenReturn(response);
         when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder()
                 .cloudUpdateTime(epochSecondsMinus60)
                 .thingName(THING_NAME)
@@ -659,7 +659,7 @@ class FullShadowSyncRequestTest {
                 .build()));
         when(mockUpdateThingShadowRequestHandler.handleRequest(localUpdateThingShadowRequestCaptor.capture(), anyString())).
                 thenReturn(mock(UpdateThingShadowHandlerResponse.class));
-        doThrow(clazz).when(mockIotDataPlaneClient).updateThingShadow(thingNameCaptor.capture(), shadowNameCaptor.capture(), payloadCaptor.capture());
+        doThrow(clazz).when(mockIotDataPlaneClientWrapper).updateThingShadow(thingNameCaptor.capture(), shadowNameCaptor.capture(), payloadCaptor.capture());
 
         FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME);
         RetryableException thrown = assertThrows(RetryableException.class, () -> fullShadowSyncRequest.execute(syncContext));
@@ -668,7 +668,7 @@ class FullShadowSyncRequestTest {
         verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
         verify(mockDao, times(0)).updateSyncInformation(any());
         verify(mockUpdateThingShadowRequestHandler, times(1)).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest.class), anyString());
-        verify(mockIotDataPlaneClient, times(1)).updateThingShadow(anyString(), anyString(), any(byte[].class));
+        verify(mockIotDataPlaneClientWrapper, times(1)).updateThingShadow(anyString(), anyString(), any(byte[].class));
 
         software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest localDocumentUpdateRequest = localUpdateThingShadowRequestCaptor.getValue();
         assertThat(localDocumentUpdateRequest.getShadowName(), is(SHADOW_NAME));
@@ -696,7 +696,7 @@ class FullShadowSyncRequestTest {
         GetThingShadowResponse response = GetThingShadowResponse.builder()
                 .payload(SdkBytes.fromByteArray(CLOUD_DOCUMENT))
                 .build();
-        when(mockIotDataPlaneClient.getThingShadow(anyString(), anyString())).thenReturn(response);
+        when(mockIotDataPlaneClientWrapper.getThingShadow(anyString(), anyString())).thenReturn(response);
         when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder()
                 .cloudUpdateTime(epochSecondsMinus60)
                 .thingName(THING_NAME)
@@ -709,7 +709,7 @@ class FullShadowSyncRequestTest {
                 .build()));
         when(mockUpdateThingShadowRequestHandler.handleRequest(localUpdateThingShadowRequestCaptor.capture(), anyString())).
                 thenReturn(mock(UpdateThingShadowHandlerResponse.class));
-        doThrow(ConflictException.class).when(mockIotDataPlaneClient).updateThingShadow(thingNameCaptor.capture(), shadowNameCaptor.capture(), payloadCaptor.capture());
+        doThrow(ConflictException.class).when(mockIotDataPlaneClientWrapper).updateThingShadow(thingNameCaptor.capture(), shadowNameCaptor.capture(), payloadCaptor.capture());
 
         FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME);
         assertThrows(ConflictException.class, () -> fullShadowSyncRequest.execute(syncContext));
@@ -717,7 +717,7 @@ class FullShadowSyncRequestTest {
         verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
         verify(mockDao, times(0)).updateSyncInformation(any());
         verify(mockUpdateThingShadowRequestHandler, times(1)).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest.class), anyString());
-        verify(mockIotDataPlaneClient, times(1)).updateThingShadow(anyString(), anyString(), any(byte[].class));
+        verify(mockIotDataPlaneClientWrapper, times(1)).updateThingShadow(anyString(), anyString(), any(byte[].class));
 
         software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest localDocumentUpdateRequest = localUpdateThingShadowRequestCaptor.getValue();
         assertThat(localDocumentUpdateRequest.getShadowName(), is(SHADOW_NAME));
@@ -745,7 +745,7 @@ class FullShadowSyncRequestTest {
         GetThingShadowResponse response = GetThingShadowResponse.builder()
                 .payload(SdkBytes.fromByteArray(CLOUD_DOCUMENT))
                 .build();
-        when(mockIotDataPlaneClient.getThingShadow(anyString(), anyString())).thenReturn(response);
+        when(mockIotDataPlaneClientWrapper.getThingShadow(anyString(), anyString())).thenReturn(response);
         when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder()
                 .cloudUpdateTime(epochSecondsMinus60)
                 .thingName(THING_NAME)
@@ -765,7 +765,7 @@ class FullShadowSyncRequestTest {
         verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
         verify(mockDao, times(0)).updateSyncInformation(any());
         verify(mockUpdateThingShadowRequestHandler, times(1)).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest.class), anyString());
-        verify(mockIotDataPlaneClient, times(0)).updateThingShadow(anyString(), anyString(), any(byte[].class));
+        verify(mockIotDataPlaneClientWrapper, times(0)).updateThingShadow(anyString(), anyString(), any(byte[].class));
 
         software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest localDocumentUpdateRequest = localUpdateThingShadowRequestCaptor.getValue();
         assertThat(localDocumentUpdateRequest.getShadowName(), is(SHADOW_NAME));
@@ -788,7 +788,7 @@ class FullShadowSyncRequestTest {
         GetThingShadowResponse response = GetThingShadowResponse.builder()
                 .payload(SdkBytes.fromByteArray(CLOUD_DOCUMENT))
                 .build();
-        when(mockIotDataPlaneClient.getThingShadow(anyString(), anyString())).thenReturn(response);
+        when(mockIotDataPlaneClientWrapper.getThingShadow(anyString(), anyString())).thenReturn(response);
         when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder()
                 .cloudUpdateTime(epochSecondsMinus60)
                 .thingName(THING_NAME)
@@ -801,7 +801,7 @@ class FullShadowSyncRequestTest {
                 .build()));
         when(mockUpdateThingShadowRequestHandler.handleRequest(localUpdateThingShadowRequestCaptor.capture(), anyString())).
                 thenReturn(mock(UpdateThingShadowHandlerResponse.class));
-        doThrow(clazz).when(mockIotDataPlaneClient).updateThingShadow(thingNameCaptor.capture(), shadowNameCaptor.capture(), payloadCaptor.capture());
+        doThrow(clazz).when(mockIotDataPlaneClientWrapper).updateThingShadow(thingNameCaptor.capture(), shadowNameCaptor.capture(), payloadCaptor.capture());
 
         FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME);
         SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, () -> fullShadowSyncRequest.execute(syncContext));
@@ -810,7 +810,7 @@ class FullShadowSyncRequestTest {
         verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
         verify(mockDao, times(0)).updateSyncInformation(any());
         verify(mockUpdateThingShadowRequestHandler, times(1)).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest.class), anyString());
-        verify(mockIotDataPlaneClient, times(1)).updateThingShadow(anyString(), anyString(), any(byte[].class));
+        verify(mockIotDataPlaneClientWrapper, times(1)).updateThingShadow(anyString(), anyString(), any(byte[].class));
 
         software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest localDocumentUpdateRequest = localUpdateThingShadowRequestCaptor.getValue();
         assertThat(localDocumentUpdateRequest.getShadowName(), is(SHADOW_NAME));
@@ -839,7 +839,7 @@ class FullShadowSyncRequestTest {
         GetThingShadowResponse response = GetThingShadowResponse.builder()
                 .payload(SdkBytes.fromByteArray(CLOUD_DOCUMENT))
                 .build();
-        when(mockIotDataPlaneClient.getThingShadow(anyString(), anyString())).thenReturn(response);
+        when(mockIotDataPlaneClientWrapper.getThingShadow(anyString(), anyString())).thenReturn(response);
         when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder()
                 .cloudUpdateTime(epochSecondsMinus60)
                 .thingName(THING_NAME)
@@ -859,7 +859,7 @@ class FullShadowSyncRequestTest {
         verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
         verify(mockDao, times(0)).updateSyncInformation(any());
         verify(mockUpdateThingShadowRequestHandler, times(1)).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest.class), anyString());
-        verify(mockIotDataPlaneClient, times(0)).updateThingShadow(anyString(), anyString(), any(byte[].class));
+        verify(mockIotDataPlaneClientWrapper, times(0)).updateThingShadow(anyString(), anyString(), any(byte[].class));
 
         software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest localDocumentUpdateRequest = localUpdateThingShadowRequestCaptor.getValue();
         assertThat(localDocumentUpdateRequest.getShadowName(), is(SHADOW_NAME));
@@ -879,7 +879,7 @@ class FullShadowSyncRequestTest {
         GetThingShadowResponse response = GetThingShadowResponse.builder()
                 .payload(SdkBytes.fromByteArray(CLOUD_DOCUMENT))
                 .build();
-        when(mockIotDataPlaneClient.getThingShadow(anyString(), anyString())).thenReturn(response);
+        when(mockIotDataPlaneClientWrapper.getThingShadow(anyString(), anyString())).thenReturn(response);
         when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder()
                 .cloudUpdateTime(epochSecondsMinus60)
                 .thingName(THING_NAME)
@@ -898,6 +898,6 @@ class FullShadowSyncRequestTest {
         verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
         verify(mockDao, times(1)).updateSyncInformation(any());
         verify(mockUpdateThingShadowRequestHandler, times(0)).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest.class), anyString());
-        verify(mockIotDataPlaneClient, times(0)).updateThingShadow(anyString(), anyString(), any(byte[].class));
+        verify(mockIotDataPlaneClientWrapper, times(0)).updateThingShadow(anyString(), anyString(), any(byte[].class));
     }
  }

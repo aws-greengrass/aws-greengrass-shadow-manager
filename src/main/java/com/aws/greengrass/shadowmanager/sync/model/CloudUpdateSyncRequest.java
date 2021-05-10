@@ -107,7 +107,7 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
                     .log("Updating cloud shadow document");
 
-            context.getIotDataPlaneClient().updateThingShadow(getThingName(), getShadowName(),
+            context.getIotDataPlaneClientWrapper().updateThingShadow(getThingName(), getShadowName(),
                     JsonUtil.getPayloadBytes(updateDocument));
         } catch (ConflictException e) {  // NOPMD - Throw ConflictException instead of treated as SdkServiceException
             throw e;

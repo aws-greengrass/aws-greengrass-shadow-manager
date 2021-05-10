@@ -10,6 +10,7 @@ import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
+import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.exception.SdkServiceException;
@@ -47,22 +48,36 @@ public class CloudDeleteSyncRequest extends BaseSyncRequest {
      * @throws SkipSyncRequestException if the update request on the cloud shadow failed for another 400 exception.
      */
     @Override
-    public void execute(SyncContext context) throws RetryableException, SkipSyncRequestException {
+    public void execute(SyncContext context)
+            throws RetryableException, SkipSyncRequestException, UnknownShadowException {
+
+        Optional<SyncInformation> syncInformation = context.getDao().getShadowSyncInformation(getThingName(),
+                getShadowName());
+        if (!syncInformation.isPresent()) {
+            throw new UnknownShadowException("Shadow not found in sync table");
+        }
+
+        if (syncInformation.get().isCloudDeleted()) {
+            logger.atInfo()
+                    .kv(LOG_THING_NAME_KEY, getThingName())
+                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                    .log("Not deleting cloud shadow document since it is already deleted");
+            return;
+        }
+
         try {
             logger.atDebug()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
                     .log("Deleting cloud shadow document");
 
-            context.getIotDataPlaneClient().deleteThingShadow(getThingName(), getShadowName());
+            context.getIotDataPlaneClientWrapper().deleteThingShadow(getThingName(), getShadowName());
         } catch (ThrottlingException | ServiceUnavailableException | InternalFailureException e) {
             throw new RetryableException(e);
         } catch (SdkServiceException | SdkClientException e) {
             throw new SkipSyncRequestException(e);
         }
 
-        Optional<SyncInformation> syncInformation = context.getDao().getShadowSyncInformation(getThingName(),
-                getShadowName());
         try {
             context.getDao().updateSyncInformation(SyncInformation.builder()
                     .lastSyncedDocument(null)

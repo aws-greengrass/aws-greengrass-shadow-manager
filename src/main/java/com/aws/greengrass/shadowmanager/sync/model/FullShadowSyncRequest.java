@@ -453,7 +453,7 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
                 .kv(LOG_SHADOW_NAME_KEY, getShadowName())
                 .log("Getting cloud shadow document");
         try {
-            GetThingShadowResponse getThingShadowResponse = context.getIotDataPlaneClient()
+            GetThingShadowResponse getThingShadowResponse = context.getIotDataPlaneClientWrapper()
                     .getThingShadow(getThingName(), getShadowName());
             if (getThingShadowResponse != null && getThingShadowResponse.payload() != null) {
                 return Optional.of(new ShadowDocument(getThingShadowResponse.payload().asByteArray()));
@@ -544,7 +544,7 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
                     .log("Updating cloud shadow document");
 
-            context.getIotDataPlaneClient().updateThingShadow(getThingName(), getShadowName(), updateDocument);
+            context.getIotDataPlaneClientWrapper().updateThingShadow(getThingName(), getShadowName(), updateDocument);
         } catch (ConflictException e) {
             logger.atWarn()
                     .kv(LOG_THING_NAME_KEY, getThingName())
@@ -578,7 +578,7 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
                     .log("Deleting cloud shadow document");
-            context.getIotDataPlaneClient().deleteThingShadow(getThingName(), getShadowName());
+            context.getIotDataPlaneClientWrapper().deleteThingShadow(getThingName(), getShadowName());
         } catch (ThrottlingException | ServiceUnavailableException | InternalFailureException e) {
             logger.atWarn()
                     .kv(LOG_THING_NAME_KEY, getThingName())

@@ -21,7 +21,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_MAX_OUTBO
 /**
  * Class which acts as the interface between ShadowManager and the IoT Data Plane.
  */
-public class IotDataPlaneClient {
+public class IotDataPlaneClientWrapper {
     private final IotDataPlaneClientFactory iotDataPlaneClientFactory;
     private final RateLimiter rateLimiter;
 
@@ -31,11 +31,11 @@ public class IotDataPlaneClient {
      * @param iotDataPlaneClientFactory Factory for the IoT data plane client
      */
     @Inject
-    public IotDataPlaneClient(IotDataPlaneClientFactory iotDataPlaneClientFactory) {
+    public IotDataPlaneClientWrapper(IotDataPlaneClientFactory iotDataPlaneClientFactory) {
         this(iotDataPlaneClientFactory, RateLimiter.create(DEFAULT_MAX_OUTBOUND_SYNC_UPDATES_PS));
     }
 
-    IotDataPlaneClient(IotDataPlaneClientFactory iotDataPlaneClientFactory, RateLimiter rateLimiter) {
+    IotDataPlaneClientWrapper(IotDataPlaneClientFactory iotDataPlaneClientFactory, RateLimiter rateLimiter) {
         this.iotDataPlaneClientFactory = iotDataPlaneClientFactory;
         this.rateLimiter = rateLimiter;
     }

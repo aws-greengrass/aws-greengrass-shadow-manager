@@ -20,7 +20,7 @@ import com.aws.greengrass.shadowmanager.model.configuration.ShadowSyncConfigurat
 import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.CloudDataClient;
-import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClient;
+import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientWrapper;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
 import com.aws.greengrass.shadowmanager.sync.model.SyncContext;
 import com.aws.greengrass.shadowmanager.util.ShadowWriteSynchronizeHelper;
@@ -117,7 +117,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
     @Mock
     private SyncHandler mockSyncHandler;
     @Mock
-    private IotDataPlaneClient mockIotDataPlaneClient;
+    private IotDataPlaneClientWrapper mockIotDataPlaneClientWrapper;
     @Mock
     private CloudDataClient mockCloudDataClient;
     @Mock
@@ -140,7 +140,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         initializeMockedConfig();
         shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper,
                 mockPubSubClientWrapper, mockInboundRateLimiter, mockDeviceConfiguration, mockSynchronizeHelper,
-                mockIotDataPlaneClient, mockSyncHandler, mockCloudDataClient, mockMqttClient);
+                mockIotDataPlaneClientWrapper, mockSyncHandler, mockCloudDataClient, mockMqttClient);
 
         Topic maxDiskUtilizationMBTopic = Topic.of(context, CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC, DEFAULT_DISK_UTILIZATION_SIZE_B);
         Topic maxDocSizeTopic = Topic.of(context, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC, DEFAULT_DOCUMENT_SIZE);
