@@ -48,7 +48,8 @@ public class InboundRateLimiterTest {
     void setup() {
         lenient().when(mockRateLimiterMap.computeIfAbsent(anyString(), any())).thenReturn(mockRateLimiter);
         lenient().when(mockRateLimiter.tryAcquire()).thenReturn(true);
-        inboundRateLimiter = new InboundRateLimiter(mockRateLimiterMap);
+        inboundRateLimiter = new InboundRateLimiter();
+        inboundRateLimiter.setRateLimiterMap(mockRateLimiterMap);
     }
 
     @Test
@@ -80,7 +81,7 @@ public class InboundRateLimiterTest {
         ConcurrentHashMap<String, RateLimiter> testMap = new ConcurrentHashMap<>();
         testMap.put("existingThing1", mockLimiter1);
         testMap.put("existingThing2", mockLimiter2);
-        inboundRateLimiter = new InboundRateLimiter(testMap);
+        inboundRateLimiter.setRateLimiterMap(testMap);
 
         inboundRateLimiter.setRate(TEST_RATE_LIMIT);
 

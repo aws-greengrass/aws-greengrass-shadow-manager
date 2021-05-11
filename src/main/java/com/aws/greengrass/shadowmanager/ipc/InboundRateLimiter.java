@@ -7,10 +7,11 @@ package com.aws.greengrass.shadowmanager.ipc;
 
 
 import com.aws.greengrass.shadowmanager.exception.ThrottledRequestException;
+import lombok.AccessLevel;
+import lombok.Setter;
 import vendored.com.google.common.util.concurrent.RateLimiter;
 
 import java.util.concurrent.ConcurrentHashMap;
-import javax.inject.Inject;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_LOCAL_REQUESTS_RATE;
 
@@ -18,20 +19,9 @@ import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_LOCAL_REQ
  * Class which handles request throttling for all inbound local shadow requests.
  */
 public class InboundRateLimiter {
-    private final ConcurrentHashMap<String, RateLimiter> rateLimiterMap;
-    private double rate = DEFAULT_LOCAL_REQUESTS_RATE;
-
-    /**
-     * Ctr for InboundRateLimiter.
-     */
-    @Inject
-    public InboundRateLimiter() {
-        this(new ConcurrentHashMap<>());
-    }
-
-    InboundRateLimiter(ConcurrentHashMap<String, RateLimiter> rateLimiterMap) {
-        this.rateLimiterMap = rateLimiterMap;
-    }
+    @Setter(AccessLevel.PACKAGE)
+    private ConcurrentHashMap<String, RateLimiter> rateLimiterMap = new ConcurrentHashMap<>();
+    private volatile double rate = DEFAULT_LOCAL_REQUESTS_RATE;
 
     /**
      * Attempts to acquire lock for the specified thing.
