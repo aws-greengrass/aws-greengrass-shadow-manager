@@ -60,6 +60,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_CLA
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC;
+import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_NAMED_SHADOWS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_NUCLEUS_THING_TOPIC;
@@ -70,6 +71,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_THI
 import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_DISK_UTILIZATION_SIZE_B;
 import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_DOCUMENT_SIZE;
 import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_LOCAL_REQUESTS_RATE;
+import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_TOTAL_LOCAL_REQUESTS_RATE;
 import static com.aws.greengrass.shadowmanager.model.Constants.MAX_SHADOW_DOCUMENT_SIZE;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -145,6 +147,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         Topic maxDiskUtilizationMBTopic = Topic.of(context, CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC, DEFAULT_DISK_UTILIZATION_SIZE_B);
         Topic maxDocSizeTopic = Topic.of(context, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC, DEFAULT_DOCUMENT_SIZE);
         Topic maxLocalRateLimiterTopic = Topic.of(context, CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC, DEFAULT_LOCAL_REQUESTS_RATE);
+        Topic maxTotalInboundRate = Topic.of(context, CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE, DEFAULT_TOTAL_LOCAL_REQUESTS_RATE);
 
         lenient().when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC))
                 .thenReturn(maxDiskUtilizationMBTopic);
@@ -152,6 +155,8 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
                 .thenReturn(maxDocSizeTopic);
         lenient().when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC))
                 .thenReturn(maxLocalRateLimiterTopic);
+        lenient().when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE))
+                .thenReturn(maxTotalInboundRate);
         lenient().when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
                 .thenReturn(mock(Topics.class));
     }
@@ -224,11 +229,37 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
     }
 
     @Test
-    void GIVEN_bad_inbound_rate_size_WHEN_initialize_THEN_throws_exception(ExtensionContext extensionContext) {
+    void GIVEN_bad_inbound_rate_WHEN_initialize_THEN_throws_exception(ExtensionContext extensionContext) {
         ignoreExceptionOfType(extensionContext, InvalidConfigurationException.class);
         Topic maxLocalRateLimiterTopic = Topic.of(context, CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC, -1);
         when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC))
                 .thenReturn(maxLocalRateLimiterTopic);
+        shadowManager.install();
+        assertTrue(shadowManager.isErrored());
+        verify(mockDao, times(0)).insertSyncInfoIfNotExists(any(SyncInformation.class));
+    }
+
+    @Test
+    void GIVEN_good_inbound_total_rate_WHEN_initialize_THEN_updates_inbound_rate_correctly() {
+        Topic maxTotalLocalRequestRate = Topic.of(context, CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE, DEFAULT_LOCAL_REQUESTS_RATE);
+        when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC))
+                .thenReturn(maxTotalLocalRequestRate);
+        shadowManager.install();
+
+        assertFalse(shadowManager.isErrored());
+        verify(mockInboundRateLimiter, times(1)).clear();
+        verify(mockInboundRateLimiter, times(1)).setTotalRate(intObjectCaptor.capture());
+        verify(mockDao, times(0)).insertSyncInfoIfNotExists(any(SyncInformation.class));
+        assertThat(intObjectCaptor.getValue(), is(notNullValue()));
+        assertThat(intObjectCaptor.getValue(), is(DEFAULT_TOTAL_LOCAL_REQUESTS_RATE));
+    }
+
+    @Test
+    void GIVEN_bad_inbound_total_rate_WHEN_initialize_THEN_throws_exception(ExtensionContext extensionContext) {
+        ignoreExceptionOfType(extensionContext, InvalidConfigurationException.class);
+        Topic maxTotalLocalRequestRate = Topic.of(context, CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE, -1);
+        when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE))
+                .thenReturn(maxTotalLocalRequestRate);
         shadowManager.install();
         assertTrue(shadowManager.isErrored());
         verify(mockDao, times(0)).insertSyncInfoIfNotExists(any(SyncInformation.class));

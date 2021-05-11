@@ -236,6 +236,51 @@ public class RateLimiterTest {
     }
 
     @Test
+    void GIVEN_max_inbound_shadow_request_rate_exceeded_WHEN_requests_processed_THEN_any_request_throttled(ExtensionContext context) throws Exception {
+        ignoreExceptionOfType(context, ThrottledRequestException.class);
+
+        when(dao.getShadowThing(anyString(), any())).thenReturn(Optional.of(new ShadowDocument(localShadowContentV1.getBytes())));
+
+        startNucleusWithConfig("rateLimitsWithTotalLocalRate.yaml");
+
+        try (EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
+            GreengrassCoreIPCClient ipcClient = new GreengrassCoreIPCClient(connection);
+
+            GetThingShadowRequest getShadowRequest = new GetThingShadowRequest();
+            getShadowRequest.setThingName(THING_NAME);
+            getShadowRequest.setShadowName("shadowName");
+
+            // calls with different thing names should trigger total rate
+            boolean exceptionTriggered = false;
+            for (int i = 1; i <= MAX_CALLS; i++) {
+                try {
+                    getShadowRequest.setThingName(String.valueOf(i));
+                    ipcClient.getThingShadow(getShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS);
+                } catch (ExecutionException e) {
+                    assertThat(e.getCause(), instanceOf(ServiceError.class));
+                    assertThat(e.getMessage(), containsString("Too Many Requests"));
+
+                    // request for new thing(s) should trigger throttle request exception
+                    getShadowRequest.setThingName("NewClassicThing");
+                    getShadowRequest.setShadowName(CLASSIC_SHADOW_IDENTIFIER);
+                    ExecutionException err = assertThrows(ExecutionException.class, () -> ipcClient.getThingShadow(getShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS));
+                    assertThat(err.getCause(), instanceOf(ServiceError.class));
+
+                    getShadowRequest.setThingName("NewNamedShadowThing");
+                    getShadowRequest.setShadowName("NewShadowName");
+                    err = assertThrows(ExecutionException.class, () -> ipcClient.getThingShadow(getShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS));
+                    assertThat(err.getCause(), instanceOf(ServiceError.class));
+
+                    exceptionTriggered = true;
+                    break;
+                }
+            }
+
+            assertThat("Expected exception was not triggered", exceptionTriggered, is(true));
+        }
+    }
+
+    @Test
     void GIVEN_requests_throttled_for_thing_WHEN_request_sent_for_different_thing_THEN_request_for_different_thing_not_throttled(ExtensionContext context) throws Exception {
         ignoreExceptionOfType(context, ThrottledRequestException.class);
 
