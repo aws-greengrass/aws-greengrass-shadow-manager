@@ -12,6 +12,7 @@ import lombok.Setter;
 import vendored.com.google.common.util.concurrent.RateLimiter;
 
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_LOCAL_REQUESTS_RATE;
 
@@ -21,7 +22,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_LOCAL_REQ
 public class InboundRateLimiter {
     @Setter(AccessLevel.PACKAGE)
     private ConcurrentHashMap<String, RateLimiter> rateLimiterMap = new ConcurrentHashMap<>();
-    private volatile double rate = DEFAULT_LOCAL_REQUESTS_RATE;
+    private final AtomicInteger rate = new AtomicInteger(DEFAULT_LOCAL_REQUESTS_RATE);
 
     /**
      * Attempts to acquire lock for the specified thing.
@@ -36,7 +37,7 @@ public class InboundRateLimiter {
             return;
         }
 
-        RateLimiter rateLimiter = rateLimiterMap.computeIfAbsent(thingName, k -> RateLimiter.create(rate));
+        RateLimiter rateLimiter = rateLimiterMap.computeIfAbsent(thingName, k -> RateLimiter.create(rate.get()));
 
         if (!rateLimiter.tryAcquire()) {
             throw new ThrottledRequestException("Local shadow request throttled for thing");
@@ -56,7 +57,7 @@ public class InboundRateLimiter {
      * @param rate Max inbound requests per second per thing
      */
     public void setRate(int rate) {
-        this.rate = rate;
+        this.rate.set(rate);
         rateLimiterMap.forEach((k, v) -> v.setRate(rate));
     }
 }

@@ -7,30 +7,21 @@ package com.aws.greengrass.integrationtests;
 
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
 import com.aws.greengrass.dependency.State;
-import com.aws.greengrass.lifecyclemanager.GlobalStateChangeListener;
-import com.aws.greengrass.lifecyclemanager.GreengrassService;
 import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.mqttclient.MqttClient;
-import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
-import com.aws.greengrass.shadowmanager.ShadowManager;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAOImpl;
-import com.aws.greengrass.shadowmanager.ShadowManagerDatabase;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
-import com.aws.greengrass.testcommons.testutilities.GGServiceTestUtil;
 import com.aws.greengrass.util.Pair;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionContext;
-import org.junit.jupiter.api.io.TempDir;
-import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.nio.file.Path;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -39,8 +30,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
 import static com.aws.greengrass.componentmanager.KernelConfigResolver.CONFIGURATION_CONFIG_KEY;
 import static com.aws.greengrass.shadowmanager.TestUtils.SAMPLE_EXCEPTION_MESSAGE;
@@ -64,27 +53,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
-class ShadowManagerTest extends GGServiceTestUtil {
-    private static final long TEST_TIME_OUT_SEC = 30L;
+class ShadowManagerTest extends NucleusLaunchUtils {
     private static final String DEFAULT_CONFIG = "config.yaml";
     private static final byte[] BASE_DOCUMENT = "{\"version\": 1, \"state\": {\"reported\": {\"name\": \"The Beatles\"}}}".getBytes();
     public static final String THING_NAME2 = "testThingName2";
-
-    private Kernel kernel;
-    private ShadowManager shadowManager;
-    private GlobalStateChangeListener listener;
-
-    @TempDir
-    Path rootDir;
-
-    @Mock
-    AuthorizationHandlerWrapper mockAuthorizationHandlerWrapper;
-
-    @Mock
-    ShadowManagerDatabase mockShadowManagerDatabase;
-
-    @Mock
-    ShadowManagerDAOImpl mockShadowManagerDAOImpl;
 
     @BeforeEach
     void setup() {
@@ -94,27 +66,6 @@ class ShadowManagerTest extends GGServiceTestUtil {
     @AfterEach
     void cleanup() {
         kernel.shutdown();
-    }
-
-    private void startNucleusWithConfig(String configFile, State expectedState, boolean mockDatabase) throws InterruptedException {
-        CountDownLatch shadowManagerRunning = new CountDownLatch(1);
-        kernel.parseArgs("-r", rootDir.toAbsolutePath().toString(), "-i",
-                getClass().getResource(configFile).toString());
-        listener = (GreengrassService service, State was, State newState) -> {
-            if (service.getName().equals(ShadowManager.SERVICE_NAME) && service.getState().equals(expectedState)) {
-                shadowManagerRunning.countDown();
-                shadowManager = (ShadowManager) service;
-            }
-        };
-        kernel.getContext().addGlobalStateChangeListener(listener);
-        if (mockDatabase) {
-            kernel.getContext().put(ShadowManagerDatabase.class, mockShadowManagerDatabase);
-            kernel.getContext().put(ShadowManagerDAOImpl.class, mockShadowManagerDAOImpl);
-            kernel.getContext().put(AuthorizationHandlerWrapper.class, mockAuthorizationHandlerWrapper);
-        }
-        kernel.launch();
-
-        assertTrue(shadowManagerRunning.await(TEST_TIME_OUT_SEC, TimeUnit.SECONDS));
     }
 
     @Test
@@ -176,7 +127,7 @@ class ShadowManagerTest extends GGServiceTestUtil {
         lenient().when(mqttClient.connected()).thenReturn(false);
 
         kernel.getContext().put(MqttClient.class, mqttClient);
-        startNucleusWithConfig(DEFAULT_CONFIG, State.RUNNING, false);
+        startNucleusWithConfig(DEFAULT_CONFIG);
         ShadowManagerDAOImpl impl = kernel.getContext().get(ShadowManagerDAOImpl.class);
         createThingShadowSyncInfo(impl, THING_NAME);
         createThingShadowSyncInfo(impl, THING_NAME2);

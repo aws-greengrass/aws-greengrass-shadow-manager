@@ -43,6 +43,7 @@ import static com.aws.greengrass.shadowmanager.TestUtils.SAMPLE_EXCEPTION_MESSAG
 import static com.aws.greengrass.shadowmanager.TestUtils.SHADOW_NAME;
 import static com.aws.greengrass.shadowmanager.TestUtils.THING_NAME;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
@@ -97,8 +98,10 @@ public class LocalUpdateSyncRequestTest {
                 .cloudVersion(5L)
                 .lastSyncTime(epochSeconds)
                 .build()));
+        UpdateThingShadowResponse response = new UpdateThingShadowResponse();
+        response.setPayload("{\"version\": 1}".getBytes(UTF_8));
         when(mockUpdateThingShadowRequestHandler.handleRequest(any(UpdateThingShadowRequest.class), anyString()))
-                .thenReturn(new UpdateThingShadowHandlerResponse(new UpdateThingShadowResponse(), UPDATE_DOCUMENT));
+                .thenReturn(new UpdateThingShadowHandlerResponse(response, UPDATE_DOCUMENT));
 
         LocalUpdateSyncRequest request = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, UPDATE_DOCUMENT);
         request.execute(syncContext);
