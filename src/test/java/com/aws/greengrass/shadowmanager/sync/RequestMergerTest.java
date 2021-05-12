@@ -13,6 +13,7 @@ import com.aws.greengrass.shadowmanager.sync.model.LocalUpdateSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.SyncRequest;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -28,7 +29,7 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
 import static org.mockito.Mockito.mock;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
-public class RequestMergerTest {
+class RequestMergerTest {
 
     RequestMerger merger;
 
@@ -49,7 +50,7 @@ public class RequestMergerTest {
 
     @ParameterizedTest
     @MethodSource("overridingRequests")
-    public void GIVEN_overriding_requests_WHEN_merge_THEN_return_overriding_request(SyncRequest old, SyncRequest value,
+    void GIVEN_overriding_requests_WHEN_merge_THEN_return_overriding_request(SyncRequest old, SyncRequest value,
             SyncRequest expected) {
         assertThat(merger.merge(old, value), is(expected));
     }
@@ -69,7 +70,7 @@ public class RequestMergerTest {
 
     @ParameterizedTest
     @MethodSource("nonMergingRequests")
-    public void GIVEN_non_mergable_request_WHEN_merge_THEN_return_full_shadow_sync(SyncRequest request1,
+    void GIVEN_non_mergable_request_WHEN_merge_THEN_return_full_shadow_sync(SyncRequest request1,
             SyncRequest request2) {
         assertThat(merger.merge(request1, request2), is(instanceOf(FullShadowSyncRequest.class)));
     }
@@ -80,5 +81,12 @@ public class RequestMergerTest {
                 arguments(cloudUpdateSyncRequest, localUpdateSyncRequest),
                 arguments(localDeleteSyncRequest, cloudDeleteSyncRequest)
         );
+    }
+
+    @Test
+    void GIVEN_update_mergable_request_WHEN_merge_THEN_return_merged_shadow_sync() {
+        LocalUpdateSyncRequest request1 = mock(LocalUpdateSyncRequest.class, "localUpdate1");
+        LocalUpdateSyncRequest request2 = mock(LocalUpdateSyncRequest.class, "localUpdate2");
+        assertThat(merger.merge(request1, request2), is(instanceOf(LocalUpdateSyncRequest.class)));
     }
 }
