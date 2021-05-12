@@ -65,9 +65,10 @@ public final class Constants {
     public static final String CONFIGURATION_SHADOW_DOCUMENTS_TOPIC = "shadowDocuments";
     public static final String CONFIGURATION_THING_NAME_TOPIC = "thingName";
     public static final String CONFIGURATION_PROVIDE_SYNC_STATUS_TOPIC = "provideSyncStatus";
-    public static final String CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC = "maxOutboundSyncUpdatesPerSecond";
     public static final String CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC = "shadowDocumentSizeLimitBytes";
     public static final String CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC = "maxDiskUtilizationMegaBytes";
+    public static final String CONFIGURATION_RATE_LIMITS_TOPIC = "rateLimits";
+    public static final String CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC = "maxOutboundSyncUpdatesPerSecond";
     public static final String CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE = "maxTotalLocalRequestsRate";
     public static final String CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC =
             "maxLocalRequestsPerSecondPerThing";

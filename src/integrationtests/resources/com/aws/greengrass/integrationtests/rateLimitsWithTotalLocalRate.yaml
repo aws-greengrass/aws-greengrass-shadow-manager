@@ -6,8 +6,9 @@ services:
         posixUser: nobody
   aws.greengrass.ShadowManager:
     configuration:
-      maxLocalRequestsPerSecondPerThing: 100
-      maxTotalLocalRequestsRate: 5
+      rateLimits:
+        maxLocalRequestsPerSecondPerThing: 100
+        maxTotalLocalRequestsRate: 5
       synchronize:
         shadowDocuments:
           - thingName: Thing1

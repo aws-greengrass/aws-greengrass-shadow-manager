@@ -78,7 +78,7 @@ public class InboundRateLimiter {
      */
     public void setTotalRate(int rate) {
         totalRate.set(rate);
-        this.totalInboundRateLimiter.setRate(rate);
+        totalInboundRateLimiter.setRate(totalRate.get());
     }
 
     /**
@@ -88,6 +88,6 @@ public class InboundRateLimiter {
      */
     public void setRate(int rate) {
         ratePerThing.set(rate);
-        rateLimitersPerThing.forEach((k, v) -> v.setRate(rate));
+        rateLimitersPerThing.forEach((k, v) -> v.setRate(ratePerThing.get()));
     }
 }

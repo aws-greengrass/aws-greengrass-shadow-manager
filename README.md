@@ -31,17 +31,19 @@ Manifests:
           - thingName: "YetAnotherThing"
           # include sync status in response messages
           provideSyncStatus: true
+
+        rateLimits:
           # number of outgoing sync updates per second (useful to constrain bandwidth)
           # https://docs.aws.amazon.com/general/latest/gr/iot-core.html#device-shadow-limits
           # 400 is max TPS for some regions (account level), others are 4000          
           maxOutboundSyncUpdatesPerSecond: 50 # default 100
+          # Rates for inbound shadow request (overall rate and rate per thing)
+          maxTotalLocalRequestsRate = 100 # default 200
+          maxLocalRequestsPerSecondPerThing: 10 # default 20 (Iot Device Shadow default value)
+        
         # other config
         shadowDocumentSizeLimitBytes: 8192 # default is 8192, max is 30720
         maxDiskUtilizationMegaBytes: 16 # set some max boundary (2000 shadows if there was 0 overhead)
-        
-        # Rates for inbound shadow request (overall rate and rate per thing)
-        maxTotalLocalRequestsRate = 100 # default 200
-        maxLocalRequestsPerSecondPerThing: 10 # default 20 (Iot Device Shadow default value)
 ```
 
 **JSON example**
@@ -75,10 +77,13 @@ Manifests:
     "provideSyncStatus":true,
     "maxOutboundSyncUpdatesPerSecond":50
   },
+  "rateLimits": {
+    "maxOutboundSyncUpdatesPerSecond":50,
+    "maxTotalLocalRequestsRate":100,
+    "maxLocalRequestsPerSecondPerThing":10
+  },
   "shadowDocumentSizeLimitBytes":8192,
   "maxDiskUtilizationMegaBytes":16,
-  "maxTotalLocalRequestsRate":100,
-  "maxLocalRequestsPerSecondPerThing":10
 }
 ```
 

@@ -65,13 +65,12 @@ import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_NAMED_SHADOWS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_NUCLEUS_THING_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_PROVIDE_SYNC_STATUS_TOPIC;
+import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_RATE_LIMITS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SHADOW_DOCUMENTS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SYNCHRONIZATION_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_THING_NAME_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_DISK_UTILIZATION_SIZE_B;
 import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_DOCUMENT_SIZE;
-import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_LOCAL_REQUESTS_RATE;
-import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_TOTAL_LOCAL_REQUESTS_RATE;
 import static com.aws.greengrass.shadowmanager.model.Constants.MAX_SHADOW_DOCUMENT_SIZE;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -102,6 +101,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
     private final static String THING_NAME_A = "thingNameA";
     private final static String THING_NAME_B = "thingNameB";
     private final static String KERNEL_THING = "kernelThing";
+    private final static int RATE_LIMIT = 500;
     @Mock
     private ShadowManagerDatabase mockDatabase;
     @Mock
@@ -146,18 +146,14 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
 
         Topic maxDiskUtilizationMBTopic = Topic.of(context, CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC, DEFAULT_DISK_UTILIZATION_SIZE_B);
         Topic maxDocSizeTopic = Topic.of(context, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC, DEFAULT_DOCUMENT_SIZE);
-        Topic maxLocalRateLimiterTopic = Topic.of(context, CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC, DEFAULT_LOCAL_REQUESTS_RATE);
-        Topic maxTotalInboundRate = Topic.of(context, CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE, DEFAULT_TOTAL_LOCAL_REQUESTS_RATE);
 
         lenient().when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC))
                 .thenReturn(maxDiskUtilizationMBTopic);
         lenient().when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC))
                 .thenReturn(maxDocSizeTopic);
-        lenient().when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC))
-                .thenReturn(maxLocalRateLimiterTopic);
-        lenient().when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE))
-                .thenReturn(maxTotalInboundRate);
         lenient().when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
+                .thenReturn(mock(Topics.class));
+        lenient().when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_RATE_LIMITS_TOPIC))
                 .thenReturn(mock(Topics.class));
     }
 
@@ -214,55 +210,102 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
     }
 
     @Test
-    void GIVEN_good_inbound_rate_WHEN_initialize_THEN_updates_inbound_rate_correctly() {
-        Topic maxLocalRateLimiterTopic = Topic.of(context, CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC, DEFAULT_LOCAL_REQUESTS_RATE);
-        when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC))
-                .thenReturn(maxLocalRateLimiterTopic);
+    void GIVEN_good_max_outbound_rate_WHEN_initialize_THEN_outbound_rate_updated() throws UnsupportedInputTypeException {
+        Topics rateLimitsTopics = Topics.of(context, CONFIGURATION_RATE_LIMITS_TOPIC, null);
+        rateLimitsTopics.createLeafChild(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC).withValueChecked(RATE_LIMIT);
+        when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_RATE_LIMITS_TOPIC))
+                .thenReturn(rateLimitsTopics);
+
         shadowManager.install();
 
         assertFalse(shadowManager.isErrored());
-        verify(mockInboundRateLimiter, times(1)).clear();
-        verify(mockInboundRateLimiter, times(1)).setRate(intObjectCaptor.capture());
-        verify(mockDao, times(0)).insertSyncInfoIfNotExists(any(SyncInformation.class));
+        verify(mockInboundRateLimiter, times(0)).setRate(anyInt());
+        verify(mockInboundRateLimiter, times(0)).setTotalRate(anyInt());
+        verify(mockIotDataPlaneClientWrapper, times(1)).setRate(intObjectCaptor.capture());
         assertThat(intObjectCaptor.getValue(), is(notNullValue()));
-        assertThat(intObjectCaptor.getValue(), is(DEFAULT_LOCAL_REQUESTS_RATE));
+        assertThat(intObjectCaptor.getValue(), is(RATE_LIMIT));
     }
 
     @Test
-    void GIVEN_bad_inbound_rate_WHEN_initialize_THEN_throws_exception(ExtensionContext extensionContext) {
+    void GIVEN_bad_max_outbound_rate_WHEN_initialize_THEN_throws_exception(ExtensionContext extensionContext) throws UnsupportedInputTypeException {
         ignoreExceptionOfType(extensionContext, InvalidConfigurationException.class);
-        Topic maxLocalRateLimiterTopic = Topic.of(context, CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC, -1);
-        when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC))
-                .thenReturn(maxLocalRateLimiterTopic);
+        Topics rateLimitsTopics = Topics.of(context, CONFIGURATION_RATE_LIMITS_TOPIC, null);
+        rateLimitsTopics.createLeafChild(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC).withValueChecked(-1);
+        when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_RATE_LIMITS_TOPIC))
+                .thenReturn(rateLimitsTopics);
+
         shadowManager.install();
+
         assertTrue(shadowManager.isErrored());
-        verify(mockDao, times(0)).insertSyncInfoIfNotExists(any(SyncInformation.class));
+        verify(mockInboundRateLimiter, times(0)).setRate(anyInt());
+        verify(mockInboundRateLimiter, times(0)).setTotalRate(anyInt());
+        verify(mockIotDataPlaneClientWrapper, times(0)).setRate(anyInt());
     }
 
     @Test
-    void GIVEN_good_inbound_total_rate_WHEN_initialize_THEN_updates_inbound_rate_correctly() {
-        Topic maxTotalLocalRequestRate = Topic.of(context, CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE, DEFAULT_LOCAL_REQUESTS_RATE);
-        when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC))
-                .thenReturn(maxTotalLocalRequestRate);
+    void GIVEN_good_overall_inbound_rate_WHEN_initialize_THEN_updates_overall_inbound_rate_correctly() throws UnsupportedInputTypeException {
+        Topics rateLimitsTopics = Topics.of(context, CONFIGURATION_RATE_LIMITS_TOPIC, null);
+        rateLimitsTopics.createLeafChild(CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE).withValueChecked(RATE_LIMIT);
+        when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_RATE_LIMITS_TOPIC))
+                .thenReturn(rateLimitsTopics);
+
         shadowManager.install();
 
         assertFalse(shadowManager.isErrored());
-        verify(mockInboundRateLimiter, times(1)).clear();
+        verify(mockIotDataPlaneClientWrapper, times(0)).setRate(anyInt());
+        verify(mockInboundRateLimiter, times(0)).setRate(anyInt());
         verify(mockInboundRateLimiter, times(1)).setTotalRate(intObjectCaptor.capture());
-        verify(mockDao, times(0)).insertSyncInfoIfNotExists(any(SyncInformation.class));
         assertThat(intObjectCaptor.getValue(), is(notNullValue()));
-        assertThat(intObjectCaptor.getValue(), is(DEFAULT_TOTAL_LOCAL_REQUESTS_RATE));
+        assertThat(intObjectCaptor.getValue(), is(RATE_LIMIT));
     }
 
     @Test
-    void GIVEN_bad_inbound_total_rate_WHEN_initialize_THEN_throws_exception(ExtensionContext extensionContext) {
+    void GIVEN_bad_overall_inbound_rate_WHEN_initialize_THEN_throws_exception(ExtensionContext extensionContext) throws UnsupportedInputTypeException {
         ignoreExceptionOfType(extensionContext, InvalidConfigurationException.class);
-        Topic maxTotalLocalRequestRate = Topic.of(context, CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE, -1);
-        when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE))
-                .thenReturn(maxTotalLocalRequestRate);
+        Topics rateLimitsTopics = Topics.of(context, CONFIGURATION_RATE_LIMITS_TOPIC, null);
+        rateLimitsTopics.createLeafChild(CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE).withValueChecked(-1);
+        when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_RATE_LIMITS_TOPIC))
+                .thenReturn(rateLimitsTopics);
+
         shadowManager.install();
+
         assertTrue(shadowManager.isErrored());
-        verify(mockDao, times(0)).insertSyncInfoIfNotExists(any(SyncInformation.class));
+        verify(mockInboundRateLimiter, times(0)).setRate(anyInt());
+        verify(mockInboundRateLimiter, times(0)).setTotalRate(anyInt());
+        verify(mockIotDataPlaneClientWrapper, times(0)).setRate(anyInt());
+    }
+
+    @Test
+    void GIVEN_good_inbound_rate_per_thing_WHEN_initialize_THEN_updates_inbound_rate_per_thing_correctly() throws UnsupportedInputTypeException {
+        Topics rateLimitsTopics = Topics.of(context, CONFIGURATION_RATE_LIMITS_TOPIC, null);
+        rateLimitsTopics.createLeafChild(CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC).withValueChecked(RATE_LIMIT);
+        when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_RATE_LIMITS_TOPIC))
+                .thenReturn(rateLimitsTopics);
+
+        shadowManager.install();
+
+        assertFalse(shadowManager.isErrored());
+        verify(mockInboundRateLimiter, times(0)).setTotalRate(anyInt());
+        verify(mockIotDataPlaneClientWrapper, times(0)).setRate(anyInt());
+        verify(mockInboundRateLimiter, times(1)).setRate(intObjectCaptor.capture());
+        assertThat(intObjectCaptor.getValue(), is(notNullValue()));
+        assertThat(intObjectCaptor.getValue(), is(RATE_LIMIT));
+    }
+
+    @Test
+    void GIVEN_bad_inbound_rate_per_thing_WHEN_initialize_THEN_throws_exception(ExtensionContext extensionContext) throws UnsupportedInputTypeException {
+        ignoreExceptionOfType(extensionContext, InvalidConfigurationException.class);
+        Topics rateLimitsTopics = Topics.of(context, CONFIGURATION_RATE_LIMITS_TOPIC, null);
+        rateLimitsTopics.createLeafChild(CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC).withValueChecked(-1);
+        when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_RATE_LIMITS_TOPIC))
+                .thenReturn(rateLimitsTopics);
+
+        shadowManager.install();
+
+        assertTrue(shadowManager.isErrored());
+        verify(mockInboundRateLimiter, times(0)).setRate(anyInt());
+        verify(mockInboundRateLimiter, times(0)).setTotalRate(anyInt());
+        verify(mockIotDataPlaneClientWrapper, times(0)).setRate(anyInt());
     }
 
     @Test
@@ -280,7 +323,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         shadowDocumentsList.add(thingAMap);
         shadowDocumentsList.add(thingBMap);
         configTopics.createLeafChild(CONFIGURATION_SHADOW_DOCUMENTS_TOPIC).withValueChecked(shadowDocumentsList);
-        configTopics.createLeafChild(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC).withValueChecked(500);
         configTopics.createLeafChild(CONFIGURATION_PROVIDE_SYNC_STATUS_TOPIC).withValueChecked(true);
         Topics systemConfigTopics = configTopics.createInteriorChild(CONFIGURATION_NUCLEUS_THING_TOPIC);
         systemConfigTopics.createLeafChild(CONFIGURATION_CLASSIC_SHADOW_TOPIC).withValue("true");
@@ -304,7 +346,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
                         ThingShadowSyncConfiguration.builder().thingName(THING_NAME_A).shadowName("bar").build(),
                         ThingShadowSyncConfiguration.builder().thingName(THING_NAME_B).shadowName("").build(),
                         ThingShadowSyncConfiguration.builder().thingName(THING_NAME_B).shadowName("foo2").build()));
-        assertThat(shadowManager.getSyncConfiguration().getMaxOutboundSyncUpdatesPerSecond(), is(500));
         assertThat(shadowManager.getSyncConfiguration().isProvideSyncStatus(), is(true));
         verify(mockDao, times(6)).insertSyncInfoIfNotExists(any(SyncInformation.class));
     }
@@ -324,7 +365,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         shadowDocumentsList.add(thingAMap);
         shadowDocumentsList.add(thingBMap);
         configTopics.createLeafChild(CONFIGURATION_SHADOW_DOCUMENTS_TOPIC).withValueChecked(shadowDocumentsList);
-        configTopics.createLeafChild(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC).withValueChecked(500);
         configTopics.createLeafChild(CONFIGURATION_PROVIDE_SYNC_STATUS_TOPIC).withValueChecked(true);
 
         when(thingNameTopic.getOnce()).thenReturn(KERNEL_THING);
@@ -350,7 +390,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
     void GIVEN_good_sync_configuration_with_only_nucleus_thing_config_WHEN_thing_name_changes_THEN_updates_nucleus_configuration_correctly() throws UnsupportedInputTypeException {
         Topic thingNameTopic = Topic.of(context, DEVICE_PARAM_THING_NAME, KERNEL_THING);
         Topics configTopics = Topics.of(context, CONFIGURATION_SYNCHRONIZATION_TOPIC, null);
-        configTopics.createLeafChild(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC).withValueChecked(500);
         configTopics.createLeafChild(CONFIGURATION_PROVIDE_SYNC_STATUS_TOPIC).withValueChecked(true);
         Topics systemConfigTopics = configTopics.createInteriorChild(CONFIGURATION_NUCLEUS_THING_TOPIC);
         systemConfigTopics.createLeafChild(CONFIGURATION_CLASSIC_SHADOW_TOPIC).withValue("true");
@@ -444,21 +483,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         verify(mockDao, times(0)).insertSyncInfoIfNotExists(any(SyncInformation.class));
     }
 
-    @Test
-    void GIVEN_bad_max_outbound_updates_ps_WHEN_initialize_THEN_service_errors(ExtensionContext extensionContext) throws UnsupportedInputTypeException {
-        ignoreExceptionOfType(extensionContext, InvalidConfigurationException.class);
-        Topics configTopics = Topics.of(context, CONFIGURATION_SYNCHRONIZATION_TOPIC, null);
-        configTopics.createLeafChild(CONFIGURATION_NUCLEUS_THING_TOPIC).withValueChecked(null);
-        configTopics.createLeafChild(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC).withValueChecked(-1);
-
-
-        when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
-                .thenReturn(configTopics);
-        shadowManager.install();
-        assertTrue(shadowManager.isErrored());
-        verify(mockDao, times(0)).insertSyncInfoIfNotExists(any(SyncInformation.class));
-    }
-
     @ParameterizedTest
     @MethodSource("com.aws.greengrass.shadowmanager.TestUtils#invalidShadowNames")
     void GIVEN_bad_shadow_names_WHEN_initialize_THEN_service_errors(String shadowName, ExtensionContext extensionContext) throws UnsupportedInputTypeException {
@@ -477,7 +501,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         shadowDocumentsList.add(thingAMap);
         shadowDocumentsList.add(thingBMap);
         configTopics.createLeafChild(CONFIGURATION_SHADOW_DOCUMENTS_TOPIC).withValueChecked(shadowDocumentsList);
-        configTopics.createLeafChild(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC).withValueChecked(500);
         configTopics.createLeafChild(CONFIGURATION_PROVIDE_SYNC_STATUS_TOPIC).withValueChecked(true);
 
         when(thingNameTopic.getOnce()).thenReturn(KERNEL_THING);
@@ -508,7 +531,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         shadowDocumentsList.add(thingAMap);
         shadowDocumentsList.add(thingBMap);
         configTopics.createLeafChild(CONFIGURATION_SHADOW_DOCUMENTS_TOPIC).withValueChecked(shadowDocumentsList);
-        configTopics.createLeafChild(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC).withValueChecked(500);
         configTopics.createLeafChild(CONFIGURATION_PROVIDE_SYNC_STATUS_TOPIC).withValueChecked(true);
 
         when(thingNameTopic.getOnce()).thenReturn(KERNEL_THING);

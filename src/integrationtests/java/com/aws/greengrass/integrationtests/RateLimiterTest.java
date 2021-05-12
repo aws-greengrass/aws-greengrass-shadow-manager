@@ -139,7 +139,7 @@ public class RateLimiterTest extends NucleusLaunchUtils {
                 }
             }
 
-            assertThat("Expected exception was not triggered", exceptionTriggered, is(true));
+            assertThat("expected throttle exception triggered", exceptionTriggered, is(true));
 
             TimeUnit.SECONDS.sleep(1);
             for (int i = 0; i < callsLeft; i++) {
@@ -185,7 +185,7 @@ public class RateLimiterTest extends NucleusLaunchUtils {
                 }
             }
 
-            assertThat("Expected exception was not triggered", exceptionTriggered, is(true));
+            assertThat("expected throttle exception triggered", exceptionTriggered, is(true));
         }
     }
 
@@ -230,7 +230,7 @@ public class RateLimiterTest extends NucleusLaunchUtils {
                 }
             }
 
-            assertThat("Expected exception was not triggered", exceptionTriggered, is(true));
+            assertThat("expected throttle exception triggered", exceptionTriggered, is(true));
         }
     }
 
@@ -267,7 +267,7 @@ public class RateLimiterTest extends NucleusLaunchUtils {
                 }
             }
 
-            assertThat("Expected exception was not triggered", exceptionTriggered, is(true));
+            assertThat("expected throttle exception triggered", exceptionTriggered, is(true));
         }
     }
 }
