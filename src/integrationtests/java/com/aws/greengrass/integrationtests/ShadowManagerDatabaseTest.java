@@ -6,32 +6,24 @@
 package com.aws.greengrass.integrationtests;
 
 import com.aws.greengrass.dependency.State;
-import com.aws.greengrass.lifecyclemanager.GlobalStateChangeListener;
-import com.aws.greengrass.lifecyclemanager.GreengrassService;
 import com.aws.greengrass.lifecyclemanager.Kernel;
-import com.aws.greengrass.shadowmanager.ShadowManager;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAOImpl;
 import com.aws.greengrass.shadowmanager.ShadowManagerDatabase;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
-import com.aws.greengrass.testcommons.testutilities.GGServiceTestUtil;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.api.io.TempDir;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalToIgnoringCase;
@@ -46,15 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 @SuppressWarnings("PMD.CloseResource")
-class ShadowManagerDatabaseTest extends GGServiceTestUtil {
-    private static final long TEST_TIME_OUT_SEC = 30L;
-
-    private Kernel kernel;
-    private GlobalStateChangeListener listener;
-
-    @TempDir
-    Path rootDir;
-
+class ShadowManagerDatabaseTest extends NucleusLaunchUtils {
     @BeforeEach
     void setup() {
         kernel = new Kernel();
@@ -65,23 +49,8 @@ class ShadowManagerDatabaseTest extends GGServiceTestUtil {
         kernel.shutdown();
     }
 
-    private void startNucleusWithConfig(String configFile, State expectedState) throws InterruptedException {
-        CountDownLatch shadowManagerRunning = new CountDownLatch(1);
-        kernel.parseArgs("-r", rootDir.toAbsolutePath().toString(), "-i",
-                getClass().getResource(configFile).toString());
-        listener = (GreengrassService service, State was, State newState) -> {
-            if (service.getName().equals(ShadowManager.SERVICE_NAME) && service.getState().equals(expectedState)) {
-                shadowManagerRunning.countDown();
-            }
-        };
-        kernel.getContext().addGlobalStateChangeListener(listener);
-        kernel.launch();
-
-        assertTrue(shadowManagerRunning.await(TEST_TIME_OUT_SEC, TimeUnit.SECONDS));
-    }
-
     private ShadowManagerDatabase initializeShadowManagerDatabase() throws InterruptedException, SQLException {
-        startNucleusWithConfig("config.yaml", State.RUNNING);
+        startNucleusWithConfig("config.yaml", State.RUNNING, false);
         ShadowManagerDatabase shadowManagerDatabase = new ShadowManagerDatabase(kernel);
         shadowManagerDatabase.install();
         return shadowManagerDatabase;
@@ -152,7 +121,7 @@ class ShadowManagerDatabaseTest extends GGServiceTestUtil {
 
     @Test
     void GIVEN_shadow_manager_database_not_connected_WHEN_close_THEN_shadow_manager_database_connection_does_nothing() throws Exception {
-        startNucleusWithConfig("config.yaml", State.RUNNING);
+        startNucleusWithConfig("config.yaml", State.RUNNING, false);
         ShadowManagerDatabase shadowManagerDatabase = new ShadowManagerDatabase(kernel);
         assertNull(shadowManagerDatabase.connection());
         shadowManagerDatabase.close();

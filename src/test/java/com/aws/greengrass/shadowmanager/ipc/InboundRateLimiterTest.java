@@ -20,6 +20,7 @@ import vendored.com.google.common.util.concurrent.RateLimiter;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static com.aws.greengrass.shadowmanager.TestUtils.THING_NAME;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -120,13 +121,13 @@ public class InboundRateLimiterTest {
 
         // fill out map to max capacity before removing last accessed rate limiter
         inboundRateLimiter.acquireLockForThing(thing1);
-        Thread.sleep(500);
+        TimeUnit.MILLISECONDS.sleep(500);
         inboundRateLimiter.acquireLockForThing(thing2);
 
         assertThat(rateLimiterMap.keySet().toArray(), arrayContainingInAnyOrder(thing1,thing2));
 
         // last accessed thing should be removed
-        Thread.sleep(500);
+        TimeUnit.MILLISECONDS.sleep(500);
         inboundRateLimiter.acquireLockForThing(thing3);
         assertThat(rateLimiterMap.keySet().toArray(), arrayContainingInAnyOrder(thing2, thing3));
     }

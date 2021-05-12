@@ -25,6 +25,7 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
+import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.services.iotdataplane.model.ConflictException;
 import software.amazon.awssdk.services.iotdataplane.model.InternalFailureException;
@@ -35,6 +36,7 @@ import software.amazon.awssdk.services.iotdataplane.model.ServiceUnavailableExce
 import software.amazon.awssdk.services.iotdataplane.model.ThrottlingException;
 import software.amazon.awssdk.services.iotdataplane.model.UnauthorizedException;
 import software.amazon.awssdk.services.iotdataplane.model.UnsupportedDocumentEncodingException;
+import software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowResponse;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -44,6 +46,7 @@ import static com.aws.greengrass.shadowmanager.TestUtils.SAMPLE_EXCEPTION_MESSAG
 import static com.aws.greengrass.shadowmanager.TestUtils.SHADOW_NAME;
 import static com.aws.greengrass.shadowmanager.TestUtils.THING_NAME;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
@@ -102,6 +105,8 @@ class CloudUpdateSyncRequestTest {
                 .cloudVersion(5L)
                 .lastSyncTime(epochSecondsMinus60)
                 .build()));
+        when(mockIotDataPlaneClientWrapper.updateThingShadow(anyString(), anyString(), any(byte[].class)))
+                .thenReturn(UpdateThingShadowResponse.builder().payload(SdkBytes.fromString("{\"version\": 6}", UTF_8)).build());
 
         CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, baseDocumentJson);
 

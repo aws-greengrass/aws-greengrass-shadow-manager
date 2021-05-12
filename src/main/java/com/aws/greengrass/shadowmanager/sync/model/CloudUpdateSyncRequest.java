@@ -26,6 +26,7 @@ import software.amazon.awssdk.services.iotdataplane.model.ConflictException;
 import software.amazon.awssdk.services.iotdataplane.model.InternalFailureException;
 import software.amazon.awssdk.services.iotdataplane.model.ServiceUnavailableException;
 import software.amazon.awssdk.services.iotdataplane.model.ThrottlingException;
+import software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowResponse;
 
 import java.io.IOException;
 import java.util.Optional;
@@ -100,14 +101,13 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
         }
 
         long cloudVersion = getAndUpdateCloudVersionInRequest(currentSyncInformation);
-
+        UpdateThingShadowResponse response;
         try {
             logger.atDebug()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
                     .log("Updating cloud shadow document");
-
-            context.getIotDataPlaneClientWrapper().updateThingShadow(getThingName(), getShadowName(),
+            response = context.getIotDataPlaneClientWrapper().updateThingShadow(getThingName(), getShadowName(),
                     JsonUtil.getPayloadBytes(updateDocument));
         } catch (ConflictException e) {  // NOPMD - Throw ConflictException instead of treated as SdkServiceException
             throw e;
@@ -120,7 +120,7 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
         try {
             context.getDao().updateSyncInformation(SyncInformation.builder()
                     .lastSyncedDocument(JsonUtil.getPayloadBytes(shadowDocument.get().toJson(false)))
-                    .cloudVersion(cloudVersion + 1)
+                    .cloudVersion(getUpdatedVersion(response.payload().asByteArray()).orElse(cloudVersion + 1))
                     .cloudDeleted(false)
                     .shadowName(getShadowName())
                     .thingName(getThingName())

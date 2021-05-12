@@ -13,6 +13,7 @@ import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.ShadowState;
+import com.aws.greengrass.shadowmanager.model.UpdateThingShadowHandlerResponse;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.util.DataOwner;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
@@ -34,6 +35,7 @@ import software.amazon.awssdk.services.iotdataplane.model.InternalFailureExcepti
 import software.amazon.awssdk.services.iotdataplane.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.iotdataplane.model.ServiceUnavailableException;
 import software.amazon.awssdk.services.iotdataplane.model.ThrottlingException;
+import software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowResponse;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -304,9 +306,8 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
         localDocumentVersion.ifPresent(version ->
                 updateDocument.set(SHADOW_DOCUMENT_VERSION, new LongNode(version)));
         byte[] payloadBytes = getPayloadBytes(updateDocument);
-        updateLocalShadowDocument(payloadBytes);
-        //TODO: get the version from the response object
-        return localDocumentVersion.map(version -> version + 1).orElse(1L);
+        Optional<Long> updatedVersion = updateLocalShadowDocument(payloadBytes);
+        return updatedVersion.orElse(localDocumentVersion.map(version -> version + 1).orElse(1L));
     }
 
     /**
@@ -355,9 +356,8 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
         cloudDocumentVersion.ifPresent(version ->
                 updateDocument.set(SHADOW_DOCUMENT_VERSION, new LongNode(version)));
         byte[] payloadBytes = getPayloadBytes(updateDocument);
-        updateCloudShadowDocument(payloadBytes);
-        //TODO: get the version from the response object
-        return cloudDocumentVersion.map(version -> version + 1).orElse(1L);
+        Optional<Long> updatedVersion = updateCloudShadowDocument(payloadBytes);
+        return updatedVersion.orElse(cloudDocumentVersion.map(version -> version + 1).orElse(1L));
     }
 
     /**
@@ -487,7 +487,7 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
      * @throws ConflictError            if the update request for local had a bad version.
      * @throws SkipSyncRequestException if the update request encountered errors which should be skipped.
      */
-    private void updateLocalShadowDocument(byte[] payloadBytes) throws ConflictError,
+    private Optional<Long> updateLocalShadowDocument(byte[] payloadBytes) throws ConflictError,
             SkipSyncRequestException {
         logger.atDebug()
                 .kv(LOG_THING_NAME_KEY, getThingName())
@@ -499,11 +499,13 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
         localRequest.setPayload(payloadBytes);
         localRequest.setShadowName(getShadowName());
         localRequest.setThingName(getThingName());
+        UpdateThingShadowHandlerResponse response;
         try {
-            context.getUpdateHandler().handleRequest(localRequest, ShadowManager.SERVICE_NAME);
+            response = context.getUpdateHandler().handleRequest(localRequest, ShadowManager.SERVICE_NAME);
         } catch (ShadowManagerDataException | UnauthorizedError | InvalidArgumentsError | ServiceError e) {
             throw new SkipSyncRequestException(e);
         }
+        return getUpdatedVersion(response.getUpdateThingShadowResponse().getPayload());
     }
 
     /**
@@ -536,15 +538,17 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
      * @throws RetryableException       if the update request encountered errors which should be retried.
      * @throws SkipSyncRequestException if the update request encountered errors which should be skipped.
      */
-    private void updateCloudShadowDocument(byte[] updateDocument)
+    private Optional<Long> updateCloudShadowDocument(byte[] updateDocument)
             throws ConflictException, RetryableException, SkipSyncRequestException {
+        UpdateThingShadowResponse response;
         try {
             logger.atDebug()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
                     .log("Updating cloud shadow document");
 
-            context.getIotDataPlaneClientWrapper().updateThingShadow(getThingName(), getShadowName(), updateDocument);
+            response = context.getIotDataPlaneClientWrapper().updateThingShadow(getThingName(), getShadowName(),
+                    updateDocument);
         } catch (ConflictException e) {
             logger.atWarn()
                     .kv(LOG_THING_NAME_KEY, getThingName())
@@ -564,6 +568,7 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
                     .log("Could not execute cloud shadow update request");
             throw new SkipSyncRequestException(e);
         }
+        return getUpdatedVersion(response.payload().asByteArray());
     }
 
     /**
