@@ -43,7 +43,6 @@ public class GetThingShadowRequestHandler extends BaseRequestHandler {
     private static final Logger logger = LogManager.getLogger(GetThingShadowRequestHandler.class);
     private final ShadowManagerDAO dao;
     private final AuthorizationHandlerWrapper authorizationHandlerWrapper;
-    private final PubSubClientWrapper pubSubClientWrapper;
 
     /**
      * IPC Handler class for responding to GetThingShadow requests.
@@ -58,7 +57,6 @@ public class GetThingShadowRequestHandler extends BaseRequestHandler {
         super(pubSubClientWrapper);
         this.authorizationHandlerWrapper = authorizationHandlerWrapper;
         this.dao = dao;
-        this.pubSubClientWrapper = pubSubClientWrapper;
     }
 
     /**
@@ -111,7 +109,7 @@ public class GetThingShadowRequestHandler extends BaseRequestHandler {
 
                 byte[] responseNodeBytes = JsonUtil.getPayloadBytes(responseNode);
 
-                pubSubClientWrapper.accept(PubSubRequest.builder().thingName(thingName).shadowName(shadowName)
+                getPubSubClientWrapper().accept(PubSubRequest.builder().thingName(thingName).shadowName(shadowName)
                         .payload(responseNodeBytes)
                         .publishOperation(Operation.GET_SHADOW)
                         .build());
@@ -125,7 +123,7 @@ public class GetThingShadowRequestHandler extends BaseRequestHandler {
                         .setCause(e)
                         .kv(LOG_THING_NAME_KEY, thingName)
                         .kv(LOG_SHADOW_NAME_KEY, shadowName)
-                        .log("Not authorized to update shadow");
+                        .log("Not authorized to get shadow");
                 publishErrorMessage(thingName, shadowName, Optional.empty(), ErrorMessage.UNAUTHORIZED_MESSAGE,
                         Operation.GET_SHADOW);
                 throw new UnauthorizedError(e.getMessage());
@@ -144,7 +142,7 @@ public class GetThingShadowRequestHandler extends BaseRequestHandler {
                         .setCause(e)
                         .kv(LOG_THING_NAME_KEY, thingName)
                         .kv(LOG_SHADOW_NAME_KEY, shadowName)
-                        .log("Could not process UpdateThingShadow Request due to internal service error");
+                        .log("Could not process GetThingShadow Request due to internal service error");
                 publishErrorMessage(thingName, shadowName, Optional.empty(),
                         ErrorMessage.INTERNAL_SERVICE_FAILURE_MESSAGE, Operation.GET_SHADOW);
                 throw new ServiceError(e.getMessage());

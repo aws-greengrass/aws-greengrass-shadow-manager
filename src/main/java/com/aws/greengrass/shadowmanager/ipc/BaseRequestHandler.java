@@ -15,6 +15,7 @@ import com.aws.greengrass.shadowmanager.model.ResponseMessageBuilder;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
+import lombok.Getter;
 import software.amazon.awssdk.aws.greengrass.model.InvalidArgumentsError;
 
 import java.time.Instant;
@@ -25,6 +26,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KE
 
 public class BaseRequestHandler {
     private static final Logger logger = LogManager.getLogger(BaseRequestHandler.class);
+    @Getter
     private final PubSubClientWrapper pubSubClientWrapper;
 
     BaseRequestHandler(PubSubClientWrapper pubSubClientWrapper) {
@@ -75,7 +77,7 @@ public class BaseRequestHandler {
      */
     @SuppressWarnings("PMD.AvoidUncheckedExceptionsInSignatures")
     void throwInvalidArgumentsError(String thingName, String shadowName, Optional<String> clientToken,
-                                            InvalidRequestParametersException e, Operation op)
+                                    InvalidRequestParametersException e, Operation op)
             throws InvalidArgumentsError {
         logger.atWarn()
                 .setEventType(op.getLogEventType())

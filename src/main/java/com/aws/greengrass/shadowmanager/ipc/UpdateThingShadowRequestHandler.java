@@ -53,7 +53,6 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
 
     private final ShadowManagerDAO dao;
     private final AuthorizationHandlerWrapper authorizationHandlerWrapper;
-    private final PubSubClientWrapper pubSubClientWrapper;
     private final ShadowWriteSynchronizeHelper synchronizeHelper;
     private final SyncHandler syncHandler;
     @Setter
@@ -77,7 +76,6 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
         super(pubSubClientWrapper);
         this.authorizationHandlerWrapper = authorizationHandlerWrapper;
         this.dao = dao;
-        this.pubSubClientWrapper = pubSubClientWrapper;
         this.synchronizeHelper = synchronizeHelper;
         this.syncHandler = syncHandler;
     }
@@ -216,7 +214,7 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
                             .build();
                     byte[] responseNodeBytes = JsonUtil.getPayloadBytes(responseNode);
 
-                    pubSubClientWrapper.accept(PubSubRequest.builder().thingName(thingName).shadowName(shadowName)
+                    getPubSubClientWrapper().accept(PubSubRequest.builder().thingName(thingName).shadowName(shadowName)
                             .payload(responseNodeBytes)
                             .publishOperation(Operation.UPDATE_SHADOW)
                             .build());
@@ -280,7 +278,7 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
                     .withClientToken(clientToken)
                     .build();
 
-            pubSubClientWrapper.delta(PubSubRequest.builder().thingName(thingName)
+            getPubSubClientWrapper().delta(PubSubRequest.builder().thingName(thingName)
                     .shadowName(shadowName)
                     .payload(JsonUtil.getPayloadBytes(responseMessage))
                     .publishOperation(Operation.UPDATE_SHADOW)
@@ -298,7 +296,7 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
                 .withTimestamp(Instant.now())
                 .build();
         // Send the current document on the documents topic after successfully updating the shadow document.
-        pubSubClientWrapper.documents(PubSubRequest.builder().thingName(thingName).shadowName(shadowName)
+        getPubSubClientWrapper().documents(PubSubRequest.builder().thingName(thingName).shadowName(shadowName)
                 .payload(JsonUtil.getPayloadBytes(responseMessage))
                 .publishOperation(Operation.UPDATE_SHADOW)
                 .build());

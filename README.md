@@ -38,6 +38,9 @@ Manifests:
         # other config
         shadowDocumentSizeLimitBytes: 8192 # default is 8192, max is 30720
         maxDiskUtilizationMegaBytes: 16 # set some max boundary (2000 shadows if there was 0 overhead)
+        
+        # number of inbound shadow requests per second per thing.
+        maxLocalRequestsPerSecondPerThing: 10 # Iot Device Shadow defaults to 20
 ```
 
 **JSON example**
@@ -72,7 +75,8 @@ Manifests:
     "maxOutboundSyncUpdatesPerSecond":50
   },
   "shadowDocumentSizeLimitBytes":8192,
-  "maxDiskUtilizationMegaBytes":16
+  "maxDiskUtilizationMegaBytes":16,
+  "maxLocalRequestsPerSecondPerThing":10
 }
 ```
 

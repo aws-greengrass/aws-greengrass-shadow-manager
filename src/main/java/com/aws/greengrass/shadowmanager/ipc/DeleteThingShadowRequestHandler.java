@@ -46,7 +46,6 @@ public class DeleteThingShadowRequestHandler extends BaseRequestHandler {
 
     private final ShadowManagerDAO dao;
     private final AuthorizationHandlerWrapper authorizationHandlerWrapper;
-    private final PubSubClientWrapper pubSubClientWrapper;
     private final ShadowWriteSynchronizeHelper synchronizeHelper;
     private final SyncHandler syncHandler;
 
@@ -68,7 +67,6 @@ public class DeleteThingShadowRequestHandler extends BaseRequestHandler {
         super(pubSubClientWrapper);
         this.authorizationHandlerWrapper = authorizationHandlerWrapper;
         this.dao = dao;
-        this.pubSubClientWrapper = pubSubClientWrapper;
         this.synchronizeHelper = synchronizeHelper;
         this.syncHandler = syncHandler;
     }
@@ -126,7 +124,7 @@ public class DeleteThingShadowRequestHandler extends BaseRequestHandler {
                             .withVersion(deletedShadowDocument.get().getVersion())
                             .withTimestamp(Instant.now())
                             .build();
-                    pubSubClientWrapper.accept(PubSubRequest.builder()
+                    getPubSubClientWrapper().accept(PubSubRequest.builder()
                             .thingName(thingName)
                             .shadowName(shadowName)
                             .payload(JsonUtil.getPayloadBytes(responseNode))
@@ -149,7 +147,7 @@ public class DeleteThingShadowRequestHandler extends BaseRequestHandler {
                             .setCause(e)
                             .kv(LOG_THING_NAME_KEY, thingName)
                             .kv(LOG_SHADOW_NAME_KEY, shadowName)
-                            .log("Not authorized to update shadow");
+                            .log("Not authorized to delete shadow");
                     publishErrorMessage(thingName, shadowName, Optional.empty(), ErrorMessage.UNAUTHORIZED_MESSAGE,
                             Operation.DELETE_SHADOW);
                     throw new UnauthorizedError(e.getMessage());
@@ -159,7 +157,7 @@ public class DeleteThingShadowRequestHandler extends BaseRequestHandler {
                             .setCause(e)
                             .kv(LOG_THING_NAME_KEY, thingName)
                             .kv(LOG_SHADOW_NAME_KEY, shadowName)
-                            .log("Could not process UpdateThingShadow Request due to internal service error");
+                            .log("Could not process DeleteThingShadow Request due to internal service error");
                     publishErrorMessage(thingName, shadowName, Optional.empty(),
                             ErrorMessage.INTERNAL_SERVICE_FAILURE_MESSAGE, Operation.DELETE_SHADOW);
                     throw new ServiceError(e.getMessage());
