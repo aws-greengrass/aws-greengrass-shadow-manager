@@ -25,6 +25,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.Answers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
@@ -60,6 +61,7 @@ import static com.aws.greengrass.shadowmanager.TestUtils.THING_NAME;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_METADATA;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_VERSION;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.instanceOf;
@@ -87,6 +89,8 @@ class FullShadowSyncRequestTest {
 
     @Mock
     private ShadowManagerDAO mockDao;
+    @Mock(answer = Answers.RETURNS_DEEP_STUBS)
+    private UpdateThingShadowHandlerResponse mockUpdateThingShadowHandlerResponse;
     @Mock
     private IotDataPlaneClientWrapper mockIotDataPlaneClientWrapper;
     @Mock
@@ -137,10 +141,11 @@ class FullShadowSyncRequestTest {
                 .localVersion(1L)
                 .lastSyncTime(epochSecondsMinus60)
                 .build()));
+        when(mockUpdateThingShadowHandlerResponse.getUpdateThingShadowResponse().getPayload()).thenReturn("{\"version\": 11, \"state\": {}}".getBytes(UTF_8));
         when(mockUpdateThingShadowRequestHandler.handleRequest(localUpdateThingShadowRequestCaptor.capture(), anyString())).
-                thenReturn(mock(UpdateThingShadowHandlerResponse.class));
+                thenReturn(mockUpdateThingShadowHandlerResponse);
         when(mockIotDataPlaneClientWrapper.updateThingShadow(thingNameCaptor.capture(), shadowNameCaptor.capture(), payloadCaptor.capture()))
-                .thenReturn(UpdateThingShadowResponse.builder().build());
+                .thenReturn(UpdateThingShadowResponse.builder().payload(SdkBytes.fromString("{\"version\": 6, \"state\": {}}", UTF_8)).build());
 
         FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME);
         fullShadowSyncRequest.execute(syncContext);
@@ -318,8 +323,9 @@ class FullShadowSyncRequestTest {
                 .localVersion(0L)
                 .lastSyncTime(Instant.EPOCH.getEpochSecond())
                 .build()));
+        when(mockUpdateThingShadowHandlerResponse.getUpdateThingShadowResponse().getPayload()).thenReturn("{\"version\": 1, \"state\": {}}".getBytes(UTF_8));
         when(mockUpdateThingShadowRequestHandler.handleRequest(localUpdateThingShadowRequestCaptor.capture(), anyString())).
-                thenReturn(mock(UpdateThingShadowHandlerResponse.class));
+                thenReturn(mockUpdateThingShadowHandlerResponse);
 
         FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME);
         fullShadowSyncRequest.execute(syncContext);
@@ -372,7 +378,7 @@ class FullShadowSyncRequestTest {
                 .lastSyncTime(Instant.EPOCH.getEpochSecond())
                 .build()));
         when(mockIotDataPlaneClientWrapper.updateThingShadow(thingNameCaptor.capture(), shadowNameCaptor.capture(), payloadCaptor.capture()))
-                .thenReturn(UpdateThingShadowResponse.builder().build());
+                .thenReturn(UpdateThingShadowResponse.builder().payload(SdkBytes.fromString("{\"version\": 1, \"state\": {}}", UTF_8)).build());
 
         FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME);
         fullShadowSyncRequest.execute(syncContext);
@@ -657,8 +663,9 @@ class FullShadowSyncRequestTest {
                 .localVersion(1L)
                 .lastSyncTime(epochSecondsMinus60)
                 .build()));
+        when(mockUpdateThingShadowHandlerResponse.getUpdateThingShadowResponse().getPayload()).thenReturn("{\"version\": 11, \"state\": {}}".getBytes(UTF_8));
         when(mockUpdateThingShadowRequestHandler.handleRequest(localUpdateThingShadowRequestCaptor.capture(), anyString())).
-                thenReturn(mock(UpdateThingShadowHandlerResponse.class));
+                thenReturn(mockUpdateThingShadowHandlerResponse);
         doThrow(clazz).when(mockIotDataPlaneClientWrapper).updateThingShadow(thingNameCaptor.capture(), shadowNameCaptor.capture(), payloadCaptor.capture());
 
         FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME);
@@ -707,8 +714,10 @@ class FullShadowSyncRequestTest {
                 .localVersion(1L)
                 .lastSyncTime(epochSecondsMinus60)
                 .build()));
+        when(mockUpdateThingShadowHandlerResponse.getUpdateThingShadowResponse().getPayload()).thenReturn("{\"version\": 1, \"state\": {}}".getBytes(UTF_8));
         when(mockUpdateThingShadowRequestHandler.handleRequest(localUpdateThingShadowRequestCaptor.capture(), anyString())).
-                thenReturn(mock(UpdateThingShadowHandlerResponse.class));
+                thenReturn(mockUpdateThingShadowHandlerResponse);
+
         doThrow(ConflictException.class).when(mockIotDataPlaneClientWrapper).updateThingShadow(thingNameCaptor.capture(), shadowNameCaptor.capture(), payloadCaptor.capture());
 
         FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME);
@@ -799,8 +808,10 @@ class FullShadowSyncRequestTest {
                 .localVersion(1L)
                 .lastSyncTime(epochSecondsMinus60)
                 .build()));
+        when(mockUpdateThingShadowHandlerResponse.getUpdateThingShadowResponse().getPayload()).thenReturn("{\"version\": 11, \"state\": {}}".getBytes(UTF_8));
         when(mockUpdateThingShadowRequestHandler.handleRequest(localUpdateThingShadowRequestCaptor.capture(), anyString())).
-                thenReturn(mock(UpdateThingShadowHandlerResponse.class));
+                thenReturn(mockUpdateThingShadowHandlerResponse);
+
         doThrow(clazz).when(mockIotDataPlaneClientWrapper).updateThingShadow(thingNameCaptor.capture(), shadowNameCaptor.capture(), payloadCaptor.capture());
 
         FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME);

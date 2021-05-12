@@ -92,17 +92,18 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
                 request.setShadowName(getShadowName());
                 request.setPayload(JsonUtil.getPayloadBytes(shadowDocument.toJson(false)));
 
-                UpdateThingShadowHandlerResponse updateThingShadowHandlerResponse =
+                UpdateThingShadowHandlerResponse response =
                         context.getUpdateHandler().handleRequest(request, SHADOW_MANAGER_NAME);
 
-                byte[] updatedDocument = updateThingShadowHandlerResponse.getCurrentDocument();
+                byte[] updatedDocument = response.getCurrentDocument();
                 long updateTime = Instant.now().getEpochSecond();
                 context.getDao().updateSyncInformation(SyncInformation.builder()
                         .thingName(getThingName())
                         .shadowName(getShadowName())
                         .lastSyncedDocument(updatedDocument)
                         .cloudUpdateTime(updateTime)
-                        .localVersion(currentLocalVersion + 1)
+                        .localVersion(getUpdatedVersion(response.getUpdateThingShadowResponse().getPayload())
+                                .orElse(currentLocalVersion + 1))
                         .cloudVersion(cloudUpdateVersion)
                         .lastSyncTime(updateTime)
                         .cloudDeleted(false)
