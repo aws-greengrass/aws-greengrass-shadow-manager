@@ -15,6 +15,7 @@ import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.UpdateThingShadowHandlerResponse;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientWrapper;
+import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException;
 import org.hamcrest.Matchers;
@@ -23,6 +24,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
@@ -38,6 +42,7 @@ import software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowResponse;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import static com.aws.greengrass.shadowmanager.TestUtils.SAMPLE_EXCEPTION_MESSAGE;
 import static com.aws.greengrass.shadowmanager.TestUtils.SHADOW_NAME;
@@ -52,6 +57,7 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
@@ -63,7 +69,7 @@ import static org.mockito.Mockito.when;
 
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
-public class LocalUpdateSyncRequestTest {
+class LocalUpdateSyncRequestTest {
 
     private static final byte[] UPDATE_DOCUMENT = "{\"version\": 6, \"state\": {\"reported\": {\"name\": \"The Beatles\"}}}".getBytes();
 
@@ -335,5 +341,28 @@ public class LocalUpdateSyncRequestTest {
 
         verify(mockDao, never()).updateSyncInformation(any());
         verify(mockUpdateThingShadowRequestHandler, never()).handleRequest(any(), any());
+    }
+
+    static Stream<Arguments> currentUpdatePayloads() {
+        return Stream.of(arguments(UPDATE_DOCUMENT));
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @MethodSource("currentUpdatePayloads")
+    void GIVEN_updated_local_update_request_WHEN_merge_THEN_return_merged_shadow_sync(byte[] updatePayload1) throws IOException {
+        LocalUpdateSyncRequest request1 = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, updatePayload1);
+        LocalUpdateSyncRequest request2 = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, "{\"version\": 7, \"state\": {\"reported\": {\"name\": \"Pink Floyd\"}}}".getBytes());
+        request1.merge(request2);
+        assertThat(JsonUtil.getPayloadJson(request1.getUpdateDocument()), is(JsonUtil.getPayloadJson(request2.getUpdateDocument())));
+    }
+
+    @ParameterizedTest
+    @NullSource
+    void GIVEN_no_update_local_update_request_2_WHEN_merge_THEN_return_first_update_shadow_document(byte[] updatePayload) throws IOException {
+        LocalUpdateSyncRequest request1 = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, UPDATE_DOCUMENT);
+        LocalUpdateSyncRequest request2 = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, updatePayload);
+        request1.merge(request2);
+        assertThat(JsonUtil.getPayloadJson(request1.getUpdateDocument()), is(JsonUtil.getPayloadJson(request1.getUpdateDocument())));
     }
 }

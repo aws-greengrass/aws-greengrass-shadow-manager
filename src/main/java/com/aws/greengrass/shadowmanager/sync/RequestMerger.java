@@ -18,6 +18,8 @@ import com.aws.greengrass.shadowmanager.sync.model.LocalUpdateSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.SyncRequest;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
+import java.io.IOException;
+
 /**
  * Merge requests that can be combined together. Falls back to FullSync if requests cannot be combined in a
  * meaningful way.
@@ -51,14 +53,24 @@ class RequestMerger {
 
         LogEventBuilder logEvent = logger.atDebug(LogEvents.SYNC.code())
                 .addKeyValue(Constants.LOG_THING_NAME_KEY, oldValue.getThingName())
-                .addKeyValue(Constants.LOG_THING_NAME_KEY, oldValue.getShadowName());
+                .addKeyValue(Constants.LOG_SHADOW_NAME_KEY, oldValue.getShadowName());
 
         if (oldValue instanceof CloudUpdateSyncRequest && value instanceof CloudUpdateSyncRequest) {
             logEvent.log("Merge cloud update requests");
             ((CloudUpdateSyncRequest) oldValue).merge((CloudUpdateSyncRequest) value);
             return oldValue;
         } else if (oldValue instanceof LocalUpdateSyncRequest && value instanceof LocalUpdateSyncRequest) {
-            // TODO: combine existing requests
+            try {
+                logEvent.log("Merge local update requests");
+                ((LocalUpdateSyncRequest) oldValue).merge((LocalUpdateSyncRequest) value);
+                return oldValue;
+            } catch (IOException e) {
+                logger.atWarn(LogEvents.SYNC.code())
+                        .addKeyValue(Constants.LOG_THING_NAME_KEY, oldValue.getThingName())
+                        .addKeyValue(Constants.LOG_SHADOW_NAME_KEY, oldValue.getShadowName())
+                        .cause(e)
+                        .log("Unable to merge local update requests");
+            }
         } else if ((oldValue instanceof CloudUpdateSyncRequest || oldValue instanceof LocalUpdateSyncRequest)
                 && (value instanceof CloudDeleteSyncRequest || value instanceof LocalDeleteSyncRequest)) {
             // update followed by delete, just send the delete - no matter the direction
@@ -80,8 +92,10 @@ class RequestMerger {
             logEvent.log("Merge simultaneous deletes for shadow from local and cloud");
         } else if (oldValue instanceof CloudUpdateSyncRequest && value instanceof LocalUpdateSyncRequest
                 || oldValue instanceof LocalUpdateSyncRequest && value instanceof CloudUpdateSyncRequest) {
-            // TODO: merge bi-directional updates like this without full sync - this is almost
-            // the same as a full sync but with partial updates
+            logger.atDebug(LogEvents.SYNC.code())
+                    .addKeyValue(Constants.LOG_THING_NAME_KEY, oldValue.getThingName())
+                    .addKeyValue(Constants.LOG_SHADOW_NAME_KEY, oldValue.getShadowName())
+                    .log("Received bi-directional updates. Converting to a full shadow sync request");
         }
 
         logEvent.log("Creating full shadow sync request");
