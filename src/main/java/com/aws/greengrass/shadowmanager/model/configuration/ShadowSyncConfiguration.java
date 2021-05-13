@@ -11,7 +11,6 @@ import com.aws.greengrass.shadowmanager.util.Validator;
 import com.aws.greengrass.util.Coerce;
 import com.aws.greengrass.util.Pair;
 import com.aws.greengrass.util.Utils;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -20,7 +19,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -29,10 +27,8 @@ import static com.aws.greengrass.shadowmanager.model.Constants.CLASSIC_SHADOW_ID
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_CLASSIC_SHADOW_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_NAMED_SHADOWS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_NUCLEUS_THING_TOPIC;
-import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_PROVIDE_SYNC_STATUS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SHADOW_DOCUMENTS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_THING_NAME_TOPIC;
-import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_PROVIDE_SYNC_STATUS;
 import static com.aws.greengrass.shadowmanager.model.Constants.UNEXPECTED_TYPE_FORMAT;
 import static com.aws.greengrass.shadowmanager.model.Constants.UNEXPECTED_VALUE_FORMAT;
 
@@ -40,8 +36,6 @@ import static com.aws.greengrass.shadowmanager.model.Constants.UNEXPECTED_VALUE_
 @Getter
 public class ShadowSyncConfiguration {
     private final Set<ThingShadowSyncConfiguration> syncConfigurations;
-    @JsonProperty(CONFIGURATION_PROVIDE_SYNC_STATUS_TOPIC)
-    private final boolean provideSyncStatus;
 
     @Override
     public boolean equals(Object o) {
@@ -58,8 +52,7 @@ public class ShadowSyncConfiguration {
         ShadowSyncConfiguration newConfiguration = (ShadowSyncConfiguration) o;
 
         // Compare the data members and return accordingly
-        return Objects.equals(this.provideSyncStatus, newConfiguration.provideSyncStatus)
-                && Objects.equals(this.syncConfigurations, newConfiguration.syncConfigurations);
+        return Objects.equals(this.syncConfigurations, newConfiguration.syncConfigurations);
     }
 
     @SuppressWarnings("PMD.UselessOverridingMethod")
@@ -85,14 +78,8 @@ public class ShadowSyncConfiguration {
             throw new InvalidConfigurationException(e);
         }
 
-        final boolean provideSyncStatus = Optional.ofNullable(
-                configTopicsPojo.get(CONFIGURATION_PROVIDE_SYNC_STATUS_TOPIC))
-                .map(Coerce::toBoolean)
-                .orElse(DEFAULT_PROVIDE_SYNC_STATUS);
-
         return ShadowSyncConfiguration.builder()
                 .syncConfigurations(syncConfigurationSet)
-                .provideSyncStatus(provideSyncStatus)
                 .build();
     }
 
