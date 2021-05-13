@@ -37,7 +37,6 @@ public final class Constants {
     // https://docs.aws.amazon.com/general/latest/gr/iot-core.html#device-shadow-limits
     // 400 is max TPS for some regions (account level), others are 4000
     public static final int DEFAULT_MAX_OUTBOUND_SYNC_UPDATES_PS = 100;
-    public static final boolean DEFAULT_PROVIDE_SYNC_STATUS = false;
     public static final int DEFAULT_DISK_UTILIZATION_SIZE_B = 16 * 1024 * 1024;
     public static final int DEFAULT_LOCAL_REQUESTS_RATE = 20;
     public static final int DEFAULT_TOTAL_LOCAL_REQUESTS_RATE = 200;
@@ -64,7 +63,6 @@ public final class Constants {
     public static final String CONFIGURATION_NAMED_SHADOWS_TOPIC = "namedShadows";
     public static final String CONFIGURATION_SHADOW_DOCUMENTS_TOPIC = "shadowDocuments";
     public static final String CONFIGURATION_THING_NAME_TOPIC = "thingName";
-    public static final String CONFIGURATION_PROVIDE_SYNC_STATUS_TOPIC = "provideSyncStatus";
     public static final String CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC = "shadowDocumentSizeLimitBytes";
     public static final String CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC = "maxDiskUtilizationMegaBytes";
     public static final String CONFIGURATION_RATE_LIMITS_TOPIC = "rateLimits";

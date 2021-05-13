@@ -29,8 +29,6 @@ Manifests:
             - "bar"
           - thingName: "OtherThing"
           - thingName: "YetAnotherThing"
-          # include sync status in response messages
-          provideSyncStatus: true
 
         rateLimits:
           # number of outgoing sync updates per second (useful to constrain bandwidth)
@@ -74,7 +72,6 @@ Manifests:
         ]
       }
     ],
-    "provideSyncStatus":true,
     "maxOutboundSyncUpdatesPerSecond":50
   },
   "rateLimits": {

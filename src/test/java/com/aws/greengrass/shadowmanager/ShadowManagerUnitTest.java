@@ -64,7 +64,6 @@ import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_NAMED_SHADOWS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_NUCLEUS_THING_TOPIC;
-import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_PROVIDE_SYNC_STATUS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_RATE_LIMITS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SHADOW_DOCUMENTS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SYNCHRONIZATION_TOPIC;
@@ -323,7 +322,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         shadowDocumentsList.add(thingAMap);
         shadowDocumentsList.add(thingBMap);
         configTopics.createLeafChild(CONFIGURATION_SHADOW_DOCUMENTS_TOPIC).withValueChecked(shadowDocumentsList);
-        configTopics.createLeafChild(CONFIGURATION_PROVIDE_SYNC_STATUS_TOPIC).withValueChecked(true);
         Topics systemConfigTopics = configTopics.createInteriorChild(CONFIGURATION_NUCLEUS_THING_TOPIC);
         systemConfigTopics.createLeafChild(CONFIGURATION_CLASSIC_SHADOW_TOPIC).withValue("true");
         systemConfigTopics.createLeafChild(CONFIGURATION_NAMED_SHADOWS_TOPIC).withValue(Collections.singletonList("boo2"));
@@ -346,7 +344,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
                         ThingShadowSyncConfiguration.builder().thingName(THING_NAME_A).shadowName("bar").build(),
                         ThingShadowSyncConfiguration.builder().thingName(THING_NAME_B).shadowName("").build(),
                         ThingShadowSyncConfiguration.builder().thingName(THING_NAME_B).shadowName("foo2").build()));
-        assertThat(shadowManager.getSyncConfiguration().isProvideSyncStatus(), is(true));
         verify(mockDao, times(6)).insertSyncInfoIfNotExists(any(SyncInformation.class));
     }
 
@@ -365,7 +362,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         shadowDocumentsList.add(thingAMap);
         shadowDocumentsList.add(thingBMap);
         configTopics.createLeafChild(CONFIGURATION_SHADOW_DOCUMENTS_TOPIC).withValueChecked(shadowDocumentsList);
-        configTopics.createLeafChild(CONFIGURATION_PROVIDE_SYNC_STATUS_TOPIC).withValueChecked(true);
 
         when(thingNameTopic.getOnce()).thenReturn(KERNEL_THING);
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
@@ -382,7 +378,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
                         ThingShadowSyncConfiguration.builder().thingName(THING_NAME_A).shadowName("bar").build(),
                         ThingShadowSyncConfiguration.builder().thingName(THING_NAME_B).shadowName("").build(),
                         ThingShadowSyncConfiguration.builder().thingName(THING_NAME_B).shadowName("foo2").build()));
-        assertThat(shadowManager.getSyncConfiguration().isProvideSyncStatus(), is(true));
         verify(mockDao, times(4)).insertSyncInfoIfNotExists(any(SyncInformation.class));
     }
 
@@ -390,7 +385,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
     void GIVEN_good_sync_configuration_with_only_nucleus_thing_config_WHEN_thing_name_changes_THEN_updates_nucleus_configuration_correctly() throws UnsupportedInputTypeException {
         Topic thingNameTopic = Topic.of(context, DEVICE_PARAM_THING_NAME, KERNEL_THING);
         Topics configTopics = Topics.of(context, CONFIGURATION_SYNCHRONIZATION_TOPIC, null);
-        configTopics.createLeafChild(CONFIGURATION_PROVIDE_SYNC_STATUS_TOPIC).withValueChecked(true);
         Topics systemConfigTopics = configTopics.createInteriorChild(CONFIGURATION_NUCLEUS_THING_TOPIC);
         systemConfigTopics.createLeafChild(CONFIGURATION_CLASSIC_SHADOW_TOPIC).withValue("true");
         systemConfigTopics.createLeafChild(CONFIGURATION_NAMED_SHADOWS_TOPIC).withValue(Collections.singletonList("boo2"));
@@ -501,7 +495,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         shadowDocumentsList.add(thingAMap);
         shadowDocumentsList.add(thingBMap);
         configTopics.createLeafChild(CONFIGURATION_SHADOW_DOCUMENTS_TOPIC).withValueChecked(shadowDocumentsList);
-        configTopics.createLeafChild(CONFIGURATION_PROVIDE_SYNC_STATUS_TOPIC).withValueChecked(true);
 
         when(thingNameTopic.getOnce()).thenReturn(KERNEL_THING);
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
@@ -531,7 +524,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         shadowDocumentsList.add(thingAMap);
         shadowDocumentsList.add(thingBMap);
         configTopics.createLeafChild(CONFIGURATION_SHADOW_DOCUMENTS_TOPIC).withValueChecked(shadowDocumentsList);
-        configTopics.createLeafChild(CONFIGURATION_PROVIDE_SYNC_STATUS_TOPIC).withValueChecked(true);
 
         when(thingNameTopic.getOnce()).thenReturn(KERNEL_THING);
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
