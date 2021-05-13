@@ -7,20 +7,12 @@ services:
   aws.greengrass.ShadowManager:
     configuration:
       rateLimits:
-        maxOutboundSyncUpdatesPerSecond: 2
-        maxLocalRequestsPerSecondPerThing: 10
+        maxLocalRequestsPerSecondPerThing: 100
+        maxTotalLocalRequestsRate: 5
       synchronize:
         shadowDocuments:
-          - thingName: "0"
-          - thingName: "1"
-          - thingName: "2"
-          - thingName: "3"
-          - thingName: "4"
-          - thingName: "5"
-          - thingName: "6"
-          - thingName: "7"
-          - thingName: "8"
-          - thingName: "9"
+          - thingName: Thing1
+            classic: true
 
   main:
     dependencies:

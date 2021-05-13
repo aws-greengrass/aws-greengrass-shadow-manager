@@ -62,10 +62,12 @@ import static com.aws.greengrass.componentmanager.KernelConfigResolver.CONFIGURA
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC;
+import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC;
+import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE;
+import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_RATE_LIMITS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SYNCHRONIZATION_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_DISK_UTILIZATION_SIZE_B;
 import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_DOCUMENT_SIZE;
-import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_LOCAL_REQUESTS_RATE;
 import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.DELETE_THING_SHADOW;
 import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.GET_THING_SHADOW;
 import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.LIST_NAMED_SHADOWS_FOR_THING;
@@ -235,8 +237,6 @@ public class ShadowManager extends PluginService {
                     thingNameTopic.remove(this.deviceThingNameWatcher);
                 }
 
-                iotDataPlaneClientWrapper.setRate(syncConfiguration.getMaxOutboundSyncUpdatesPerSecond());
-
                 cloudDataClient.stopSubscribing();
                 syncHandler.stop();
                 // Remove sync information of shadows that are no longer being synced.
@@ -245,6 +245,35 @@ public class ShadowManager extends PluginService {
                 // Initialize the sync information if the sync information does not exist.
                 initializeSyncInfo();
                 startSyncingShadows();
+            } catch (InvalidConfigurationException e) {
+                serviceErrored(e);
+            }
+        });
+
+        Topics rateLimitTopics = config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_RATE_LIMITS_TOPIC);
+        rateLimitTopics.subscribe((what, newv) -> {
+            Map<String, Object> rateLimitsPojo = rateLimitTopics.toPOJO();
+            try {
+                if (rateLimitsPojo.containsKey(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC)) {
+                    int maxOutboundSyncUpdatesPerSecond = Coerce.toInt(rateLimitsPojo
+                            .get(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC));
+                    Validator.validateOutboundSyncUpdatesPerSecond(maxOutboundSyncUpdatesPerSecond);
+                    iotDataPlaneClientWrapper.setRate(maxOutboundSyncUpdatesPerSecond);
+                }
+
+                if (rateLimitsPojo.containsKey(CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE)) {
+                    int maxTotalLocalRequestRate = Coerce.toInt(rateLimitsPojo
+                            .get(CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE));
+                    Validator.validateTotalLocalRequestRate(maxTotalLocalRequestRate);
+                    inboundRateLimiter.setTotalRate(maxTotalLocalRequestRate);
+                }
+
+                if (rateLimitsPojo.containsKey(CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC)) {
+                    int maxLocalShadowUpdatesPerThingPerSecond = Coerce.toInt(rateLimitsPojo
+                            .get(CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC));
+                    Validator.validateLocalShadowRequestsPerThingPerSecond(maxLocalShadowUpdatesPerThingPerSecond);
+                    inboundRateLimiter.setRate(maxLocalShadowUpdatesPerThingPerSecond);
+                }
             } catch (InvalidConfigurationException e) {
                 serviceErrored(e);
             }
@@ -275,18 +304,6 @@ public class ShadowManager extends PluginService {
                         int newMaxDiskUtilization = Coerce.toInt(newv);
                         Validator.validateMaxDiskUtilization(newMaxDiskUtilization);
                         this.database.setMaxDiskUtilization(Coerce.toInt(newv));
-                    } catch (InvalidConfigurationException e) {
-                        serviceErrored(e);
-                    }
-                });
-
-        config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC)
-                .dflt(DEFAULT_LOCAL_REQUESTS_RATE)
-                .subscribe((why, newv) -> {
-                    try {
-                        int maxLocalShadowUpdatesPerThingPerSecond = Coerce.toInt(newv);
-                        Validator.validateLocalShadowRequestsPerThingPerSecond(maxLocalShadowUpdatesPerThingPerSecond);
-                        inboundRateLimiter.setRate(maxLocalShadowUpdatesPerThingPerSecond);
                     } catch (InvalidConfigurationException e) {
                         serviceErrored(e);
                     }

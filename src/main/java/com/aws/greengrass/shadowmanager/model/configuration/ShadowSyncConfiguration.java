@@ -27,13 +27,11 @@ import java.util.stream.Collectors;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.CLASSIC_SHADOW_IDENTIFIER;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_CLASSIC_SHADOW_TOPIC;
-import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_NAMED_SHADOWS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_NUCLEUS_THING_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_PROVIDE_SYNC_STATUS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SHADOW_DOCUMENTS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_THING_NAME_TOPIC;
-import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_MAX_OUTBOUND_SYNC_UPDATES_PS;
 import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_PROVIDE_SYNC_STATUS;
 import static com.aws.greengrass.shadowmanager.model.Constants.UNEXPECTED_TYPE_FORMAT;
 import static com.aws.greengrass.shadowmanager.model.Constants.UNEXPECTED_VALUE_FORMAT;
@@ -44,8 +42,6 @@ public class ShadowSyncConfiguration {
     private final Set<ThingShadowSyncConfiguration> syncConfigurations;
     @JsonProperty(CONFIGURATION_PROVIDE_SYNC_STATUS_TOPIC)
     private final boolean provideSyncStatus;
-    @JsonProperty(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC)
-    private final int maxOutboundSyncUpdatesPerSecond;
 
     @Override
     public boolean equals(Object o) {
@@ -62,8 +58,7 @@ public class ShadowSyncConfiguration {
         ShadowSyncConfiguration newConfiguration = (ShadowSyncConfiguration) o;
 
         // Compare the data members and return accordingly
-        return Objects.equals(this.maxOutboundSyncUpdatesPerSecond, newConfiguration.maxOutboundSyncUpdatesPerSecond)
-                && Objects.equals(this.provideSyncStatus, newConfiguration.provideSyncStatus)
+        return Objects.equals(this.provideSyncStatus, newConfiguration.provideSyncStatus)
                 && Objects.equals(this.syncConfigurations, newConfiguration.syncConfigurations);
     }
 
@@ -90,14 +85,6 @@ public class ShadowSyncConfiguration {
             throw new InvalidConfigurationException(e);
         }
 
-        int maxOutboundSyncUpdatesPerSecond = DEFAULT_MAX_OUTBOUND_SYNC_UPDATES_PS;
-        if (configTopicsPojo.containsKey(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC)) {
-            int newMaxOutboundSyncUpdatesPerSecond = Coerce.toInt(configTopicsPojo
-                    .get(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC));
-            Validator.validateOutboundSyncUpdatesPerSecond(newMaxOutboundSyncUpdatesPerSecond);
-            maxOutboundSyncUpdatesPerSecond = newMaxOutboundSyncUpdatesPerSecond;
-        }
-
         final boolean provideSyncStatus = Optional.ofNullable(
                 configTopicsPojo.get(CONFIGURATION_PROVIDE_SYNC_STATUS_TOPIC))
                 .map(Coerce::toBoolean)
@@ -105,7 +92,6 @@ public class ShadowSyncConfiguration {
 
         return ShadowSyncConfiguration.builder()
                 .syncConfigurations(syncConfigurationSet)
-                .maxOutboundSyncUpdatesPerSecond(maxOutboundSyncUpdatesPerSecond)
                 .provideSyncStatus(provideSyncStatus)
                 .build();
     }

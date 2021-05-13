@@ -8,21 +8,36 @@ package com.aws.greengrass.shadowmanager.ipc;
 
 import com.aws.greengrass.shadowmanager.exception.ThrottledRequestException;
 import lombok.AccessLevel;
+import lombok.Getter;
 import lombok.Setter;
 import vendored.com.google.common.util.concurrent.RateLimiter;
 
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_LOCAL_REQUESTS_RATE;
+import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_TOTAL_LOCAL_REQUESTS_RATE;
 
 /**
  * Class which handles request throttling for all inbound local shadow requests.
  */
 public class InboundRateLimiter {
+    private final AtomicInteger ratePerThing = new AtomicInteger(DEFAULT_LOCAL_REQUESTS_RATE);
+    private final AtomicInteger totalRate = new AtomicInteger(DEFAULT_TOTAL_LOCAL_REQUESTS_RATE);
+
     @Setter(AccessLevel.PACKAGE)
-    private ConcurrentHashMap<String, RateLimiter> rateLimiterMap = new ConcurrentHashMap<>();
-    private final AtomicInteger rate = new AtomicInteger(DEFAULT_LOCAL_REQUESTS_RATE);
+    private RateLimiter totalInboundRateLimiter = RateLimiter.create(DEFAULT_TOTAL_LOCAL_REQUESTS_RATE);
+
+    @Setter(AccessLevel.PACKAGE) @Getter(AccessLevel.PACKAGE)
+    private Map<String, RateLimiter> rateLimitersPerThing = Collections.synchronizedMap(
+            new LinkedHashMap<String, RateLimiter>(totalRate.get(), 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry eldest) {
+            return size() > totalRate.get();
+        }
+    });
 
     /**
      * Attempts to acquire lock for the specified thing.
@@ -37,7 +52,12 @@ public class InboundRateLimiter {
             return;
         }
 
-        RateLimiter rateLimiter = rateLimiterMap.computeIfAbsent(thingName, k -> RateLimiter.create(rate.get()));
+        if (!totalInboundRateLimiter.tryAcquire()) {
+            throw new ThrottledRequestException("Max total local shadow request rate exceeded");
+        }
+
+        RateLimiter rateLimiter = rateLimitersPerThing.computeIfAbsent(thingName, k ->
+                RateLimiter.create(ratePerThing.get()));
 
         if (!rateLimiter.tryAcquire()) {
             throw new ThrottledRequestException("Local shadow request throttled for thing");
@@ -48,7 +68,17 @@ public class InboundRateLimiter {
      * Clears all inbound rate limiters.
      */
     public void clear() {
-        rateLimiterMap.clear();
+        rateLimitersPerThing.clear();
+    }
+
+    /**
+     * Sets the overall inbound rate limiter rate.
+     *
+     * @param rate Max inbound requests per second for all things
+     */
+    public void setTotalRate(int rate) {
+        totalRate.set(rate);
+        totalInboundRateLimiter.setRate(totalRate.get());
     }
 
     /**
@@ -57,7 +87,7 @@ public class InboundRateLimiter {
      * @param rate Max inbound requests per second per thing
      */
     public void setRate(int rate) {
-        this.rate.set(rate);
-        rateLimiterMap.forEach((k, v) -> v.setRate(rate));
+        ratePerThing.set(rate);
+        rateLimitersPerThing.forEach((k, v) -> v.setRate(ratePerThing.get()));
     }
 }

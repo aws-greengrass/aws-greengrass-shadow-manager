@@ -6,7 +6,8 @@ services:
         posixUser: nobody
   aws.greengrass.ShadowManager:
     configuration:
-      maxLocalRequestsPerSecondPerThing: 100
+      rateLimits:
+        maxLocalRequestsPerSecondPerThing: 100
   main:
     dependencies:
       - DoAll

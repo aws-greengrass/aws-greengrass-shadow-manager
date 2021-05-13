@@ -139,10 +139,24 @@ public final class Validator {
     }
 
     /**
-     * Validates the maximum outbound sync updates per second is within the appropriate limits.
+     * Validates the total maximum inbound shadow requests rate is within the appropriate limits.
      *
-     * @param maxLocalShadowRequestsPerThingPerSecond The new max local shadow requests limit per thing per second
-     * @throws InvalidConfigurationException if the new local shadow requests limit per thing per second is less than 0.
+     * @param maxTotalLocalRequestRate The combined total local shadow request rate
+     * @throws InvalidConfigurationException if the new total local shadow requests rate is less than 0.
+     */
+    public static void validateTotalLocalRequestRate(int maxTotalLocalRequestRate) {
+        if (maxTotalLocalRequestRate <= 0) {
+            throw new InvalidConfigurationException(String.format(
+                    "Maximum total local shadow request rate per second provided %d is invalid. It should be "
+                            + "greater than 0.", maxTotalLocalRequestRate));
+        }
+    }
+
+    /**
+     * Validates the maximum inbound shadow requests rate per thing is within the appropriate limits.
+     *
+     * @param maxLocalShadowRequestsPerThingPerSecond The new max local shadow requests rate per thing
+     * @throws InvalidConfigurationException if the new local shadow requests rate per thing is less than 0.
      */
     public static void validateLocalShadowRequestsPerThingPerSecond(int maxLocalShadowRequestsPerThingPerSecond) {
         if (maxLocalShadowRequestsPerThingPerSecond <= 0) {

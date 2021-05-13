@@ -45,7 +45,7 @@ public class IotDataPlaneClientWrapper {
      *
      * @param rate Max outbound requests per second
      */
-    public void setRate(double rate) {
+    public void setRate(int rate) {
         rateLimiter.setRate(rate);
     }
 
