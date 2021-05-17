@@ -186,7 +186,7 @@ public class ShadowManager extends PluginService {
         greengrassCoreIPCService.setOperationHandler(UPDATE_THING_SHADOW, context ->
                 new UpdateThingShadowIPCHandler(context, inboundRateLimiter, updateThingShadowRequestHandler));
         greengrassCoreIPCService.setOperationHandler(LIST_NAMED_SHADOWS_FOR_THING, context ->
-                new ListNamedShadowsForThingIPCHandler(context, dao, authorizationHandlerWrapper));
+                new ListNamedShadowsForThingIPCHandler(context, dao, authorizationHandlerWrapper, inboundRateLimiter));
     }
 
     void handleDeviceThingNameChange(Object whatHappened, Node changedNode) {
