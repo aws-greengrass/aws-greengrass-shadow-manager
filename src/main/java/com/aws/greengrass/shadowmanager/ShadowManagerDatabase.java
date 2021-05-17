@@ -29,10 +29,6 @@ public class ShadowManagerDatabase implements Closeable {
     private static final String DATABASE_FORMAT = "jdbc:h2:%s/shadow";
     private final JdbcDataSource dataSource;
     private Connection connection;
-    //TODO: Use this when we implement [GG-35347]
-    @SuppressWarnings("PMD.UnusedPrivateField")
-    @SuppressFBWarnings(value = "URF_UNREAD_FIELD", justification = "Will be used when we implement [GG-35347]")
-    private long maxDiskUtilization;
 
     /**
      * Creates a database with a {@link javax.sql.DataSource} using the kernel config.
@@ -76,14 +72,5 @@ public class ShadowManagerDatabase implements Closeable {
                 throw new IOException(e);
             }
         }
-    }
-
-    /**
-     * Sets the max disk utilization.
-     *
-     * @param newMaxDiskUtilization the new max disk utilization.
-     */
-    public void setMaxDiskUtilization(int newMaxDiskUtilization) {
-        maxDiskUtilization = newMaxDiskUtilization;
     }
 }

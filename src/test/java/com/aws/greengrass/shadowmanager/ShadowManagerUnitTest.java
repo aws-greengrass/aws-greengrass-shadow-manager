@@ -57,7 +57,6 @@ import static com.aws.greengrass.componentmanager.KernelConfigResolver.CONFIGURA
 import static com.aws.greengrass.deployment.DeviceConfiguration.DEVICE_PARAM_THING_NAME;
 import static com.aws.greengrass.shadowmanager.ShadowManager.SERVICE_NAME;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_CLASSIC_SHADOW_TOPIC;
-import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE;
@@ -68,7 +67,6 @@ import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_RAT
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SHADOW_DOCUMENTS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SYNCHRONIZATION_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_THING_NAME_TOPIC;
-import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_DISK_UTILIZATION_SIZE_B;
 import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_DOCUMENT_SIZE;
 import static com.aws.greengrass.shadowmanager.model.Constants.MAX_SHADOW_DOCUMENT_SIZE;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
@@ -143,44 +141,14 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
                 mockPubSubClientWrapper, mockInboundRateLimiter, mockDeviceConfiguration, mockSynchronizeHelper,
                 mockIotDataPlaneClientWrapper, mockSyncHandler, mockCloudDataClient, mockMqttClient);
 
-        Topic maxDiskUtilizationMBTopic = Topic.of(context, CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC, DEFAULT_DISK_UTILIZATION_SIZE_B);
         Topic maxDocSizeTopic = Topic.of(context, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC, DEFAULT_DOCUMENT_SIZE);
 
-        lenient().when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC))
-                .thenReturn(maxDiskUtilizationMBTopic);
         lenient().when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC))
                 .thenReturn(maxDocSizeTopic);
         lenient().when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
                 .thenReturn(mock(Topics.class));
         lenient().when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_RATE_LIMITS_TOPIC))
                 .thenReturn(mock(Topics.class));
-    }
-
-    @ParameterizedTest
-    @ValueSource(ints = {DEFAULT_DISK_UTILIZATION_SIZE_B, DEFAULT_DISK_UTILIZATION_SIZE_B + 1})
-    void GIVEN_good_max_disk_utilization_WHEN_initialize_THEN_updates_max_disk_utilization_correctly(int maxDiskUtilizationMB) {
-        Topic maxDiskUtilizationMBTopic = Topic.of(context, CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC, maxDiskUtilizationMB);
-        when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC))
-                .thenReturn(maxDiskUtilizationMBTopic);
-
-        shadowManager.install();
-        assertFalse(shadowManager.isErrored());
-        verify(mockDatabase, times(1)).setMaxDiskUtilization(intObjectCaptor.capture());
-        verify(mockDao, times(0)).insertSyncInfoIfNotExists(any(SyncInformation.class));
-        assertThat(intObjectCaptor.getValue(), is(notNullValue()));
-        assertThat(intObjectCaptor.getValue(), is(maxDiskUtilizationMB));
-    }
-
-    @ParameterizedTest
-    @ValueSource(ints = {-1})
-    void GIVEN_bad_max_disk_utilization_WHEN_initialize_THEN_updates_max_disk_utilization_correctly(int maxDiskUtilizationMB, ExtensionContext extensionContext) {
-        ignoreExceptionOfType(extensionContext, InvalidConfigurationException.class);
-        Topic maxDiskUtilizationMBTopic = Topic.of(context, CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC, maxDiskUtilizationMB);
-        when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC))
-                .thenReturn(maxDiskUtilizationMBTopic);
-        shadowManager.install();
-        assertTrue(shadowManager.isErrored());
-        verify(mockDao, times(0)).insertSyncInfoIfNotExists(any(SyncInformation.class));
     }
 
     @ParameterizedTest
@@ -429,7 +397,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
     void GIVEN_bad_field_in_thing_sync_configuration_WHEN_initialize_THEN_service_errors(ExtensionContext extensionContext) throws UnsupportedInputTypeException {
         ignoreExceptionOfType(extensionContext, MismatchedInputException.class);
         ignoreExceptionOfType(extensionContext, InvalidConfigurationException.class);
-        Topic maxDiskUtilizationMBTopic = Topic.of(context, CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC, DEFAULT_DISK_UTILIZATION_SIZE_B);
         Topic maxDocSizeTopic = Topic.of(context, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC, DEFAULT_DOCUMENT_SIZE);
         Topics configTopics = Topics.of(context, CONFIGURATION_SYNCHRONIZATION_TOPIC, null);
         configTopics.createLeafChild(CONFIGURATION_NUCLEUS_THING_TOPIC).withValueChecked(null);
@@ -443,8 +410,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
 
         Topic thingNameTopic = Topic.of(context, DEVICE_PARAM_THING_NAME, KERNEL_THING);
         when(mockDeviceConfiguration.getThingName()).thenReturn(thingNameTopic);
-        when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC))
-                .thenReturn(maxDiskUtilizationMBTopic);
         when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC))
                 .thenReturn(maxDocSizeTopic);
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
@@ -457,7 +422,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
     @Test
     void GIVEN_bad_type_of_thing_sync_configuration_WHEN_initialize_THEN_service_errors(ExtensionContext extensionContext) throws UnsupportedInputTypeException {
         ignoreExceptionOfType(extensionContext, InvalidConfigurationException.class);
-        Topic maxDiskUtilizationMBTopic = Topic.of(context, CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC, DEFAULT_DISK_UTILIZATION_SIZE_B);
         Topic maxDocSizeTopic = Topic.of(context, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC, DEFAULT_DOCUMENT_SIZE);
         Topics configTopics = Topics.of(context, CONFIGURATION_SYNCHRONIZATION_TOPIC, null);
         configTopics.createLeafChild(CONFIGURATION_NUCLEUS_THING_TOPIC).withValueChecked(null);
@@ -466,8 +430,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         shadowDocumentsTopics.createLeafChild(CONFIGURATION_NAMED_SHADOWS_TOPIC).withValue(Collections.singletonList("boo2"));
         shadowDocumentsTopics.createLeafChild(CONFIGURATION_THING_NAME_TOPIC).withValue(THING_NAME_A);
 
-        when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC))
-                .thenReturn(maxDiskUtilizationMBTopic);
         when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC))
                 .thenReturn(maxDocSizeTopic);
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
