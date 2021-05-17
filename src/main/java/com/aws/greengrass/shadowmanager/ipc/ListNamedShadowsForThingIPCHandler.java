@@ -12,6 +12,7 @@ import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
+import com.aws.greengrass.shadowmanager.exception.ThrottledRequestException;
 import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.util.Validator;
 import software.amazon.awssdk.aws.greengrass.GeneratedAbstractListNamedShadowsForThingOperationHandler;
@@ -64,6 +65,7 @@ public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNam
     private final String serviceName;
     private final ShadowManagerDAO dao;
     private final AuthorizationHandlerWrapper authorizationHandlerWrapper;
+    private final InboundRateLimiter inboundRateLimiter;
 
     /**
      * IPC Handler class for responding to ListNamedShadowsForThing requests.
@@ -71,14 +73,17 @@ public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNam
      * @param context                     topics passed by the Nucleus
      * @param dao                         Local shadow database management
      * @param authorizationHandlerWrapper The authorization handler wrapper
+     * @param inboundRateLimiter          the rate limiter for local shadow requests
      */
     public ListNamedShadowsForThingIPCHandler(
             OperationContinuationHandlerContext context,
             ShadowManagerDAO dao,
-            AuthorizationHandlerWrapper authorizationHandlerWrapper) {
+            AuthorizationHandlerWrapper authorizationHandlerWrapper,
+            InboundRateLimiter inboundRateLimiter) {
         super(context);
         this.authorizationHandlerWrapper = authorizationHandlerWrapper;
         this.dao = dao;
+        this.inboundRateLimiter = inboundRateLimiter;
         this.serviceName = context.getAuthenticationData().getIdentityLabel();
     }
 
@@ -104,9 +109,14 @@ public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNam
             String thingName = request.getThingName();
 
             try {
-                logger.atTrace("ipc-list-named-shadow-for-thing-request").log();
+                logger.atTrace()
+                        .setEventType(LogEvents.LIST_NAMED_SHADOWS.code())
+                        .kv(LOG_THING_NAME_KEY, thingName)
+                        .log("ipc-list-named-shadow-for-thing-request");
 
                 Validator.validateThingName(thingName);
+                inboundRateLimiter.acquireLockForThing(request.getThingName());
+
                 authorizationHandlerWrapper.doAuthorization(LIST_NAMED_SHADOWS_FOR_THING, serviceName, thingName);
 
                 int pageSize = Optional.ofNullable(request.getPageSize())
@@ -152,6 +162,13 @@ public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNam
                         .kv(LOG_THING_NAME_KEY, thingName)
                         .log("Not authorized to list named shadows for thing");
                 throw new UnauthorizedError(e.getMessage());
+            } catch (ThrottledRequestException e) {
+                logger.atWarn()
+                        .setEventType(LogEvents.LIST_NAMED_SHADOWS.code())
+                        .setCause(e)
+                        .kv(LOG_THING_NAME_KEY, request.getThingName())
+                        .log();
+                throw new ServiceError("Too Many Requests");
             } catch (InvalidRequestParametersException | IllegalArgumentException e) {
                 logger.atWarn()
                         .setEventType(LogEvents.LIST_NAMED_SHADOWS.code())
@@ -163,10 +180,10 @@ public class ListNamedShadowsForThingIPCHandler extends GeneratedAbstractListNam
                 throw new InvalidArgumentsError(e.getMessage());
             } catch (ShadowManagerDataException | GeneralSecurityException e) {
                 logger.atError()
-                    .setEventType(LogEvents.LIST_NAMED_SHADOWS.code())
-                    .setCause(e)
-                    .kv(LOG_THING_NAME_KEY, thingName)
-                    .log("Could not process ListNamedShadowsForThing Request due to internal service error");
+                        .setEventType(LogEvents.LIST_NAMED_SHADOWS.code())
+                        .setCause(e)
+                        .kv(LOG_THING_NAME_KEY, thingName)
+                        .log("Could not process ListNamedShadowsForThing Request due to internal service error");
                 throw new ServiceError(e.getMessage());
             }
         });
