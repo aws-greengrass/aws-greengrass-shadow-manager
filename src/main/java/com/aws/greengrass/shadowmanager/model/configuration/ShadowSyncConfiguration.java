@@ -14,7 +14,6 @@ import com.aws.greengrass.util.Utils;
 import lombok.Builder;
 import lombok.Getter;
 
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -93,7 +92,7 @@ public class ShadowSyncConfiguration {
     private static void processOtherThingConfigurations(Map<String, Object> configTopicsPojo, String thingName,
                                                         Set<ThingShadowSyncConfiguration> syncConfigurationSet) {
         configTopicsPojo.computeIfPresent(CONFIGURATION_SHADOW_DOCUMENTS_TOPIC, (ignored, shadowDocumentsObject) -> {
-            if (shadowDocumentsObject instanceof ArrayList) {
+            if (shadowDocumentsObject instanceof List) {
                 List<Object> shadowDocumentsToSyncList = (List) shadowDocumentsObject;
                 shadowDocumentsToSyncList.forEach(shadowDocumentsToSync ->
                         processThingConfiguration(shadowDocumentsToSync, thingName,

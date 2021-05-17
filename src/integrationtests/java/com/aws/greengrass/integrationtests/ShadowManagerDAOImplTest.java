@@ -70,6 +70,7 @@ class ShadowManagerDAOImplTest {
 
         database = new ShadowManagerDatabase(kernel);
         database.install();
+        database.open();
         dao = new ShadowManagerDAOImpl(database);
     }
 

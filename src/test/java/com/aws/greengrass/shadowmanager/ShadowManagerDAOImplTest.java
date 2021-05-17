@@ -10,6 +10,7 @@ import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.util.Pair;
+import org.h2.jdbcx.JdbcConnectionPool;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -53,6 +54,9 @@ class ShadowManagerDAOImplTest {
 
     @Mock
     private ShadowManagerDatabase mockDatabase;
+
+    @Mock
+    private JdbcConnectionPool mockPool;
 
     @Mock
     private Connection mockConnection;
@@ -216,7 +220,8 @@ class ShadowManagerDAOImplTest {
     @BeforeEach
     void setup() throws SQLException {
         when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
-        when(mockDatabase.connection()).thenReturn(mockConnection);
+        when(mockDatabase.getPool()).thenReturn(mockPool);
+        when(mockPool.getConnection()).thenReturn(mockConnection);
     }
 
     @Test

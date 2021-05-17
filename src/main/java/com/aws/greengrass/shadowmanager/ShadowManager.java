@@ -43,12 +43,12 @@ import com.aws.greengrass.util.Pair;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.Synchronized;
 import org.flywaydb.core.api.FlywayException;
 import software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService;
 import software.amazon.awssdk.crt.mqtt.MqttClientConnectionEvents;
 
 import java.io.IOException;
-import java.sql.SQLException;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -94,13 +94,12 @@ public class ShadowManager extends PluginService {
     public final MqttClientConnectionEvents callbacks = new MqttClientConnectionEvents() {
         @Override
         public void onConnectionInterrupted(int errorCode) {
-            cloudDataClient.stopSubscribing();
-            syncHandler.stop();
+            stopSyncingShadows();
         }
 
         @Override
         public void onConnectionResumed(boolean sessionPresent) {
-            if (getState() == State.RUNNING) {
+            if (inState(State.RUNNING)) {
                 startSyncingShadows();
             }
         }
@@ -187,7 +186,7 @@ public class ShadowManager extends PluginService {
                 new ListNamedShadowsForThingIPCHandler(context, dao, authorizationHandlerWrapper, inboundRateLimiter));
     }
 
-    void handleDeviceThingNameChange(Object whatHappened, Node changedNode) {
+    void handleDeviceThingNameChange(WhatHappened whatHappened, Node changedNode) {
         if (!(changedNode instanceof Topic)) {
             return;
         }
@@ -206,8 +205,9 @@ public class ShadowManager extends PluginService {
         try {
             database.install();
             JsonUtil.loadSchema();
-        } catch (SQLException | FlywayException | IOException e) {
+        } catch (FlywayException | IOException e) {
             serviceErrored(e);
+            return;
         }
 
         inboundRateLimiter.clear();
@@ -235,14 +235,11 @@ public class ShadowManager extends PluginService {
                     thingNameTopic.remove(this.deviceThingNameWatcher);
                 }
 
-                cloudDataClient.stopSubscribing();
-                syncHandler.stop();
-                // Remove sync information of shadows that are no longer being synced.
-                deleteRemovedSyncInformation();
-
-                // Initialize the sync information if the sync information does not exist.
-                initializeSyncInfo();
-                startSyncingShadows();
+                // only stop / start syncing if we are not in install - it will otherwise be started by lifecycle
+                if (inState(State.RUNNING)) {
+                    stopSyncingShadows();
+                    startSyncingShadows();
+                }
             } catch (InvalidConfigurationException e) {
                 serviceErrored(e);
             }
@@ -295,6 +292,8 @@ public class ShadowManager extends PluginService {
                     }
                 });
     }
+
+
 
     private void deleteRemovedSyncInformation() {
         Set<Pair<String, String>> removedShadows = new HashSet<>(this.dao.listSyncedShadows());
@@ -350,9 +349,11 @@ public class ShadowManager extends PluginService {
     @SuppressWarnings({"PMD.AvoidCatchingGenericException"})
     public void startup() {
         try {
-            reportState(State.RUNNING);
+            database.open();
 
             startSyncingShadows();
+
+            reportState(State.RUNNING);
         } catch (Exception e) {
             serviceErrored(e);
         }
@@ -360,17 +361,26 @@ public class ShadowManager extends PluginService {
 
     @Override
     protected void shutdown() throws InterruptedException {
-        super.shutdown();
         try {
-            cloudDataClient.stopSubscribing();
-            syncHandler.stop();
+            stopSyncingShadows();
             database.close();
+            inboundRateLimiter.clear();
         } catch (IOException e) {
             logger.atError()
                     .setEventType(LogEvents.DATABASE_CLOSE_ERROR.code())
                     .setCause(e)
                     .log("Failed to close out shadow database");
         }
+        super.shutdown();
+    }
+
+    /**
+     * Stop the sync handler and stop subscription thread on cloud client.
+     */
+    @Synchronized
+    void stopSyncingShadows() {
+        cloudDataClient.stopSubscribing();
+        syncHandler.stop();
     }
 
     /**
@@ -378,7 +388,14 @@ public class ShadowManager extends PluginService {
      *
      * @implNote Making this package-private for unit tests.
      */
-    public void startSyncingShadows() {
+    @Synchronized
+    void startSyncingShadows() {
+        // Remove sync information of shadows that are no longer being synced.
+        deleteRemovedSyncInformation();
+
+        // Initialize the sync information if the sync information does not exist.
+        initializeSyncInfo();
+
         if (mqttClient.connected() && !syncConfiguration.getSyncConfigurations().isEmpty()) {
             final SyncContext syncContext = new SyncContext(dao, getUpdateThingShadowRequestHandler(),
                     getDeleteThingShadowRequestHandler(),

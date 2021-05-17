@@ -7,14 +7,15 @@ package com.aws.greengrass.shadowmanager;
 
 import com.aws.greengrass.lifecyclemanager.Kernel;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import lombok.Getter;
+import lombok.Synchronized;
 import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.FlywayException;
+import org.h2.jdbcx.JdbcConnectionPool;
 import org.h2.jdbcx.JdbcDataSource;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.sql.Connection;
-import java.sql.SQLException;
-import java.util.Objects;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
@@ -28,7 +29,11 @@ public class ShadowManagerDatabase implements Closeable {
     // Configurable?
     private static final String DATABASE_FORMAT = "jdbc:h2:%s/shadow";
     private final JdbcDataSource dataSource;
-    private Connection connection;
+
+    @Getter
+    private JdbcConnectionPool pool;
+
+    private boolean closed = true;
 
     /**
      * Creates a database with a {@link javax.sql.DataSource} using the kernel config.
@@ -42,19 +47,13 @@ public class ShadowManagerDatabase implements Closeable {
                 String.format(DATABASE_FORMAT, kernel.getNucleusPaths().workPath().resolve(SERVICE_NAME)));
     }
 
-    public synchronized Connection connection() {
-        return connection;
-    }
-
     /**
      * Performs the database installation. This includes any migrations that needs to be performed.
      *
-     * @throws SQLException When a connection to the local db fails for any reason.
+     * @throws FlywayException if an error occurs migrating the database.
      */
-    public synchronized void install() throws SQLException {
-        if (Objects.isNull(connection)) {
-            connection = dataSource.getConnection();
-        }
+    @Synchronized
+    public void install() throws FlywayException {
         Flyway flyway = Flyway.configure(getClass().getClassLoader())
                 .locations("db/migration")
                 .dataSource(dataSource)
@@ -62,15 +61,25 @@ public class ShadowManagerDatabase implements Closeable {
         flyway.migrate();
     }
 
+    /**
+     * Open the database to allow connections.
+     */
+    @Synchronized
+    public void open() {
+        if (closed) {
+            // defaults to 10 connections with a 30s timeout waiting for a connection
+            pool = JdbcConnectionPool.create(dataSource);
+            closed = false;
+        }
+    }
+
     @Override
-    @SuppressFBWarnings(value = "UWF_FIELD_NOT_INITIALIZED_IN_CONSTRUCTOR", justification = "We check for null.")
-    public synchronized void close() throws IOException {
-        if (Objects.nonNull(connection)) {
-            try {
-                connection.close();
-            } catch (SQLException e) {
-                throw new IOException(e);
-            }
+    @Synchronized
+    @SuppressFBWarnings(value = "UWF_FIELD_NOT_INITIALIZED_IN_CONSTRUCTOR", justification = "Field gated by flag")
+    public void close() throws IOException {
+        if (!closed) {
+            pool.dispose();
+            closed = true;
         }
     }
 }
