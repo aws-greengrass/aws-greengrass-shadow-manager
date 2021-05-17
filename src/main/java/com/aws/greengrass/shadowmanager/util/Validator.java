@@ -123,22 +123,6 @@ public final class Validator {
     }
 
     /**
-     * Validates the maximum disk utilization is within the appropriate limits.
-     *
-     * @param newMaxDiskUtilization The new max disk utilization
-     * @throws InvalidConfigurationException if the new disk utilization is less than 0.
-     */
-    public static void validateMaxDiskUtilization(int newMaxDiskUtilization) {
-        //TODO; revisit this when we know what a good minimum is.
-        if (newMaxDiskUtilization <= 0) {
-            throw new InvalidConfigurationException(String.format(
-                    "Maximum disk utilization provided %d is invalid. It should be greater than 0.",
-                    newMaxDiskUtilization));
-        }
-
-    }
-
-    /**
      * Validates the total maximum inbound shadow requests rate is within the appropriate limits.
      *
      * @param maxTotalLocalRequestRate The combined total local shadow request rate

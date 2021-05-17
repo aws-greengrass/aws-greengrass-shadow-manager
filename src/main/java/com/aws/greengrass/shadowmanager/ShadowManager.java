@@ -59,14 +59,12 @@ import java.util.Set;
 import javax.inject.Inject;
 
 import static com.aws.greengrass.componentmanager.KernelConfigResolver.CONFIGURATION_CONFIG_KEY;
-import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_RATE_LIMITS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SYNCHRONIZATION_TOPIC;
-import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_DISK_UTILIZATION_SIZE_B;
 import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_DOCUMENT_SIZE;
 import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.DELETE_THING_SHADOW;
 import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.GET_THING_SHADOW;
@@ -292,18 +290,6 @@ public class ShadowManager extends PluginService {
                         Validator.validateMaxShadowSize(newMaxShadowSize);
                         Validator.setMaxShadowDocumentSize(newMaxShadowSize);
                         updateThingShadowRequestHandler.setMaxShadowSize(newMaxShadowSize);
-                    } catch (InvalidConfigurationException e) {
-                        serviceErrored(e);
-                    }
-                });
-
-        config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_DISK_UTILIZATION_MB_TOPIC)
-                .dflt(DEFAULT_DISK_UTILIZATION_SIZE_B)
-                .subscribe((why, newv) -> {
-                    try {
-                        int newMaxDiskUtilization = Coerce.toInt(newv);
-                        Validator.validateMaxDiskUtilization(newMaxDiskUtilization);
-                        this.database.setMaxDiskUtilization(Coerce.toInt(newv));
                     } catch (InvalidConfigurationException e) {
                         serviceErrored(e);
                     }
