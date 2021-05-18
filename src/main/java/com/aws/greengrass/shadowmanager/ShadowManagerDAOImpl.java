@@ -14,6 +14,7 @@ import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.util.Pair;
 
 import java.io.IOException;
+import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -53,7 +54,9 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
     public Optional<ShadowDocument> getShadowThing(String thingName, String shadowName) {
         String sql = "SELECT document, version, updateTime FROM documents  WHERE deleted = 0 AND "
                 + "thingName = ? AND shadowName = ?";
-        try (PreparedStatement preparedStatement = database.connection().prepareStatement(sql)) {
+
+        try (Connection c = database.getPool().getConnection();
+             PreparedStatement preparedStatement = c.prepareStatement(sql)) {
             preparedStatement.setString(1, thingName);
             preparedStatement.setString(2, shadowName);
             try (ResultSet resultSet = preparedStatement.executeQuery()) {
@@ -64,7 +67,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
                 }
                 return Optional.empty();
             }
-        } catch (SQLException | IOException e) {
+        } catch (SQLException | IOException | IllegalStateException e) {
             throw new ShadowManagerDataException(e);
         }
     }
@@ -323,9 +326,10 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
     }
 
     private <T> T execute(String sql, SQLExecution<T> thunk) {
-        try (PreparedStatement statement = database.connection().prepareStatement(sql)) {
+        try (Connection c = database.getPool().getConnection();
+             PreparedStatement statement = c.prepareStatement(sql)) {
             return thunk.apply(statement);
-        } catch (SQLException e) {
+        } catch (SQLException | IllegalStateException e) {
             throw new ShadowManagerDataException(e);
         }
     }

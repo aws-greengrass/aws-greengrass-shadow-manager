@@ -9,6 +9,8 @@ import com.aws.greengrass.authorization.exceptions.AuthorizationException;
 import com.aws.greengrass.config.Topic;
 import com.aws.greengrass.config.Topics;
 import com.aws.greengrass.config.UnsupportedInputTypeException;
+import com.aws.greengrass.dependency.Context;
+import com.aws.greengrass.dependency.State;
 import com.aws.greengrass.deployment.DeviceConfiguration;
 import com.aws.greengrass.mqttclient.CallbackEventManager;
 import com.aws.greengrass.mqttclient.MqttClient;
@@ -27,6 +29,7 @@ import com.aws.greengrass.shadowmanager.util.ShadowWriteSynchronizeHelper;
 import com.aws.greengrass.shadowmanager.util.Validator;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.testcommons.testutilities.GGServiceTestUtil;
+import com.aws.greengrass.util.Pair;
 import com.fasterxml.jackson.databind.exc.MismatchedInputException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -51,6 +54,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 import static com.aws.greengrass.componentmanager.KernelConfigResolver.CONFIGURATION_CONFIG_KEY;
@@ -59,8 +64,8 @@ import static com.aws.greengrass.shadowmanager.ShadowManager.SERVICE_NAME;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_CLASSIC_SHADOW_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC;
-import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC;
+import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_NAMED_SHADOWS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_NUCLEUS_THING_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_RATE_LIMITS_TOPIC;
@@ -71,9 +76,9 @@ import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_DOCUMENT_
 import static com.aws.greengrass.shadowmanager.model.Constants.MAX_SHADOW_DOCUMENT_SIZE;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
-import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -81,10 +86,15 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -161,7 +171,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
 
         assertFalse(shadowManager.isErrored());
         assertThat(Validator.getMaxShadowDocumentSize(), is(maxDocSize));
-        verify(mockDao, times(0)).insertSyncInfoIfNotExists(any(SyncInformation.class));
     }
 
     @ParameterizedTest
@@ -173,7 +182,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
                 .thenReturn(maxDocSizeTopic);
         shadowManager.install();
         assertTrue(shadowManager.isErrored());
-        verify(mockDao, times(0)).insertSyncInfoIfNotExists(any(SyncInformation.class));
     }
 
     @Test
@@ -312,7 +320,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
                         ThingShadowSyncConfiguration.builder().thingName(THING_NAME_A).shadowName("bar").build(),
                         ThingShadowSyncConfiguration.builder().thingName(THING_NAME_B).shadowName("").build(),
                         ThingShadowSyncConfiguration.builder().thingName(THING_NAME_B).shadowName("foo2").build()));
-        verify(mockDao, times(6)).insertSyncInfoIfNotExists(any(SyncInformation.class));
     }
 
     @Test
@@ -346,7 +353,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
                         ThingShadowSyncConfiguration.builder().thingName(THING_NAME_A).shadowName("bar").build(),
                         ThingShadowSyncConfiguration.builder().thingName(THING_NAME_B).shadowName("").build(),
                         ThingShadowSyncConfiguration.builder().thingName(THING_NAME_B).shadowName("foo2").build()));
-        verify(mockDao, times(4)).insertSyncInfoIfNotExists(any(SyncInformation.class));
     }
 
     @Test
@@ -367,9 +373,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
                 containsInAnyOrder(
                         ThingShadowSyncConfiguration.builder().thingName(KERNEL_THING).shadowName("").build(),
                         ThingShadowSyncConfiguration.builder().thingName(KERNEL_THING).shadowName("boo2").build()));
-
-        verify(mockDao, times(2)).insertSyncInfoIfNotExists(any(SyncInformation.class));
-
     }
 
     @Test
@@ -390,7 +393,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         when(mockDeviceConfiguration.getThingName()).thenReturn(thingNameTopic);
         shadowManager.install();
         assertTrue(shadowManager.isErrored());
-        verify(mockDao, times(0)).insertSyncInfoIfNotExists(any(SyncInformation.class));
     }
 
     @Test
@@ -416,7 +418,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
                 .thenReturn(configTopics);
         shadowManager.install();
         assertTrue(shadowManager.isErrored());
-        verify(mockDao, times(0)).insertSyncInfoIfNotExists(any(SyncInformation.class));
     }
 
     @Test
@@ -436,7 +437,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
                 .thenReturn(configTopics);
         shadowManager.install();
         assertTrue(shadowManager.isErrored());
-        verify(mockDao, times(0)).insertSyncInfoIfNotExists(any(SyncInformation.class));
     }
 
     @ParameterizedTest
@@ -464,7 +464,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         when(mockDeviceConfiguration.getThingName()).thenReturn(thingNameTopic);
         shadowManager.install();
         assertTrue(shadowManager.isErrored());
-        verify(mockDao, times(0)).insertSyncInfoIfNotExists(any(SyncInformation.class));
     }
 
     @ParameterizedTest
@@ -494,7 +493,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
 
         shadowManager.install();
         assertTrue(shadowManager.isErrored());
-        verify(mockDao, times(0)).insertSyncInfoIfNotExists(any(SyncInformation.class));
     }
 
     @Test
@@ -520,14 +518,31 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
     }
 
     @Test
-    void GIVEN_shadow_manager_WHEN_startSyncHandler_THEN_starts_sync_handler_and_unsubscribes() {
-        shadowManager.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurations(new HashSet<>()).build());
-        shadowManager.getSyncConfiguration().getSyncConfigurations().add(mock(ThingShadowSyncConfiguration.class));
+    void GIVEN_shadow_manager_WHEN_startup_THEN_updates_stored_config_and_starts_sync_handler_and_unsubscribes() {
+        createSyncConfigForSingleShadow("thing", "shadow");
+        when(mockDao.listSyncedShadows()).thenReturn(Collections.singletonList(new Pair<>("foo", "bar")));
+
         when(mockMqttClient.connected()).thenReturn(true);
-        shadowManager.startSyncingShadows();
+        shadowManager.startup();
 
         verify(mockCloudDataClient, times(1)).updateSubscriptions(anySet());
         verify(mockSyncHandler, times(1)).start(any(SyncContext.class), anyInt());
+
+        verify(mockDatabase, times(1)).open();
+        verify(mockDao, times(1)).deleteSyncInformation("foo", "bar");
+
+        ArgumentCaptor<SyncInformation> captor = ArgumentCaptor.forClass(SyncInformation.class);
+        verify(mockDao, times(1)).insertSyncInfoIfNotExists(captor.capture());
+        assertThat(captor.getValue().getThingName(), is("thing"));
+        assertThat(captor.getValue().getShadowName(), is("shadow"));
+    }
+
+    private void createSyncConfigForSingleShadow(String thing, String shadow) {
+        shadowManager.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurations(new HashSet<>()).build());
+        ThingShadowSyncConfiguration config = mock(ThingShadowSyncConfiguration.class);
+        when(config.getThingName()).thenReturn(thing);
+        when(config.getShadowName()).thenReturn(shadow);
+        shadowManager.getSyncConfiguration().getSyncConfigurations().add(config);
     }
 
     @Test
@@ -536,4 +551,65 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         doThrow(IOException.class).when(mockDatabase).close();
         assertDoesNotThrow(() -> shadowManager.shutdown());
     }
+
+    @Test
+    void GIVEN_installed_WHEN_running_and_config_updated_THEN_sync_restarted() throws Exception {
+        when(mockMqttClient.connected()).thenReturn(true);
+
+        ShadowManager s = spy(shadowManager);
+
+        doReturn(false, true).when(s).inState(eq(State.RUNNING));
+
+        try (Context context = new Context()){
+            Topic thingNameTopic = mock(Topic.class);
+            Topics configTopics = Topics.of(context, CONFIGURATION_SYNCHRONIZATION_TOPIC, null);
+            List<Map<String, Object>> shadowDocumentsList = new ArrayList<>();
+            Map<String, Object> thingAMap = new HashMap<>();
+            thingAMap.put(CONFIGURATION_THING_NAME_TOPIC, THING_NAME_A);
+            thingAMap.put(CONFIGURATION_CLASSIC_SHADOW_TOPIC, false);
+            thingAMap.put(CONFIGURATION_NAMED_SHADOWS_TOPIC, Arrays.asList("foo"));
+            Map<String, Object> thingBMap = new HashMap<>();
+            thingBMap.put(CONFIGURATION_THING_NAME_TOPIC, THING_NAME_B);
+            thingBMap.put(CONFIGURATION_NAMED_SHADOWS_TOPIC, Collections.singletonList("foo2"));
+            shadowDocumentsList.add(thingAMap);
+            shadowDocumentsList.add(thingBMap);
+            configTopics.createLeafChild(CONFIGURATION_SHADOW_DOCUMENTS_TOPIC).withValueChecked(shadowDocumentsList);
+
+            when(thingNameTopic.getOnce()).thenReturn(KERNEL_THING);
+            when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC)).thenReturn(configTopics);
+            when(mockDeviceConfiguration.getThingName()).thenReturn(thingNameTopic);
+            s.install();
+
+            // no dao access for sync during install
+            verify(mockDao, never()).listSyncedShadows();
+
+            // no restart of sync handler
+            verify(mockSyncHandler, never()).stop();
+            verify(mockSyncHandler, never()).start(any(SyncContext.class), anyInt());
+
+            reset(mockSyncHandler, mockDao);
+
+            when(mockDao.listSyncedShadows()).thenReturn(Collections.emptyList());
+
+            CountDownLatch latch = new CountDownLatch(1);
+            doAnswer(invocation -> {
+                latch.countDown();
+                return null;
+            }).when(mockSyncHandler).start(any(SyncContext.class), anyInt());
+
+            // WHEN
+            configTopics.lookup(CONFIGURATION_SHADOW_DOCUMENTS_TOPIC).withValueChecked(Arrays.asList(thingAMap));
+
+            // THEN
+            assertThat("synchandler started", latch.await(10, TimeUnit.SECONDS), is(true));
+
+            ArgumentCaptor<SyncInformation> captor = ArgumentCaptor.forClass(SyncInformation.class);
+
+            verify(mockDao, times(1)).insertSyncInfoIfNotExists(captor.capture());
+            assertThat(captor.getValue().getThingName(), is(THING_NAME_A));
+            assertThat(captor.getValue().getShadowName(), is("foo"));
+        }
+    }
+
+
 }

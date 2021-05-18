@@ -15,6 +15,7 @@ import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.util.Pair;
+import org.flywaydb.core.api.FlywayException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,7 +23,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.sql.SQLException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -75,9 +75,9 @@ class ShadowManagerTest extends NucleusLaunchUtils {
 
     @Test
     void GIVEN_Greengrass_with_shadow_manager_WHEN_database_install_fails_THEN_service_errors(ExtensionContext context) throws Exception {
-        ignoreExceptionOfType(context, SQLException.class);
+        ignoreExceptionOfType(context, FlywayException.class);
 
-        doThrow(SQLException.class).when(mockShadowManagerDatabase).install();
+        doThrow(FlywayException.class).when(mockShadowManagerDatabase).install();
         startNucleusWithConfig(DEFAULT_CONFIG, State.ERRORED, true);
     }
 

@@ -31,10 +31,10 @@ import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasItems;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 @SuppressWarnings("PMD.CloseResource")
@@ -53,6 +53,7 @@ class ShadowManagerDatabaseTest extends NucleusLaunchUtils {
         startNucleusWithConfig("config.yaml", State.RUNNING, false);
         ShadowManagerDatabase shadowManagerDatabase = new ShadowManagerDatabase(kernel);
         shadowManagerDatabase.install();
+        shadowManagerDatabase.open();
         return shadowManagerDatabase;
     }
 
@@ -84,9 +85,9 @@ class ShadowManagerDatabaseTest extends NucleusLaunchUtils {
     @Test
     void GIVEN_nucleus_WHEN_install_THEN_shadow_manager_database_installs_and_starts_successfully() throws Exception {
         ShadowManagerDatabase shadowManagerDatabase = initializeShadowManagerDatabase();
-        assertNotNull(shadowManagerDatabase.connection());
+        assertNotNull(shadowManagerDatabase.getPool());
 
-        List<String> tables = loadTables(shadowManagerDatabase.connection());
+        List<String> tables = loadTables(shadowManagerDatabase.getPool().getConnection());
         // flyway installed
         assertThat(tables, hasItem(equalToIgnoringCase("flyway_schema_history")));
 
@@ -102,30 +103,37 @@ class ShadowManagerDatabaseTest extends NucleusLaunchUtils {
         assertThat(tables, not(hasItem(equalToIgnoringCase("bar"))));
     }
 
-
-    @Test
-    void GIVEN_shadow_manager_database_connected_WHEN_install_again_THEN_shadow_manager_database_connection_does_not_change() throws Exception {
-        ShadowManagerDatabase shadowManagerDatabase = initializeShadowManagerDatabase();
-        Connection connection = shadowManagerDatabase.connection();
-        assertNotNull(connection);
-        shadowManagerDatabase.install();
-        assertEquals(shadowManagerDatabase.connection(), connection);
-    }
-
     @Test
     void GIVEN_shadow_manager_database_connected_WHEN_close_THEN_shadow_manager_database_connection_closes_successfully() throws Exception {
         ShadowManagerDatabase shadowManagerDatabase = initializeShadowManagerDatabase();
+        assertNotNull(shadowManagerDatabase.getPool());
+        Connection c = assertDoesNotThrow(() -> shadowManagerDatabase.getPool().getConnection());
+        assertNotNull(c, "connection should not be null");
+        assertThat("connection is not closed", c.isClosed(), is(false));
+        c.close();
         shadowManagerDatabase.close();
-        assertTrue(shadowManagerDatabase.connection().isClosed());
+        assertThat("active connections", shadowManagerDatabase.getPool().getActiveConnections(), is(0));
+        assertThrows(IllegalStateException.class, () -> shadowManagerDatabase.getPool().getConnection());
+    }
+
+    @Test
+    void GIVEN_shadow_manager_database_open_WHEN_closed_and_opened_THEN_shadow_manager_database_can_return_connections() throws Exception {
+        ShadowManagerDatabase shadowManagerDatabase = initializeShadowManagerDatabase();
+        shadowManagerDatabase.close();
+        shadowManagerDatabase.open();
+        Connection c = assertDoesNotThrow(() -> shadowManagerDatabase.getPool().getConnection());
+        assertNotNull(c, "connection should not be null");
+        assertThat("connection is not closed", c.isClosed(), is(false));
+        c.close();
     }
 
     @Test
     void GIVEN_shadow_manager_database_not_connected_WHEN_close_THEN_shadow_manager_database_connection_does_nothing() throws Exception {
         startNucleusWithConfig("config.yaml", State.RUNNING, false);
         ShadowManagerDatabase shadowManagerDatabase = new ShadowManagerDatabase(kernel);
-        assertNull(shadowManagerDatabase.connection());
+        assertNull(shadowManagerDatabase.getPool());
         shadowManagerDatabase.close();
-        assertNull(shadowManagerDatabase.connection());
+        assertNull(shadowManagerDatabase.getPool());
     }
 
     static List<String> loadTables(Connection connection) throws SQLException {
