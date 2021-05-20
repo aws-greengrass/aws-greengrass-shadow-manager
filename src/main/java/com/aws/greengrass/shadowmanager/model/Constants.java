@@ -57,7 +57,7 @@ public final class Constants {
     public static final int PBE_KEY_ITERATION_COUNT = 65_536;
     public static final int PBE_KEY_LENGTH = 256;
     public static final String CONFIGURATION_SYNCHRONIZATION_TOPIC = "synchronize";
-    public static final String CONFIGURATION_NUCLEUS_THING_TOPIC = "nucleusThing";
+    public static final String CONFIGURATION_CORE_THING_TOPIC = "coreThing";
     public static final String CONFIGURATION_CLASSIC_SHADOW_TOPIC = "classic";
     public static final String CONFIGURATION_NAMED_SHADOWS_TOPIC = "namedShadows";
     public static final String CONFIGURATION_SHADOW_DOCUMENTS_TOPIC = "shadowDocuments";
