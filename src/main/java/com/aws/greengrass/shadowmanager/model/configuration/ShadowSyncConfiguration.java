@@ -24,8 +24,8 @@ import java.util.stream.Collectors;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.CLASSIC_SHADOW_IDENTIFIER;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_CLASSIC_SHADOW_TOPIC;
+import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_CORE_THING_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_NAMED_SHADOWS_TOPIC;
-import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_NUCLEUS_THING_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SHADOW_DOCUMENTS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_THING_NAME_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.UNEXPECTED_TYPE_FORMAT;
@@ -71,7 +71,7 @@ public class ShadowSyncConfiguration {
     public static ShadowSyncConfiguration processConfiguration(Map<String, Object> configTopicsPojo, String thingName) {
         Set<ThingShadowSyncConfiguration> syncConfigurationSet = new HashSet<>();
         try {
-            processNucleusThingConfiguration(configTopicsPojo, thingName, syncConfigurationSet);
+            processCoreThingConfiguration(configTopicsPojo, thingName, syncConfigurationSet);
             processOtherThingConfigurations(configTopicsPojo, thingName, syncConfigurationSet);
         } catch (InvalidRequestParametersException e) {
             throw new InvalidConfigurationException(e);
@@ -113,19 +113,19 @@ public class ShadowSyncConfiguration {
      * @param syncConfigurationSet the sync configuration list to add the nucleus thing configuration to.
      * @throws InvalidRequestParametersException if the named shadow validation fails.
      */
-    private static void processNucleusThingConfiguration(Map<String, Object> configTopicsPojo, String thingName,
-                                                         Set<ThingShadowSyncConfiguration> syncConfigurationSet) {
-        configTopicsPojo.computeIfPresent(CONFIGURATION_NUCLEUS_THING_TOPIC, (ignored, nucleusThingConfigObject) -> {
-            processThingConfiguration(nucleusThingConfigObject, thingName, syncConfigurationSet);
-            return nucleusThingConfigObject;
+    private static void processCoreThingConfiguration(Map<String, Object> configTopicsPojo, String thingName,
+                                                      Set<ThingShadowSyncConfiguration> syncConfigurationSet) {
+        configTopicsPojo.computeIfPresent(CONFIGURATION_CORE_THING_TOPIC, (ignored, coreThingConfigObject) -> {
+            processThingConfiguration(coreThingConfigObject, thingName, syncConfigurationSet);
+            return coreThingConfigObject;
         });
     }
 
-    private static void processThingConfiguration(Object thingConfigObject, String nucleusThingName,
+    private static void processThingConfiguration(Object thingConfigObject, String coreThingName,
                                                   Set<ThingShadowSyncConfiguration> syncConfigurationSet) {
         if (thingConfigObject instanceof Map) {
             Map<String, Object> thingConfig = (Map) thingConfigObject;
-            AtomicReference<String> thingName = new AtomicReference<>(nucleusThingName);
+            AtomicReference<String> thingName = new AtomicReference<>(coreThingName);
             if (thingConfig.containsKey(CONFIGURATION_THING_NAME_TOPIC)) {
                 Object name = thingConfig.get(CONFIGURATION_THING_NAME_TOPIC);
                 if (name instanceof String) {

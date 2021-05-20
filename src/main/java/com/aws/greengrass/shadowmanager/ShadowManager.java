@@ -196,7 +196,7 @@ public class ShadowManager extends PluginService {
             // First time.
             return;
         }
-        getNucleusThingShadowSyncConfiguration(oldThingName).ifPresent(thingShadowSyncConfiguration ->
+        getCoreThingShadowSyncConfiguration(oldThingName).ifPresent(thingShadowSyncConfiguration ->
                 thingShadowSyncConfiguration.setThingName(thingName));
     }
 
@@ -227,9 +227,9 @@ public class ShadowManager extends PluginService {
                 this.syncHandler.setSyncConfiguration(this.syncConfiguration.getSyncConfigurations());
 
                 // Subscribe to the thing name topic if the Nucleus thing shadows have been synced.
-                Optional<ThingShadowSyncConfiguration> nucleusThingConfig =
-                        getNucleusThingShadowSyncConfiguration(thingName);
-                if (nucleusThingConfig.isPresent()) {
+                Optional<ThingShadowSyncConfiguration> coreThingConfig =
+                        getCoreThingShadowSyncConfiguration(thingName);
+                if (coreThingConfig.isPresent()) {
                     thingNameTopic.subscribeGeneric(this.deviceThingNameWatcher);
                 } else {
                     thingNameTopic.remove(this.deviceThingNameWatcher);
@@ -322,7 +322,7 @@ public class ShadowManager extends PluginService {
                 .build());
     }
 
-    private Optional<ThingShadowSyncConfiguration> getNucleusThingShadowSyncConfiguration(String thingName) {
+    private Optional<ThingShadowSyncConfiguration> getCoreThingShadowSyncConfiguration(String thingName) {
         return syncConfiguration.getSyncConfigurations()
                 .stream()
                 .filter(thingShadowSyncConfiguration -> thingName.equals(thingShadowSyncConfiguration.getThingName()))

@@ -67,7 +67,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_NAMED_SHADOWS_TOPIC;
-import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_NUCLEUS_THING_TOPIC;
+import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_CORE_THING_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_RATE_LIMITS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SHADOW_DOCUMENTS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SYNCHRONIZATION_TOPIC;
@@ -298,7 +298,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         shadowDocumentsList.add(thingAMap);
         shadowDocumentsList.add(thingBMap);
         configTopics.createLeafChild(CONFIGURATION_SHADOW_DOCUMENTS_TOPIC).withValueChecked(shadowDocumentsList);
-        Topics systemConfigTopics = configTopics.createInteriorChild(CONFIGURATION_NUCLEUS_THING_TOPIC);
+        Topics systemConfigTopics = configTopics.createInteriorChild(CONFIGURATION_CORE_THING_TOPIC);
         systemConfigTopics.createLeafChild(CONFIGURATION_CLASSIC_SHADOW_TOPIC).withValue("true");
         systemConfigTopics.createLeafChild(CONFIGURATION_NAMED_SHADOWS_TOPIC).withValue(Collections.singletonList("boo2"));
 
@@ -359,7 +359,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
     void GIVEN_good_sync_configuration_with_only_nucleus_thing_config_WHEN_thing_name_changes_THEN_updates_nucleus_configuration_correctly() throws UnsupportedInputTypeException {
         Topic thingNameTopic = Topic.of(context, DEVICE_PARAM_THING_NAME, KERNEL_THING);
         Topics configTopics = Topics.of(context, CONFIGURATION_SYNCHRONIZATION_TOPIC, null);
-        Topics systemConfigTopics = configTopics.createInteriorChild(CONFIGURATION_NUCLEUS_THING_TOPIC);
+        Topics systemConfigTopics = configTopics.createInteriorChild(CONFIGURATION_CORE_THING_TOPIC);
         systemConfigTopics.createLeafChild(CONFIGURATION_CLASSIC_SHADOW_TOPIC).withValue("true");
         systemConfigTopics.createLeafChild(CONFIGURATION_NAMED_SHADOWS_TOPIC).withValue(Collections.singletonList("boo2"));
 
@@ -385,7 +385,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         thingAMap.put(CONFIGURATION_CLASSIC_SHADOW_TOPIC, false);
         thingAMap.put(CONFIGURATION_NAMED_SHADOWS_TOPIC, Arrays.asList("foo", "bar"));
         shadowDocumentsList.add(thingAMap);
-        configTopics.createLeafChild(CONFIGURATION_NUCLEUS_THING_TOPIC).withValueChecked(shadowDocumentsList);
+        configTopics.createLeafChild(CONFIGURATION_CORE_THING_TOPIC).withValueChecked(shadowDocumentsList);
         configTopics.createLeafChild(CONFIGURATION_SHADOW_DOCUMENTS_TOPIC).withValueChecked(null);
 
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
@@ -401,7 +401,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         ignoreExceptionOfType(extensionContext, InvalidConfigurationException.class);
         Topic maxDocSizeTopic = Topic.of(context, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC, DEFAULT_DOCUMENT_SIZE);
         Topics configTopics = Topics.of(context, CONFIGURATION_SYNCHRONIZATION_TOPIC, null);
-        configTopics.createLeafChild(CONFIGURATION_NUCLEUS_THING_TOPIC).withValueChecked(null);
+        configTopics.createLeafChild(CONFIGURATION_CORE_THING_TOPIC).withValueChecked(null);
         List<Map<String, Object>> shadowDocumentsList = new ArrayList<>();
         Map<String, Object> thingAMap = new HashMap<>();
         thingAMap.put(CONFIGURATION_THING_NAME_TOPIC, THING_NAME_A);
@@ -425,7 +425,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         ignoreExceptionOfType(extensionContext, InvalidConfigurationException.class);
         Topic maxDocSizeTopic = Topic.of(context, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC, DEFAULT_DOCUMENT_SIZE);
         Topics configTopics = Topics.of(context, CONFIGURATION_SYNCHRONIZATION_TOPIC, null);
-        configTopics.createLeafChild(CONFIGURATION_NUCLEUS_THING_TOPIC).withValueChecked(null);
+        configTopics.createLeafChild(CONFIGURATION_CORE_THING_TOPIC).withValueChecked(null);
         Topics shadowDocumentsTopics = configTopics.createInteriorChild(CONFIGURATION_SHADOW_DOCUMENTS_TOPIC);
         shadowDocumentsTopics.createLeafChild(CONFIGURATION_CLASSIC_SHADOW_TOPIC).withValue("true");
         shadowDocumentsTopics.createLeafChild(CONFIGURATION_NAMED_SHADOWS_TOPIC).withValue(Collections.singletonList("boo2"));
