@@ -16,6 +16,7 @@ import org.h2.jdbcx.JdbcDataSource;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.nio.file.Path;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
@@ -27,7 +28,12 @@ import static com.aws.greengrass.shadowmanager.ShadowManager.SERVICE_NAME;
 @Singleton
 public class ShadowManagerDatabase implements Closeable {
     // Configurable?
-    private static final String DATABASE_FORMAT = "jdbc:h2:%s/shadow";
+    // see https://www.h2database.com/javadoc/org/h2/engine/DbSettings.html
+    // these setting optimize for minimal disk space over concurrent performance
+    private static final String DATABASE_FORMAT = "jdbc:h2:%s/shadow"
+            + ";RETENTION_TIME=1000" // ms - time to keep values for before writing to disk (default is 45000)
+            + ";DEFRAG_ALWAYS=TRUE" // defragment db on shutdown (ensures only a single value in db on close)
+            ;
     private final JdbcDataSource dataSource;
 
     @Getter
@@ -42,9 +48,16 @@ public class ShadowManagerDatabase implements Closeable {
      */
     @Inject
     public ShadowManagerDatabase(final Kernel kernel) {
+        this(kernel.getNucleusPaths().workPath().resolve(SERVICE_NAME));
+    }
+
+    /**
+     * Create a new instance at the specified path.
+     * @param path a path to store the db.
+     */
+    public ShadowManagerDatabase(Path path) {
         this.dataSource = new JdbcDataSource();
-        this.dataSource.setURL(
-                String.format(DATABASE_FORMAT, kernel.getNucleusPaths().workPath().resolve(SERVICE_NAME)));
+        this.dataSource.setURL(String.format(DATABASE_FORMAT, path));
     }
 
     /**
