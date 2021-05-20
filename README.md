@@ -15,7 +15,7 @@ Manifests:
       Configuration:
         synchronize:
           # explicit config for Nucleus
-          nucleusThing:
+          coreThing:
             classic: true // default is true
             namedShadows:
             - "foo"
@@ -48,7 +48,7 @@ Manifests:
 ```
 {
   "synchronize":{
-    "nucleusThing":{
+    "coreThing":{
       "classic":true,
       "namedShadows":[
         "foo",
@@ -72,7 +72,6 @@ Manifests:
         ]
       }
     ],
-    "maxOutboundSyncUpdatesPerSecond":50
   },
   "rateLimits": {
     "maxOutboundSyncUpdatesPerSecond":50,
