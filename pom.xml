@@ -484,6 +484,13 @@
                                     </excludes>
                                 </filter>
                             </filters>
+                            <relocations>
+                                <!-- Relocate all of H2 into a namespace just for shadow manager, so nothing conflicts -->
+                                <relocation>
+                                    <pattern>org.h2</pattern>
+                                    <shadedPattern>com.aws.greengrass.shadowmanager.lib.org.h2</shadedPattern>
+                                </relocation>
+                            </relocations>
                         </configuration>
                     </execution>
                 </executions>
