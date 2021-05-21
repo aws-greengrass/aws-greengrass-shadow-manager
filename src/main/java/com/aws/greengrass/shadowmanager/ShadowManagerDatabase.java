@@ -33,6 +33,7 @@ public class ShadowManagerDatabase implements Closeable {
     private static final String DATABASE_FORMAT = "jdbc:h2:%s/shadow"
             + ";RETENTION_TIME=1000" // ms - time to keep values for before writing to disk (default is 45000)
             + ";DEFRAG_ALWAYS=TRUE" // defragment db on shutdown (ensures only a single value in db on close)
+            + ";COMPRESS=TRUE" // compress large objects (clob/blob) (default false)
             ;
     private final JdbcDataSource dataSource;
 
