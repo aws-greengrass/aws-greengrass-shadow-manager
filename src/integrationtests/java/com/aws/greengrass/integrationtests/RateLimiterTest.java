@@ -41,7 +41,6 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.instanceOf;
-import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -122,29 +121,39 @@ public class RateLimiterTest extends NucleusLaunchUtils {
             GetThingShadowRequest getShadowRequest = new GetThingShadowRequest();
             getShadowRequest.setThingName(THING_NAME);
 
-            // attempts to keep making requests until throttled and expected exception is thrown
-            // will attempt the rest of the requests afterwards which should not be throttled after
-            // waiting for one second
-            int callsLeft = MAX_CALLS;
-            boolean exceptionTriggered = false;
             for (int i = 1; i <= MAX_CALLS; i++) {
-                try {
-                    ipcClient.getThingShadow(getShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS);
-                } catch (ExecutionException e) {
-                    assertThat(e.getCause(), instanceOf(ServiceError.class));
-                    assertThat(e.getMessage(), containsString("Too Many Requests"));
-                    callsLeft = MAX_CALLS - i;
-                    exceptionTriggered = true;
-                    break;
-                }
-            }
-
-            assertThat("expected throttle exception triggered", exceptionTriggered, is(true));
-
-            TimeUnit.SECONDS.sleep(1);
-            for (int i = 0; i < callsLeft; i++) {
                 assertDoesNotThrow(() -> ipcClient.getThingShadow(getShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS));
             }
+            ExecutionException thrown = assertThrows(ExecutionException.class, () -> ipcClient.getThingShadow(getShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS));
+            assertThat(thrown.getCause(), instanceOf(ServiceError.class));
+            assertThat(thrown.getMessage(), containsString("Too Many Requests"));
+        }
+    }
+
+    @Test
+    void GIVEN_local_request_throttled_for_thing_WHEN_requests_processed_after_one_second_THEN_requests_not_throttled(ExtensionContext context) throws Exception {
+        ignoreExceptionOfType(context, ThrottledRequestException.class);
+
+        when(dao.getShadowThing(anyString(), any())).thenReturn(Optional.of(new ShadowDocument(localShadowContentV1.getBytes())));
+
+        startNucleusWithConfig("rateLimits.yaml", true, true);
+
+        try (EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
+            GreengrassCoreIPCClient ipcClient = new GreengrassCoreIPCClient(connection);
+
+            GetThingShadowRequest getShadowRequest = new GetThingShadowRequest();
+            getShadowRequest.setThingName(THING_NAME);
+
+            for (int i = 1; i <= MAX_CALLS; i++) {
+                assertDoesNotThrow(() -> ipcClient.getThingShadow(getShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS));
+            }
+            ExecutionException thrown = assertThrows(ExecutionException.class, () -> ipcClient.getThingShadow(getShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS));
+            assertThat(thrown.getCause(), instanceOf(ServiceError.class));
+            assertThat(thrown.getMessage(), containsString("Too Many Requests"));
+
+            // call after one second should not be throttled
+            TimeUnit.SECONDS.sleep(1);
+            assertDoesNotThrow(() -> ipcClient.getThingShadow(getShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS));
         }
     }
 
@@ -163,29 +172,30 @@ public class RateLimiterTest extends NucleusLaunchUtils {
             getShadowRequest.setThingName(THING_NAME);
             getShadowRequest.setShadowName("shadowName");
 
-            // once requests are throttled check that classic and named shadows are also throttled
-            boolean exceptionTriggered = false;
+            // classic and named shadows should count towards rate limiter for thing
             for (int i = 1; i <= MAX_CALLS; i++) {
-                try {
-                    ipcClient.getThingShadow(getShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS);
-                } catch (ExecutionException e) {
-                    assertThat(e.getCause(), instanceOf(ServiceError.class));
-                    assertThat(e.getMessage(), containsString("Too Many Requests"));
-
+                if (i % 2 == 0) {
                     getShadowRequest.setShadowName(CLASSIC_SHADOW_IDENTIFIER);
-                    ExecutionException err = assertThrows(ExecutionException.class, () -> ipcClient.getThingShadow(getShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS));
-                    assertThat(err.getCause(), instanceOf(ServiceError.class));
-
-                    getShadowRequest.setShadowName("differentShadowName");
-                    err = assertThrows(ExecutionException.class, () -> ipcClient.getThingShadow(getShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS));
-                    assertThat(err.getCause(), instanceOf(ServiceError.class));
-
-                    exceptionTriggered = true;
-                    break;
+                } else {
+                    getShadowRequest.setShadowName("shadowName");
                 }
+                assertDoesNotThrow(() -> ipcClient.getThingShadow(getShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS));
             }
 
-            assertThat("expected throttle exception triggered", exceptionTriggered, is(true));
+            getShadowRequest.setShadowName(CLASSIC_SHADOW_IDENTIFIER);
+            ExecutionException thrown = assertThrows(ExecutionException.class, () -> ipcClient.getThingShadow(getShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS));
+            assertThat(thrown.getCause(), instanceOf(ServiceError.class));
+            assertThat(thrown.getMessage(), containsString("Too Many Requests"));
+
+            getShadowRequest.setShadowName("shadowName");
+            thrown = assertThrows(ExecutionException.class, () -> ipcClient.getThingShadow(getShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS));
+            assertThat(thrown.getCause(), instanceOf(ServiceError.class));
+            assertThat(thrown.getMessage(), containsString("Too Many Requests"));
+
+            getShadowRequest.setShadowName("differentShadowName");
+            thrown = assertThrows(ExecutionException.class, () -> ipcClient.getThingShadow(getShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS));
+            assertThat(thrown.getCause(), instanceOf(ServiceError.class));
+            assertThat(thrown.getMessage(), containsString("Too Many Requests"));
         }
     }
 
@@ -205,32 +215,22 @@ public class RateLimiterTest extends NucleusLaunchUtils {
             getShadowRequest.setShadowName("shadowName");
 
             // calls with different thing names should trigger total rate
-            boolean exceptionTriggered = false;
             for (int i = 1; i <= MAX_CALLS; i++) {
-                try {
-                    getShadowRequest.setThingName(String.valueOf(i));
-                    ipcClient.getThingShadow(getShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS);
-                } catch (ExecutionException e) {
-                    assertThat(e.getCause(), instanceOf(ServiceError.class));
-                    assertThat(e.getMessage(), containsString("Too Many Requests"));
-
-                    // request for new thing(s) should trigger throttle request exception
-                    getShadowRequest.setThingName("NewClassicThing");
-                    getShadowRequest.setShadowName(CLASSIC_SHADOW_IDENTIFIER);
-                    ExecutionException err = assertThrows(ExecutionException.class, () -> ipcClient.getThingShadow(getShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS));
-                    assertThat(err.getCause(), instanceOf(ServiceError.class));
-
-                    getShadowRequest.setThingName("NewNamedShadowThing");
-                    getShadowRequest.setShadowName("NewShadowName");
-                    err = assertThrows(ExecutionException.class, () -> ipcClient.getThingShadow(getShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS));
-                    assertThat(err.getCause(), instanceOf(ServiceError.class));
-
-                    exceptionTriggered = true;
-                    break;
-                }
+                getShadowRequest.setThingName(String.valueOf(i));
+                assertDoesNotThrow(() -> ipcClient.getThingShadow(getShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS));
             }
 
-            assertThat("expected throttle exception triggered", exceptionTriggered, is(true));
+            getShadowRequest.setThingName("NewClassicThing");
+            getShadowRequest.setShadowName(CLASSIC_SHADOW_IDENTIFIER);
+            ExecutionException thrown = assertThrows(ExecutionException.class, () -> ipcClient.getThingShadow(getShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS));
+            assertThat(thrown.getCause(), instanceOf(ServiceError.class));
+            assertThat(thrown.getMessage(), containsString("Too Many Requests"));
+
+            getShadowRequest.setThingName("NewNamedShadowThing");
+            getShadowRequest.setShadowName("NewShadowName");
+            thrown = assertThrows(ExecutionException.class, () -> ipcClient.getThingShadow(getShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS));
+            assertThat(thrown.getCause(), instanceOf(ServiceError.class));
+            assertThat(thrown.getMessage(), containsString("Too Many Requests"));
         }
     }
 
@@ -251,23 +251,15 @@ public class RateLimiterTest extends NucleusLaunchUtils {
             GetThingShadowRequest newThingShadowRequest = new GetThingShadowRequest();
             newThingShadowRequest.setThingName("separateThing");
 
-            // attempts to keep making requests until throttled and expected exception is thrown
-            // will immediately make request for separate thing which should not be throttled
-            boolean exceptionTriggered = false;
             for (int i = 1; i <= MAX_CALLS; i++) {
-                try {
-                    ipcClient.getThingShadow(originalThingShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS);
-                } catch (ExecutionException e) {
-                    assertThat(e.getCause(), instanceOf(ServiceError.class));
-                    assertThat(e.getMessage(), containsString("Too Many Requests"));
-                    exceptionTriggered = true;
-
-                    assertDoesNotThrow(() -> ipcClient.getThingShadow(newThingShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS));
-                    break;
-                }
+                assertDoesNotThrow(() -> ipcClient.getThingShadow(originalThingShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS));
             }
 
-            assertThat("expected throttle exception triggered", exceptionTriggered, is(true));
+            ExecutionException thrown = assertThrows(ExecutionException.class, () -> ipcClient.getThingShadow(originalThingShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS));
+            assertThat(thrown.getCause(), instanceOf(ServiceError.class));
+            assertThat(thrown.getMessage(), containsString("Too Many Requests"));
+
+            assertDoesNotThrow(() -> ipcClient.getThingShadow(newThingShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS));
         }
     }
 }

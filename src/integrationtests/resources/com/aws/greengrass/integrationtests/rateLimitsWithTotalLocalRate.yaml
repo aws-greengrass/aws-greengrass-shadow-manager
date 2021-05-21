@@ -8,7 +8,7 @@ services:
     configuration:
       rateLimits:
         maxLocalRequestsPerSecondPerThing: 100
-        maxTotalLocalRequestsRate: 5
+        maxTotalLocalRequestsRate: 10
       synchronize:
         shadowDocuments:
           - thingName: Thing1
