@@ -16,7 +16,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import vendored.com.google.common.util.concurrent.RateLimiter;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -25,7 +24,6 @@ import java.util.concurrent.TimeUnit;
 import static com.aws.greengrass.shadowmanager.TestUtils.THING_NAME;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.arrayContainingInAnyOrder;
-import static org.hamcrest.Matchers.closeTo;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -41,20 +39,19 @@ import static org.mockito.Mockito.verify;
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 public class InboundRateLimiterTest {
     private static final int TEST_RATE_LIMIT = 1;
-    private static final double DOUBLE_ERROR_RANGE = .1;
     private InboundRateLimiter inboundRateLimiter;
 
     @Mock
-    RateLimiter mockRateLimiter;
+    IpcRateLimiter mockRateLimiter;
 
     @Mock
-    RateLimiter mockTotalInboundRateLimiter;
+    IpcRateLimiter mockTotalInboundRateLimiter;
 
     @Mock
-    Map<String, RateLimiter> mockRateLimiterMap;
+    Map<String, IpcRateLimiter> mockRateLimiterMap;
 
     @Captor
-    ArgumentCaptor<Double> rateCaptor;
+    ArgumentCaptor<Integer> rateCaptor;
 
     @Captor
     ArgumentCaptor<String> thingNameCaptor;
@@ -117,7 +114,7 @@ public class InboundRateLimiterTest {
         inboundRateLimiter = new InboundRateLimiter();
         inboundRateLimiter.setTotalRate(testRate);
 
-        Map<String, RateLimiter> rateLimiterMap = inboundRateLimiter.getRateLimitersPerThing();
+        Map<String, IpcRateLimiter> rateLimiterMap = inboundRateLimiter.getRateLimitersPerThing();
 
         // fill out map to max capacity before removing last accessed rate limiter
         inboundRateLimiter.acquireLockForThing(thing1);
@@ -134,10 +131,10 @@ public class InboundRateLimiterTest {
 
     @Test
     void GIVEN_new_rate_WHEN_set_rate_THEN_rate_set_for_existing_limiters() {
-        RateLimiter mockLimiter1 = mock(RateLimiter.class);
-        RateLimiter mockLimiter2 = mock(RateLimiter.class);
+        IpcRateLimiter mockLimiter1 = mock(IpcRateLimiter.class);
+        IpcRateLimiter mockLimiter2 = mock(IpcRateLimiter.class);
 
-        LinkedHashMap<String, RateLimiter> testRateLimiterMap = new LinkedHashMap<>();
+        LinkedHashMap<String, IpcRateLimiter> testRateLimiterMap = new LinkedHashMap<>();
         testRateLimiterMap.put("existingThing1", mockLimiter1);
         testRateLimiterMap.put("existingThing2", mockLimiter2);
         inboundRateLimiter = new InboundRateLimiter();
@@ -147,15 +144,15 @@ public class InboundRateLimiterTest {
 
         verify(mockLimiter1, times(1)).setRate(rateCaptor.capture());
         verify(mockLimiter2, times(1)).setRate(rateCaptor.capture());
-        assertThat(rateCaptor.getAllValues().get(0), is(closeTo(TEST_RATE_LIMIT, DOUBLE_ERROR_RANGE)));
-        assertThat(rateCaptor.getAllValues().get(1), is(closeTo(TEST_RATE_LIMIT, DOUBLE_ERROR_RANGE)));
+        assertThat(rateCaptor.getAllValues().get(0), is(TEST_RATE_LIMIT));
+        assertThat(rateCaptor.getAllValues().get(1), is(TEST_RATE_LIMIT));
     }
 
     @Test
     void GIVEN_new_total_inbound_rate_WHEN_set_total_rate_THEN_rate_set_for_total_inbound_rate_limiter() throws ThrottledRequestException {
         inboundRateLimiter.setTotalRate(TEST_RATE_LIMIT);
         verify(mockTotalInboundRateLimiter, times(1)).setRate(rateCaptor.capture());
-        assertThat(rateCaptor.getValue(), is(closeTo(TEST_RATE_LIMIT, DOUBLE_ERROR_RANGE)));
+        assertThat(rateCaptor.getValue(), is(TEST_RATE_LIMIT));
     }
 
     @Test

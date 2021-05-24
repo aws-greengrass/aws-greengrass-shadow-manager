@@ -66,7 +66,7 @@ public class AuthorizationHandlerWrapper {
      */
     public void doAuthorization(String opCode, String serviceName, String resource)
             throws AuthorizationException {
-        // shadow manager is always authorized to udpate shadows
+        // shadow manager is always authorized to update shadows
         if (serviceName.equals(SHADOW_MANAGER_NAME)) {
             return;
         }

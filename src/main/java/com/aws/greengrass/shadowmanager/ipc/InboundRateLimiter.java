@@ -10,7 +10,6 @@ import com.aws.greengrass.shadowmanager.exception.ThrottledRequestException;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
-import vendored.com.google.common.util.concurrent.RateLimiter;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -28,11 +27,11 @@ public class InboundRateLimiter {
     private final AtomicInteger totalRate = new AtomicInteger(DEFAULT_TOTAL_LOCAL_REQUESTS_RATE);
 
     @Setter(AccessLevel.PACKAGE)
-    private RateLimiter totalInboundRateLimiter = RateLimiter.create(DEFAULT_TOTAL_LOCAL_REQUESTS_RATE);
+    private IpcRateLimiter totalInboundRateLimiter = new IpcRateLimiter(DEFAULT_TOTAL_LOCAL_REQUESTS_RATE);
 
     @Setter(AccessLevel.PACKAGE) @Getter(AccessLevel.PACKAGE)
-    private Map<String, RateLimiter> rateLimitersPerThing = Collections.synchronizedMap(
-            new LinkedHashMap<String, RateLimiter>(totalRate.get(), 0.75f, true) {
+    private Map<String, IpcRateLimiter> rateLimitersPerThing = Collections.synchronizedMap(
+            new LinkedHashMap<String, IpcRateLimiter>(totalRate.get()) {
         @Override
         protected boolean removeEldestEntry(Map.Entry eldest) {
             return size() > totalRate.get();
@@ -56,8 +55,8 @@ public class InboundRateLimiter {
             throw new ThrottledRequestException("Max total local shadow request rate exceeded");
         }
 
-        RateLimiter rateLimiter = rateLimitersPerThing.computeIfAbsent(thingName, k ->
-                RateLimiter.create(ratePerThing.get()));
+        IpcRateLimiter rateLimiter = rateLimitersPerThing.computeIfAbsent(thingName, k ->
+                new IpcRateLimiter(ratePerThing.get()));
 
         if (!rateLimiter.tryAcquire()) {
             throw new ThrottledRequestException("Local shadow request throttled for thing");
