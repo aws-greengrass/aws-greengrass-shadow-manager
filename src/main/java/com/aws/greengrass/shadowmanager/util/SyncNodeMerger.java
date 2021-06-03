@@ -29,7 +29,7 @@ public final class SyncNodeMerger {
 
     /**
      * Gets the merged node for sync based on the current local document, current cloud document, last synced document
-     * and whose data should be considered as master in a conflict situation.
+     * and whose data should be considered as primary in a conflict situation.
      *
      * @param local The current local document
      * @param cloud The current cloud document

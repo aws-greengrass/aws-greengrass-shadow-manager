@@ -137,7 +137,7 @@ public class SyncHandler {
      *
      * @param syncConfigurations the sync configuration list.
      */
-    //TODO: Figure out a better way to set this configuration in only one place.
+    // GG_NEEDS_REVIEW: TODO: Figure out a better way to set this configuration in only one place.
     public void setSyncConfiguration(Set<ThingShadowSyncConfiguration> syncConfigurations) {
         this.syncConfigurations = syncConfigurations;
     }
