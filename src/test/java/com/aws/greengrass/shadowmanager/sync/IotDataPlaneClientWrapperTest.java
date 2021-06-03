@@ -29,8 +29,8 @@ import software.amazon.awssdk.services.iotdataplane.model.InternalFailureExcepti
 import software.amazon.awssdk.services.iotdataplane.model.InvalidRequestException;
 import software.amazon.awssdk.services.iotdataplane.model.IotDataPlaneException;
 import software.amazon.awssdk.services.iotdataplane.model.MethodNotAllowedException;
-import software.amazon.awssdk.services.iotdataplane.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.iotdataplane.model.RequestEntityTooLargeException;
+import software.amazon.awssdk.services.iotdataplane.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.iotdataplane.model.ServiceUnavailableException;
 import software.amazon.awssdk.services.iotdataplane.model.ThrottlingException;
 import software.amazon.awssdk.services.iotdataplane.model.UnauthorizedException;
@@ -54,8 +54,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 class IotDataPlaneClientWrapperTest {
