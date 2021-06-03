@@ -17,7 +17,6 @@ import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.util.Pair;
 import com.fasterxml.jackson.databind.JsonNode;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

@@ -6,19 +6,19 @@
 package com.aws.greengrass.shadowmanager.ipc;
 
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
-import com.aws.greengrass.shadowmanager.ipc.model.PubSubRequest;
-import com.aws.greengrass.shadowmanager.model.Constants;
-import com.aws.greengrass.shadowmanager.model.ShadowDocument;
-import com.aws.greengrass.shadowmanager.model.ShadowRequest;
-import com.aws.greengrass.shadowmanager.model.UpdateThingShadowHandlerResponse;
-import com.aws.greengrass.shadowmanager.sync.SyncHandler;
-import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.ipc.model.Operation;
+import com.aws.greengrass.shadowmanager.ipc.model.PubSubRequest;
+import com.aws.greengrass.shadowmanager.model.Constants;
 import com.aws.greengrass.shadowmanager.model.LogEvents;
+import com.aws.greengrass.shadowmanager.model.ShadowDocument;
+import com.aws.greengrass.shadowmanager.model.ShadowRequest;
+import com.aws.greengrass.shadowmanager.model.UpdateThingShadowHandlerResponse;
+import com.aws.greengrass.shadowmanager.sync.SyncHandler;
+import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.shadowmanager.util.ShadowWriteSynchronizeHelper;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.fasterxml.jackson.databind.JsonNode;

@@ -21,10 +21,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCClient;
 import software.amazon.awssdk.aws.greengrass.model.GetThingShadowRequest;
 import software.amazon.awssdk.aws.greengrass.model.ServiceError;
+import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.eventstreamrpc.EventStreamRPCConnection;
 import software.amazon.awssdk.services.iotdataplane.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowResponse;
@@ -47,8 +47,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.after;
 import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 public class RateLimiterTest extends NucleusLaunchUtils {
