@@ -65,7 +65,7 @@ class ShadowManagerDAOImplTest {
     @BeforeEach
     public void before() throws SQLException {
         kernel = new Kernel();
-        // Might need to start the kernel here
+        // Might need to start the Nucleus here
         kernel.parseArgs("-r", rootDir.toAbsolutePath().toString());
 
         database = new ShadowManagerDatabase(kernel);

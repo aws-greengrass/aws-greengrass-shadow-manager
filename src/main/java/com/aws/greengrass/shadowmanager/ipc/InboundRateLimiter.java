@@ -46,7 +46,7 @@ public class InboundRateLimiter {
      */
     public void acquireLockForThing(String thingName) throws ThrottledRequestException {
 
-        // TODO: have calling class validate thingName prior to getting lock
+        // GG_NEEDS_REVIEW: TODO: have calling class validate thingName prior to getting lock
         if (thingName == null || thingName.isEmpty()) {
             return;
         }
