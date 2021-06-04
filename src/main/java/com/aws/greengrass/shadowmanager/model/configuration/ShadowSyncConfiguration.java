@@ -42,7 +42,7 @@ public class ShadowSyncConfiguration {
         if (o == this) {
             return true;
         }
-        /* Check if o is an instance of LoggerConfiguration or not "null instanceof [type]" also returns false */
+        // Check if o is an instance of LoggerConfiguration or not "null instanceof [type]" also returns false
         if (!(o instanceof ShadowSyncConfiguration)) {
             return false;
         }
