@@ -27,7 +27,6 @@ import static com.aws.greengrass.shadowmanager.ShadowManager.SERVICE_NAME;
  */
 @Singleton
 public class ShadowManagerDatabase implements Closeable {
-    // Configurable?
     // see https://www.h2database.com/javadoc/org/h2/engine/DbSettings.html
     // these setting optimize for minimal disk space over concurrent performance
     private static final String DATABASE_FORMAT = "jdbc:h2:%s/shadow"

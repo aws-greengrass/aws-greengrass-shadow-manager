@@ -1,7 +1,7 @@
 ## AWS Greengrass Shadow Manager
 
 This is an AWS GreengrassV2 Component that handles offline device shadow
-document storage and synchronization to the IoT Device Shadow Service.
+document storage and synchronization to the AWS IoT Device Shadow Service.
 
 ## FAQ
 
@@ -41,7 +41,6 @@ Manifests:
         
         # other config
         shadowDocumentSizeLimitBytes: 8192 # default is 8192, max is 30720
-        maxDiskUtilizationMegaBytes: 16 # set some max boundary (2000 shadows if there was 0 overhead)
 ```
 
 **JSON example**
@@ -78,8 +77,7 @@ Manifests:
     "maxTotalLocalRequestsRate":100,
     "maxLocalRequestsPerSecondPerThing":10
   },
-  "shadowDocumentSizeLimitBytes":8192,
-  "maxDiskUtilizationMegaBytes":16,
+  "shadowDocumentSizeLimitBytes":8192
 }
 ```
 

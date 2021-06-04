@@ -67,7 +67,7 @@ public class GetThingShadowIPCHandler extends GeneratedAbstractGetThingShadowOpe
     @SuppressWarnings("PMD.PreserveStackTrace")
     public GetThingShadowResponse handleRequest(GetThingShadowRequest request) {
         try {
-            // GG_NEEDS_REVIEW: TODO: refactor request handler class so that SyncHandler can retry throttled requests
+            // TODO: [GG-36230]: refactor request handler class so that SyncHandler can retry throttled requests
             inboundRateLimiter.acquireLockForThing(request.getThingName());
         } catch (ThrottledRequestException e) {
             logger.atWarn()
