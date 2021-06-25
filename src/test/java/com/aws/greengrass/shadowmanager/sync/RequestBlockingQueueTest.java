@@ -46,11 +46,16 @@ public class RequestBlockingQueueTest {
     SyncRequest thingBShadow1;
     @Mock
     SyncRequest thingCShadow1;
+    @Mock
+    SyncRequest thingAShadow1Again;
+    @Mock
+    SyncRequest thingAShadow1Merged;
 
     @BeforeEach
     void setup() {
         queue = new RequestBlockingQueue(merger, 3);
         setupRequest(thingAShadow1, "A", "1");
+        setupRequest(thingAShadow1Again, "A", "1");
         setupRequest(thingAShadow2, "A", "2");
         setupRequest(thingBShadow1, "B", "1");
         setupRequest(thingCShadow1, "C", "1");
@@ -293,13 +298,39 @@ public class RequestBlockingQueueTest {
 
     @Test
     void GIVEN_empty_queue_WHEN_offerAndTake_THEN_return_offered() {
-        assertThat(queue.offerAndTake(thingAShadow1), is(thingAShadow1));
+        assertThat(queue.offerAndTake(thingAShadow1, true), is(thingAShadow1));
     }
 
     @Test
     void GIVEN_non_empty_queue_WHEN_offerAndTake_THEN_return_head() {
         queue.offer(thingAShadow2);
-        assertThat(queue.offerAndTake(thingAShadow1), is(thingAShadow2));
+        assertThat(queue.offerAndTake(thingAShadow1, true), is(thingAShadow2));
         assertThat(queue.poll(), is(thingAShadow1));
+    }
+
+    @Test
+    void GIVEN_non_empty_queue_WHEN_offerAndTake_same_shadow_new_THEN_return_merged() {
+        queue.offer(thingAShadow1);
+        when(merger.merge(thingAShadow1, thingAShadow1Again)).thenReturn(thingAShadow1Merged);
+        assertThat(queue.offerAndTake(thingAShadow1Again, true), is(thingAShadow1Merged));
+        assertThat("queue empty", queue.isEmpty(), is(true));
+    }
+
+    @Test
+    void GIVEN_non_empty_queue_WHEN_offerAndTake_same_shadow_old_THEN_return_merged() {
+        queue.offer(thingAShadow1);
+        when(merger.merge(thingAShadow1Again, thingAShadow1)).thenReturn(thingAShadow1Merged);
+        assertThat(queue.offerAndTake(thingAShadow1Again, false), is(thingAShadow1Merged));
+        assertThat("queue empty", queue.isEmpty(), is(true));
+    }
+
+    @Test
+    void GIVEN_non_empty_queue_WHEN_offerAndTake_same_shadow_THEN_merge_and_return_head() {
+        queue.offer(thingAShadow2);
+        queue.offer(thingAShadow1);
+        when(merger.merge(thingAShadow1Again, thingAShadow1)).thenReturn(thingAShadow1Merged);
+        assertThat(queue.offerAndTake(thingAShadow1Again, false), is(thingAShadow2));
+        assertThat(queue.poll(), is(thingAShadow1Merged));
+        assertThat("queue empty", queue.isEmpty(), is(true));
     }
 }

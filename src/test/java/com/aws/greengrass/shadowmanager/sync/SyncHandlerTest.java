@@ -274,7 +274,7 @@ class SyncHandlerTest {
             return null;
         }).when(retryer).run(any(), eq(request1), eq(context));
 
-        when(queue.offerAndTake(request1)).thenReturn(request1);
+        when(queue.offerAndTake(request1, false)).thenReturn(request1);
 
         try {
             syncHandler.start(context, 1);
@@ -285,7 +285,7 @@ class SyncHandlerTest {
             executorService.shutdownNow();
         }
 
-        verify(queue, times(1)).offerAndTake(request1);
+        verify(queue, times(1)).offerAndTake(request1, false);
     }
 
     @Test
@@ -405,6 +405,10 @@ class SyncHandlerTest {
             executeLatch.countDown();
             return null;
         }).when(retryer).run(any(), any(FullShadowSyncRequest.class), eq(context));
+
+        // return the offered request
+        when(queue.offerAndTake(any(FullShadowSyncRequest.class), eq(true)))
+                .thenAnswer(invocation -> invocation.getArgument(0, FullShadowSyncRequest.class));
 
         try {
             syncHandler.start(context, 1);

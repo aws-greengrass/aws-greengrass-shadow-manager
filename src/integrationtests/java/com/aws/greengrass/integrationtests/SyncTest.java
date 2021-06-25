@@ -8,6 +8,7 @@ package com.aws.greengrass.integrationtests;
 import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAOImpl;
+import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
@@ -43,12 +44,16 @@ import java.time.temporal.ChronoUnit;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
+import static com.github.grantwest.eventually.EventuallyLambdaMatcher.eventuallyEval;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
@@ -71,7 +76,12 @@ class SyncTest extends NucleusLaunchUtils {
     public static final String RANDOM_SHADOW = "badShadowName";
     private static final String cloudShadowContentV10 = "{\"version\":10,\"state\":{\"desired\":{\"SomeKey\":\"foo\"}}}";
     private static final String cloudShadowContentV1 = "{\"version\":1,\"state\":{\"desired\":{\"SomeKey\":\"foo\"}}}";
-    private static final String localShadowContentV1 = "{\"state\":{\"desired\":{\"SomeKey\":\"foo\"}},\"metadata\":{}}";
+    private static final String localShadowContentV1 = "{\"state\":{\"reported\":{\"SomeKey\":\"foo\", "
+            + "\"OtherKey\": 1}}}";
+    private static final String localShadowContentV2 = "{\"state\":{\"reported\":{\"OtherKey\":2, \"AnotherKey\": "
+            + "\"foobar\"}}}";
+    private static final String mergedLocalShadowContentV2 = "{\"state\":{\"reported\":{\"SomeKey\":\"foo\","
+            + "\"OtherKey\":2, \"AnotherKey\": \"foobar\"}}, \"version\":10}";
 
     @Mock
     UpdateThingShadowResponse mockUpdateThingShadowResponse;
@@ -436,5 +446,93 @@ class SyncTest extends NucleusLaunchUtils {
         updateHandler.handleRequest(request, "DoAll");
 
         verify(iotDataPlaneClientFactory.getIotDataPlaneClient(), after(Duration.ofSeconds(10).toMillis()).never()).updateThingShadow(
-                any(software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowRequest.class));    }
+                any(software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowRequest.class));
+    }
+
+
+    static class TestException extends RuntimeException { // NOPMD
+
+    }
+
+    @Test
+    void GIVEN_cloud_update_request_WHEN_retryable_thrown_AND_new_cloud_update_request_THEN_retries_with_merged_request(ExtensionContext context)
+            throws InterruptedException, IOException {
+        ignoreExceptionOfType(context, RetryableException.class);
+        ignoreExceptionOfType(context, TestException.class);
+
+        UpdateThingShadowRequest request1 = new UpdateThingShadowRequest();
+        request1.setThingName(MOCK_THING_NAME);
+        request1.setShadowName(CLASSIC_SHADOW);
+        request1.setPayload(localShadowContentV1.getBytes(UTF_8));
+
+        UpdateThingShadowRequest request2 = new UpdateThingShadowRequest();
+        request2.setThingName(MOCK_THING_NAME);
+        request2.setShadowName(CLASSIC_SHADOW);
+        request2.setPayload(localShadowContentV2.getBytes(UTF_8));
+
+        // on startup a full sync is executed. mock a cloud response
+        GetThingShadowResponse shadowResponse = mock(GetThingShadowResponse.class, Answers.RETURNS_DEEP_STUBS);
+        lenient().when(shadowResponse.payload().asByteArray()).thenReturn(cloudShadowContentV10.getBytes(UTF_8));
+
+        // return the "V10" existing document for full sync
+        when(iotDataPlaneClientFactory.getIotDataPlaneClient()
+                .getThingShadow(any(GetThingShadowRequest.class))).thenReturn(shadowResponse);
+
+        startNucleusWithConfig("sync.yaml", true, false);
+
+        SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
+        ShadowManagerDAOImpl dao = kernel.getContext().get(ShadowManagerDAOImpl.class);
+
+        // wait for full sync to finish
+        Supplier<Optional<SyncInformation>> syncInfo = () -> dao.getShadowSyncInformation(MOCK_THING_NAME,
+                CLASSIC_SHADOW);
+        assertThat("full sync finished with version 10",
+                () -> syncInfo.get().map(SyncInformation::getCloudVersion).orElse(0L),
+                eventuallyEval(is(10L), Duration.ofSeconds(10)));
+
+
+        UpdateThingShadowRequestHandler updateHandler = shadowManager.getUpdateThingShadowRequestHandler();
+
+        // return version 11 on successful cloud update
+        when(mockUpdateThingShadowResponse.payload()).thenReturn(SdkBytes.fromString("{\"version\": 11}", UTF_8));
+        AtomicInteger updateThingShadowCalled = new AtomicInteger(0);
+
+        // throw an exception first - before throwing we make another request so that there is another request for
+        // to update this shadow in the queue
+        when(iotDataPlaneClientFactory.getIotDataPlaneClient().updateThingShadow(cloudUpdateThingShadowRequestCaptor.capture()))
+                .thenAnswer(invocation -> {
+                    // request #2 comes in as we are processing request #1
+                    updateHandler.handleRequest(request2, "DoAll");
+
+                    updateThingShadowCalled.incrementAndGet();
+                    throw new RetryableException(new TestException());
+                }).thenAnswer(invocation -> {
+                    updateThingShadowCalled.incrementAndGet();
+                    return mockUpdateThingShadowResponse;
+                });
+
+        // Fire the initial request
+        updateHandler.handleRequest(request1, "DoAll");
+
+        assertThat("update thing shadow called", updateThingShadowCalled::get, eventuallyEval(is(2)));
+        assertThat("sync queue is empty", () -> syncHandler.getSyncQueue().isEmpty(), eventuallyEval(is(true)));
+        assertThat("dao cloud version updated", () -> syncInfo.get()
+                        .map(SyncInformation::getCloudVersion).orElse(0L), eventuallyEval(is(11L)));
+        assertThat("dao local version updated", () -> syncInfo.get()
+                .map(SyncInformation::getLocalVersion).orElse(0L), eventuallyEval(is(3L)));
+
+        assertThat("number of cloud update attempts", cloudUpdateThingShadowRequestCaptor.getAllValues(), hasSize(2));
+
+        // get last cloud update request
+        software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowRequest actualRequest =
+                cloudUpdateThingShadowRequestCaptor.getAllValues().get(1);
+
+        JsonNode actualNode = JsonUtil.getPayloadJson(actualRequest.payload().asByteArray()).get();
+        JsonNode expectedNode = JsonUtil.getPayloadJson(mergedLocalShadowContentV2.getBytes(UTF_8)).get();
+
+        // check that it is request 2 merged on top of request 1 and *not* request 1 merged on top of request 2
+        assertThat(actualNode, is(equalTo(expectedNode)));
+    }
 }
+
+
