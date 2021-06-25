@@ -282,6 +282,8 @@ public class SyncHandler {
 
                     // put request to back of queue and get the front of queue in a single operation
                     SyncRequest failedRequest = request;
+
+                    // tell queue this is not a new value so it merges correctly with any update that came in
                     request = syncQueue.offerAndTake(request, false);
 
                     // if queue was empty, we are going to immediately retrying the same request. For this case don't

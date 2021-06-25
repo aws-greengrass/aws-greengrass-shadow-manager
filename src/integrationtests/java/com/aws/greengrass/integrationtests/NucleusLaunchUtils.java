@@ -92,6 +92,8 @@ public class NucleusLaunchUtils extends GGServiceTestUtil {
         }
         SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
         ExecutorService es = kernel.getContext().get(ExecutorService.class);
+
+        // set retry config to only try once so we can test failures earlier
         RetryUtils.RetryConfig retryConfig = RetryUtils.RetryConfig.builder()
                 .maxAttempt(1)
                 .maxRetryInterval(Duration.ofSeconds(1))
