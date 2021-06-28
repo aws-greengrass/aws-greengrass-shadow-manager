@@ -106,6 +106,8 @@ public class SyncHandler {
     private Set<ThingShadowSyncConfiguration> syncConfigurations;
 
 
+    private final RetryUtils.RetryConfig defaultRetryConfig;
+
     /**
      * Construct a new instance.
      *
@@ -114,6 +116,18 @@ public class SyncHandler {
      */
     @Inject
     public SyncHandler(RequestBlockingQueue syncQueue, ExecutorService executorService) {
+        this(syncQueue, executorService, DEFAULT_RETRY_CONFIG);
+    }
+
+    /**
+     * Construct a new instance.
+     *
+     * @param syncQueue          the queue for storing sync requests
+     * @param executorService    provider of threads for syncing
+     * @param defaultRetryConfig the config for retrying requests
+     */
+    public SyncHandler(RequestBlockingQueue syncQueue, ExecutorService executorService,
+            RetryUtils.RetryConfig defaultRetryConfig) {
         this(syncQueue, executorService,
                 // retry wrapper so that requests can be mocked
                 (config, request, context) ->
@@ -122,14 +136,21 @@ public class SyncHandler {
                                     request.execute(context);
                                     return null;
                                 },
-                                SYNC_EVENT_TYPE, logger));
+                                SYNC_EVENT_TYPE, logger),
+                defaultRetryConfig);
     }
 
     SyncHandler(RequestBlockingQueue syncQueue, ExecutorService executorService,
                 Retryer retryer) {
+        this(syncQueue, executorService, retryer, DEFAULT_RETRY_CONFIG);
+    }
+
+    SyncHandler(RequestBlockingQueue syncQueue, ExecutorService executorService,
+            Retryer retryer, RetryUtils.RetryConfig defaultRetryConfig) {
         this.syncQueue = syncQueue;
         this.syncExecutorService = executorService;
         this.retryer = retryer;
+        this.defaultRetryConfig = defaultRetryConfig;
     }
 
     /**
@@ -237,7 +258,7 @@ public class SyncHandler {
         logger.atInfo(SYNC_EVENT_TYPE).log("Start waiting for sync requests");
         try {
             SyncRequest request = syncQueue.take();
-            RetryUtils.RetryConfig retryConfig = DEFAULT_RETRY_CONFIG;
+            RetryUtils.RetryConfig retryConfig = defaultRetryConfig;
             do {
                 try {
                     logger.atInfo(SYNC_EVENT_TYPE)
@@ -247,7 +268,7 @@ public class SyncHandler {
                             .log("Executing sync request");
 
                     retryer.run(retryConfig, request, context);
-                    retryConfig = DEFAULT_RETRY_CONFIG; // reset the retry config back to default after success
+                    retryConfig = defaultRetryConfig; // reset the retry config back to default after success
 
                     logger.atDebug(SYNC_EVENT_TYPE).log("Waiting for next sync request");
                     request = syncQueue.take();
@@ -261,7 +282,9 @@ public class SyncHandler {
 
                     // put request to back of queue and get the front of queue in a single operation
                     SyncRequest failedRequest = request;
-                    request = syncQueue.offerAndTake(request);
+
+                    // tell queue this is not a new value so it merges correctly with any update that came in
+                    request = syncQueue.offerAndTake(request, false);
 
                     // if queue was empty, we are going to immediately retrying the same request. For this case don't
                     // use the default retry configuration - keep from spamming too quickly
@@ -277,16 +300,18 @@ public class SyncHandler {
                             .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
                             .addKeyValue(LOG_SHADOW_NAME_KEY, request.getShadowName())
                             .log("Received conflict when processing request. Retrying as a full sync");
-                    // don't need to add to queue as we want to immediately retry as a full sync
-                    request = new FullShadowSyncRequest(request.getThingName(), request.getShadowName());
+                    // add back to queue to merge over any shadow request that came in while it was executing
+                    request = syncQueue.offerAndTake(new FullShadowSyncRequest(request.getThingName(),
+                            request.getShadowName()), true);
                 } catch (UnknownShadowException e) {
                     logger.atWarn(SYNC_EVENT_TYPE)
                             .cause(e)
                             .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
                             .addKeyValue(LOG_SHADOW_NAME_KEY, request.getShadowName())
                             .log("Received unknown shadow when processing request. Retrying as a full sync");
-                    // don't need to add to queue as we want to immediately retry as a full sync
-                    request = new FullShadowSyncRequest(request.getThingName(), request.getShadowName());
+                    // add back to queue to merge over any shadow request that came in while it was executing
+                    request = syncQueue.offerAndTake(new FullShadowSyncRequest(request.getThingName(),
+                            request.getShadowName()), true);
                 } catch (Exception e) {
                     logger.atError(SYNC_EVENT_TYPE)
                             .cause(e)

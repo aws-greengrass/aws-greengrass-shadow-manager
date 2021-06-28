@@ -84,9 +84,10 @@ class RequestMergerTest {
     }
 
     @Test
-    void GIVEN_update_mergable_request_WHEN_merge_THEN_return_merged_shadow_sync() {
+    void GIVEN_update_mergeable_request_WHEN_merge_THEN_return_merged_shadow_sync() {
         LocalUpdateSyncRequest request1 = mock(LocalUpdateSyncRequest.class, "localUpdate1");
         LocalUpdateSyncRequest request2 = mock(LocalUpdateSyncRequest.class, "localUpdate2");
         assertThat(merger.merge(request1, request2), is(instanceOf(LocalUpdateSyncRequest.class)));
     }
+
 }

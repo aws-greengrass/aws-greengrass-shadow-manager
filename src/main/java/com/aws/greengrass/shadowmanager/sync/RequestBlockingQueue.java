@@ -169,14 +169,32 @@ public class RequestBlockingQueue {
 
     /**
      * Merge the request with an existing request in the queue. This only updates if a request for the shadow is already
-     * present in the queue.
+     * present in the queue. This treats the value being offered as 'new' when merging.
      *
      * @param value the request to merge
      * @return true if the request was merged; false when no existing request is present.
      */
     private boolean mergeIfPresent(SyncRequest value) {
+        return mergeIfPresent(value, true);
+    }
+
+    /**
+     * Merge the request with an existing request in the queue. This only updates if a request for the shadow is already
+     * present in the queue.
+     *
+     * @param value the request to merge
+     * @param isNewValue true if the value to merge should be merged on top of the existing value. When false, the
+     *                   offered value is treated as the base and the current value in the map is merged on top
+     * @return true if the request was merged; false when no existing request is present.
+     */
+    private boolean mergeIfPresent(SyncRequest value, boolean isNewValue) {
         String key = createKey(value);
-        SyncRequest updated = requests.computeIfPresent(key, (k, oldValue) -> merger.merge(oldValue, value));
+        SyncRequest updated = requests.computeIfPresent(key, (k, currentValue) -> {
+            if (isNewValue) {
+                return merger.merge(currentValue, value);
+            }
+            return merger.merge(value, currentValue);
+        });
         return updated != null;
     }
 
@@ -212,11 +230,14 @@ public class RequestBlockingQueue {
      * returned.
      *
      * @param value a request to add
+     * @param isNewValue whether the value being offered should be considered as new. When offering back an "old"
+     *                   request to retry, this should be set to false so that a request in the queue is merged
+     *                   correctly.
      * @return the head of the queue (which may be the given value if the queue is empty)
      * @throws NullPointerException if value is null
      */
     @SuppressWarnings("PMD.AvoidThrowingNullPointerException")
-    public SyncRequest offerAndTake(SyncRequest value) {
+    public SyncRequest offerAndTake(SyncRequest value, boolean isNewValue) {
         if (value == null) {
             throw new NullPointerException();
         }
@@ -225,7 +246,11 @@ public class RequestBlockingQueue {
             if (isEmpty()) {
                 return value;
             }
+            boolean merged = mergeIfPresent(value, isNewValue);
             SyncRequest head = dequeue();
+            if (merged) {
+                return head;
+            }
             enqueue(value);
             // no signalling as we are not changing "fullness" of the queue
             return head;
