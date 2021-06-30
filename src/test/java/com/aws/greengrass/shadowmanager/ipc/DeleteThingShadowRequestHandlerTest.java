@@ -94,8 +94,9 @@ class DeleteThingShadowRequestHandlerTest {
     ArgumentCaptor<PubSubRequest> pubSubRequestCaptor;
 
     @BeforeEach
-    void setup() {
+    void setup() throws IOException {
         lenient().when(mockSynchronizeHelper.getThingShadowLock(any())).thenReturn(Object.class);
+        JsonUtil.loadSchema();
     }
 
     @ParameterizedTest

@@ -7,6 +7,7 @@ package com.aws.greengrass.shadowmanager.sync.model;
 
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
+import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.ShadowRequest;
@@ -81,7 +82,7 @@ public abstract class BaseSyncRequest extends ShadowRequest implements SyncReque
         try {
             ShadowDocument document = new ShadowDocument(payload);
             return Optional.of(document.getVersion());
-        } catch (IOException e) {
+        } catch (InvalidRequestParametersException | IOException e) {
             logger.atDebug()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())

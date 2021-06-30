@@ -6,6 +6,7 @@
 package com.aws.greengrass.shadowmanager.sync.model;
 
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
+import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
@@ -904,7 +905,7 @@ class FullShadowSyncRequestTest {
 
         FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME);
         SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, () -> fullShadowSyncRequest.execute(syncContext));
-        assertThat(thrown.getCause(), is(instanceOf(IOException.class)));
+        assertThat(thrown.getCause(), is(instanceOf(InvalidRequestParametersException.class)));
 
         verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
         verify(mockDao, times(1)).updateSyncInformation(any());

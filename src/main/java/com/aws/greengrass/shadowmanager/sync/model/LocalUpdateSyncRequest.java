@@ -7,6 +7,7 @@ package com.aws.greengrass.shadowmanager.sync.model;
 
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
+import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
@@ -83,7 +84,7 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
         ShadowDocument shadowDocument;
         try {
             shadowDocument = new ShadowDocument(updateDocument);
-        } catch (IOException e) {
+        } catch (IOException | InvalidRequestParametersException e) {
             throw new SkipSyncRequestException(e);
         }
 

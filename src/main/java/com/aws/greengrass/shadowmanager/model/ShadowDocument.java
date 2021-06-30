@@ -5,6 +5,7 @@
 
 package com.aws.greengrass.shadowmanager.model;
 
+import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.util.Pair;
 import com.aws.greengrass.util.SerializerFactory;
@@ -21,6 +22,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_M
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_TIMESTAMP;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_VERSION;
+import static com.aws.greengrass.shadowmanager.util.JsonUtil.isNullOrMissing;
 
 /**
  * Class for managing operations on the Shadow Document.
@@ -51,14 +53,23 @@ public class ShadowDocument {
      *
      * @param documentBytes the byte array containing the shadow information.
      * @throws IOException if there was an issue while deserializing the shadow byte array.
+     * @throws InvalidRequestParametersException if there was a validation issue while deserializing the shadow doc.
      */
-    public ShadowDocument(byte[] documentBytes) throws IOException {
+    public ShadowDocument(byte[] documentBytes) throws IOException, InvalidRequestParametersException {
         if (documentBytes == null || documentBytes.length == 0) {
             setFields(null, null, null);
             return;
         }
+        JsonNode documentJson = JsonUtil.getPayloadJson(documentBytes)
+                .filter(d -> !isNullOrMissing(d))
+                .orElseThrow(() ->
+                        new InvalidRequestParametersException(ErrorMessage
+                                .createInvalidPayloadJsonMessage("")));
+        // Validate the payload schema
+        JsonUtil.validatePayloadSchema(documentJson);
+
         ShadowDocument shadowDocument = SerializerFactory.getFailSafeJsonObjectMapper()
-                .readValue(documentBytes, ShadowDocument.class);
+                .convertValue(documentJson, ShadowDocument.class);
         setFields(shadowDocument.getState(), shadowDocument.getMetadata(), shadowDocument.getVersion());
     }
 
