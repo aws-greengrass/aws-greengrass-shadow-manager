@@ -20,6 +20,7 @@ import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -85,6 +86,10 @@ class GetThingShadowRequestHandlerTest {
     @Captor
     ArgumentCaptor<PubSubRequest> pubSubRequestCaptor;
 
+    @BeforeEach
+    void setup() throws IOException {
+        JsonUtil.loadSchema();
+    }
 
     @ParameterizedTest
     @NullAndEmptySource

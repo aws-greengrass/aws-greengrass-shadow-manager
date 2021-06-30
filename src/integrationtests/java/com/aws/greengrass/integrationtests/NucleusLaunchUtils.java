@@ -14,14 +14,20 @@ import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
 import com.aws.greengrass.shadowmanager.ShadowManager;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAOImpl;
 import com.aws.greengrass.shadowmanager.ShadowManagerDatabase;
+import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientFactory;
+import com.aws.greengrass.shadowmanager.sync.SyncHandler;
 import com.aws.greengrass.testcommons.testutilities.GGServiceTestUtil;
+import com.aws.greengrass.util.RetryUtils;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Answers;
 import org.mockito.Mock;
 
 import java.nio.file.Path;
+import java.time.Duration;
+import java.util.Collections;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -84,6 +90,16 @@ public class NucleusLaunchUtils extends GGServiceTestUtil {
         if (mockDao) {
             kernel.getContext().put(ShadowManagerDAOImpl.class, dao);
         }
+        SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
+        ExecutorService es = kernel.getContext().get(ExecutorService.class);
+
+        // set retry config to only try once so we can test failures earlier
+        RetryUtils.RetryConfig retryConfig = RetryUtils.RetryConfig.builder()
+                .maxAttempt(1)
+                .maxRetryInterval(Duration.ofSeconds(1))
+                .retryableExceptions(Collections.singletonList(RetryableException.class))
+                .build();
+        kernel.getContext().put(SyncHandler.class, new SyncHandler(syncHandler.getSyncQueue(), es, retryConfig));
         kernel.launch();
 
         assertTrue(shadowManagerRunning.await(TEST_TIME_OUT_SEC, TimeUnit.SECONDS));

@@ -6,6 +6,7 @@
 package com.aws.greengrass.shadowmanager.sync.model;
 
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
+import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
@@ -85,9 +86,10 @@ class LocalUpdateSyncRequestTest {
     SyncContext syncContext;
 
     @BeforeEach
-    void setup() {
+    void setup() throws IOException {
         syncContext = new SyncContext(mockDao, mockUpdateThingShadowRequestHandler,
                 mock(DeleteThingShadowRequestHandler.class), mock(IotDataPlaneClientWrapper.class));
+        JsonUtil.loadSchema();
     }
 
     @Test
@@ -134,7 +136,7 @@ class LocalUpdateSyncRequestTest {
 
         LocalUpdateSyncRequest request = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, badCloudPayload);
         SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, () -> request.execute(syncContext));
-        assertThat(thrown.getCause(), is(instanceOf(IOException.class)));
+        assertThat(thrown.getCause(), is(instanceOf(InvalidRequestParametersException.class)));
 
         verify(mockDao, times(0)).getShadowSyncInformation(anyString(), anyString());
         verify(mockUpdateThingShadowRequestHandler, times(0)).handleRequest(any(), any());

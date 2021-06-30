@@ -8,6 +8,7 @@ package com.aws.greengrass.shadowmanager;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
+import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.util.Pair;
 import org.h2.jdbcx.JdbcConnectionPool;
@@ -218,10 +219,11 @@ class ShadowManagerDAOImplTest {
     }
 
     @BeforeEach
-    void setup() throws SQLException {
+    void setup() throws SQLException, IOException {
         when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
         when(mockDatabase.getPool()).thenReturn(mockPool);
         when(mockPool.getConnection()).thenReturn(mockConnection);
+        JsonUtil.loadSchema();
     }
 
     @Test
