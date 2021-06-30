@@ -8,6 +8,7 @@ package com.aws.greengrass.shadowmanager.sync.model;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.ShadowManager;
+import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
@@ -371,7 +372,7 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
             throws SkipSyncRequestException {
         try {
             return new ShadowDocument(syncInformation.getLastSyncedDocument());
-        } catch (IOException e) {
+        } catch (InvalidRequestParametersException | IOException e) {
             logger.atError()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
@@ -470,7 +471,7 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
                     .log("Could not execute cloud shadow get request");
             throw new RetryableException(e);
-        } catch (SdkServiceException | SdkClientException | IOException e) {
+        } catch (SdkServiceException | SdkClientException | InvalidRequestParametersException | IOException e) {
             logger.atError()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
