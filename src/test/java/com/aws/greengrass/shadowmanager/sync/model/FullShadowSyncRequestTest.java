@@ -83,6 +83,7 @@ import static org.mockito.Mockito.when;
 class FullShadowSyncRequestTest {
     private static final byte[] LOCAL_DOCUMENT = "{\"version\": 10, \"state\": {\"reported\": {\"name\": \"The Beach Boys\", \"NewField\": 100}, \"desired\": {\"name\": \"Pink Floyd\", \"SomethingNew\": true}}}".getBytes();
     private static final byte[] CLOUD_DOCUMENT = "{\"version\": 5, \"state\": {\"reported\": {\"name\": \"The Beatles\", \"OldField\": true}, \"desired\": {\"name\": \"Backstreet Boys\", \"SomeOtherThingNew\": 100}}}".getBytes();
+    private static final byte[] CLOUD_DOCUMENT_WITH_DELTA = "{\"version\": 5, \"state\": {\"reported\": {\"name\": \"The Beatles\", \"OldField\": true}, \"desired\": {\"name\": \"Backstreet Boys\", \"SomeOtherThingNew\": 100}, \"delta\": {\"name\": \"The Beatles\", \"OldField\": true}}}".getBytes();
     private static final byte[] BASE_DOCUMENT = "{\"version\": 1, \"state\": {\"reported\": {\"name\": \"The Beatles\", \"OldField\": true}, \"desired\": {\"name\": \"The Beatles\"}}}".getBytes();
     private static final byte[] MERGED_DOCUMENT = "{\"state\": {\"reported\": {\"name\": \"The Beach Boys\", \"NewField\": 100}, \"desired\": {\"name\": \"Backstreet Boys\", \"SomethingNew\": true, \"SomeOtherThingNew\": 100}}}".getBytes();
     private static final byte[] BAD_DOCUMENT = "{\"version\": true}".getBytes();
@@ -179,7 +180,6 @@ class FullShadowSyncRequestTest {
         assertThat(syncInformationCaptor.getValue().getShadowName(), is(SHADOW_NAME));
         assertThat(syncInformationCaptor.getValue().getThingName(), is(THING_NAME));
         assertThat(syncInformationCaptor.getValue().isCloudDeleted(), is(false));
-
     }
 
     @Test
@@ -911,4 +911,66 @@ class FullShadowSyncRequestTest {
         verify(mockUpdateThingShadowRequestHandler, times(0)).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest.class), anyString());
         verify(mockIotDataPlaneClientWrapper, times(0)).updateThingShadow(anyString(), anyString(), any(byte[].class));
     }
- }
+
+
+    @Test
+    void GIVEN_updated_local_and_cloud_with_delta_document_WHEN_execute_THEN_updates_local_and_cloud_document() throws RetryableException, SkipSyncRequestException, IOException {
+        long epochSeconds = Instant.now().getEpochSecond();
+        long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
+        JsonNode expectedMergedDocument = JsonUtil.getPayloadJson(MERGED_DOCUMENT).get();
+        ShadowDocument shadowDocument = new ShadowDocument(LOCAL_DOCUMENT);
+        when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.of(shadowDocument));
+        GetThingShadowResponse response = GetThingShadowResponse.builder()
+                .payload(SdkBytes.fromByteArray(CLOUD_DOCUMENT_WITH_DELTA))
+                .build();
+        when(mockIotDataPlaneClientWrapper.getThingShadow(anyString(), anyString())).thenReturn(response);
+        when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder()
+                .cloudUpdateTime(epochSecondsMinus60)
+                .thingName(THING_NAME)
+                .shadowName(SHADOW_NAME)
+                .cloudDeleted(false)
+                .lastSyncedDocument(BASE_DOCUMENT)
+                .cloudVersion(1L)
+                .localVersion(1L)
+                .lastSyncTime(epochSecondsMinus60)
+                .build()));
+        when(mockUpdateThingShadowHandlerResponse.getUpdateThingShadowResponse().getPayload()).thenReturn("{\"version\": 11, \"state\": {}}".getBytes(UTF_8));
+        when(mockUpdateThingShadowRequestHandler.handleRequest(localUpdateThingShadowRequestCaptor.capture(), anyString())).
+                thenReturn(mockUpdateThingShadowHandlerResponse);
+        when(mockIotDataPlaneClientWrapper.updateThingShadow(thingNameCaptor.capture(), shadowNameCaptor.capture(), payloadCaptor.capture()))
+                .thenReturn(UpdateThingShadowResponse.builder().payload(SdkBytes.fromString("{\"version\": 6, \"state\": {}}", UTF_8)).build());
+
+        FullShadowSyncRequest fullShadowSyncRequest = new FullShadowSyncRequest(THING_NAME, SHADOW_NAME);
+        fullShadowSyncRequest.execute(syncContext);
+
+        verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
+        verify(mockDao, times(1)).updateSyncInformation(any());
+        verify(mockUpdateThingShadowRequestHandler, times(1)).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest.class), anyString());
+        verify(mockIotDataPlaneClientWrapper, times(1)).updateThingShadow(anyString(), anyString(), any(byte[].class));
+
+        software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest localDocumentUpdateRequest = localUpdateThingShadowRequestCaptor.getValue();
+        assertThat(localDocumentUpdateRequest.getShadowName(), is(SHADOW_NAME));
+        assertThat(localDocumentUpdateRequest.getThingName(), is(THING_NAME));
+        JsonNode actualLocalUpdateDocument = JsonUtil.getPayloadJson(localDocumentUpdateRequest.getPayload()).get();
+        assertThat(actualLocalUpdateDocument.get(SHADOW_DOCUMENT_VERSION).asLong(), is(10L));
+        ((ObjectNode)actualLocalUpdateDocument).remove(SHADOW_DOCUMENT_VERSION);
+        assertThat(actualLocalUpdateDocument, is(expectedMergedDocument));
+
+        assertThat(thingNameCaptor.getValue(), is(THING_NAME));
+        assertThat(shadowNameCaptor.getValue(), is(SHADOW_NAME));
+        JsonNode actualCloudUpdateDocument = JsonUtil.getPayloadJson(payloadCaptor.getValue()).get();
+        assertThat(actualCloudUpdateDocument.get(SHADOW_DOCUMENT_VERSION).asLong(), is(5L));
+        ((ObjectNode)actualCloudUpdateDocument).remove(SHADOW_DOCUMENT_VERSION);
+        assertThat(actualCloudUpdateDocument, is(expectedMergedDocument));
+
+        assertThat(syncInformationCaptor.getValue(), is(notNullValue()));
+        assertThat(JsonUtil.getPayloadJson(syncInformationCaptor.getValue().getLastSyncedDocument()).get(), is(expectedMergedDocument));
+        assertThat(syncInformationCaptor.getValue().getCloudVersion(), is(6L));
+        assertThat(syncInformationCaptor.getValue().getLocalVersion(), is(11L));
+        assertThat(syncInformationCaptor.getValue().getCloudUpdateTime(), is(greaterThanOrEqualTo(epochSeconds)));
+        assertThat(syncInformationCaptor.getValue().getLastSyncTime(), is(greaterThanOrEqualTo(epochSeconds)));
+        assertThat(syncInformationCaptor.getValue().getShadowName(), is(SHADOW_NAME));
+        assertThat(syncInformationCaptor.getValue().getThingName(), is(THING_NAME));
+        assertThat(syncInformationCaptor.getValue().isCloudDeleted(), is(false));
+    }
+}

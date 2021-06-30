@@ -7,6 +7,7 @@ package com.aws.greengrass.shadowmanager.model;
 
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.util.Pair;
+import com.aws.greengrass.util.SerializerFactory;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.LongNode;
@@ -56,7 +57,8 @@ public class ShadowDocument {
             setFields(null, null, null);
             return;
         }
-        ShadowDocument shadowDocument = JsonUtil.OBJECT_MAPPER.readValue(documentBytes, ShadowDocument.class);
+        ShadowDocument shadowDocument = SerializerFactory.getFailSafeJsonObjectMapper()
+                .readValue(documentBytes, ShadowDocument.class);
         setFields(shadowDocument.getState(), shadowDocument.getMetadata(), shadowDocument.getVersion());
     }
 
@@ -72,7 +74,8 @@ public class ShadowDocument {
             setFields(null, null, null);
             return;
         }
-        ShadowDocument shadowDocument = JsonUtil.OBJECT_MAPPER.readValue(documentBytes, ShadowDocument.class);
+        ShadowDocument shadowDocument = SerializerFactory.getFailSafeJsonObjectMapper()
+                .readValue(documentBytes, ShadowDocument.class);
         setFields(shadowDocument.getState(), shadowDocument.getMetadata(), version);
     }
 

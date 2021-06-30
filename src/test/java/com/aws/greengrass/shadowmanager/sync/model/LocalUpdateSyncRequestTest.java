@@ -17,7 +17,6 @@ import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientWrapper;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
-import com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -124,21 +123,6 @@ class LocalUpdateSyncRequestTest {
         assertThat(syncInformationCaptor.getValue().getShadowName(), is(SHADOW_NAME));
         assertThat(syncInformationCaptor.getValue().getThingName(), is(THING_NAME));
         assertThat(syncInformationCaptor.getValue().isCloudDeleted(), is(false));
-    }
-
-    @Test
-    void GIVEN_bad_cloud_update_payload_WHEN_execute_THEN_throw_skip_sync_request_exception(ExtensionContext context) {
-        ignoreExceptionOfType(context, UnrecognizedPropertyException.class);
-
-        final byte[] badCloudPayload = "{\"version\": 6, \"badUpdate\": {\"reported\": {\"name\": \"The Beatles\"}}}".getBytes();
-
-        LocalUpdateSyncRequest request = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, badCloudPayload);
-        SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class, () -> request.execute(syncContext));
-        assertThat(thrown.getCause(), is(instanceOf(IOException.class)));
-
-        verify(mockDao, times(0)).getShadowSyncInformation(anyString(), anyString());
-        verify(mockUpdateThingShadowRequestHandler, times(0)).handleRequest(any(), any());
-        verify(mockDao, times(0)).updateSyncInformation(any());
     }
 
     @Test
