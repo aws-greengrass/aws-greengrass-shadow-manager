@@ -16,9 +16,8 @@ services:
       - DoAll
   DoAll:
     lifecycle:
-      all:
-        run:
-          echo "Running"
+      startup: echo "Running"
+      shutdown: echo "Stopping"
     dependencies:
       - aws.greengrass.ShadowManager
     configuration:
