@@ -22,13 +22,15 @@ Manifests:
             - "bar"
           # Explicit config for "other" IoT Things
           shadowDocuments:
-          - thingName: "MyThing"
-            classic: false
-            namedShadows:
-            - "foo"
-            - "bar"
-          - thingName: "OtherThing"
-          - thingName: "YetAnotherThing"
+            <thingName>:
+              classic: false
+              namedShadows:
+              - "foo"
+              - "bar"
+            <thingName>:
+              classic: true
+            <thingName>:
+              classic: false
 
         rateLimits:
           # number of outgoing sync updates per second (useful to constrain bandwidth)
@@ -54,20 +56,18 @@ Manifests:
         "bar"
       ]
     },
-    "shadowDocuments":[
-      {
-        "thingName":"MyThing",
+    "shadowDocuments":{
+      "MyThing": {
         "classic":false,
         "namedShadows":[
           "foo",
           "bar"
         ]
       },
-      {
-        "thingName":"OtherThing",
+      "OtherThing": {
         "classic":true,
         "namedShadows":[
-          
+          "foo2"
         ]
       }
     ],
@@ -80,6 +80,11 @@ Manifests:
   "shadowDocumentSizeLimitBytes":8192
 }
 ```
+
+### Notes
+- For Shadow manager 2.1 synchronize configuration supports both data types for syncing shadows. The sync configuration
+can either be a `map` or a `list`. The map approach is preferred since this allows the customers to use the deployment 
+`merge` command to add in new shadows to sync.
 
 ## Security
 

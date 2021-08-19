@@ -106,7 +106,7 @@ public class ShadowManager extends PluginService {
     };
     private final CallbackEventManager.OnConnectCallback onConnect = callbacks::onConnectionResumed;
 
-    @Getter(AccessLevel.PACKAGE)
+    @Getter(AccessLevel.PUBLIC)
     @Setter(AccessLevel.PACKAGE)
     private ShadowSyncConfiguration syncConfiguration;
 

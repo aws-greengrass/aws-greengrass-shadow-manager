@@ -323,7 +323,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
     }
 
     @Test
-    void GIVEN_good_sync_configuration_without_nucleus_thing_config_WHEN_initialize_THEN_processes_configuration_correctly() throws UnsupportedInputTypeException {
+    void GIVEN_good_sync_configuration_without_nucleus_thing_config_in_list_WHEN_initialize_THEN_processes_configuration_correctly() throws UnsupportedInputTypeException {
         Topic thingNameTopic = mock(Topic.class);
         Topics configTopics = Topics.of(context, CONFIGURATION_SYNCHRONIZATION_TOPIC, null);
         List<Map<String, Object>> shadowDocumentsList = new ArrayList<>();
@@ -337,6 +337,34 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         shadowDocumentsList.add(thingAMap);
         shadowDocumentsList.add(thingBMap);
         configTopics.createLeafChild(CONFIGURATION_SHADOW_DOCUMENTS_TOPIC).withValueChecked(shadowDocumentsList);
+
+        when(thingNameTopic.getOnce()).thenReturn(KERNEL_THING);
+        when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
+                .thenReturn(configTopics);
+        when(mockDeviceConfiguration.getThingName()).thenReturn(thingNameTopic);
+        shadowManager.install();
+
+        verify(thingNameTopic, times(0)).subscribeGeneric(any());
+        verify(thingNameTopic, times(1)).remove(any());
+        assertFalse(shadowManager.isErrored());
+        assertThat(shadowManager.getSyncConfiguration().getSyncConfigurations(),
+                containsInAnyOrder(
+                        ThingShadowSyncConfiguration.builder().thingName(THING_NAME_A).shadowName("foo").build(),
+                        ThingShadowSyncConfiguration.builder().thingName(THING_NAME_A).shadowName("bar").build(),
+                        ThingShadowSyncConfiguration.builder().thingName(THING_NAME_B).shadowName("").build(),
+                        ThingShadowSyncConfiguration.builder().thingName(THING_NAME_B).shadowName("foo2").build()));
+    }
+
+    @Test
+    void GIVEN_good_sync_configuration_without_nucleus_thing_config_in_map_WHEN_initialize_THEN_processes_configuration_correctly() {
+        Topic thingNameTopic = mock(Topic.class);
+        Topics configTopics = Topics.of(context, CONFIGURATION_SYNCHRONIZATION_TOPIC, null);
+        Topics thingConfigTopics = configTopics.createInteriorChild(CONFIGURATION_SHADOW_DOCUMENTS_TOPIC);
+        Topics thingATopics = thingConfigTopics.createInteriorChild(THING_NAME_A);
+        thingATopics.createLeafChild(CONFIGURATION_CLASSIC_SHADOW_TOPIC).withValue(false);
+        thingATopics.createLeafChild(CONFIGURATION_NAMED_SHADOWS_TOPIC).withValue(Arrays.asList("foo", "bar"));
+        Topics thingBTopics = thingConfigTopics.createInteriorChild(THING_NAME_B);
+        thingBTopics.createLeafChild(CONFIGURATION_NAMED_SHADOWS_TOPIC).withValue(Collections.singletonList("foo2"));
 
         when(thingNameTopic.getOnce()).thenReturn(KERNEL_THING);
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))

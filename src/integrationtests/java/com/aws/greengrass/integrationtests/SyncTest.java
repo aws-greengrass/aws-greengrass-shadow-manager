@@ -12,6 +12,7 @@ import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
+import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
@@ -49,6 +50,7 @@ import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector
 import static com.github.grantwest.eventually.EventuallyLambdaMatcher.eventuallyEval;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
@@ -68,7 +70,8 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 class SyncTest extends NucleusLaunchUtils {
-    public static final String MOCK_THING_NAME = "Thing1";
+    public static final String MOCK_THING_NAME_1 = "Thing1";
+    public static final String MOCK_THING_NAME_2 = "Thing2";
     public static final String CLASSIC_SHADOW = "";
     public static final String RANDOM_SHADOW = "badShadowName";
 
@@ -103,9 +106,9 @@ class SyncTest extends NucleusLaunchUtils {
     @BeforeEach
     void setup() {
         kernel = new Kernel();
-        syncInfo = () -> kernel.getContext().get(ShadowManagerDAOImpl.class).getShadowSyncInformation(MOCK_THING_NAME,
+        syncInfo = () -> kernel.getContext().get(ShadowManagerDAOImpl.class).getShadowSyncInformation(MOCK_THING_NAME_1,
                 CLASSIC_SHADOW);
-        localShadow = () -> kernel.getContext().get(ShadowManagerDAOImpl.class).getShadowThing(MOCK_THING_NAME,
+        localShadow = () -> kernel.getContext().get(ShadowManagerDAOImpl.class).getShadowThing(MOCK_THING_NAME_1,
                 CLASSIC_SHADOW);
     }
 
@@ -145,6 +148,43 @@ class SyncTest extends NucleusLaunchUtils {
     }
 
     @Test
+    void GIVEN_sync_config_map_and_no_local_WHEN_startup_THEN_local_version_updated_via_full_sync(ExtensionContext context)
+            throws IOException, InterruptedException {
+        ignoreExceptionOfType(context, InterruptedException.class);
+
+        GetThingShadowResponse shadowResponse = mock(GetThingShadowResponse.class, Answers.RETURNS_DEEP_STUBS);
+        lenient().when(shadowResponse.payload().asByteArray()).thenReturn(cloudShadowContentV10.getBytes(UTF_8));
+
+        // existing document
+        when(iotDataPlaneClientFactory.getIotDataPlaneClient()
+                .getThingShadow(any(GetThingShadowRequest.class))).thenReturn(shadowResponse);
+
+        startNucleusWithConfig("sync_map.yaml", true, false);
+
+        assertThat(shadowManager.getSyncConfiguration().getSyncConfigurations(),
+                containsInAnyOrder(
+                        ThingShadowSyncConfiguration.builder().thingName(MOCK_THING_NAME_1).shadowName("").build(),
+                        ThingShadowSyncConfiguration.builder().thingName(MOCK_THING_NAME_2).shadowName("bar").build(),
+                        ThingShadowSyncConfiguration.builder().thingName(MOCK_THING_NAME_2).shadowName("").build(),
+                        ThingShadowSyncConfiguration.builder().thingName(MOCK_THING_NAME_2).shadowName("foo").build()));
+
+        assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
+        assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(10L)));
+        assertThat("local version", syncInfo.get().get().getLocalVersion(), is(1L));
+
+        assertThat("local shadow exists", localShadow.get().isPresent(), is(true));
+        ShadowDocument shadowDocument = localShadow.get().get();
+
+        JsonNode v1 = new ShadowDocument(localShadowContentV1.getBytes(UTF_8)).toJson(false);
+        // remove metadata node and version (JsonNode version will fail a comparison of long vs int)
+        shadowDocument = new ShadowDocument(shadowDocument.getState(), null, null);
+        assertThat(shadowDocument.toJson(false), is(equalTo(v1)));
+
+        verify(iotDataPlaneClientFactory.getIotDataPlaneClient(), never()).updateThingShadow(
+                any(software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowRequest.class));
+    }
+
+    @Test
     void GIVEN_sync_config_and_no_cloud_WHEN_startup_THEN_cloud_version_updated_via_full_sync(ExtensionContext context)
             throws IOException, InterruptedException {
         ignoreExceptionOfType(context, InterruptedException.class);
@@ -156,13 +196,13 @@ class SyncTest extends NucleusLaunchUtils {
         when(iotDataPlaneClientFactory.getIotDataPlaneClient().getThingShadow(any(GetThingShadowRequest.class)))
                 .thenThrow(ResourceNotFoundException.class);
         when(dao.updateSyncInformation(syncInformationCaptor.capture())).thenReturn(true);
-        when(dao.listSyncedShadows()).thenReturn(Collections.singletonList(new Pair<>(MOCK_THING_NAME, CLASSIC_SHADOW)));
+        when(dao.listSyncedShadows()).thenReturn(Collections.singletonList(new Pair<>(MOCK_THING_NAME_1, CLASSIC_SHADOW)));
 
         ShadowDocument localDocument = new ShadowDocument(localShadowContentV1.getBytes(UTF_8), 1);
-        when(dao.getShadowThing(eq(MOCK_THING_NAME), eq(CLASSIC_SHADOW))).thenReturn(Optional.of(localDocument));
-        when(dao.getShadowSyncInformation(eq(MOCK_THING_NAME), eq(CLASSIC_SHADOW)))
+        when(dao.getShadowThing(eq(MOCK_THING_NAME_1), eq(CLASSIC_SHADOW))).thenReturn(Optional.of(localDocument));
+        when(dao.getShadowSyncInformation(eq(MOCK_THING_NAME_1), eq(CLASSIC_SHADOW)))
                 .thenReturn(Optional.of(SyncInformation.builder()
-                        .thingName(MOCK_THING_NAME)
+                        .thingName(MOCK_THING_NAME_1)
                         .shadowName(CLASSIC_SHADOW)
                         .lastSyncTime(Instant.EPOCH.getEpochSecond())
                         .cloudUpdateTime(Instant.EPOCH.getEpochSecond())
@@ -178,10 +218,10 @@ class SyncTest extends NucleusLaunchUtils {
 
         assertThat(syncInformationCaptor.getValue().getCloudVersion(), is(1L));
         assertThat(syncInformationCaptor.getValue().getLocalVersion(), is(1L));
-        assertThat(syncInformationCaptor.getValue().getThingName(), is(MOCK_THING_NAME));
+        assertThat(syncInformationCaptor.getValue().getThingName(), is(MOCK_THING_NAME_1));
         assertThat(syncInformationCaptor.getValue().getShadowName(), is(CLASSIC_SHADOW));
 
-        assertThat(cloudUpdateThingShadowRequestCaptor.getValue().thingName(), is(MOCK_THING_NAME));
+        assertThat(cloudUpdateThingShadowRequestCaptor.getValue().thingName(), is(MOCK_THING_NAME_1));
         assertThat(cloudUpdateThingShadowRequestCaptor.getValue().shadowName(), is(CLASSIC_SHADOW));
 
         verify(dao, never()).updateShadowThing(anyString(), anyString(), any(byte[].class), anyLong());
@@ -210,7 +250,7 @@ class SyncTest extends NucleusLaunchUtils {
 
         // update local shadow
         UpdateThingShadowRequest request = new UpdateThingShadowRequest();
-        request.setThingName(MOCK_THING_NAME);
+        request.setThingName(MOCK_THING_NAME_1);
         request.setShadowName(CLASSIC_SHADOW);
         request.setPayload(localShadowContentV1.getBytes(UTF_8));
 
@@ -248,7 +288,7 @@ class SyncTest extends NucleusLaunchUtils {
         startNucleusWithConfig("sync.yaml", true, false);
 
         SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
-        syncHandler.pushLocalUpdateSyncRequest(MOCK_THING_NAME, CLASSIC_SHADOW, JsonUtil.getPayloadBytes(cloudDocument));
+        syncHandler.pushLocalUpdateSyncRequest(MOCK_THING_NAME_1, CLASSIC_SHADOW, JsonUtil.getPayloadBytes(cloudDocument));
         assertEmptySyncQueue(syncHandler);
 
         assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
@@ -288,7 +328,7 @@ class SyncTest extends NucleusLaunchUtils {
 
         DeleteThingShadowRequestHandler deleteHandler = shadowManager.getDeleteThingShadowRequestHandler();
         DeleteThingShadowRequest request = new DeleteThingShadowRequest();
-        request.setThingName(MOCK_THING_NAME);
+        request.setThingName(MOCK_THING_NAME_1);
         request.setShadowName(CLASSIC_SHADOW);
         deleteHandler.handleRequest(request, "DoAll");
 
@@ -331,7 +371,7 @@ class SyncTest extends NucleusLaunchUtils {
         assertThat("local shadow exists", () -> localShadow.get().isPresent(), eventuallyEval(is(true)));
         assertThat("local shadow version",localShadow.get().get().getVersion(), is(1L));
 
-        syncHandler.pushLocalDeleteSyncRequest(MOCK_THING_NAME, CLASSIC_SHADOW, "{\"version\": 10}".getBytes(UTF_8));
+        syncHandler.pushLocalDeleteSyncRequest(MOCK_THING_NAME_1, CLASSIC_SHADOW, "{\"version\": 10}".getBytes(UTF_8));
 
         // wait for it to process
         assertEmptySyncQueue(syncHandler);
@@ -372,14 +412,14 @@ class SyncTest extends NucleusLaunchUtils {
                 .cloudDeleted(false)
                 .lastSyncTime(Instant.now().getEpochSecond())
                 .shadowName(RANDOM_SHADOW)
-                .thingName(MOCK_THING_NAME)
+                .thingName(MOCK_THING_NAME_1)
                 .build());
-        dao.updateShadowThing(MOCK_THING_NAME, RANDOM_SHADOW, localShadowContentV1.getBytes(UTF_8), 1L);
+        dao.updateShadowThing(MOCK_THING_NAME_1, RANDOM_SHADOW, localShadowContentV1.getBytes(UTF_8), 1L);
 
         DeleteThingShadowRequestHandler deleteHandler = shadowManager.getDeleteThingShadowRequestHandler();
 
         DeleteThingShadowRequest request = new DeleteThingShadowRequest();
-        request.setThingName(MOCK_THING_NAME);
+        request.setThingName(MOCK_THING_NAME_1);
         request.setShadowName(RANDOM_SHADOW);
 
         deleteHandler.handleRequest(request, "DoAll");
@@ -403,7 +443,7 @@ class SyncTest extends NucleusLaunchUtils {
         UpdateThingShadowRequestHandler updateHandler = shadowManager.getUpdateThingShadowRequestHandler();
 
         UpdateThingShadowRequest request = new UpdateThingShadowRequest();
-        request.setThingName(MOCK_THING_NAME);
+        request.setThingName(MOCK_THING_NAME_1);
         request.setShadowName(RANDOM_SHADOW);
         request.setPayload(localShadowContentV1.getBytes(UTF_8));
         updateHandler.handleRequest(request, "DoAll");
@@ -424,12 +464,12 @@ class SyncTest extends NucleusLaunchUtils {
         ignoreExceptionOfType(context, TestException.class);
 
         UpdateThingShadowRequest request1 = new UpdateThingShadowRequest();
-        request1.setThingName(MOCK_THING_NAME);
+        request1.setThingName(MOCK_THING_NAME_1);
         request1.setShadowName(CLASSIC_SHADOW);
         request1.setPayload(localUpdate1.getBytes(UTF_8));
 
         UpdateThingShadowRequest request2 = new UpdateThingShadowRequest();
-        request2.setThingName(MOCK_THING_NAME);
+        request2.setThingName(MOCK_THING_NAME_1);
         request2.setShadowName(CLASSIC_SHADOW);
         request2.setPayload(localUpdate2.getBytes(UTF_8));
 
