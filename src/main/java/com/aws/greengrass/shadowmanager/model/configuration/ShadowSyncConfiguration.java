@@ -25,6 +25,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.CLASSIC_SHADOW_ID
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_CLASSIC_SHADOW_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_CORE_THING_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_NAMED_SHADOWS_TOPIC;
+import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SHADOW_DOCUMENTS_MAP_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SHADOW_DOCUMENTS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_THING_NAME_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.UNEXPECTED_TYPE_FORMAT;
@@ -90,12 +91,23 @@ public class ShadowSyncConfiguration {
      */
     private static void processOtherThingConfigurations(Map<String, Object> configTopicsPojo,
                                                         Set<ThingShadowSyncConfiguration> syncConfigurationSet) {
+        // Process the shadow documents map first.
+        configTopicsPojo.computeIfPresent(CONFIGURATION_SHADOW_DOCUMENTS_MAP_TOPIC,
+                (ignored, shadowDocumentsObject) -> {
+                    if (shadowDocumentsObject instanceof Map) {
+                        Map<String, Object> shadowDocumentsMap = (Map) shadowDocumentsObject;
+                        shadowDocumentsMap.forEach((componentName, componentConfigObject) ->
+                                processThingConfiguration(componentConfigObject, componentName, syncConfigurationSet));
+                    } else {
+                        throw new InvalidConfigurationException(String.format("Unexpected type in %s: %s",
+                                CONFIGURATION_SHADOW_DOCUMENTS_TOPIC, shadowDocumentsObject.getClass().getTypeName()));
+                    }
+                    return shadowDocumentsObject;
+                });
+
+        // Then process the shadow documents list.
         configTopicsPojo.computeIfPresent(CONFIGURATION_SHADOW_DOCUMENTS_TOPIC, (ignored, shadowDocumentsObject) -> {
-            if (shadowDocumentsObject instanceof Map) {
-                Map<String, Object> shadowDocumentsMap = (Map) shadowDocumentsObject;
-                shadowDocumentsMap.forEach((componentName, componentConfigObject) ->
-                        processThingConfiguration(componentConfigObject, componentName, syncConfigurationSet));
-            } else if (shadowDocumentsObject instanceof List) {
+            if (shadowDocumentsObject instanceof List) {
                 List<Object> shadowDocumentsToSyncList = (List) shadowDocumentsObject;
                 shadowDocumentsToSyncList.forEach(shadowDocumentsToSync ->
                         processThingConfiguration(shadowDocumentsToSync, syncConfigurationSet));

@@ -7,7 +7,7 @@ services:
   aws.greengrass.ShadowManager:
     configuration:
       synchronize:
-        shadowDocuments:
+        shadowDocumentsMap:
           Thing1:
             classic: true
           Thing2:

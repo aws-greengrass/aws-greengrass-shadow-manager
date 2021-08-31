@@ -69,6 +69,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_NAMED_SHADOWS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_RATE_LIMITS_TOPIC;
+import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SHADOW_DOCUMENTS_MAP_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SHADOW_DOCUMENTS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SYNCHRONIZATION_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_THING_NAME_TOPIC;
@@ -107,6 +108,7 @@ import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.UPD
 class ShadowManagerUnitTest extends GGServiceTestUtil {
     private final static String THING_NAME_A = "thingNameA";
     private final static String THING_NAME_B = "thingNameB";
+    private final static String THING_NAME_C = "thingNameC";
     private final static String KERNEL_THING = "kernelThing";
     private final static int RATE_LIMIT = 500;
     @Mock
@@ -359,7 +361,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
     void GIVEN_good_sync_configuration_without_nucleus_thing_config_in_map_WHEN_initialize_THEN_processes_configuration_correctly() {
         Topic thingNameTopic = mock(Topic.class);
         Topics configTopics = Topics.of(context, CONFIGURATION_SYNCHRONIZATION_TOPIC, null);
-        Topics thingConfigTopics = configTopics.createInteriorChild(CONFIGURATION_SHADOW_DOCUMENTS_TOPIC);
+        Topics thingConfigTopics = configTopics.createInteriorChild(CONFIGURATION_SHADOW_DOCUMENTS_MAP_TOPIC);
         Topics thingATopics = thingConfigTopics.createInteriorChild(THING_NAME_A);
         thingATopics.createLeafChild(CONFIGURATION_CLASSIC_SHADOW_TOPIC).withValue(false);
         thingATopics.createLeafChild(CONFIGURATION_NAMED_SHADOWS_TOPIC).withValue(Arrays.asList("foo", "bar"));
@@ -379,6 +381,47 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
                 containsInAnyOrder(
                         ThingShadowSyncConfiguration.builder().thingName(THING_NAME_A).shadowName("foo").build(),
                         ThingShadowSyncConfiguration.builder().thingName(THING_NAME_A).shadowName("bar").build(),
+                        ThingShadowSyncConfiguration.builder().thingName(THING_NAME_B).shadowName("").build(),
+                        ThingShadowSyncConfiguration.builder().thingName(THING_NAME_B).shadowName("foo2").build()));
+    }
+
+    @Test
+    void GIVEN_good_sync_configuration_without_nucleus_thing_config_in_map_and_list_WHEN_initialize_THEN_processes_configuration_correctly() throws UnsupportedInputTypeException {
+        Topic thingNameTopic = mock(Topic.class);
+        Topics configTopics = Topics.of(context, CONFIGURATION_SYNCHRONIZATION_TOPIC, null);
+        Topics thingConfigTopics = configTopics.createInteriorChild(CONFIGURATION_SHADOW_DOCUMENTS_MAP_TOPIC);
+        Topics thingATopics = thingConfigTopics.createInteriorChild(THING_NAME_A);
+        thingATopics.createLeafChild(CONFIGURATION_CLASSIC_SHADOW_TOPIC).withValue(false);
+        thingATopics.createLeafChild(CONFIGURATION_NAMED_SHADOWS_TOPIC).withValue(Arrays.asList("foo", "bar"));
+        Topics thingBTopics = thingConfigTopics.createInteriorChild(THING_NAME_B);
+        thingBTopics.createLeafChild(CONFIGURATION_NAMED_SHADOWS_TOPIC).withValue(Collections.singletonList("foo2"));
+        List<Map<String, Object>> shadowDocumentsList = new ArrayList<>();
+        Map<String, Object> thingCMap = new HashMap<>();
+        thingCMap.put(CONFIGURATION_THING_NAME_TOPIC, THING_NAME_C);
+        thingCMap.put(CONFIGURATION_CLASSIC_SHADOW_TOPIC, true);
+        thingCMap.put(CONFIGURATION_NAMED_SHADOWS_TOPIC, Collections.singletonList("foo100"));
+        Map<String, Object> thingBMap = new HashMap<>();
+        thingBMap.put(CONFIGURATION_THING_NAME_TOPIC, THING_NAME_B);
+        thingBMap.put(CONFIGURATION_NAMED_SHADOWS_TOPIC, Collections.singletonList("foo2"));
+        shadowDocumentsList.add(thingCMap);
+        shadowDocumentsList.add(thingBMap);
+        configTopics.createLeafChild(CONFIGURATION_SHADOW_DOCUMENTS_TOPIC).withValueChecked(shadowDocumentsList);
+
+        when(thingNameTopic.getOnce()).thenReturn(KERNEL_THING);
+        when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
+                .thenReturn(configTopics);
+        when(mockDeviceConfiguration.getThingName()).thenReturn(thingNameTopic);
+        shadowManager.install();
+
+        verify(thingNameTopic, times(0)).subscribeGeneric(any());
+        verify(thingNameTopic, times(1)).remove(any());
+        assertFalse(shadowManager.isErrored());
+        assertThat(shadowManager.getSyncConfiguration().getSyncConfigurations(),
+                containsInAnyOrder(
+                        ThingShadowSyncConfiguration.builder().thingName(THING_NAME_A).shadowName("foo").build(),
+                        ThingShadowSyncConfiguration.builder().thingName(THING_NAME_A).shadowName("bar").build(),
+                        ThingShadowSyncConfiguration.builder().thingName(THING_NAME_C).shadowName("").build(),
+                        ThingShadowSyncConfiguration.builder().thingName(THING_NAME_C).shadowName("foo100").build(),
                         ThingShadowSyncConfiguration.builder().thingName(THING_NAME_B).shadowName("").build(),
                         ThingShadowSyncConfiguration.builder().thingName(THING_NAME_B).shadowName("foo2").build()));
     }
