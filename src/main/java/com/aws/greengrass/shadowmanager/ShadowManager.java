@@ -35,6 +35,7 @@ import com.aws.greengrass.shadowmanager.sync.CloudDataClient;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientWrapper;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
 import com.aws.greengrass.shadowmanager.sync.model.SyncContext;
+import com.aws.greengrass.shadowmanager.sync.strategy.model.Strategy;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.shadowmanager.util.ShadowWriteSynchronizeHelper;
 import com.aws.greengrass.shadowmanager.util.Validator;
@@ -64,8 +65,10 @@ import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_RATE_LIMITS_TOPIC;
+import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_STRATEGY_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SYNCHRONIZATION_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_DOCUMENT_SIZE;
+import static com.aws.greengrass.shadowmanager.sync.strategy.model.Strategy.DEFAULT_STRATEGY;
 import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.DELETE_THING_SHADOW;
 import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.GET_THING_SHADOW;
 import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.LIST_NAMED_SHADOWS_FOR_THING;
@@ -224,7 +227,7 @@ public class ShadowManager extends PluginService {
                     return;
                 }
                 this.syncConfiguration = newSyncConfiguration;
-                this.syncHandler.setSyncConfiguration(this.syncConfiguration.getSyncConfigurations());
+                this.syncHandler.setSyncConfigurations(this.syncConfiguration.getSyncConfigurations());
 
                 // Subscribe to the thing name topic if the Nucleus thing shadows have been synced.
                 Optional<ThingShadowSyncConfiguration> coreThingConfig =
@@ -290,6 +293,18 @@ public class ShadowManager extends PluginService {
                     } catch (InvalidConfigurationException e) {
                         serviceErrored(e);
                     }
+                });
+
+        Topics strategyTopics = config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_STRATEGY_TOPIC);
+        strategyTopics.subscribe((why, newv) -> {
+                    Strategy strategy;
+                    if (WhatHappened.removed.equals(why) || newv == null) {
+                        strategy = DEFAULT_STRATEGY;
+                    } else {
+                        // Get the correct sync strategy configuration from the POJO.
+                        strategy = Strategy.fromPojo(strategyTopics.toPOJO());
+                    }
+                    syncHandler.setSyncStrategy(strategy);
                 });
     }
 
@@ -389,7 +404,7 @@ public class ShadowManager extends PluginService {
      * @implNote Making this package-private for unit tests.
      */
     @Synchronized
-    void startSyncingShadows() {
+    public void startSyncingShadows() {
         // Remove sync information of shadows that are no longer being synced.
         deleteRemovedSyncInformation();
 

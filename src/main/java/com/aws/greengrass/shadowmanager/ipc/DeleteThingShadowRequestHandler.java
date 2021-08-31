@@ -151,7 +151,7 @@ public class DeleteThingShadowRequestHandler extends BaseRequestHandler {
                     publishErrorMessage(thingName, shadowName, Optional.empty(), ErrorMessage.UNAUTHORIZED_MESSAGE,
                             Operation.DELETE_SHADOW);
                     throw new UnauthorizedError(e.getMessage());
-                } catch (ShadowManagerDataException | IOException e) {
+                } catch (ShadowManagerDataException | InterruptedException | IOException e) {
                     logger.atError()
                             .setEventType(LogEvents.DELETE_THING_SHADOW.code())
                             .setCause(e)

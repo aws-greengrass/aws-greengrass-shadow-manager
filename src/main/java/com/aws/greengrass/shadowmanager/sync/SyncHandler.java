@@ -7,8 +7,6 @@ package com.aws.greengrass.shadowmanager.sync;
 
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
-import com.aws.greengrass.shadowmanager.exception.RetryableException;
-import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
 import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.sync.model.CloudDeleteSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.CloudUpdateSyncRequest;
@@ -16,28 +14,22 @@ import com.aws.greengrass.shadowmanager.sync.model.FullShadowSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.LocalDeleteSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.LocalUpdateSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.SyncContext;
-import com.aws.greengrass.shadowmanager.sync.model.SyncRequest;
+import com.aws.greengrass.shadowmanager.sync.strategy.SyncStrategy;
+import com.aws.greengrass.shadowmanager.sync.strategy.SyncStrategyFactory;
+import com.aws.greengrass.shadowmanager.sync.strategy.model.Strategy;
+import com.aws.greengrass.shadowmanager.sync.strategy.model.StrategyType;
 import com.aws.greengrass.util.Pair;
 import com.aws.greengrass.util.RetryUtils;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.Getter;
-import software.amazon.awssdk.aws.greengrass.model.ConflictError;
-import software.amazon.awssdk.services.iotdataplane.model.ConflictException;
+import lombok.Setter;
 
-import java.time.Duration;
-import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
-import java.util.concurrent.atomic.AtomicBoolean;
 import javax.inject.Inject;
 
-import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
-import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.LogEvents.SYNC;
 
 /**
@@ -46,54 +38,12 @@ import static com.aws.greengrass.shadowmanager.model.LogEvents.SYNC;
 public class SyncHandler {
     private static final Logger logger = LogManager.getLogger(SyncHandler.class);
 
-    /**
-     * Configuration for retrying sync requests.
-     */
-    private static final RetryUtils.RetryConfig DEFAULT_RETRY_CONFIG =
-            RetryUtils.RetryConfig.builder()
-                    .maxAttempt(5)
-                    .initialRetryInterval(Duration.of(3, ChronoUnit.SECONDS))
-                    .maxRetryInterval(Duration.of(1, ChronoUnit.MINUTES))
-                    .retryableExceptions(Collections.singletonList(RetryableException.class)).build();
-    /**
-     * Configuration for retrying a sync request immediately after failing with the {@link #DEFAULT_RETRY_CONFIG}.
-     */
-    private static final RetryUtils.RetryConfig FAILED_RETRY_CONFIG =
-            RetryUtils.RetryConfig.builder()
-                    .maxAttempt(3)
-                    .initialRetryInterval(Duration.of(30, ChronoUnit.SECONDS))
-                    .maxRetryInterval(Duration.of(2, ChronoUnit.MINUTES))
-                    .retryableExceptions(Collections.singletonList(RetryableException.class))
-                    .build();
-
     private static final String SYNC_EVENT_TYPE = SYNC.code();
 
     /**
      * Default number of threads to use for executing sync requests.
      */
     public static final int DEFAULT_PARALLELISM = 1;
-
-    @Getter
-    private final RequestBlockingQueue syncQueue;
-
-    private final ExecutorService syncExecutorService;
-
-    private final Object lifecycleLock = new Object();
-
-    /**
-     * The threads running the sync loop.
-     */
-    final List<Future<?>> syncThreads = new ArrayList<>();
-
-    /**
-     * Indicates whether syncing is running or not.
-     */
-    final AtomicBoolean syncing = new AtomicBoolean(false);
-
-    /**
-     * Interface for executing sync requests.
-     */
-    private final Retryer retryer;
 
     /**
      * Context object containing handlers useful for sync requests.
@@ -103,32 +53,32 @@ public class SyncHandler {
     /**
      * Context object containing sync configurations.
      */
+    // TODO: [GG-36231]: Figure out a better way to set this configuration in only one place.
+    @Setter
     private Set<ThingShadowSyncConfiguration> syncConfigurations;
 
+    /**
+     * The sync strategy for all shadows.
+     *
+     * @implNote The Getter and Setter are only used in integration tests.
+     */
+    @Getter
+    @Setter
+    private SyncStrategy overallSyncStrategy;
 
-    private final RetryUtils.RetryConfig defaultRetryConfig;
+    /**
+     * The sync strategy factory object to generate.
+     */
+    private final SyncStrategyFactory syncStrategyFactory;
 
     /**
      * Construct a new instance.
      *
-     * @param syncQueue       the queue for storing sync requests
      * @param executorService provider of threads for syncing
      */
     @Inject
-    public SyncHandler(RequestBlockingQueue syncQueue, ExecutorService executorService) {
-        this(syncQueue, executorService, DEFAULT_RETRY_CONFIG);
-    }
-
-    /**
-     * Construct a new instance.
-     *
-     * @param syncQueue          the queue for storing sync requests
-     * @param executorService    provider of threads for syncing
-     * @param defaultRetryConfig the config for retrying requests
-     */
-    public SyncHandler(RequestBlockingQueue syncQueue, ExecutorService executorService,
-            RetryUtils.RetryConfig defaultRetryConfig) {
-        this(syncQueue, executorService,
+    public SyncHandler(ExecutorService executorService) {
+        this(executorService,
                 // retry wrapper so that requests can be mocked
                 (config, request, context) ->
                         RetryUtils.runWithRetry(config,
@@ -136,40 +86,36 @@ public class SyncHandler {
                                     request.execute(context);
                                     return null;
                                 },
-                                SYNC_EVENT_TYPE, logger),
-                defaultRetryConfig);
-    }
-
-    SyncHandler(RequestBlockingQueue syncQueue, ExecutorService executorService,
-                Retryer retryer) {
-        this(syncQueue, executorService, retryer, DEFAULT_RETRY_CONFIG);
-    }
-
-    SyncHandler(RequestBlockingQueue syncQueue, ExecutorService executorService,
-            Retryer retryer, RetryUtils.RetryConfig defaultRetryConfig) {
-        this.syncQueue = syncQueue;
-        this.syncExecutorService = executorService;
-        this.retryer = retryer;
-        this.defaultRetryConfig = defaultRetryConfig;
+                                SYNC_EVENT_TYPE, logger));
     }
 
     /**
-     * Sets the sync configuration list.
+     * Constructor.
      *
-     * @param syncConfigurations the sync configuration list.
+     * @param executorService provider of threads for syncing
+     * @param retryer         The retryer object.
      */
-    // TODO: [GG-36231]: Figure out a better way to set this configuration in only one place.
-    public void setSyncConfiguration(Set<ThingShadowSyncConfiguration> syncConfigurations) {
-        this.syncConfigurations = syncConfigurations;
+    private SyncHandler(ExecutorService executorService, Retryer retryer) {
+        this(new SyncStrategyFactory(retryer, executorService));
     }
 
     /**
-     * Interface for executing sync requests with retries.
+     * Constructor for testing.
+     *
+     * @param syncStrategyFactory The sync strategy factory object to generate.
      */
-    @FunctionalInterface
-    interface Retryer {
-        @SuppressWarnings("PMD.SignatureDeclareThrowsException")
-        void run(RetryUtils.RetryConfig config, SyncRequest request, SyncContext context) throws Exception;
+    SyncHandler(SyncStrategyFactory syncStrategyFactory) {
+        this.syncStrategyFactory = syncStrategyFactory;
+        setSyncStrategy(Strategy.builder().type(StrategyType.REALTIME).build());
+    }
+
+    /**
+     * Sets the sync strategy based on the Strategy object provided.
+     *
+     * @param syncStrategy The sync strategy.
+     */
+    public void setSyncStrategy(Strategy syncStrategy) {
+        this.overallSyncStrategy = this.syncStrategyFactory.getSyncStrategy(syncStrategy);
     }
 
     /**
@@ -179,20 +125,20 @@ public class SyncHandler {
      * @throws InterruptedException if the thread is interrupted while enqueuing data
      */
     private void fullSyncOnAllShadows() throws InterruptedException {
-        syncQueue.clear();
+        overallSyncStrategy.clearSyncQueue();
 
         List<Pair<String, String>> shadows = context.getDao().listSyncedShadows();
 
-        if (shadows.size() > syncQueue.remainingCapacity()) {
+        if (shadows.size() > overallSyncStrategy.getRemainingCapacity()) {
             logger.atWarn(SYNC_EVENT_TYPE)
                     .addKeyValue("syncedShadows", shadows.size())
-                    .addKeyValue("syncQueueCapacity", syncQueue.remainingCapacity())
+                    .addKeyValue("syncQueueCapacity", overallSyncStrategy.getRemainingCapacity())
                     .log("There are more shadows than space in the sync queue. Syncing will block");
         }
         Iterator<FullShadowSyncRequest> it =
                 shadows.stream().map(p -> new FullShadowSyncRequest(p.getLeft(), p.getRight())).iterator();
-        while (syncing.get() && it.hasNext()) {
-            syncQueue.put(it.next());
+        while (it.hasNext()) {
+            overallSyncStrategy.putSyncRequest(it.next());
         }
     }
 
@@ -203,18 +149,8 @@ public class SyncHandler {
      * @param syncParallelism number of threads to use for syncing
      */
     public void start(SyncContext context, int syncParallelism) {
-        synchronized (lifecycleLock) {
-            if (syncing.compareAndSet(false, true)) {
-                this.context = context;
-                logger.atInfo(SYNC_EVENT_TYPE).log("Start syncing");
-                for (int i = 0; i < syncParallelism; i++) {
-                    syncThreads.add(syncExecutorService.submit(this::syncLoop));
-                }
-            } else {
-                logger.atDebug(SYNC_EVENT_TYPE).log("Syncing is already in progress. Ignoring request to start");
-                return;
-            }
-        }
+        overallSyncStrategy.startSync(context, syncParallelism);
+        this.context = context;
         try {
             fullSyncOnAllShadows();
         } catch (InterruptedException e) {
@@ -226,143 +162,20 @@ public class SyncHandler {
     }
 
     /**
+     * Start sync threads to process sync requests. This automatically starts a full sync for all shadows.
+     *
+     * @param syncParallelism number of threads to use for syncing
+     * @implNote Required for integration test.
+     */
+    public void startSyncStrategy(int syncParallelism) {
+        overallSyncStrategy.startSync(context, syncParallelism);
+    }
+
+    /**
      * Stops sync threads and clear syncing queue.
      */
     public void stop() {
-        synchronized (lifecycleLock) {
-            if (syncing.compareAndSet(true, false)) {
-                logger.atInfo(SYNC_EVENT_TYPE).log("Stop syncing");
-                syncing.set(false);
-
-                logger.atDebug(SYNC_EVENT_TYPE).log("Cancel {} sync thread(s)", syncThreads.size());
-                syncThreads.forEach(t -> t.cancel(true));
-                syncThreads.clear();
-
-                int remaining = syncQueue.size();
-                syncQueue.clear();
-
-                if (remaining > 0) {
-                    logger.atInfo(SYNC_EVENT_TYPE).log("Stopped syncing with {} pending sync items", remaining);
-                }
-            } else {
-                logger.atDebug(SYNC_EVENT_TYPE).log("Syncing is already stopped. Ignoring request to stop");
-            }
-        }
-    }
-
-    /**
-     * Take and execute items from the sync queue. This is intended to be run in a separate thread.
-     */
-    @SuppressWarnings({"PMD.CompareObjectsWithEquals", "PMD.AvoidCatchingGenericException"})
-    private void syncLoop() {
-        logger.atInfo(SYNC_EVENT_TYPE).log("Start waiting for sync requests");
-        try {
-            SyncRequest request = syncQueue.take();
-            RetryUtils.RetryConfig retryConfig = defaultRetryConfig;
-            do {
-                try {
-                    logger.atInfo(SYNC_EVENT_TYPE)
-                            .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
-                            .addKeyValue(LOG_SHADOW_NAME_KEY, request.getShadowName())
-                            .addKeyValue("Type", request.getClass().getSimpleName())
-                            .log("Executing sync request");
-
-                    retryer.run(retryConfig, request, context);
-                    retryConfig = defaultRetryConfig; // reset the retry config back to default after success
-
-                    logger.atDebug(SYNC_EVENT_TYPE).log("Waiting for next sync request");
-                    request = syncQueue.take();
-                } catch (RetryableException e) {
-                    // this will be rethrown if all retries fail in RetryUtils
-                    logger.atDebug(SYNC_EVENT_TYPE)
-                            .cause(e)
-                            .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
-                            .addKeyValue(LOG_SHADOW_NAME_KEY, request.getShadowName())
-                            .log("Retry sync request. Adding back to queue");
-
-                    // put request to back of queue and get the front of queue in a single operation
-                    SyncRequest failedRequest = request;
-
-                    // tell queue this is not a new value so it merges correctly with any update that came in
-                    request = syncQueue.offerAndTake(request, false);
-
-                    // if queue was empty, we are going to immediately retrying the same request. For this case don't
-                    // use the default retry configuration - keep from spamming too quickly
-                    if (request == failedRequest) {
-                        retryConfig = FAILED_RETRY_CONFIG;
-                    }
-                } catch (InterruptedException e) {
-                    logger.atWarn(SYNC_EVENT_TYPE).log("Interrupted while waiting for sync requests");
-                    Thread.currentThread().interrupt();
-                } catch (ConflictException | ConflictError e) {
-                    logger.atWarn(SYNC_EVENT_TYPE)
-                            .cause(e)
-                            .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
-                            .addKeyValue(LOG_SHADOW_NAME_KEY, request.getShadowName())
-                            .log("Received conflict when processing request. Retrying as a full sync");
-                    // add back to queue to merge over any shadow request that came in while it was executing
-                    request = syncQueue.offerAndTake(new FullShadowSyncRequest(request.getThingName(),
-                            request.getShadowName()), true);
-                } catch (UnknownShadowException e) {
-                    logger.atWarn(SYNC_EVENT_TYPE)
-                            .cause(e)
-                            .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
-                            .addKeyValue(LOG_SHADOW_NAME_KEY, request.getShadowName())
-                            .log("Received unknown shadow when processing request. Retrying as a full sync");
-                    // add back to queue to merge over any shadow request that came in while it was executing
-                    request = syncQueue.offerAndTake(new FullShadowSyncRequest(request.getThingName(),
-                            request.getShadowName()), true);
-                } catch (Exception e) {
-                    logger.atError(SYNC_EVENT_TYPE)
-                            .cause(e)
-                            .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
-                            .addKeyValue(LOG_SHADOW_NAME_KEY, request.getShadowName())
-                            .log("Skipping sync request");
-                    request = syncQueue.take();
-                }
-            } while (!Thread.currentThread().isInterrupted());
-        } catch (InterruptedException e) {
-            logger.atWarn(SYNC_EVENT_TYPE).log("Interrupted while waiting for sync requests");
-        }
-        logger.atInfo(SYNC_EVENT_TYPE).log("Stop waiting for sync requests");
-    }
-
-    /**
-     * Put a sync request into the queue if syncing is started.
-     * <p/>
-     * This will block if the queue is full. This is intentional as non-blocking requires either an unbounded queue
-     * of requests, or an Executor service which creates threads from an unbounded queue.
-     * <p/>
-     * We cannot support an unbounded queue as that will lead to memory pressure - instead requests need to be
-     * throttled.
-     * <p/>
-     * Synchronized so that there is at most only one put in progress waiting to be added if queue is full
-     *
-     * @param request the request to add.
-     */
-    synchronized void putSyncRequest(SyncRequest request) {
-        if (!syncing.get()) {
-            logger.atTrace(SYNC_EVENT_TYPE)
-                    .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
-                    .addKeyValue(LOG_SHADOW_NAME_KEY, request.getShadowName())
-                    .log("Syncing is stopped. Ignoring sync request");
-            return;
-        }
-        try {
-            syncQueue.put(request);
-
-            // the above put call will block. If syncing is stopped while waiting but after the put call succeeds then
-            // remove the request we just added
-            if (!syncing.get()) {
-                syncQueue.remove(request);
-            }
-        } catch (InterruptedException e) {
-            logger.atWarn(SYNC_EVENT_TYPE)
-                    .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
-                    .addKeyValue(LOG_SHADOW_NAME_KEY, request.getShadowName())
-                    .log("Interrupted while putting sync request into queue");
-            Thread.currentThread().interrupt();
-        }
+        overallSyncStrategy.stopSync();
     }
 
     /**
@@ -384,10 +197,12 @@ public class SyncHandler {
      * @param thingName      The thing name associated with the sync shadow update
      * @param shadowName     The shadow name associated with the sync shadow update
      * @param updateDocument The update shadow request
+     * @throws InterruptedException if the thread is interrupted while enqueuing data
      */
-    public void pushCloudUpdateSyncRequest(String thingName, String shadowName, JsonNode updateDocument) {
+    public void pushCloudUpdateSyncRequest(String thingName, String shadowName, JsonNode updateDocument)
+            throws InterruptedException {
         if (isShadowSynced(thingName, shadowName)) {
-            putSyncRequest(new CloudUpdateSyncRequest(thingName, shadowName, updateDocument));
+            overallSyncStrategy.putSyncRequest(new CloudUpdateSyncRequest(thingName, shadowName, updateDocument));
         }
     }
 
@@ -398,10 +213,12 @@ public class SyncHandler {
      * @param thingName      The thing name associated with the sync shadow update
      * @param shadowName     The shadow name associated with the sync shadow update
      * @param updateDocument Update document to be applied to local shadow
+     * @throws InterruptedException if the thread is interrupted while enqueuing data
      */
-    public void pushLocalUpdateSyncRequest(String thingName, String shadowName, byte[] updateDocument) {
+    public void pushLocalUpdateSyncRequest(String thingName, String shadowName, byte[] updateDocument)
+            throws InterruptedException {
         if (isShadowSynced(thingName, shadowName)) {
-            putSyncRequest(new LocalUpdateSyncRequest(thingName, shadowName, updateDocument));
+            overallSyncStrategy.putSyncRequest(new LocalUpdateSyncRequest(thingName, shadowName, updateDocument));
         }
     }
 
@@ -411,10 +228,12 @@ public class SyncHandler {
      *
      * @param thingName  The thing name associated with the sync shadow update
      * @param shadowName The shadow name associated with the sync shadow update
+     * @throws InterruptedException if the thread is interrupted while enqueuing data
      */
-    public void pushCloudDeleteSyncRequest(String thingName, String shadowName) {
+    public void pushCloudDeleteSyncRequest(String thingName, String shadowName)
+            throws InterruptedException {
         if (isShadowSynced(thingName, shadowName)) {
-            putSyncRequest(new CloudDeleteSyncRequest(thingName, shadowName));
+            overallSyncStrategy.putSyncRequest(new CloudDeleteSyncRequest(thingName, shadowName));
         }
     }
 
@@ -425,22 +244,12 @@ public class SyncHandler {
      * @param thingName     The thing name associated with the sync shadow update
      * @param shadowName    The shadow name associated with the sync shadow update
      * @param deletePayload Delete response payload containing the deleted shadow version
+     * @throws InterruptedException if the thread is interrupted while enqueuing data
      */
-    public void pushLocalDeleteSyncRequest(String thingName, String shadowName, byte[] deletePayload) {
+    public void pushLocalDeleteSyncRequest(String thingName, String shadowName, byte[] deletePayload)
+            throws InterruptedException {
         if (isShadowSynced(thingName, shadowName)) {
-            putSyncRequest(new LocalDeleteSyncRequest(thingName, shadowName, deletePayload));
-        }
-    }
-
-    /**
-     * Performs a full sync on a specific shadow.
-     *
-     * @param thingName  The thing name associated with the sync shadow update
-     * @param shadowName The shadow name associated with the sync shadow update
-     */
-    public void fullSyncOnShadow(String thingName, String shadowName) {
-        if (isShadowSynced(thingName, shadowName)) {
-            putSyncRequest(new FullShadowSyncRequest(thingName, shadowName));
+            overallSyncStrategy.putSyncRequest(new LocalDeleteSyncRequest(thingName, shadowName, deletePayload));
         }
     }
 }

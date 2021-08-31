@@ -24,15 +24,8 @@ import java.io.IOException;
  * Merge requests that can be combined together. Falls back to FullSync if requests cannot be combined in a
  * meaningful way.
  */
-class RequestMerger {
+public class RequestMerger {
     private static final Logger logger = LogManager.getLogger(RequestMerger.class);
-
-    /**
-     * Construct a new instance.
-     */
-    public RequestMerger() {
-
-    }
 
     /**
      * Merge two requests into one.

@@ -127,7 +127,10 @@ class ShadowManagerTest extends NucleusLaunchUtils {
         lenient().when(mqttClient.connected()).thenReturn(false);
 
         kernel.getContext().put(MqttClient.class, mqttClient);
-        startNucleusWithConfig(DEFAULT_CONFIG);
+        startNucleusWithConfig(NucleusLaunchUtilsConfig.builder()
+                .configFile(DEFAULT_CONFIG)
+                .mqttConnected(false)
+                .build());
         ShadowManagerDAOImpl impl = kernel.getContext().get(ShadowManagerDAOImpl.class);
         createThingShadowSyncInfo(impl, THING_NAME);
         createThingShadowSyncInfo(impl, THING_NAME2);

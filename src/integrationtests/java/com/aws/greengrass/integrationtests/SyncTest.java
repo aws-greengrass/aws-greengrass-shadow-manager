@@ -6,6 +6,7 @@
 package com.aws.greengrass.integrationtests;
 
 import com.aws.greengrass.lifecyclemanager.Kernel;
+import com.aws.greengrass.logging.impl.config.LogConfig;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAOImpl;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
@@ -15,6 +16,7 @@ import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
+import com.aws.greengrass.shadowmanager.sync.strategy.RealTimeSyncStrategy;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.util.Pair;
@@ -29,6 +31,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.event.Level;
 import software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowRequest;
 import software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest;
 import software.amazon.awssdk.core.SdkBytes;
@@ -43,6 +46,7 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE;
@@ -88,7 +92,7 @@ class SyncTest extends NucleusLaunchUtils {
     private static final String localUpdate1 = "{\"state\":{\"reported\":{\"SomeKey\":\"foo\", \"OtherKey\": 1}}}";
     private static final String localUpdate2 = "{\"state\":{\"reported\":{\"OtherKey\":2, \"AnotherKey\":\"foobar\"}}}";
     private static final String mergedLocalShadowContentV2 =
-            "{\"state\":{\"reported\":{\"SomeKey\":\"foo\",\"OtherKey\":2,\"AnotherKey\":\"foobar\"}},\"version\":10}";
+            "{\"state\":{\"reported\":{\"SomeKey\":\"foo\",\"OtherKey\":2,\"AnotherKey\":\"foobar\"}}}";
 
     @Mock
     UpdateThingShadowResponse mockUpdateThingShadowResponse;
@@ -129,8 +133,11 @@ class SyncTest extends NucleusLaunchUtils {
         when(iotDataPlaneClientFactory.getIotDataPlaneClient()
                 .getThingShadow(any(GetThingShadowRequest.class))).thenReturn(shadowResponse);
 
-        startNucleusWithConfig("sync.yaml", true, false);
-
+        startNucleusWithConfig(NucleusLaunchUtilsConfig.builder()
+                .configFile("sync.yaml")
+                .mockCloud(true)
+                .build());
+    
         assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
         assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(10L)));
         assertThat("local version", syncInfo.get().get().getLocalVersion(), is(1L));
@@ -151,15 +158,25 @@ class SyncTest extends NucleusLaunchUtils {
     void GIVEN_sync_config_map_and_no_local_WHEN_startup_THEN_local_version_updated_via_full_sync(ExtensionContext context)
             throws IOException, InterruptedException {
         ignoreExceptionOfType(context, InterruptedException.class);
+        ignoreExceptionOfType(context, ResourceNotFoundException.class);
 
         GetThingShadowResponse shadowResponse = mock(GetThingShadowResponse.class, Answers.RETURNS_DEEP_STUBS);
         lenient().when(shadowResponse.payload().asByteArray()).thenReturn(cloudShadowContentV10.getBytes(UTF_8));
 
         // existing document
         when(iotDataPlaneClientFactory.getIotDataPlaneClient()
-                .getThingShadow(any(GetThingShadowRequest.class))).thenReturn(shadowResponse);
+                .getThingShadow(any(GetThingShadowRequest.class))).thenAnswer(invocation -> {
+            GetThingShadowRequest request = invocation.getArgument(0);
+            if (request.thingName().equals(MOCK_THING_NAME_1) && request.shadowName().equals(CLASSIC_SHADOW)) {
+                return shadowResponse;
+            }
+            throw ResourceNotFoundException.builder().build();
+        });
 
-        startNucleusWithConfig("sync_map.yaml", true, false);
+        startNucleusWithConfig(NucleusLaunchUtilsConfig.builder()
+                .configFile("sync_map.yaml")
+                .mockCloud(true)
+                .build());
 
         assertThat(shadowManager.getSyncConfiguration().getSyncConfigurations(),
                 containsInAnyOrder(
@@ -211,7 +228,11 @@ class SyncTest extends NucleusLaunchUtils {
                         .lastSyncedDocument(null)
                         .build()));
 
-        startNucleusWithConfig("sync.yaml", true, true);
+        startNucleusWithConfig(NucleusLaunchUtilsConfig.builder()
+                .configFile("sync.yaml")
+                .mockCloud(true)
+                .mockDao(true)
+                .build());
 
         assertThat(() -> cloudUpdateThingShadowRequestCaptor.getValue(), eventuallyEval(is(notNullValue())));
         assertThat(() -> syncInformationCaptor.getValue(), eventuallyEval(is(notNullValue())));
@@ -244,7 +265,10 @@ class SyncTest extends NucleusLaunchUtils {
         when(iotDataPlaneClientFactory.getIotDataPlaneClient().updateThingShadow(cloudUpdateThingShadowRequestCaptor.capture()))
                 .thenReturn(mockUpdateThingShadowResponse);
 
-        startNucleusWithConfig("sync.yaml", true, false);
+        startNucleusWithConfig(NucleusLaunchUtilsConfig.builder()
+                .configFile("sync.yaml")
+                .mockCloud(true)
+                .build());
 
         UpdateThingShadowRequestHandler updateHandler = shadowManager.getUpdateThingShadowRequestHandler();
 
@@ -255,7 +279,7 @@ class SyncTest extends NucleusLaunchUtils {
         request.setPayload(localShadowContentV1.getBytes(UTF_8));
 
         updateHandler.handleRequest(request, "DoAll");
-        assertEmptySyncQueue(kernel.getContext().get(SyncHandler.class));
+        assertEmptySyncQueue(kernel.getContext().get(RealTimeSyncStrategy.class));
 
         assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
 
@@ -285,11 +309,15 @@ class SyncTest extends NucleusLaunchUtils {
 
         JsonNode cloudDocument = JsonUtil.getPayloadJson(cloudShadowContentV1.getBytes(UTF_8)).get();
 
-        startNucleusWithConfig("sync.yaml", true, false);
+        startNucleusWithConfig(NucleusLaunchUtilsConfig.builder()
+                .configFile("sync.yaml")
+                .mockCloud(true)
+                .build());
 
         SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
+        RealTimeSyncStrategy syncStrategy = kernel.getContext().get(RealTimeSyncStrategy.class);
         syncHandler.pushLocalUpdateSyncRequest(MOCK_THING_NAME_1, CLASSIC_SHADOW, JsonUtil.getPayloadBytes(cloudDocument));
-        assertEmptySyncQueue(syncHandler);
+        assertEmptySyncQueue(syncStrategy);
 
         assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
 
@@ -321,7 +349,10 @@ class SyncTest extends NucleusLaunchUtils {
         when(iotDataPlaneClientFactory.getIotDataPlaneClient()
                 .getThingShadow(any(GetThingShadowRequest.class))).thenReturn(shadowResponse);
 
-        startNucleusWithConfig("sync.yaml", true, false);
+        startNucleusWithConfig(NucleusLaunchUtilsConfig.builder()
+                .configFile("sync.yaml")
+                .mockCloud(true)
+                .build());
 
         // we have a local shadow from the initial full sync
         assertThat("local shadow exists", () -> localShadow.get().isPresent(), eventuallyEval(is(true)));
@@ -344,8 +375,8 @@ class SyncTest extends NucleusLaunchUtils {
                 any(software.amazon.awssdk.services.iotdataplane.model.DeleteThingShadowRequest.class));
     }
 
-    private void assertEmptySyncQueue(SyncHandler syncHandler) {
-        assertThat(() -> syncHandler.getSyncQueue().size(), eventuallyEval(is(0)));
+    private void assertEmptySyncQueue(RealTimeSyncStrategy realTimeSyncStrategy) {
+        assertThat(() -> realTimeSyncStrategy.getSyncQueue().size(), eventuallyEval(is(0)));
     }
 
     @Test
@@ -363,18 +394,22 @@ class SyncTest extends NucleusLaunchUtils {
         when(iotDataPlaneClientFactory.getIotDataPlaneClient()
                 .getThingShadow(any(GetThingShadowRequest.class))).thenReturn(shadowResponse);
 
-        startNucleusWithConfig("sync.yaml", true, false);
+        startNucleusWithConfig(NucleusLaunchUtilsConfig.builder()
+                .configFile("sync.yaml")
+                .mockCloud(true)
+                .build());
 
         SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
+        RealTimeSyncStrategy syncStrategy = kernel.getContext().get(RealTimeSyncStrategy.class);
 
         // we have a local shadow from the initial full sync
         assertThat("local shadow exists", () -> localShadow.get().isPresent(), eventuallyEval(is(true)));
-        assertThat("local shadow version",localShadow.get().get().getVersion(), is(1L));
+        assertThat("local shadow version", localShadow.get().get().getVersion(), is(1L));
 
         syncHandler.pushLocalDeleteSyncRequest(MOCK_THING_NAME_1, CLASSIC_SHADOW, "{\"version\": 10}".getBytes(UTF_8));
 
         // wait for it to process
-        assertEmptySyncQueue(syncHandler);
+        assertEmptySyncQueue(syncStrategy);
 
         assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
         assertThat("cloud deleted", () -> syncInfo.get().get().isCloudDeleted(), eventuallyEval(is(true)));
@@ -399,9 +434,12 @@ class SyncTest extends NucleusLaunchUtils {
         when(iotDataPlaneClientFactory.getIotDataPlaneClient().getThingShadow(any(GetThingShadowRequest.class)))
                 .thenThrow(ResourceNotFoundException.class);
 
-        startNucleusWithConfig("sync.yaml", true, false);
+        startNucleusWithConfig(NucleusLaunchUtilsConfig.builder()
+                .configFile("sync.yaml")
+                .mockCloud(true)
+                .build());
 
-        assertEmptySyncQueue(kernel.getContext().get(SyncHandler.class));
+        assertEmptySyncQueue(kernel.getContext().get(RealTimeSyncStrategy.class));
 
         ShadowManagerDAO dao = kernel.getContext().get(ShadowManagerDAOImpl.class);
         dao.updateSyncInformation(SyncInformation.builder()
@@ -438,7 +476,10 @@ class SyncTest extends NucleusLaunchUtils {
         when(iotDataPlaneClientFactory.getIotDataPlaneClient().getThingShadow(any(GetThingShadowRequest.class)))
                 .thenThrow(ResourceNotFoundException.class);
 
-        startNucleusWithConfig("sync.yaml", true, false);
+        startNucleusWithConfig(NucleusLaunchUtilsConfig.builder()
+                .configFile("sync.yaml")
+                .mockCloud(true)
+                .build());
 
         UpdateThingShadowRequestHandler updateHandler = shadowManager.getUpdateThingShadowRequestHandler();
 
@@ -460,6 +501,8 @@ class SyncTest extends NucleusLaunchUtils {
     @Test
     void GIVEN_cloud_update_request_WHEN_retryable_thrown_AND_new_cloud_update_request_THEN_retries_with_merged_request(ExtensionContext context)
             throws InterruptedException, IOException {
+        LogConfig.getRootLogConfig().setLevel(Level.DEBUG);
+        ignoreExceptionOfType(context, ResourceNotFoundException.class);
         ignoreExceptionOfType(context, RetryableException.class);
         ignoreExceptionOfType(context, TestException.class);
 
@@ -475,49 +518,49 @@ class SyncTest extends NucleusLaunchUtils {
 
         // on startup a full sync is executed. mock a cloud response
         GetThingShadowResponse shadowResponse = mock(GetThingShadowResponse.class, Answers.RETURNS_DEEP_STUBS);
-        lenient().when(shadowResponse.payload().asByteArray()).thenReturn(cloudShadowContentV10.getBytes(UTF_8));
+        lenient().when(shadowResponse.payload().asByteArray()).thenThrow(ResourceNotFoundException.class);
 
         // return the "V10" existing document for full sync
         when(iotDataPlaneClientFactory.getIotDataPlaneClient()
                 .getThingShadow(any(GetThingShadowRequest.class))).thenReturn(shadowResponse);
-
-        startNucleusWithConfig("sync.yaml", true, false);
-
-        // wait for full sync to finish
-        assertThat("full sync finished with version 10",
-                () -> syncInfo.get().map(SyncInformation::getCloudVersion).orElse(0L),
-                eventuallyEval(is(10L), Duration.ofSeconds(10)));
-
-
-        UpdateThingShadowRequestHandler updateHandler = shadowManager.getUpdateThingShadowRequestHandler();
-
-        // return version 11 on successful cloud update
-        when(mockUpdateThingShadowResponse.payload()).thenReturn(SdkBytes.fromString("{\"version\": 11}", UTF_8));
         AtomicInteger updateThingShadowCalled = new AtomicInteger(0);
+        AtomicReference<UpdateThingShadowRequestHandler> handler = new AtomicReference<>();
 
         // throw an exception first - before throwing we make another request so that there is another request for
         // to update this shadow in the queue
         when(iotDataPlaneClientFactory.getIotDataPlaneClient().updateThingShadow(cloudUpdateThingShadowRequestCaptor.capture()))
                 .thenAnswer(invocation -> {
-                    // request #2 comes in as we are processing request #1
-                    updateHandler.handleRequest(request2, "DoAll");
+                    software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowRequest r = invocation.getArgument(0);
+                    ShadowDocument s = new ShadowDocument(r.payload().asByteArray());
+                    if (s.getState().getReported().has("AnotherKey")) {
+                        updateThingShadowCalled.incrementAndGet();
+                        return UpdateThingShadowResponse.builder().payload(SdkBytes.fromString("{\"version\": 11}", UTF_8)).build();
+                    }
+                    if (handler.get() != null) {
+                        // request #2 comes in as we are processing request #1
+                        handler.get().handleRequest(request2, "DoAll");
+                    }
 
-                    updateThingShadowCalled.incrementAndGet();
                     throw new RetryableException(new TestException());
-                }).thenAnswer(invocation -> {
-                    updateThingShadowCalled.incrementAndGet();
-                    return mockUpdateThingShadowResponse;
                 });
 
-        // Fire the initial request
-        updateHandler.handleRequest(request1, "DoAll");
+        startNucleusWithConfig(NucleusLaunchUtilsConfig.builder()
+                .configFile("sync.yaml")
+                .mockCloud(true)
+                .build());
 
-        assertThat("update thing shadow called", updateThingShadowCalled::get, eventuallyEval(is(2)));
-        assertEmptySyncQueue(kernel.getContext().get(SyncHandler.class));
+        handler.set(shadowManager.getUpdateThingShadowRequestHandler());
+
+
+        // Fire the initial request
+        handler.get().handleRequest(request1, "DoAll");
+
+        assertThat("update thing shadow called", updateThingShadowCalled::get, eventuallyEval(is(1)));
+        assertEmptySyncQueue(kernel.getContext().get(RealTimeSyncStrategy.class));
         assertThat("dao cloud version updated", () -> syncInfo.get()
-                        .map(SyncInformation::getCloudVersion).orElse(0L), eventuallyEval(is(11L)));
+                .map(SyncInformation::getCloudVersion).orElse(0L), eventuallyEval(is(11L)));
         assertThat("dao local version updated", () -> syncInfo.get()
-                .map(SyncInformation::getLocalVersion).orElse(0L), eventuallyEval(is(3L)));
+                .map(SyncInformation::getLocalVersion).orElse(0L), eventuallyEval(is(2L)));
 
         assertThat("number of cloud update attempts", cloudUpdateThingShadowRequestCaptor.getAllValues(), hasSize(2));
 

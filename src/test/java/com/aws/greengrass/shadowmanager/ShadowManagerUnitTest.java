@@ -71,6 +71,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_NAM
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_RATE_LIMITS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SHADOW_DOCUMENTS_MAP_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SHADOW_DOCUMENTS_TOPIC;
+import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_STRATEGY_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SYNCHRONIZATION_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_THING_NAME_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_DOCUMENT_SIZE;
@@ -160,6 +161,8 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         lenient().when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
                 .thenReturn(mock(Topics.class));
         lenient().when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_RATE_LIMITS_TOPIC))
+                .thenReturn(mock(Topics.class));
+        lenient().when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_STRATEGY_TOPIC))
                 .thenReturn(mock(Topics.class));
     }
 
@@ -681,6 +684,4 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
             assertThat(captor.getValue().getShadowName(), is("foo"));
         }
     }
-
-
 }
