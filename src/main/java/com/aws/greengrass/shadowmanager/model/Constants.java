@@ -61,6 +61,7 @@ public final class Constants {
     public static final String CONFIGURATION_CLASSIC_SHADOW_TOPIC = "classic";
     public static final String CONFIGURATION_NAMED_SHADOWS_TOPIC = "namedShadows";
     public static final String CONFIGURATION_SHADOW_DOCUMENTS_TOPIC = "shadowDocuments";
+    public static final String CONFIGURATION_SHADOW_DOCUMENTS_MAP_TOPIC = "shadowDocumentsMap";
     public static final String CONFIGURATION_THING_NAME_TOPIC = "thingName";
     public static final String CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC = "shadowDocumentSizeLimitBytes";
     public static final String CONFIGURATION_RATE_LIMITS_TOPIC = "rateLimits";

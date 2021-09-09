@@ -29,6 +29,16 @@ Manifests:
             - "bar"
           - thingName: "OtherThing"
           - thingName: "YetAnotherThing"
+          shadowDocumentsMap:
+            <thingName>:
+              classic: false
+              namedShadows:
+              - "foo"
+              - "bar"
+            <thingName>:
+              classic: true
+            <thingName>:
+              classic: false
 
         rateLimits:
           # number of outgoing sync updates per second (useful to constrain bandwidth)
@@ -54,6 +64,21 @@ Manifests:
         "bar"
       ]
     },
+    "shadowDocumentsMap":{
+      "MyThing": {
+        "classic":false,
+        "namedShadows":[
+          "foo",
+          "bar"
+        ]
+      },
+      "OtherThing": {
+        "classic":true,
+        "namedShadows":[
+          "foo2"
+        ]
+      }
+    },
     "shadowDocuments":[
       {
         "thingName":"MyThing",
@@ -70,7 +95,7 @@ Manifests:
           
         ]
       }
-    ],
+    ]
   },
   "rateLimits": {
     "maxOutboundSyncUpdatesPerSecond":50,
@@ -80,6 +105,11 @@ Manifests:
   "shadowDocumentSizeLimitBytes":8192
 }
 ```
+
+### Notes
+- For Shadow manager 2.1 synchronize configuration supports both data types for syncing shadows. The sync configuration
+can either be a `map` or a `list`. Both the `map` and `list` thing shadow configurations will be merged. The map 
+approach is preferred since this allows the customers to use the deployment `merge` command to add in new shadows to sync.
 
 ## Security
 
