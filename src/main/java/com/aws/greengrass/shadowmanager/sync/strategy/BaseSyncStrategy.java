@@ -12,6 +12,7 @@ import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
 import com.aws.greengrass.shadowmanager.sync.RequestMerger;
 import com.aws.greengrass.shadowmanager.sync.Retryer;
 import com.aws.greengrass.shadowmanager.sync.model.SyncContext;
+import com.aws.greengrass.shadowmanager.sync.model.SyncRequest;
 import com.aws.greengrass.util.RetryUtils;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -25,6 +26,8 @@ import java.util.List;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.LogEvents.SYNC;
 
 public abstract class BaseSyncStrategy {
@@ -46,7 +49,7 @@ public abstract class BaseSyncStrategy {
      * @implNote The Setter is only used in unit tests. The Getter is used in integration tests.
      */
     @Getter
-    @Setter(AccessLevel.PACKAGE)
+    @Setter
     RequestBlockingQueue syncQueue;
 
     /**
@@ -147,8 +150,9 @@ public abstract class BaseSyncStrategy {
                 doStop();
 
                 int remaining = syncQueue.size();
-                syncQueue.clear();
 
+                // Not clearing the queue since we need it if the customer updates the sync strategy on the fly. The
+                //queue will be transferred to the new sync strategy.
                 if (remaining > 0) {
                     logger.atInfo(SYNC_EVENT_TYPE)
                             .log("Stopped real time syncing with {} pending sync items", remaining);
@@ -164,4 +168,34 @@ public abstract class BaseSyncStrategy {
     abstract void doStart(SyncContext context, int syncParallelism);
 
     abstract void doStop();
+
+    void putSyncRequest(SyncRequest request, AtomicBoolean syncing) {
+        if (!syncing.get()) {
+            logger.atTrace(SYNC_EVENT_TYPE)
+                    .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
+                    .addKeyValue(LOG_SHADOW_NAME_KEY, request.getShadowName())
+                    .log("Syncing is stopped. Ignoring sync request");
+            return;
+        }
+        try {
+            logger.atInfo(SYNC_EVENT_TYPE)
+                    .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
+                    .addKeyValue(LOG_SHADOW_NAME_KEY, request.getShadowName())
+                    .log("Adding new sync request");
+
+            syncQueue.put(request);
+
+            // the above put call will block. If syncing is stopped while waiting but after the put call succeeds then
+            // remove the request we just added
+            if (!syncing.get()) {
+                syncQueue.remove(request);
+            }
+        } catch (InterruptedException e) {
+            logger.atWarn(SYNC_EVENT_TYPE)
+                    .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
+                    .addKeyValue(LOG_SHADOW_NAME_KEY, request.getShadowName())
+                    .log("Interrupted while putting sync request into queue");
+            Thread.currentThread().interrupt();
+        }
+    }
 }

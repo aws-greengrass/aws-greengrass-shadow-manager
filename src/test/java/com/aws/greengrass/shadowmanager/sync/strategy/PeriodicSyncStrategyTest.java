@@ -36,13 +36,15 @@ import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
-import static org.mockito.ArgumentMatchers.any;
 import static org.hamcrest.core.Is.is;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
@@ -55,8 +57,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
-class RealTimeSyncStrategyTest {
-
+class PeriodicSyncStrategyTest {
     @Mock
     private Retryer mockRetryer;
     @Mock
@@ -65,37 +66,38 @@ class RealTimeSyncStrategyTest {
     private RequestBlockingQueue mockRequestBlockingQueue;
     private RequestBlockingQueue requestBlockingQueue;
 
-    private ExecutorService executorService;
-    private RealTimeSyncStrategy strategy;
+    private ScheduledExecutorService scheduledExecutorService;
+    private PeriodicSyncStrategy syncStrategy;
 
     @BeforeEach
     void setup() {
-        executorService = Executors.newCachedThreadPool();
+        scheduledExecutorService = new ScheduledThreadPoolExecutor(1);
         this.requestBlockingQueue = new RequestBlockingQueue(new RequestMerger());
     }
 
     @AfterEach
     void tearDown() {
-        strategy.stop();
-        executorService.shutdownNow();
+        syncStrategy.stopSync();
+        scheduledExecutorService.shutdownNow();
     }
 
     @Test
     void GIVEN_sync_request_WHEN_putSyncRequest_and_sync_loop_runs_THEN_request_is_executed_successfully()
             throws Exception {
-        strategy = new RealTimeSyncStrategy(executorService, mockRetryer, requestBlockingQueue);
-        strategy.start(mockSyncContext, 1);
-        strategy.putSyncRequest(mock(FullShadowSyncRequest.class));
+        syncStrategy = new PeriodicSyncStrategy(scheduledExecutorService, mockRetryer, 3, requestBlockingQueue);
+        syncStrategy.startSync(mockSyncContext, 3);
+        syncStrategy.putSyncRequest(mock(FullShadowSyncRequest.class));
 
         verify(mockRetryer, timeout(Duration.ofSeconds(5).toMillis()).times(1)).run(any(), any(), any());
     }
 
+
     @Test
     void GIVEN_sync_request_WHEN_putSyncRequest_and_syncing_is_stopped_THEN_request_is_not_added_to_queue()
             throws Exception {
-        strategy = new RealTimeSyncStrategy(executorService, mockRetryer, mockRequestBlockingQueue);
+        syncStrategy = new PeriodicSyncStrategy(scheduledExecutorService, mockRetryer, 3, mockRequestBlockingQueue);
 
-        strategy.putSyncRequest(mock(FullShadowSyncRequest.class));
+        syncStrategy.putSyncRequest(mock(FullShadowSyncRequest.class));
 
         verify(mockRequestBlockingQueue, timeout(Duration.ofSeconds(5).toMillis()).times(0)).put(any());
         verify(mockRetryer, timeout(Duration.ofSeconds(5).toMillis()).times(0)).run(any(), any(), any());
@@ -104,15 +106,15 @@ class RealTimeSyncStrategyTest {
     @Test
     void GIVEN_sync_request_WHEN_sync_stops_during_put_in_queue_THEN_request_is_removed_from_queue()
             throws Exception {
-        strategy = new RealTimeSyncStrategy(executorService, mockRetryer, mockRequestBlockingQueue);
+        syncStrategy = new PeriodicSyncStrategy(scheduledExecutorService, mockRetryer, 3, mockRequestBlockingQueue);
 
         doAnswer(i -> {
-            strategy.syncing.set(false);
+            syncStrategy.syncing.set(false);
             return null;
         }).when(mockRequestBlockingQueue).put(any());
 
-        strategy.start(mockSyncContext, 1);
-        strategy.putSyncRequest(mock(FullShadowSyncRequest.class));
+        syncStrategy.startSync(mockSyncContext, 2);
+        syncStrategy.putSyncRequest(mock(FullShadowSyncRequest.class));
 
         verify(mockRequestBlockingQueue, timeout(Duration.ofSeconds(5).toMillis()).times(1)).put(any());
         verify(mockRequestBlockingQueue, times(1)).remove(any());
@@ -123,11 +125,11 @@ class RealTimeSyncStrategyTest {
     void GIVEN_sync_request_WHEN_queue_throws_interrupted_exception_THEN_sync_request_is_not_added(ExtensionContext extensionContext)
             throws Exception {
         ignoreExceptionOfType(extensionContext, InterruptedException.class);
-        strategy = new RealTimeSyncStrategy(executorService, mockRetryer, mockRequestBlockingQueue);
+        syncStrategy = new PeriodicSyncStrategy(scheduledExecutorService, mockRetryer, 3, mockRequestBlockingQueue);
         doThrow(InterruptedException.class).when(mockRequestBlockingQueue).put(any());
 
-        strategy.start(mockSyncContext, 1);
-        strategy.putSyncRequest(mock(FullShadowSyncRequest.class));
+        syncStrategy.startSync(mockSyncContext, 2);
+        syncStrategy.putSyncRequest(mock(FullShadowSyncRequest.class));
 
         verify(mockRetryer, timeout(Duration.ofSeconds(5).toMillis()).times(0)).run(any(), any(), any());
         // check that we are interrupted by our "fake" exception. This also clears the thread state so cleanup
@@ -138,20 +140,20 @@ class RealTimeSyncStrategyTest {
 
     @Test
     void GIVEN_request_queue_WHEN_put_and_clear_THEN_queue_has_correct_number_of_requests() throws InterruptedException {
-        strategy = new RealTimeSyncStrategy(executorService, mockRetryer, requestBlockingQueue);
+        syncStrategy = new PeriodicSyncStrategy(scheduledExecutorService, mockRetryer, 3, requestBlockingQueue);
 
-        strategy.syncing.set(true);
+        syncStrategy.syncing.set(true);
 
         Random rand = new Random();
         int randomNumberOfSyncRequests = rand.nextInt(1024);
         for (int i = 0; i < randomNumberOfSyncRequests; i++) {
-            strategy.putSyncRequest(new FullShadowSyncRequest("foo-" + i, "bar-" + i));
+            syncStrategy.putSyncRequest(new FullShadowSyncRequest("foo-" + i, "bar-" + i));
         }
-        assertThat(strategy.getRemainingCapacity(), is(1024 - randomNumberOfSyncRequests));
+        assertThat(syncStrategy.getRemainingCapacity(), is(1024 - randomNumberOfSyncRequests));
 
-        strategy.clearSyncQueue();
+        syncStrategy.clearSyncQueue();
 
-        assertThat(strategy.getRemainingCapacity(), is(1024));
+        assertThat(syncStrategy.getRemainingCapacity(), is(1024));
     }
 
     @Test
@@ -172,7 +174,7 @@ class RealTimeSyncStrategyTest {
         requests.add(request1);
         requests.add(request2);
 
-        strategy = new RealTimeSyncStrategy(executorService, mockRetryer, mockRequestBlockingQueue);
+        syncStrategy = new PeriodicSyncStrategy(scheduledExecutorService, mockRetryer, 3, mockRequestBlockingQueue);
         doAnswer(invocation -> {
             executeLatch.countDown();
             if (executeLatch.getCount() != 0) {
@@ -185,11 +187,11 @@ class RealTimeSyncStrategyTest {
         doAnswer(invocation -> {
             takeLatch.countDown();
             return requests.poll();
-        }).when(mockRequestBlockingQueue).take();
+        }).when(mockRequestBlockingQueue).poll();
         when(mockRequestBlockingQueue.offerAndTake(request1, false)).thenReturn(request1);
 
-        strategy.start(mockSyncContext, 1);
-        strategy.putSyncRequest(new FullShadowSyncRequest("foo", "bar"));
+        syncStrategy.startSync(mockSyncContext, 2);
+        syncStrategy.putSyncRequest(new FullShadowSyncRequest("foo", "bar"));
 
         assertThat("executed request", executeLatch.await(5, TimeUnit.SECONDS), is(true));
         assertThat("take all requests", takeLatch.await(5, TimeUnit.SECONDS), is(true));
@@ -206,7 +208,7 @@ class RealTimeSyncStrategyTest {
         lenient().when(request1.getThingName()).thenReturn("thing1");
         lenient().when(request1.getShadowName()).thenReturn("shadow1");
 
-        strategy = new RealTimeSyncStrategy(executorService, mockRetryer, mockRequestBlockingQueue);
+        syncStrategy = new PeriodicSyncStrategy(scheduledExecutorService, mockRetryer, 3, mockRequestBlockingQueue);
         doAnswer(invocation -> {
             executeLatch.countDown();
             if (executeLatch.getCount() != 0) {
@@ -215,13 +217,13 @@ class RealTimeSyncStrategyTest {
             return null;
         }).when(mockRetryer).run(any(), any(), any());
 
-        when(mockRequestBlockingQueue.take()).thenReturn(request1);
+        when(mockRequestBlockingQueue.poll()).thenReturn(request1);
 
-        strategy.start(mockSyncContext, 1);
-        strategy.putSyncRequest(new FullShadowSyncRequest("foo", "bar"));
+        syncStrategy.startSync(mockSyncContext, 2);
+        syncStrategy.putSyncRequest(new FullShadowSyncRequest("foo", "bar"));
 
         assertThat("executed request", executeLatch.await(5, TimeUnit.SECONDS), is(true));
-        verify(mockRequestBlockingQueue, atLeastOnce()).take();
+        verify(mockRequestBlockingQueue, atLeastOnce()).poll();
         verify(mockRequestBlockingQueue, times(0)).offerAndTake(request1, false);
     }
 
@@ -232,7 +234,7 @@ class RealTimeSyncStrategyTest {
         ignoreExceptionOfType(extensionContext, clazz);
 
         ExecutorService executorService = Executors.newSingleThreadExecutor();
-        strategy = new RealTimeSyncStrategy(executorService, mockRetryer, mockRequestBlockingQueue);
+        syncStrategy = new PeriodicSyncStrategy(scheduledExecutorService, mockRetryer, 3, mockRequestBlockingQueue);
 
         CloudUpdateSyncRequest request1 = mock(CloudUpdateSyncRequest.class);
         lenient().when(request1.getThingName()).thenReturn("thing1");
@@ -240,12 +242,12 @@ class RealTimeSyncStrategyTest {
 
         CountDownLatch executeLatch = new CountDownLatch(2); // 1 retry to fail, 1 to succeed
 
-        when(mockRequestBlockingQueue.take()).thenAnswer(invocation -> {
+        when(mockRequestBlockingQueue.poll()).thenAnswer(invocation -> {
             if (executeLatch.getCount() == 2) {
                 return request1;
             }
             // sleep for the subsequent take until thread shuts down
-            Thread.sleep(Duration.of(5, ChronoUnit.SECONDS).toMillis());
+            TimeUnit.SECONDS.sleep(Duration.of(5, ChronoUnit.SECONDS).toMillis());
             return null;
         });
 
@@ -264,7 +266,7 @@ class RealTimeSyncStrategyTest {
                 .thenAnswer(invocation -> invocation.getArgument(0, FullShadowSyncRequest.class));
 
         try {
-            strategy.start(mockSyncContext, 1);
+            syncStrategy.startSync(mockSyncContext, 2);
 
             assertThat("executed requests", executeLatch.await(5, TimeUnit.SECONDS), is(true));
         } finally {

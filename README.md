@@ -13,6 +13,9 @@ Manifests:
       aws.greengrass.ShadowManager
   - aws.greengrass.ShadowManager:
       Configuration:
+        strategy:
+          type: periodic // default realTime
+          delay: 300 // in seconds
         synchronize:
           # explicit config for Nucleus
           coreThing:
@@ -56,6 +59,10 @@ Manifests:
 **JSON example**
 ```
 {
+  "strategy":{
+    "type": "periodic", // default realTime
+    "delay": 300  // in seconds
+  },
   "synchronize":{
     "coreThing":{
       "classic":true,

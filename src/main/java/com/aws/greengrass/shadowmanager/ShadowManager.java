@@ -42,6 +42,8 @@ import com.aws.greengrass.shadowmanager.util.Validator;
 import com.aws.greengrass.util.Coerce;
 import com.aws.greengrass.util.Pair;
 import lombok.AccessLevel;
+import lombok.Builder;
+import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.Synchronized;
@@ -98,13 +100,14 @@ public class ShadowManager extends PluginService {
     public final MqttClientConnectionEvents callbacks = new MqttClientConnectionEvents() {
         @Override
         public void onConnectionInterrupted(int errorCode) {
-            stopSyncingShadows();
+            stopSyncingShadows(true);
         }
 
         @Override
         public void onConnectionResumed(boolean sessionPresent) {
             if (inState(State.RUNNING)) {
-                startSyncingShadows();
+                startSyncingShadows(StartSyncInfo.builder().updateCloudSubscriptions(true).build());
+
             }
         }
     };
@@ -241,8 +244,9 @@ public class ShadowManager extends PluginService {
 
                 // only stop / start syncing if we are not in install - it will otherwise be started by lifecycle
                 if (inState(State.RUNNING)) {
-                    stopSyncingShadows();
-                    startSyncingShadows();
+                    stopSyncingShadows(true);
+                    startSyncingShadows(StartSyncInfo.builder().reInitializeSyncInfo(true)
+                            .updateCloudSubscriptions(true).build());
                 }
             } catch (InvalidConfigurationException e) {
                 serviceErrored(e);
@@ -311,7 +315,9 @@ public class ShadowManager extends PluginService {
                             return;
                         }
                     }
+                    stopSyncingShadows(false);
                     syncHandler.setSyncStrategy(strategy);
+                    startSyncingShadows(StartSyncInfo.builder().build());
                 });
     }
 
@@ -373,7 +379,8 @@ public class ShadowManager extends PluginService {
         try {
             database.open();
 
-            startSyncingShadows();
+            startSyncingShadows(StartSyncInfo.builder().reInitializeSyncInfo(true)
+                    .updateCloudSubscriptions(true).build());
 
             reportState(State.RUNNING);
         } catch (Exception e) {
@@ -384,7 +391,7 @@ public class ShadowManager extends PluginService {
     @Override
     protected void shutdown() throws InterruptedException {
         try {
-            stopSyncingShadows();
+            stopSyncingShadows(true);
             database.close();
             inboundRateLimiter.clear();
         } catch (IOException e) {
@@ -398,37 +405,68 @@ public class ShadowManager extends PluginService {
 
     /**
      * Stop the sync handler and stop subscription thread on cloud client.
+     *
+     * @param stopCloudSubscriptions whether or not to stop MQTT subscriptions.
      */
     @Synchronized
-    void stopSyncingShadows() {
-        cloudDataClient.stopSubscribing();
+    void stopSyncingShadows(boolean stopCloudSubscriptions) {
+        // Only stop subscribing to cloud shadows on reconnection or startup.
+        if (stopCloudSubscriptions) {
+            cloudDataClient.stopSubscribing();
+        }
         syncHandler.stop();
     }
 
     /**
      * Starts the Sync handler and update the subscriptions for Cloud Data Client.
      *
+     * @param startSyncInfo information on what to do to start syncing shadows.
      * @implNote Making this package-private for unit tests.
      */
     @Synchronized
-    public void startSyncingShadows() {
-        // Remove sync information of shadows that are no longer being synced.
-        deleteRemovedSyncInformation();
+    public void startSyncingShadows(StartSyncInfo startSyncInfo) {
+        // Only reinitialize the sync info if the synchronize configuration has been updated.
+        if (startSyncInfo.reInitializeSyncInfo) {
+            // Remove sync information of shadows that are no longer being synced.
+            deleteRemovedSyncInformation();
 
-        // Initialize the sync information if the sync information does not exist.
-        initializeSyncInfo();
+            // Initialize the sync information if the sync information does not exist.
+            initializeSyncInfo();
+        }
 
         if (mqttClient.connected() && !syncConfiguration.getSyncConfigurations().isEmpty()) {
             final SyncContext syncContext = new SyncContext(dao, getUpdateThingShadowRequestHandler(),
                     getDeleteThingShadowRequestHandler(),
                     iotDataPlaneClientWrapper);
             syncHandler.start(syncContext, SyncHandler.DEFAULT_PARALLELISM);
-            cloudDataClient.updateSubscriptions(syncConfiguration.getSyncShadows());
+
+            // Only update the MQTT subscriptions to cloud shadows at startup or reconnection.
+            if (startSyncInfo.updateCloudSubscriptions) {
+                cloudDataClient.updateSubscriptions(syncConfiguration.getSyncShadows());
+            }
         } else {
             logger.atTrace()
                     .kv("connected", mqttClient.connected())
                     .kv("sync configuration list count", syncConfiguration.getSyncConfigurations().size())
                     .log("Not starting sync loop");
         }
+    }
+
+    /**
+     * Class to handle different configurations to start syncing shadows.
+     */
+    @Builder
+    @Data
+    public static class StartSyncInfo {
+        /**
+         * Whether or not to reinitialize the sync info. We should only remove the deleted or add the new sync info if
+         * the synchronize configuration has changed or at startup.
+         */
+        boolean reInitializeSyncInfo;
+
+        /**
+         * Whether or not to update the MQTT subscriptions for cloud shadows.
+         */
+        boolean updateCloudSubscriptions;
     }
 }

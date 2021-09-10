@@ -9,6 +9,7 @@ import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
+import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
 import com.aws.greengrass.shadowmanager.sync.Retryer;
 import com.aws.greengrass.shadowmanager.sync.model.FullShadowSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.SyncContext;
@@ -36,10 +37,14 @@ public class RealTimeSyncStrategy extends BaseSyncStrategy implements SyncStrate
      *
      * @param executorService executor service.
      * @param retryer         The retryer object.
+     * @param syncQueue       The sync queue from the previous strategy if any.
      */
-    public RealTimeSyncStrategy(ExecutorService executorService, Retryer retryer) {
+    public RealTimeSyncStrategy(ExecutorService executorService, Retryer retryer, RequestBlockingQueue syncQueue) {
         super(retryer);
         this.syncExecutorService = executorService;
+        if (syncQueue != null) {
+            this.syncQueue = syncQueue;
+        }
     }
 
     /**
@@ -105,28 +110,7 @@ public class RealTimeSyncStrategy extends BaseSyncStrategy implements SyncStrate
      */
     @Override
     public void putSyncRequest(SyncRequest request) {
-        if (!syncing.get()) {
-            logger.atTrace(SYNC_EVENT_TYPE)
-                    .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
-                    .addKeyValue(LOG_SHADOW_NAME_KEY, request.getShadowName())
-                    .log("Syncing is stopped. Ignoring sync request");
-            return;
-        }
-        try {
-            syncQueue.put(request);
-
-            // the above put call will block. If syncing is stopped while waiting but after the put call succeeds then
-            // remove the request we just added
-            if (!syncing.get()) {
-                syncQueue.remove(request);
-            }
-        } catch (InterruptedException e) {
-            logger.atWarn(SYNC_EVENT_TYPE)
-                    .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
-                    .addKeyValue(LOG_SHADOW_NAME_KEY, request.getShadowName())
-                    .log("Interrupted while putting sync request into queue");
-            Thread.currentThread().interrupt();
-        }
+        super.putSyncRequest(request, syncing);
     }
 
     /**
