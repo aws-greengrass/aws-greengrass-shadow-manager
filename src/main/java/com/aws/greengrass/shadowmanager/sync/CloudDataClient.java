@@ -242,7 +242,7 @@ public class CloudDataClient {
         String thingName = shadowRequest.getThingName();
         String shadowName = shadowRequest.getShadowName();
         logger.atDebug().kv(LOG_THING_NAME_KEY, thingName).kv(LOG_SHADOW_NAME_KEY, shadowName)
-                .log("Received cloud update request");
+                .log("Received cloud update sync request");
         try {
             syncHandler.pushLocalUpdateSyncRequest(thingName, shadowName, message.getPayload());
         } catch (InterruptedException e) {
@@ -250,7 +250,7 @@ public class CloudDataClient {
             logger.atError()
                     .setEventType(LogEvents.CLOUD_DATA_CLIENT_SUBSCRIPTION_ERROR.code())
                     .setCause(e)
-                    .log("Failed to add local update");
+                    .log("Failed to add local update sync request");
         }
     }
 
@@ -265,7 +265,7 @@ public class CloudDataClient {
         String thingName = shadowRequest.getThingName();
         String shadowName = shadowRequest.getShadowName();
         logger.atDebug().kv(LOG_THING_NAME_KEY, thingName).kv(LOG_SHADOW_NAME_KEY, shadowName)
-                .log("Received cloud delete request");
+                .log("Received cloud delete request sync request");
         try {
             syncHandler.pushLocalDeleteSyncRequest(thingName, shadowName, message.getPayload());
         } catch (InterruptedException e) {
@@ -273,7 +273,7 @@ public class CloudDataClient {
             logger.atError()
                     .setEventType(LogEvents.CLOUD_DATA_CLIENT_SUBSCRIPTION_ERROR.code())
                     .setCause(e)
-                    .log("Failed to add local delete");
+                    .log("Failed to add local delete sync request");
         }
     }
 

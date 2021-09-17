@@ -5,6 +5,7 @@
 
 package com.aws.greengrass.shadowmanager.sync.strategy.model;
 
+import com.aws.greengrass.shadowmanager.exception.InvalidConfigurationException;
 import com.aws.greengrass.util.Coerce;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -40,8 +41,9 @@ public class Strategy {
      *
      * @param pojo the key-value POJO object.
      * @return the converted sync strategy object.
+     * @throws InvalidConfigurationException if the strategy configuration is bad.
      */
-    public static Strategy fromPojo(Map<String, Object> pojo) {
+    public static Strategy fromPojo(Map<String, Object> pojo) throws InvalidConfigurationException {
         StrategyBuilder strategy = Strategy.builder();
         for (Map.Entry<String, Object> entry : pojo.entrySet()) {
             switch (entry.getKey()) {
@@ -52,7 +54,8 @@ public class Strategy {
                     strategy.delay(Coerce.toLong(entry.getValue()));
                     break;
                 default:
-                    break;
+                    throw new InvalidConfigurationException(String.format("Unexpected key in configuration: %s",
+                            entry.getKey()));
             }
         }
         return strategy.build();

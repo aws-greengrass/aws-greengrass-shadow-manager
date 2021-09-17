@@ -91,6 +91,7 @@ public class ShadowManager extends PluginService {
     private final UpdateThingShadowRequestHandler updateThingShadowRequestHandler;
     private final GetThingShadowRequestHandler getThingShadowRequestHandler;
     private final IotDataPlaneClientWrapper iotDataPlaneClientWrapper;
+    @Getter(AccessLevel.PACKAGE)
     private final SyncHandler syncHandler;
     private final CloudDataClient cloudDataClient;
     private final MqttClient mqttClient;
@@ -298,11 +299,17 @@ public class ShadowManager extends PluginService {
         Topics strategyTopics = config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_STRATEGY_TOPIC);
         strategyTopics.subscribe((why, newv) -> {
                     Strategy strategy;
-                    if (WhatHappened.removed.equals(why) || newv == null) {
+                    Map<String, Object> strategyPojo = strategyTopics.toPOJO();
+                    if (WhatHappened.removed.equals(why) || strategyPojo == null || strategyPojo.isEmpty()) {
                         strategy = DEFAULT_STRATEGY;
                     } else {
                         // Get the correct sync strategy configuration from the POJO.
-                        strategy = Strategy.fromPojo(strategyTopics.toPOJO());
+                        try {
+                            strategy = Strategy.fromPojo(strategyPojo);
+                        } catch (InvalidConfigurationException e) {
+                            serviceErrored(e);
+                            return;
+                        }
                     }
                     syncHandler.setSyncStrategy(strategy);
                 });
