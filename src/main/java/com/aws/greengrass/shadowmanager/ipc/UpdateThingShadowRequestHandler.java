@@ -229,7 +229,7 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
                     removeMetadataNode(updateDocumentRequest);
                     this.syncHandler.pushCloudUpdateSyncRequest(thingName, shadowName, updateDocumentRequest);
                     return new UpdateThingShadowHandlerResponse(updateThingShadowResponse, updateDocumentBytes);
-                } catch (ShadowManagerDataException | InterruptedException | IOException e) {
+                } catch (ShadowManagerDataException | IOException e) {
                     throwServiceError(thingName, shadowName, clientToken, e);
                 }
                 return null;

@@ -9,6 +9,11 @@ import com.aws.greengrass.shadowmanager.sync.Retryer;
 import com.aws.greengrass.shadowmanager.sync.model.SyncContext;
 import com.aws.greengrass.shadowmanager.sync.model.SyncRequest;
 
+/**
+ * Handles syncing of shadows on a specific cadence. With this strategy, the Shadow manager will only execute the
+ * sync requests on a particular interval. It will cache all the sync requests until the interval has elapsed; after
+ * which it will empty the sync queue by executing all the cached sync requests.
+ */
 public class PeriodicSyncStrategy extends BaseSyncStrategy implements SyncStrategy {
 
     public PeriodicSyncStrategy(Retryer retryer) {
@@ -22,7 +27,17 @@ public class PeriodicSyncStrategy extends BaseSyncStrategy implements SyncStrate
      * @param syncParallelism number of threads to use for syncing
      */
     @Override
-    public void startSync(SyncContext context, int syncParallelism) {
+    public void start(SyncContext context, int syncParallelism) {
+
+    }
+
+    @Override
+    void doStart(SyncContext context, int syncParallelism) {
+
+    }
+
+    @Override
+    void doStop() {
 
     }
 
@@ -30,7 +45,7 @@ public class PeriodicSyncStrategy extends BaseSyncStrategy implements SyncStrate
      * Stops the syncing of shadows.
      */
     @Override
-    public void stopSync() {
+    public void stop() {
 
     }
 
@@ -46,10 +61,9 @@ public class PeriodicSyncStrategy extends BaseSyncStrategy implements SyncStrate
      * Synchronized so that there is at most only one put in progress waiting to be added if queue is full
      *
      * @param request request the request to add.
-     * @throws InterruptedException if the thread is interrupted while enqueuing data
      */
     @Override
-    public void putSyncRequest(SyncRequest request) throws InterruptedException {
+    public void putSyncRequest(SyncRequest request) {
 
     }
 

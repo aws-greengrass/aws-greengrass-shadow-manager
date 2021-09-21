@@ -22,7 +22,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.api.extension.ExtensionContext;
 import org.mockito.Answers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
@@ -35,14 +34,12 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 
-import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -91,7 +88,7 @@ class SyncHandlerTest {
         syncHandler.start(context, numThreads);
 
         // THEN
-        verify(mockSyncStrategy, times(1)).startSync(eq(context), eq(numThreads));
+        verify(mockSyncStrategy, times(1)).start(eq(context), eq(numThreads));
         verify(mockSyncStrategy, times(1)).clearSyncQueue();
         verify(mockSyncStrategy, times(shadows.size())).putSyncRequest(any());
     }
@@ -110,29 +107,7 @@ class SyncHandlerTest {
         syncHandler.stop();
 
         // THEN
-        verify(mockSyncStrategy, times(1)).stopSync();
-    }
-
-
-    @Test
-    void GIVEN_started_WHEN_full_shadow_sync_interrupted_THEN_stop(ExtensionContext extensionContext) throws InterruptedException {
-        ignoreExceptionOfType(extensionContext, InterruptedException.class);
-        List<Pair<String, String>> shadows = Arrays.asList(new Pair<>("a", "1"), new Pair<>("b", "2"));
-        when(context.getDao().listSyncedShadows()).thenReturn(shadows);
-
-        doThrow(new InterruptedException()).when(mockSyncStrategy).putSyncRequest(any());
-
-        // GIVEN
-        syncHandler.start(context, 1);
-
-        // THEN
-        verify(mockSyncStrategy, times(1)).startSync(eq(context), eq(1));
-        verify(mockSyncStrategy, times(1)).clearSyncQueue();
-        verify(mockSyncStrategy, times(1)).stopSync();
-
-        // check that we are interrupted by our "fake" exception. This also clears the thread state so cleanup
-        // happens correctly
-        assertThat(Thread.interrupted(), is(true));
+        verify(mockSyncStrategy, times(1)).stop();
     }
 
     @Test

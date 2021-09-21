@@ -79,7 +79,6 @@ import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SYN
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_THING_NAME_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_DOCUMENT_SIZE;
 import static com.aws.greengrass.shadowmanager.model.Constants.MAX_SHADOW_DOCUMENT_SIZE;
-import static com.aws.greengrass.shadowmanager.model.Constants.STRATEGY_TYPE_PERIODIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.STRATEGY_TYPE_REAL_TIME;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -712,19 +711,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
             assertThat(strategyCaptor.getValue().getType(), is(StrategyType.PERIODIC));
         }
         assertThat(strategyCaptor.getValue().getDelay(), is(equalTo(interval)));
-    }
-
-    @Test
-    void GIVEN_bad_key_strategy_config_WHEN_initialize_THEN_service_errors(ExtensionContext extensionContext) {
-        ignoreExceptionOfType(extensionContext, InvalidConfigurationException.class);
-        Topics strategyTopics = Topics.of(context, CONFIGURATION_STRATEGY_TOPIC, null);
-        strategyTopics.createLeafChild("strategyType").withValue(STRATEGY_TYPE_PERIODIC);
-
-        when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_STRATEGY_TOPIC)).thenReturn(strategyTopics);
-        shadowManager.install();
-
-        assertTrue(shadowManager.isErrored());
-        verify(mockSyncHandler, never()).setSyncStrategy(any());
     }
 
     @Test

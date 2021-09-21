@@ -8,29 +8,22 @@ package com.aws.greengrass.shadowmanager.sync.strategy;
 import com.aws.greengrass.shadowmanager.sync.model.SyncContext;
 import com.aws.greengrass.shadowmanager.sync.model.SyncRequest;
 
-import java.util.concurrent.atomic.AtomicBoolean;
-
 /**
  * Interface to for different functionalities in sync strategies.
  */
 public interface SyncStrategy {
-    /**
-     * Indicates whether syncing is running or not.
-     */
-    AtomicBoolean syncing = new AtomicBoolean(false);
-
     /**
      * Starts syncing the shadows based on the strategy.
      *
      * @param context         an context object for syncing
      * @param syncParallelism number of threads to use for syncing
      */
-    void startSync(SyncContext context, int syncParallelism);
+    void start(SyncContext context, int syncParallelism);
 
     /**
      * Stops the syncing of shadows.
      */
-    void stopSync();
+    void stop();
 
     /**
      * Put a sync request into the queue if syncing is started.
@@ -44,9 +37,8 @@ public interface SyncStrategy {
      * Synchronized so that there is at most only one put in progress waiting to be added if queue is full
      *
      * @param request request the request to add.
-     * @throws InterruptedException if the thread is interrupted while enqueuing data
      */
-    void putSyncRequest(SyncRequest request) throws InterruptedException;
+    void putSyncRequest(SyncRequest request);
 
     /**
      * Clear all the sync requests in the request blocking queue.

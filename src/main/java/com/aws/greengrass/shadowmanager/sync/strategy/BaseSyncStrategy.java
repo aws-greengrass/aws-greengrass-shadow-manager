@@ -5,6 +5,8 @@
 
 package com.aws.greengrass.shadowmanager.sync.strategy;
 
+import com.aws.greengrass.logging.api.Logger;
+import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
 import com.aws.greengrass.shadowmanager.sync.RequestMerger;
@@ -21,10 +23,12 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.aws.greengrass.shadowmanager.model.LogEvents.SYNC;
 
-public class BaseSyncStrategy {
+public abstract class BaseSyncStrategy {
+    private static final Logger logger = LogManager.getLogger(BaseSyncStrategy.class);
     static final String SYNC_EVENT_TYPE = SYNC.code();
 
     /**
@@ -61,6 +65,11 @@ public class BaseSyncStrategy {
      * Configuration for retrying a sync request.
      */
     final RetryUtils.RetryConfig retryConfig;
+
+    /**
+     * Indicates whether syncing is running or not.
+     */
+    AtomicBoolean syncing = new AtomicBoolean(false);
 
     /**
      * Configuration for retrying sync requests.
@@ -108,4 +117,51 @@ public class BaseSyncStrategy {
         RequestMerger requestMerger = new RequestMerger();
         this.syncQueue = new RequestBlockingQueue(requestMerger);
     }
+
+    /**
+     * Starts syncing the shadows based on the strategy.
+     *
+     * @param context         an context object for syncing
+     * @param syncParallelism number of threads to use for syncing
+     */
+    void startSync(SyncContext context, int syncParallelism) {
+        synchronized (lifecycleLock) {
+            this.context = context;
+            if (syncing.compareAndSet(false, true)) {
+                doStart(context, syncParallelism);
+            } else {
+                logger.atDebug(SYNC_EVENT_TYPE).log("Already started syncing");
+            }
+        }
+    }
+
+    /**
+     * Stops the syncing of shadows.
+     */
+    void stopSync() {
+        synchronized (lifecycleLock) {
+            if (syncing.compareAndSet(true, false)) {
+                logger.atInfo(SYNC_EVENT_TYPE).log("Stop real time syncing");
+                syncing.set(false);
+
+                doStop();
+
+                int remaining = syncQueue.size();
+                syncQueue.clear();
+
+                if (remaining > 0) {
+                    logger.atInfo(SYNC_EVENT_TYPE)
+                            .log("Stopped real time syncing with {} pending sync items", remaining);
+                }
+            } else {
+                logger.atDebug(SYNC_EVENT_TYPE)
+                        .log("Real time Syncing is already stopped. Ignoring request to stop");
+            }
+        }
+    }
+
+
+    abstract void doStart(SyncContext context, int syncParallelism);
+
+    abstract void doStop();
 }

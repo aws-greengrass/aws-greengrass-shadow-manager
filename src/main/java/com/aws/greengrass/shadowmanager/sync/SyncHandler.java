@@ -121,10 +121,8 @@ public class SyncHandler {
     /**
      * Performs a full sync on all shadows. Clears any existing sync requests and will create full shadow sync requests
      * for all shadows.
-     *
-     * @throws InterruptedException if the thread is interrupted while enqueuing data
      */
-    private void fullSyncOnAllShadows() throws InterruptedException {
+    private void fullSyncOnAllShadows() {
         overallSyncStrategy.clearSyncQueue();
 
         List<Pair<String, String>> shadows = context.getDao().listSyncedShadows();
@@ -137,7 +135,7 @@ public class SyncHandler {
         }
         Iterator<FullShadowSyncRequest> it =
                 shadows.stream().map(p -> new FullShadowSyncRequest(p.getLeft(), p.getRight())).iterator();
-        while (it.hasNext()) {
+        while (it.hasNext() && !Thread.currentThread().isInterrupted()) {
             overallSyncStrategy.putSyncRequest(it.next());
         }
     }
@@ -149,33 +147,16 @@ public class SyncHandler {
      * @param syncParallelism number of threads to use for syncing
      */
     public void start(SyncContext context, int syncParallelism) {
-        overallSyncStrategy.startSync(context, syncParallelism);
+        overallSyncStrategy.start(context, syncParallelism);
         this.context = context;
-        try {
-            fullSyncOnAllShadows();
-        } catch (InterruptedException e) {
-            logger.atWarn(SYNC_EVENT_TYPE)
-                    .log("Interrupted while queuing full sync requests at startup. Syncing will stop");
-            stop();
-            Thread.currentThread().interrupt();
-        }
-    }
-
-    /**
-     * Start sync threads to process sync requests. This automatically starts a full sync for all shadows.
-     *
-     * @param syncParallelism number of threads to use for syncing
-     * @implNote Required for integration test.
-     */
-    public void startSyncStrategy(int syncParallelism) {
-        overallSyncStrategy.startSync(context, syncParallelism);
+        fullSyncOnAllShadows();
     }
 
     /**
      * Stops sync threads and clear syncing queue.
      */
     public void stop() {
-        overallSyncStrategy.stopSync();
+        overallSyncStrategy.stop();
     }
 
     /**
@@ -197,10 +178,8 @@ public class SyncHandler {
      * @param thingName      The thing name associated with the sync shadow update
      * @param shadowName     The shadow name associated with the sync shadow update
      * @param updateDocument The update shadow request
-     * @throws InterruptedException if the thread is interrupted while enqueuing data
      */
-    public void pushCloudUpdateSyncRequest(String thingName, String shadowName, JsonNode updateDocument)
-            throws InterruptedException {
+    public void pushCloudUpdateSyncRequest(String thingName, String shadowName, JsonNode updateDocument) {
         if (isShadowSynced(thingName, shadowName)) {
             overallSyncStrategy.putSyncRequest(new CloudUpdateSyncRequest(thingName, shadowName, updateDocument));
         }
@@ -213,10 +192,8 @@ public class SyncHandler {
      * @param thingName      The thing name associated with the sync shadow update
      * @param shadowName     The shadow name associated with the sync shadow update
      * @param updateDocument Update document to be applied to local shadow
-     * @throws InterruptedException if the thread is interrupted while enqueuing data
      */
-    public void pushLocalUpdateSyncRequest(String thingName, String shadowName, byte[] updateDocument)
-            throws InterruptedException {
+    public void pushLocalUpdateSyncRequest(String thingName, String shadowName, byte[] updateDocument) {
         if (isShadowSynced(thingName, shadowName)) {
             overallSyncStrategy.putSyncRequest(new LocalUpdateSyncRequest(thingName, shadowName, updateDocument));
         }
@@ -228,10 +205,8 @@ public class SyncHandler {
      *
      * @param thingName  The thing name associated with the sync shadow update
      * @param shadowName The shadow name associated with the sync shadow update
-     * @throws InterruptedException if the thread is interrupted while enqueuing data
      */
-    public void pushCloudDeleteSyncRequest(String thingName, String shadowName)
-            throws InterruptedException {
+    public void pushCloudDeleteSyncRequest(String thingName, String shadowName) {
         if (isShadowSynced(thingName, shadowName)) {
             overallSyncStrategy.putSyncRequest(new CloudDeleteSyncRequest(thingName, shadowName));
         }
@@ -244,10 +219,8 @@ public class SyncHandler {
      * @param thingName     The thing name associated with the sync shadow update
      * @param shadowName    The shadow name associated with the sync shadow update
      * @param deletePayload Delete response payload containing the deleted shadow version
-     * @throws InterruptedException if the thread is interrupted while enqueuing data
      */
-    public void pushLocalDeleteSyncRequest(String thingName, String shadowName, byte[] deletePayload)
-            throws InterruptedException {
+    public void pushLocalDeleteSyncRequest(String thingName, String shadowName, byte[] deletePayload) {
         if (isShadowSynced(thingName, shadowName)) {
             overallSyncStrategy.putSyncRequest(new LocalDeleteSyncRequest(thingName, shadowName, deletePayload));
         }

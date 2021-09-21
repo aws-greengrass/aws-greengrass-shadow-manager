@@ -54,8 +54,7 @@ public class Strategy {
                     strategy.delay(Coerce.toLong(entry.getValue()));
                     break;
                 default:
-                    throw new InvalidConfigurationException(String.format("Unexpected key in configuration: %s",
-                            entry.getKey()));
+                    break;
             }
         }
         return strategy.build();

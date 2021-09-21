@@ -73,7 +73,7 @@ class RealTimeSyncStrategyTest {
 
     @AfterEach
     void tearDown() {
-        strategy.stopSync();
+        strategy.stop();
         executorService.shutdownNow();
     }
 
@@ -81,7 +81,7 @@ class RealTimeSyncStrategyTest {
     void GIVEN_sync_request_WHEN_putSyncRequest_and_sync_loop_runs_THEN_request_is_executed_successfully()
             throws Exception {
         strategy = new RealTimeSyncStrategy(executorService, mockRetryer);
-        strategy.startSync(mockSyncContext, 1);
+        strategy.start(mockSyncContext, 1);
         strategy.putSyncRequest(mock(FullShadowSyncRequest.class));
 
         verify(mockRetryer, timeout(Duration.ofSeconds(5).toMillis()).times(1)).run(any(), any(), any());
@@ -110,7 +110,7 @@ class RealTimeSyncStrategyTest {
             return null;
         }).when(mockRequestBlockingQueue).put(any());
 
-        strategy.startSync(mockSyncContext, 1);
+        strategy.start(mockSyncContext, 1);
         strategy.putSyncRequest(mock(FullShadowSyncRequest.class));
 
         verify(mockRequestBlockingQueue, timeout(Duration.ofSeconds(5).toMillis()).times(1)).put(any());
@@ -126,7 +126,7 @@ class RealTimeSyncStrategyTest {
         strategy.setSyncQueue(mockRequestBlockingQueue);
         doThrow(InterruptedException.class).when(mockRequestBlockingQueue).put(any());
 
-        strategy.startSync(mockSyncContext, 1);
+        strategy.start(mockSyncContext, 1);
         strategy.putSyncRequest(mock(FullShadowSyncRequest.class));
 
         verify(mockRetryer, timeout(Duration.ofSeconds(5).toMillis()).times(0)).run(any(), any(), any());
@@ -189,7 +189,7 @@ class RealTimeSyncStrategyTest {
         }).when(mockRequestBlockingQueue).take();
         when(mockRequestBlockingQueue.offerAndTake(request1, false)).thenReturn(request1);
 
-        strategy.startSync(mockSyncContext, 1);
+        strategy.start(mockSyncContext, 1);
         strategy.putSyncRequest(new FullShadowSyncRequest("foo", "bar"));
 
         assertThat("executed request", executeLatch.await(5, TimeUnit.SECONDS), is(true));
@@ -219,7 +219,7 @@ class RealTimeSyncStrategyTest {
 
         when(mockRequestBlockingQueue.take()).thenReturn(request1);
 
-        strategy.startSync(mockSyncContext, 1);
+        strategy.start(mockSyncContext, 1);
         strategy.putSyncRequest(new FullShadowSyncRequest("foo", "bar"));
 
         assertThat("executed request", executeLatch.await(5, TimeUnit.SECONDS), is(true));
@@ -267,7 +267,7 @@ class RealTimeSyncStrategyTest {
                 .thenAnswer(invocation -> invocation.getArgument(0, FullShadowSyncRequest.class));
 
         try {
-            strategy.startSync(mockSyncContext, 1);
+            strategy.start(mockSyncContext, 1);
 
             assertThat("executed requests", executeLatch.await(5, TimeUnit.SECONDS), is(true));
         } finally {

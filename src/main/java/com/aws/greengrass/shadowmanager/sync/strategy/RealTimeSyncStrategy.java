@@ -18,21 +18,18 @@ import software.amazon.awssdk.aws.greengrass.model.ConflictError;
 import software.amazon.awssdk.services.iotdataplane.model.ConflictException;
 
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
 
+/**
+ * Handles syncing of shadows in real time. Whenever the device is connected, this strategy will try to execute the
+ * shadow sync requests as quickly as possible.
+ */
 public class RealTimeSyncStrategy extends BaseSyncStrategy implements SyncStrategy {
 
     private static final Logger logger = LogManager.getLogger(RealTimeSyncStrategy.class);
     private final ExecutorService syncExecutorService;
-
-    /**
-     * Indicates whether syncing is running or not.
-     */
-    AtomicBoolean syncing = new AtomicBoolean(false);
-
 
     /**
      * Constructor.
@@ -65,49 +62,33 @@ public class RealTimeSyncStrategy extends BaseSyncStrategy implements SyncStrate
      * @param syncParallelism number of threads to use for syncing
      */
     @Override
-    public void startSync(SyncContext context, int syncParallelism) {
-        synchronized (lifecycleLock) {
-            if (syncing.compareAndSet(false, true)) {
-                this.context = context;
-                logger.atInfo(SYNC_EVENT_TYPE).log("Start real time syncing");
-                for (int i = 0; i < syncParallelism; i++) {
-                    syncThreads.add(syncExecutorService.submit(this::syncLoop));
-                }
-            } else {
-                logger.atDebug(SYNC_EVENT_TYPE)
-                        .log("Real time Syncing is already in progress. Ignoring request to start");
-            }
+    public void start(SyncContext context, int syncParallelism) {
+        super.startSync(context, syncParallelism);
+    }
+
+    @Override
+    void doStart(SyncContext context, int syncParallelism) {
+        logger.atInfo(SYNC_EVENT_TYPE).log("Start real time syncing");
+        for (int i = 0; i < syncParallelism; i++) {
+            syncThreads.add(syncExecutorService.submit(this::syncLoop));
         }
+
     }
 
     /**
      * Stops the syncing of shadows.
      */
     @Override
-    public void stopSync() {
-        synchronized (lifecycleLock) {
-            if (syncing.compareAndSet(true, false)) {
-                logger.atInfo(SYNC_EVENT_TYPE).log("Stop real time syncing");
-                syncing.set(false);
-
-                logger.atDebug(SYNC_EVENT_TYPE).log("Cancel {} real time sync thread(s)", syncThreads.size());
-                syncThreads.forEach(t -> t.cancel(true));
-                syncThreads.clear();
-
-                int remaining = syncQueue.size();
-                syncQueue.clear();
-
-                if (remaining > 0) {
-                    logger.atInfo(SYNC_EVENT_TYPE)
-                            .log("Stopped real time syncing with {} pending sync items", remaining);
-                }
-            } else {
-                logger.atDebug(SYNC_EVENT_TYPE)
-                        .log("Real time Syncing is already stopped. Ignoring request to stop");
-            }
-        }
+    public void stop() {
+        super.stopSync();
     }
 
+    @Override
+    void doStop() {
+        logger.atDebug(SYNC_EVENT_TYPE).log("Cancel {} real time sync thread(s)", syncThreads.size());
+        syncThreads.forEach(t -> t.cancel(true));
+        syncThreads.clear();
+    }
 
     /**
      * Put a sync request into the queue if syncing is started.
@@ -121,10 +102,9 @@ public class RealTimeSyncStrategy extends BaseSyncStrategy implements SyncStrate
      * Synchronized so that there is at most only one put in progress waiting to be added if queue is full
      *
      * @param request request the request to add.
-     * @throws InterruptedException if the thread is interrupted while enqueuing data
      */
     @Override
-    public void putSyncRequest(SyncRequest request) throws InterruptedException {
+    public void putSyncRequest(SyncRequest request) {
         if (!syncing.get()) {
             logger.atTrace(SYNC_EVENT_TYPE)
                     .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
@@ -241,7 +221,6 @@ public class RealTimeSyncStrategy extends BaseSyncStrategy implements SyncStrate
             } while (!Thread.currentThread().isInterrupted());
         } catch (InterruptedException e) {
             logger.atWarn(SYNC_EVENT_TYPE).log("Interrupted while waiting for sync requests");
-            Thread.currentThread().interrupt();
         }
         logger.atInfo(SYNC_EVENT_TYPE).log("Stop waiting for sync requests");
     }
