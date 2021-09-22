@@ -17,6 +17,7 @@ import com.aws.greengrass.shadowmanager.ShadowManagerDatabase;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientFactory;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
+import com.aws.greengrass.shadowmanager.sync.strategy.RealTimeSyncStrategy;
 import com.aws.greengrass.testcommons.testutilities.GGServiceTestUtil;
 import com.aws.greengrass.util.RetryUtils;
 import org.junit.jupiter.api.io.TempDir;
@@ -29,6 +30,7 @@ import java.util.Collections;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.lenient;
@@ -52,18 +54,72 @@ public class NucleusLaunchUtils extends GGServiceTestUtil {
     @Mock
     ShadowManagerDatabase mockShadowManagerDatabase;
 
+    @Deprecated()
     public void startNucleusWithConfig(String configFile) throws InterruptedException {
         startNucleusWithConfig(configFile, State.RUNNING, false, false, false);
     }
 
+    @Deprecated()
     void startNucleusWithConfig(String configFile, boolean mockCloud, boolean mockDao) throws InterruptedException {
         startNucleusWithConfig(configFile, State.RUNNING, false, mockCloud, mockDao);
     }
 
+    @Deprecated()
     void startNucleusWithConfig(String configFile, State expectedState, boolean mockDatabase) throws InterruptedException {
         startNucleusWithConfig(configFile, expectedState, mockDatabase, false, true);
     }
 
+    void startNucleusWithConfig(NucleusLaunchUtilsConfig config) throws InterruptedException {
+        CountDownLatch shadowManagerRunning = new CountDownLatch(1);
+        AtomicBoolean isSyncMocked = new AtomicBoolean(false);
+        kernel.parseArgs("-r", rootDir.toAbsolutePath().toString(), "-i",
+                getClass().getResource(config.getConfigFile()).toString());
+        listener = (GreengrassService service, State was, State newState) -> {
+            if (service.getName().equals(ShadowManager.SERVICE_NAME) && service.getState().equals(config.getExpectedState())) {
+                shadowManager = (ShadowManager) service;
+                shadowManagerRunning.countDown();
+            }
+        };
+        kernel.getContext().addGlobalStateChangeListener(listener);
+        kernel.getContext().put(MqttClient.class, mqttClient);
+        if (config.isMqttConnected()) {
+            // assume we are always connected
+            lenient().when(mqttClient.connected()).thenAnswer(invocation -> isSyncMocked.get());
+        }
+
+
+        if (config.isMockDatabase()) {
+            kernel.getContext().put(ShadowManagerDatabase.class, mockShadowManagerDatabase);
+            kernel.getContext().put(AuthorizationHandlerWrapper.class, mockAuthorizationHandlerWrapper);
+        }
+        if (config.isMockCloud()) {
+            kernel.getContext().put(IotDataPlaneClientFactory.class, iotDataPlaneClientFactory);
+        }
+        if (config.isMockDao()) {
+            kernel.getContext().put(ShadowManagerDAOImpl.class, dao);
+        }
+        SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
+        RealTimeSyncStrategy realTimeSyncStrategy = (RealTimeSyncStrategy) syncHandler.getOverallSyncStrategy();
+        ExecutorService es = kernel.getContext().get(ExecutorService.class);
+        // set retry config to only try once so we can test failures earlier
+        kernel.launch();
+
+        assertTrue(shadowManagerRunning.await(TEST_TIME_OUT_SEC, TimeUnit.SECONDS));
+
+        RetryUtils.RetryConfig retryConfig = RetryUtils.RetryConfig.builder()
+                .maxAttempt(1)
+                .maxRetryInterval(Duration.ofSeconds(1))
+                .retryableExceptions(Collections.singletonList(RetryableException.class))
+                .build();
+        RealTimeSyncStrategy syncStrategy = new RealTimeSyncStrategy(es, realTimeSyncStrategy.getRetryer(), retryConfig);
+        syncHandler.setOverallSyncStrategy(syncStrategy);
+        isSyncMocked.set(true);
+        shadowManager.startSyncingShadows();
+
+        kernel.getContext().put(RealTimeSyncStrategy.class, syncStrategy);
+    }
+
+    @Deprecated()
     void startNucleusWithConfig(String configFile, State expectedState, boolean mockDatabase, boolean mockCloud,
                                 boolean mockDao) throws InterruptedException {
         CountDownLatch shadowManagerRunning = new CountDownLatch(1);
@@ -90,16 +146,7 @@ public class NucleusLaunchUtils extends GGServiceTestUtil {
         if (mockDao) {
             kernel.getContext().put(ShadowManagerDAOImpl.class, dao);
         }
-        SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
-        ExecutorService es = kernel.getContext().get(ExecutorService.class);
-
         // set retry config to only try once so we can test failures earlier
-        RetryUtils.RetryConfig retryConfig = RetryUtils.RetryConfig.builder()
-                .maxAttempt(1)
-                .maxRetryInterval(Duration.ofSeconds(1))
-                .retryableExceptions(Collections.singletonList(RetryableException.class))
-                .build();
-        kernel.getContext().put(SyncHandler.class, new SyncHandler(syncHandler.getSyncQueue(), es, retryConfig));
         kernel.launch();
 
         assertTrue(shadowManagerRunning.await(TEST_TIME_OUT_SEC, TimeUnit.SECONDS));

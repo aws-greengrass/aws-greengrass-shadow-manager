@@ -155,7 +155,7 @@ public class ShadowSyncConfiguration {
      * @param thingConfigObject    The thing configuration object
      * @param thingName            The thing name
      * @param syncConfigurationSet the sync configuration list to add the nucleus thing configuration to.
-     * @throws InvalidRequestParametersException if the named shadow validation fails.
+     * @throws InvalidConfigurationException if the named shadow validation fails.
      */
     private static void processThingConfiguration(Object thingConfigObject, String thingName,
                                                   Set<ThingShadowSyncConfiguration> syncConfigurationSet,

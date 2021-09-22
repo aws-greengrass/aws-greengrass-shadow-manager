@@ -242,7 +242,7 @@ public class CloudDataClient {
         String thingName = shadowRequest.getThingName();
         String shadowName = shadowRequest.getShadowName();
         logger.atDebug().kv(LOG_THING_NAME_KEY, thingName).kv(LOG_SHADOW_NAME_KEY, shadowName)
-                .log("Received cloud update request");
+                .log("Received cloud update sync request");
         syncHandler.pushLocalUpdateSyncRequest(thingName, shadowName, message.getPayload());
     }
 
@@ -257,7 +257,7 @@ public class CloudDataClient {
         String thingName = shadowRequest.getThingName();
         String shadowName = shadowRequest.getShadowName();
         logger.atDebug().kv(LOG_THING_NAME_KEY, thingName).kv(LOG_SHADOW_NAME_KEY, shadowName)
-                .log("Received cloud delete request");
+                .log("Received cloud delete request sync request");
         syncHandler.pushLocalDeleteSyncRequest(thingName, shadowName, message.getPayload());
     }
 

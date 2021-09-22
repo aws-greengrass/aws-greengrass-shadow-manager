@@ -25,6 +25,8 @@ import com.aws.greengrass.shadowmanager.sync.CloudDataClient;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientWrapper;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
 import com.aws.greengrass.shadowmanager.sync.model.SyncContext;
+import com.aws.greengrass.shadowmanager.sync.strategy.model.Strategy;
+import com.aws.greengrass.shadowmanager.sync.strategy.model.StrategyType;
 import com.aws.greengrass.shadowmanager.util.ShadowWriteSynchronizeHelper;
 import com.aws.greengrass.shadowmanager.util.Validator;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
@@ -36,6 +38,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -71,13 +74,16 @@ import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_NAM
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_RATE_LIMITS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SHADOW_DOCUMENTS_MAP_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SHADOW_DOCUMENTS_TOPIC;
+import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_STRATEGY_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SYNCHRONIZATION_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_THING_NAME_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_DOCUMENT_SIZE;
 import static com.aws.greengrass.shadowmanager.model.Constants.MAX_SHADOW_DOCUMENT_SIZE;
+import static com.aws.greengrass.shadowmanager.model.Constants.STRATEGY_TYPE_REAL_TIME;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -142,6 +148,8 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
     private ArgumentCaptor<MqttClientConnectionEvents> mqttCallbacksCaptor;
     @Captor
     private ArgumentCaptor<CallbackEventManager.OnConnectCallback> mqtOnConnectCallbackCaptor;
+    @Captor
+    private ArgumentCaptor<Strategy> strategyCaptor;
 
     private ShadowManager shadowManager;
 
@@ -160,6 +168,8 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         lenient().when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
                 .thenReturn(mock(Topics.class));
         lenient().when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_RATE_LIMITS_TOPIC))
+                .thenReturn(mock(Topics.class));
+        lenient().when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_STRATEGY_TOPIC))
                 .thenReturn(mock(Topics.class));
     }
 
@@ -682,5 +692,37 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         }
     }
 
+    @ParameterizedTest
+    @CsvSource({"realTime,30", "periodic,30", "periodic,300"})
+    void GIVEN_good_strategy_config_WHEN_initialize_THEN_correctly_sets_strategy_in_synchandler(String strategyType, long interval) {
+        Topics strategyTopics = Topics.of(context, CONFIGURATION_STRATEGY_TOPIC, null);
+        strategyTopics.createLeafChild("type").withValue(strategyType);
+        strategyTopics.createLeafChild("delay").withValue(interval);
 
+        when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_STRATEGY_TOPIC)).thenReturn(strategyTopics);
+        doNothing().when(shadowManager.getSyncHandler()).setSyncStrategy(strategyCaptor.capture());
+        shadowManager.install();
+
+        assertFalse(shadowManager.isErrored());
+        assertThat(strategyCaptor.getValue(), is(notNullValue()));
+        if (STRATEGY_TYPE_REAL_TIME.equals(strategyType)) {
+            assertThat(strategyCaptor.getValue().getType(), is(StrategyType.REALTIME));
+        } else {
+            assertThat(strategyCaptor.getValue().getType(), is(StrategyType.PERIODIC));
+        }
+        assertThat(strategyCaptor.getValue().getDelay(), is(equalTo(interval)));
+    }
+
+    @Test
+    void GIVEN_bad_value_strategy_config_WHEN_initialize_THEN_service_errors(ExtensionContext extensionContext) {
+        ignoreExceptionOfType(extensionContext, InvalidConfigurationException.class);
+        Topics strategyTopics = Topics.of(context, CONFIGURATION_STRATEGY_TOPIC, null);
+        strategyTopics.createLeafChild("type").withValue("real Time");
+
+        when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_STRATEGY_TOPIC)).thenReturn(strategyTopics);
+        shadowManager.install();
+
+        assertTrue(shadowManager.isErrored());
+        verify(mockSyncHandler, never()).setSyncStrategy(any());
+    }
 }

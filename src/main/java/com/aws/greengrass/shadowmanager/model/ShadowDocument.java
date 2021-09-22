@@ -52,10 +52,23 @@ public class ShadowDocument {
      * Constructor to create a new shadow document from a byte array.
      *
      * @param documentBytes the byte array containing the shadow information.
-     * @throws IOException if there was an issue while deserializing the shadow byte array.
+     * @throws IOException                       if there was an issue while deserializing the shadow byte array.
      * @throws InvalidRequestParametersException if there was a validation issue while deserializing the shadow doc.
      */
     public ShadowDocument(byte[] documentBytes) throws IOException, InvalidRequestParametersException {
+        this(documentBytes, true);
+    }
+
+    /**
+     * Constructor to create a new shadow document from a byte array.
+     *
+     * @param documentBytes the byte array containing the shadow information.
+     * @param validate      whether to validate the payload or not.
+     * @throws IOException                       if there was an issue while deserializing the shadow byte array.
+     * @throws InvalidRequestParametersException if there was a validation issue while deserializing the shadow doc.
+     */
+    public ShadowDocument(byte[] documentBytes, boolean validate)
+            throws IOException, InvalidRequestParametersException {
         if (documentBytes == null || documentBytes.length == 0) {
             setFields(null, null, null);
             return;
@@ -65,8 +78,10 @@ public class ShadowDocument {
                 .orElseThrow(() ->
                         new InvalidRequestParametersException(ErrorMessage
                                 .createInvalidPayloadJsonMessage("")));
-        // Validate the payload schema
-        JsonUtil.validatePayloadSchema(documentJson);
+        if (validate) {
+            // Validate the payload schema
+            JsonUtil.validatePayloadSchema(documentJson);
+        }
 
         ShadowDocument shadowDocument = SerializerFactory.getFailSafeJsonObjectMapper()
                 .convertValue(documentJson, ShadowDocument.class);

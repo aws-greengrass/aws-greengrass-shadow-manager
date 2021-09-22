@@ -69,8 +69,13 @@ public final class Constants {
     public static final String CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE = "maxTotalLocalRequestsRate";
     public static final String CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC =
             "maxLocalRequestsPerSecondPerThing";
+    public static final String CONFIGURATION_STRATEGY_TOPIC = "strategy";
     public static final String UNEXPECTED_TYPE_FORMAT = "Unexpected type in %s: %s";
     public static final String UNEXPECTED_VALUE_FORMAT = "Unexpected value in %s: %s";
+
+    public static final String STRATEGY_TYPE_REAL_TIME = "realTime";
+    public static final String STRATEGY_TYPE_PERIODIC = "periodic";
+
 
     private Constants() {
     }
