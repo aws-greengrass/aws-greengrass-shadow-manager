@@ -34,6 +34,7 @@ import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.CloudDataClient;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientWrapper;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
+import com.aws.greengrass.shadowmanager.sync.model.Direction;
 import com.aws.greengrass.shadowmanager.sync.model.SyncContext;
 import com.aws.greengrass.shadowmanager.sync.strategy.model.Strategy;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
@@ -70,6 +71,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_RATE_LIMITS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_STRATEGY_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SYNCHRONIZATION_TOPIC;
+import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SYNC_DIRECTION_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_DOCUMENT_SIZE;
 import static com.aws.greengrass.shadowmanager.sync.strategy.model.Strategy.DEFAULT_STRATEGY;
 import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.DELETE_THING_SHADOW;
@@ -108,7 +110,8 @@ public class ShadowManager extends PluginService {
         @Override
         public void onConnectionResumed(boolean sessionPresent) {
             if (inState(State.RUNNING)) {
-                startSyncingShadows(StartSyncInfo.builder().updateCloudSubscriptions(true).build());
+                startSyncingShadows(StartSyncInfo.builder().startSyncStrategy(true).startSyncStrategy(true)
+                        .updateCloudSubscriptions(true).build());
 
             }
         }
@@ -211,9 +214,22 @@ public class ShadowManager extends PluginService {
 
     @Override
     protected void install() {
+        install(InstallConfig.builder()
+                .configureMaxDocSizeLimitConfig(true)
+                .configureRateLimitsConfig(true)
+                .configureStrategyConfig(true)
+                .configureSyncDirectionConfig(true)
+                .configureSynchronizeConfig(true)
+                .installDatabase(true)
+                .build());
+    }
+
+    protected void install(InstallConfig installConfig) {
         try {
-            database.install();
-            JsonUtil.loadSchema();
+            if (installConfig.installDatabase) {
+                database.install();
+                JsonUtil.loadSchema();
+            }
         } catch (FlywayException | IOException e) {
             serviceErrored(e);
             return;
@@ -221,108 +237,148 @@ public class ShadowManager extends PluginService {
 
         inboundRateLimiter.clear();
 
-        Topics configTopics = config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC);
-        configTopics.subscribe((what, newv) -> {
-            Map<String, Object> configTopicsPojo = configTopics.toPOJO();
-            try {
-                Topic thingNameTopic = this.deviceConfiguration.getThingName();
-                String thingName = Coerce.toString(thingNameTopic);
-                ShadowSyncConfiguration newSyncConfiguration =
-                        ShadowSyncConfiguration.processConfiguration(configTopicsPojo, thingName);
-                if (this.syncConfiguration != null && this.syncConfiguration.equals(newSyncConfiguration)) {
-                    return;
-                }
-                this.syncConfiguration = newSyncConfiguration;
-                this.syncHandler.setSyncConfigurations(this.syncConfiguration.getSyncConfigurations());
-
-                // Subscribe to the thing name topic if the Nucleus thing shadows have been synced.
-                Optional<ThingShadowSyncConfiguration> coreThingConfig =
-                        getCoreThingShadowSyncConfiguration(thingName);
-                if (coreThingConfig.isPresent()) {
-                    thingNameTopic.subscribeGeneric(this.deviceThingNameWatcher);
-                } else {
-                    thingNameTopic.remove(this.deviceThingNameWatcher);
-                }
-
-                // only stop / start syncing if we are not in install - it will otherwise be started by lifecycle
-                if (inState(State.RUNNING)) {
-                    stopSyncingShadows(true);
-                    startSyncingShadows(StartSyncInfo.builder().reInitializeSyncInfo(true)
-                            .updateCloudSubscriptions(true).build());
-                }
-            } catch (InvalidConfigurationException e) {
-                serviceErrored(e);
-            }
-        });
-
-        Topics rateLimitTopics = config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_RATE_LIMITS_TOPIC);
-        rateLimitTopics.subscribe((what, newv) -> {
-            Map<String, Object> rateLimitsPojo = rateLimitTopics.toPOJO();
-            try {
-                if (rateLimitsPojo.containsKey(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC)) {
-                    int maxOutboundSyncUpdatesPerSecond = Coerce.toInt(rateLimitsPojo
-                            .get(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC));
-                    Validator.validateOutboundSyncUpdatesPerSecond(maxOutboundSyncUpdatesPerSecond);
-                    iotDataPlaneClientWrapper.setRate(maxOutboundSyncUpdatesPerSecond);
-                }
-
-                if (rateLimitsPojo.containsKey(CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE)) {
-                    int maxTotalLocalRequestRate = Coerce.toInt(rateLimitsPojo
-                            .get(CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE));
-                    Validator.validateTotalLocalRequestRate(maxTotalLocalRequestRate);
-                    inboundRateLimiter.setTotalRate(maxTotalLocalRequestRate);
-                }
-
-                if (rateLimitsPojo.containsKey(CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC)) {
-                    int maxLocalShadowUpdatesPerThingPerSecond = Coerce.toInt(rateLimitsPojo
-                            .get(CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC));
-                    Validator.validateLocalShadowRequestsPerThingPerSecond(maxLocalShadowUpdatesPerThingPerSecond);
-                    inboundRateLimiter.setRate(maxLocalShadowUpdatesPerThingPerSecond);
-                }
-            } catch (InvalidConfigurationException e) {
-                serviceErrored(e);
-            }
-        });
-
-        config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC)
-                .dflt(DEFAULT_DOCUMENT_SIZE)
-                .subscribe((why, newv) -> {
-                    int newMaxShadowSize;
-                    if (WhatHappened.removed.equals(why)) {
-                        newMaxShadowSize = DEFAULT_DOCUMENT_SIZE;
-                    } else {
-                        newMaxShadowSize = Coerce.toInt(newv);
-                    }
-                    try {
-                        Validator.validateMaxShadowSize(newMaxShadowSize);
-                        Validator.setMaxShadowDocumentSize(newMaxShadowSize);
-                        updateThingShadowRequestHandler.setMaxShadowSize(newMaxShadowSize);
-                    } catch (InvalidConfigurationException e) {
-                        serviceErrored(e);
-                    }
-                });
-
-        Topics strategyTopics = config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_STRATEGY_TOPIC);
-        final AtomicReference<Strategy> currentStrategy = new AtomicReference<>(DEFAULT_STRATEGY);
-
-        strategyTopics.subscribe((why, newv) -> {
-            Strategy strategy;
-            Map<String, Object> strategyPojo = strategyTopics.toPOJO();
-
-            if (WhatHappened.removed.equals(why) || strategyPojo == null || strategyPojo.isEmpty()) {
-                strategy = DEFAULT_STRATEGY;
-            } else {
-                // Get the correct sync strategy configuration from the POJO.
+        if (installConfig.configureSynchronizeConfig) {
+            Topics configTopics = config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC);
+            configTopics.subscribe((what, newv) -> {
+                Map<String, Object> configTopicsPojo = configTopics.toPOJO();
                 try {
-                    strategy = Strategy.fromPojo(strategyPojo);
+                    Topic thingNameTopic = this.deviceConfiguration.getThingName();
+                    String thingName = Coerce.toString(thingNameTopic);
+                    ShadowSyncConfiguration newSyncConfiguration =
+                            ShadowSyncConfiguration.processConfiguration(configTopicsPojo, thingName);
+                    if (this.syncConfiguration != null && this.syncConfiguration.equals(newSyncConfiguration)) {
+                        return;
+                    }
+                    this.syncConfiguration = newSyncConfiguration;
+                    this.syncHandler.setSyncConfigurations(this.syncConfiguration.getSyncConfigurations());
+
+                    // Subscribe to the thing name topic if the Nucleus thing shadows have been synced.
+                    Optional<ThingShadowSyncConfiguration> coreThingConfig =
+                            getCoreThingShadowSyncConfiguration(thingName);
+                    if (coreThingConfig.isPresent()) {
+                        thingNameTopic.subscribeGeneric(this.deviceThingNameWatcher);
+                    } else {
+                        thingNameTopic.remove(this.deviceThingNameWatcher);
+                    }
+
+                    // only stop / start syncing if we are not in install - it will otherwise be started by lifecycle
+                    if (inState(State.RUNNING)) {
+                        stopSyncingShadows(true);
+                        startSyncingShadows(StartSyncInfo.builder().reInitializeSyncInfo(true).startSyncStrategy(true)
+                                .updateCloudSubscriptions(true).build());
+                    }
                 } catch (InvalidConfigurationException e) {
                     serviceErrored(e);
-                    return;
                 }
-            }
+            });
+        }
 
-            currentStrategy.set(replaceStrategyIfNecessary(currentStrategy.get(), strategy));
-        });
+        if (installConfig.configureRateLimitsConfig) {
+            Topics rateLimitTopics = config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_RATE_LIMITS_TOPIC);
+            rateLimitTopics.subscribe((what, newv) -> {
+                Map<String, Object> rateLimitsPojo = rateLimitTopics.toPOJO();
+                try {
+                    if (rateLimitsPojo.containsKey(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC)) {
+                        int maxOutboundSyncUpdatesPerSecond = Coerce.toInt(rateLimitsPojo
+                                .get(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC));
+                        Validator.validateOutboundSyncUpdatesPerSecond(maxOutboundSyncUpdatesPerSecond);
+                        iotDataPlaneClientWrapper.setRate(maxOutboundSyncUpdatesPerSecond);
+                    }
+
+                    if (rateLimitsPojo.containsKey(CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE)) {
+                        int maxTotalLocalRequestRate = Coerce.toInt(rateLimitsPojo
+                                .get(CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE));
+                        Validator.validateTotalLocalRequestRate(maxTotalLocalRequestRate);
+                        inboundRateLimiter.setTotalRate(maxTotalLocalRequestRate);
+                    }
+
+                    if (rateLimitsPojo.containsKey(CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC)) {
+                        int maxLocalShadowUpdatesPerThingPerSecond = Coerce.toInt(rateLimitsPojo
+                                .get(CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC));
+                        Validator.validateLocalShadowRequestsPerThingPerSecond(maxLocalShadowUpdatesPerThingPerSecond);
+                        inboundRateLimiter.setRate(maxLocalShadowUpdatesPerThingPerSecond);
+                    }
+                } catch (InvalidConfigurationException e) {
+                    serviceErrored(e);
+                }
+            });
+        }
+
+
+        if (installConfig.configureMaxDocSizeLimitConfig) {
+            config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC)
+                    .dflt(DEFAULT_DOCUMENT_SIZE)
+                    .subscribe((why, newv) -> {
+                        int newMaxShadowSize;
+                        if (WhatHappened.removed.equals(why)) {
+                            newMaxShadowSize = DEFAULT_DOCUMENT_SIZE;
+                        } else {
+                            newMaxShadowSize = Coerce.toInt(newv);
+                        }
+                        try {
+                            Validator.validateMaxShadowSize(newMaxShadowSize);
+                            Validator.setMaxShadowDocumentSize(newMaxShadowSize);
+                            updateThingShadowRequestHandler.setMaxShadowSize(newMaxShadowSize);
+                        } catch (InvalidConfigurationException e) {
+                            serviceErrored(new InvalidConfigurationException(e));
+                        }
+                    });
+        }
+
+        if (installConfig.configureSyncDirectionConfig) {
+            config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC,
+                    CONFIGURATION_SYNC_DIRECTION_TOPIC)
+                    .dflt(Direction.BIDIRECTIONAL)
+                    .subscribe((why, newv) -> {
+                        Direction newSyncDirection;
+                        if (WhatHappened.removed.equals(why)) {
+                            newSyncDirection = Direction.BIDIRECTIONAL;
+                        } else {
+                            try {
+                                newSyncDirection = Direction.valueOf(Coerce.toString(newv));
+                            } catch (IllegalArgumentException e) {
+                                serviceErrored(e);
+                                return;
+                            }
+                        }
+
+                        Direction currentDirection = syncHandler.getSyncDirection();
+                        // if the sync direction is the same, then just return and do nothing.
+                        if (newSyncDirection.equals(currentDirection)) {
+                            logger.atDebug()
+                                    .log("Not processing sync direction config change since it is the same {}",
+                                            currentDirection);
+                            return;
+                        }
+
+                        setupSync(newSyncDirection, Optional.of(currentDirection));
+                        syncHandler.setSyncDirection(newSyncDirection);
+                    });
+        }
+
+        if (installConfig.configureStrategyConfig) {
+            Topics strategyTopics = config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_STRATEGY_TOPIC);
+            final AtomicReference<Strategy> currentStrategy = new AtomicReference<>(DEFAULT_STRATEGY);
+
+            strategyTopics.subscribe((why, newv) -> {
+                Strategy strategy;
+                Map<String, Object> strategyPojo = strategyTopics.toPOJO();
+
+                if (WhatHappened.removed.equals(why) || strategyPojo == null || strategyPojo.isEmpty()) {
+                    strategy = DEFAULT_STRATEGY;
+                } else {
+                    // Get the correct sync strategy configuration from the POJO.
+                    try {
+                        strategy = Strategy.fromPojo(strategyPojo);
+                    } catch (InvalidConfigurationException e) {
+                        serviceErrored(e);
+                        return;
+                    }
+                }
+
+                currentStrategy.set(replaceStrategyIfNecessary(currentStrategy.get(), strategy));
+            });
+        }
     }
 
     Strategy replaceStrategyIfNecessary(Strategy currentStrategy, Strategy strategy) {
@@ -330,9 +386,51 @@ public class ShadowManager extends PluginService {
             currentStrategy = strategy;
             stopSyncingShadows(false);
             syncHandler.setSyncStrategy(strategy);
-            startSyncingShadows(StartSyncInfo.builder().build());
+            startSyncingShadows(StartSyncInfo.builder().startSyncStrategy(true).build());
         }
         return currentStrategy;
+    }
+
+    private void setupSync(Direction newSyncDirection, Optional<Direction> currentDirection) {
+        if (Direction.FROMDEVICEONLY.equals(newSyncDirection)) {
+            // If we are going to update the cloud after a local shadow has been updated, then stop
+            // the existing sync loop future which is trying to subscribe to shadow topics.
+            // Also unsubscribe all the shadow topics that we have already subscribed to.
+            // Start the sync strategy if the current direction was FROMCLOUDONLY
+            cloudDataClient.stopSubscribing();
+            cloudDataClient.unsubscribeForAllShadowsTopics();
+            startSyncingShadows(StartSyncInfo.builder()
+                    .overrideRunningCheck(!currentDirection.isPresent())
+                    .reInitializeSyncInfo(!currentDirection.isPresent())
+                    .startSyncStrategy(!currentDirection.isPresent())
+                    .build());
+        } else if (Direction.FROMCLOUDONLY.equals(newSyncDirection)) {
+            // If we are only going to get an update after a cloud shadow has been updated, then
+            // update the shadow subscriptions if the current direction was FROMDEVICEONLY (since we
+            // would have unsubscribed from all topics).
+            // Stop the sync strategy loop.
+            // TODO: do we need to clear the sync queue?
+            if (!currentDirection.isPresent() || Direction.FROMDEVICEONLY.equals(currentDirection.get())) {
+                cloudDataClient.updateSubscriptions(syncConfiguration.getSyncShadows());
+            }
+            startSyncingShadows(StartSyncInfo.builder()
+                    .overrideRunningCheck(!currentDirection.isPresent())
+                    .reInitializeSyncInfo(!currentDirection.isPresent())
+                    .startSyncStrategy(!currentDirection.isPresent())
+                    .build());
+        } else {
+            // If we need to do a bidrectional sync, then start the sync strategy loop only if the
+            // current direction was FROMCLOUDONLY (since we would have stopped the loop) and update
+            // all the cloud subscriptions only if the current direction was FROMDEVICEONLY (since we
+            // would have unsubscribed from all topics).
+            startSyncingShadows(StartSyncInfo.builder()
+                    .startSyncStrategy(!currentDirection.isPresent())
+                    .updateCloudSubscriptions(!currentDirection.isPresent()
+                            || Direction.FROMDEVICEONLY.equals(currentDirection.get()))
+                    .reInitializeSyncInfo(!currentDirection.isPresent())
+                    .overrideRunningCheck(!currentDirection.isPresent())
+                    .build());
+        }
     }
 
     private void deleteRemovedSyncInformation() {
@@ -392,9 +490,7 @@ public class ShadowManager extends PluginService {
             database.open();
 
             reportState(State.RUNNING);
-            startSyncingShadows(StartSyncInfo.builder().reInitializeSyncInfo(true).overrideRunningCheck(true)
-                    .updateCloudSubscriptions(true).build());
-
+            setupSync(syncHandler.getSyncDirection(), Optional.empty());
         } catch (Exception e) {
             serviceErrored(e);
         }
@@ -454,10 +550,12 @@ public class ShadowManager extends PluginService {
         }
 
         if (mqttClient.connected() && !syncConfiguration.getSyncConfigurations().isEmpty()) {
-            final SyncContext syncContext = new SyncContext(dao, getUpdateThingShadowRequestHandler(),
-                    getDeleteThingShadowRequestHandler(),
-                    iotDataPlaneClientWrapper);
-            syncHandler.start(syncContext, SyncHandler.DEFAULT_PARALLELISM);
+            if (startSyncInfo.startSyncStrategy) {
+                final SyncContext syncContext = new SyncContext(dao, getUpdateThingShadowRequestHandler(),
+                        getDeleteThingShadowRequestHandler(),
+                        iotDataPlaneClientWrapper);
+                syncHandler.start(syncContext, SyncHandler.DEFAULT_PARALLELISM);
+            }
 
             // Only update the MQTT subscriptions to cloud shadows at startup or reconnection.
             if (startSyncInfo.updateCloudSubscriptions) {
@@ -494,5 +592,49 @@ public class ShadowManager extends PluginService {
          * ONLY supposed to be used in startup.
          */
         boolean overrideRunningCheck;
+
+        /**
+         * Whether or not to start the sync strategy.
+         */
+        boolean startSyncStrategy;
+    }
+
+    /**
+     * Class to handle different configurations on how to install the shadow manager component.
+     *
+     * @implNote This class is only used in tests in order to avoid any unnecessary mocks.
+     */
+    @Builder
+    @Data
+    public static class InstallConfig {
+        /**
+         * Whether or not to install the database and load the JSON schema for validation.
+         */
+        boolean installDatabase;
+
+        /**
+         * Whether or not to subscribe to the synchronize config field.
+         */
+        boolean configureSynchronizeConfig;
+
+        /**
+         * Whether or not to subscribe to the rate limits config field.
+         */
+        boolean configureRateLimitsConfig;
+
+        /**
+         * Whether or not to subscribe to the max doc size config field.
+         */
+        boolean configureMaxDocSizeLimitConfig;
+
+        /**
+         * Whether or not to subscribe to the sync direction config field.
+         */
+        boolean configureSyncDirectionConfig;
+
+        /**
+         * Whether or not to subscribe to the sync strategy config field.
+         */
+        boolean configureStrategyConfig;
     }
 }

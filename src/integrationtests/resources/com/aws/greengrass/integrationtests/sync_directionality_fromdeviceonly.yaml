@@ -1,0 +1,51 @@
+---
+services:
+  aws.greengrass.Nucleus:
+    configuration:
+      runWithDefault:
+        posixUser: nobody
+  aws.greengrass.ShadowManager:
+    configuration:
+      synchronize:
+        direction: FROMDEVICEONLY
+        shadowDocumentsMap:
+          Thing1:
+            classic: true
+          Thing2:
+            namedShadows:
+              - "foo"
+              - "bar"
+
+  main:
+    dependencies:
+      - DoAll
+  DoAll:
+    lifecycle:
+      startup: echo "Running"
+      shutdown: echo "Stopping"
+    dependencies:
+      - aws.greengrass.ShadowManager
+    configuration:
+      accessControl:
+        aws.greengrass.ShadowManager:
+          policyId1:
+            policyDescription: access to CRUD shadow operations
+            operations:
+              - 'aws.greengrass#GetThingShadow'
+              - 'aws.greengrass#UpdateThingShadow'
+              - 'aws.greengrass#DeleteThingShadow'
+            resources:
+              - '*'
+          policyId2:
+            policyDescription: access to list named shadows
+            operations:
+              - 'aws.greengrass#ListNamedShadowsForThing'
+            resources:
+              - '*'
+        aws.greengrass.ipc.pubsub:
+          policyId3:
+            policyDescription: access to pubsub topics
+            operations:
+              - 'aws.greengrass#SubscribeToTopic'
+            resources:
+              - '*'

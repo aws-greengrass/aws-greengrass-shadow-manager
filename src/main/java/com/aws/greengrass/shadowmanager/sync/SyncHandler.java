@@ -8,11 +8,15 @@ package com.aws.greengrass.shadowmanager.sync;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfiguration;
+import com.aws.greengrass.shadowmanager.sync.model.BaseSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.CloudDeleteSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.CloudUpdateSyncRequest;
+import com.aws.greengrass.shadowmanager.sync.model.Direction;
 import com.aws.greengrass.shadowmanager.sync.model.FullShadowSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.LocalDeleteSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.LocalUpdateSyncRequest;
+import com.aws.greengrass.shadowmanager.sync.model.OverwriteCloudShadowRequest;
+import com.aws.greengrass.shadowmanager.sync.model.OverwriteLocalShadowRequest;
 import com.aws.greengrass.shadowmanager.sync.model.SyncContext;
 import com.aws.greengrass.shadowmanager.sync.strategy.SyncStrategy;
 import com.aws.greengrass.shadowmanager.sync.strategy.SyncStrategyFactory;
@@ -30,6 +34,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.stream.Stream;
 import javax.inject.Inject;
 
 import static com.aws.greengrass.shadowmanager.model.LogEvents.SYNC;
@@ -67,6 +72,13 @@ public class SyncHandler {
     @Getter
     @Setter
     private SyncStrategy overallSyncStrategy;
+
+    /**
+     * The direction of syncing shadows to/from the cloud.
+     */
+    @Getter
+    @Setter
+    private Direction syncDirection = Direction.BIDIRECTIONAL;
 
     /**
      * The sync strategy factory object to generate.
@@ -148,10 +160,25 @@ public class SyncHandler {
                     .addKeyValue("syncQueueCapacity", overallSyncStrategy.getRemainingCapacity())
                     .log("There are more shadows than space in the sync queue. Syncing will block");
         }
-        Iterator<FullShadowSyncRequest> it =
-                shadows.stream().map(p -> new FullShadowSyncRequest(p.getLeft(), p.getRight())).iterator();
-        while (it.hasNext() && !Thread.currentThread().isInterrupted()) {
-            overallSyncStrategy.putSyncRequest(it.next());
+        Stream<BaseSyncRequest> requestStream = null;
+        switch (getSyncDirection()) {
+            case BIDIRECTIONAL:
+                requestStream = shadows.stream().map(p -> new FullShadowSyncRequest(p.getLeft(), p.getRight()));
+                break;
+            case FROMDEVICEONLY:
+                requestStream = shadows.stream().map(p -> new OverwriteCloudShadowRequest(p.getLeft(), p.getRight()));
+                break;
+            case FROMCLOUDONLY:
+                requestStream = shadows.stream().map(p -> new OverwriteLocalShadowRequest(p.getLeft(), p.getRight()));
+                break;
+            default:
+                break;
+        }
+        if (requestStream != null && !requestStream.equals(Stream.empty())) {
+            Iterator<BaseSyncRequest> it = requestStream.iterator();
+            while (it.hasNext() && !Thread.currentThread().isInterrupted()) {
+                overallSyncStrategy.putSyncRequest(it.next());
+            }
         }
     }
 
@@ -197,7 +224,7 @@ public class SyncHandler {
      * @param updateDocument The update shadow request
      */
     public void pushCloudUpdateSyncRequest(String thingName, String shadowName, JsonNode updateDocument) {
-        if (isShadowSynced(thingName, shadowName)) {
+        if (isShadowSynced(thingName, shadowName) && !Direction.FROMCLOUDONLY.equals(syncDirection)) {
             overallSyncStrategy.putSyncRequest(new CloudUpdateSyncRequest(thingName, shadowName, updateDocument));
         }
     }
@@ -211,7 +238,7 @@ public class SyncHandler {
      * @param updateDocument Update document to be applied to local shadow
      */
     public void pushLocalUpdateSyncRequest(String thingName, String shadowName, byte[] updateDocument) {
-        if (isShadowSynced(thingName, shadowName)) {
+        if (isShadowSynced(thingName, shadowName) && !Direction.FROMDEVICEONLY.equals(syncDirection)) {
             overallSyncStrategy.putSyncRequest(new LocalUpdateSyncRequest(thingName, shadowName, updateDocument));
         }
     }
@@ -224,7 +251,7 @@ public class SyncHandler {
      * @param shadowName The shadow name associated with the sync shadow update
      */
     public void pushCloudDeleteSyncRequest(String thingName, String shadowName) {
-        if (isShadowSynced(thingName, shadowName)) {
+        if (isShadowSynced(thingName, shadowName) && !Direction.FROMCLOUDONLY.equals(syncDirection)) {
             overallSyncStrategy.putSyncRequest(new CloudDeleteSyncRequest(thingName, shadowName));
         }
     }
@@ -238,7 +265,7 @@ public class SyncHandler {
      * @param deletePayload Delete response payload containing the deleted shadow version
      */
     public void pushLocalDeleteSyncRequest(String thingName, String shadowName, byte[] deletePayload) {
-        if (isShadowSynced(thingName, shadowName)) {
+        if (isShadowSynced(thingName, shadowName) && !Direction.FROMDEVICEONLY.equals(syncDirection)) {
             overallSyncStrategy.putSyncRequest(new LocalDeleteSyncRequest(thingName, shadowName, deletePayload));
         }
     }

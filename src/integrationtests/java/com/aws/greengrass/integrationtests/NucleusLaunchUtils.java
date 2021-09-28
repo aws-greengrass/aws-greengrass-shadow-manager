@@ -87,7 +87,11 @@ public class NucleusLaunchUtils extends GGServiceTestUtil {
         kernel.getContext().put(MqttClient.class, mqttClient);
         if (config.isMqttConnected()) {
             // assume we are always connected
-            lenient().when(mqttClient.connected()).thenAnswer(invocation -> isSyncMocked.get());
+            if (config.isResetRetryConfig()) {
+                lenient().when(mqttClient.connected()).thenAnswer(invocation -> isSyncMocked.get());
+            } else {
+                lenient().when(mqttClient.connected()).thenAnswer(invocation -> true);
+            }
         }
 
 
@@ -103,31 +107,34 @@ public class NucleusLaunchUtils extends GGServiceTestUtil {
         }
         SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
         SyncStrategy realTimeSyncStrategy = syncHandler.getOverallSyncStrategy();
+        kernel.getContext().put(RealTimeSyncStrategy.class, (RealTimeSyncStrategy) realTimeSyncStrategy);
         ExecutorService es = kernel.getContext().get(ExecutorService.class);
         ScheduledExecutorService ses = kernel.getContext().get(ScheduledExecutorService.class);
         // set retry config to only try once so we can test failures earlier
         kernel.launch();
 
         assertTrue(shadowManagerRunning.await(TEST_TIME_OUT_SEC, TimeUnit.SECONDS));
-        realTimeSyncStrategy.stop();
 
-        RetryUtils.RetryConfig retryConfig = RetryUtils.RetryConfig.builder()
-                .maxAttempt(1)
-                .maxRetryInterval(Duration.ofSeconds(1))
-                .retryableExceptions(Collections.singletonList(RetryableException.class))
-                .build();
-        SyncStrategy syncStrategy;
-        if (RealTimeSyncStrategy.class.equals(config.getSyncClazz())) {
-            syncStrategy = new RealTimeSyncStrategy(es, ((RealTimeSyncStrategy) realTimeSyncStrategy).getRetryer(), retryConfig);
-            kernel.getContext().put(RealTimeSyncStrategy.class, (RealTimeSyncStrategy) syncStrategy);
-        } else {
-            syncStrategy = new PeriodicSyncStrategy(ses, ((RealTimeSyncStrategy) realTimeSyncStrategy).getRetryer(), 3, retryConfig);
-            kernel.getContext().put(PeriodicSyncStrategy.class, (PeriodicSyncStrategy) syncStrategy);
+        if (config.isResetRetryConfig()) {
+            realTimeSyncStrategy.stop();
+            RetryUtils.RetryConfig retryConfig = RetryUtils.RetryConfig.builder()
+                    .maxAttempt(1)
+                    .maxRetryInterval(Duration.ofSeconds(1))
+                    .retryableExceptions(Collections.singletonList(RetryableException.class))
+                    .build();
+            SyncStrategy syncStrategy;
+            if (RealTimeSyncStrategy.class.equals(config.getSyncClazz())) {
+                syncStrategy = new RealTimeSyncStrategy(es, ((RealTimeSyncStrategy) realTimeSyncStrategy).getRetryer(), retryConfig);
+                kernel.getContext().put(RealTimeSyncStrategy.class, (RealTimeSyncStrategy) syncStrategy);
+            } else {
+                syncStrategy = new PeriodicSyncStrategy(ses, ((RealTimeSyncStrategy) realTimeSyncStrategy).getRetryer(), 3, retryConfig);
+                kernel.getContext().put(PeriodicSyncStrategy.class, (PeriodicSyncStrategy) syncStrategy);
 
+            }
+            syncHandler.setOverallSyncStrategy(syncStrategy);
+            isSyncMocked.set(true);
+            shadowManager.startSyncingShadows(ShadowManager.StartSyncInfo.builder().build());
         }
-        syncHandler.setOverallSyncStrategy(syncStrategy);
-        isSyncMocked.set(true);
-        shadowManager.startSyncingShadows(ShadowManager.StartSyncInfo.builder().build());
 
     }
 

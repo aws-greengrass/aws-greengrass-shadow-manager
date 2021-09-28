@@ -5,15 +5,19 @@
 
 package com.aws.greengrass.integrationtests.ipc;
 
-import com.aws.greengrass.deployment.DeviceConfiguration;
-import com.aws.greengrass.deployment.exceptions.DeviceConfigurationException;
+import com.aws.greengrass.dependency.State;
 import com.aws.greengrass.integrationtests.util.ConfigPlatformResolver;
 import com.aws.greengrass.lifecyclemanager.GlobalStateChangeListener;
+import com.aws.greengrass.lifecyclemanager.GreengrassService;
 import com.aws.greengrass.lifecyclemanager.Kernel;
+import com.aws.greengrass.mqttclient.MqttClient;
+import com.aws.greengrass.shadowmanager.ShadowManager;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
+import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientFactory;
+import com.aws.greengrass.shadowmanager.sync.SyncHandler;
+import com.aws.greengrass.shadowmanager.sync.strategy.SyncStrategy;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
-import com.aws.greengrass.testcommons.testutilities.NoOpPathOwnershipHandler;
 import com.aws.greengrass.testcommons.testutilities.UniqueRootPathExtension;
 import com.aws.greengrass.util.Pair;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -30,6 +34,8 @@ import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.Answers;
+import org.mockito.Mock;
 import software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCClient;
 import software.amazon.awssdk.aws.greengrass.model.ConflictError;
 import software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowRequest;
@@ -48,10 +54,8 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
@@ -93,6 +97,14 @@ class ShadowIPCTest {
     public static final String MOCK_THING_NAME = "mockThing";
     public static final String SHADOW_NAME_1 = "testShadowName";
     private static Kernel kernel;
+    private static ShadowManager shadowManager;
+    private static GlobalStateChangeListener listener;
+
+    @Mock(answer = Answers.RETURNS_DEEP_STUBS)
+    private static IotDataPlaneClientFactory iotDataPlaneClientFactory;
+    @Mock
+    private static MqttClient mqttClient;
+
     private static final String nullVersionErrorMessage = "Invalid JSON: version: null found, number expected";
     private static final String expectedShadowDocumentV1Str = "{\"version\":1,\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}}}";
     private static final String expectedShadowDocumentV2Str = "{\"state\":{\"desired\":{\"color\":{\"r\":0,\"a\":255,\"g\":255},\"NewArray\":[1,2,3,5,8,13]},\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}},\"version\":2}";
@@ -139,26 +151,37 @@ class ShadowIPCTest {
     }
 
     @BeforeAll
-    static void beforeEach(ExtensionContext context) throws InterruptedException, IOException, DeviceConfigurationException {
+    static void beforeEach(ExtensionContext context) throws InterruptedException, IOException {
         ignoreExceptionOfType(context, InterruptedException.class);
         ignoreExceptionWithMessage(context, "Connection reset by peer");
         // Ignore if IPC can't send us more lifecycle updates because the test is already done.
         ignoreExceptionUltimateCauseWithMessage(context, "Channel not found for given connection context");
 
         kernel = new Kernel();
-        kernel.getContext().put(DeviceConfiguration.class,
-                new DeviceConfiguration(kernel, MOCK_THING_NAME, "us-east-1", "us-east-1", "mock", "mock", "mock", "us-east-1",
-                        "mock"));
-
-        NoOpPathOwnershipHandler.register(kernel);
+        CountDownLatch shadowManagerRunning = new CountDownLatch(1);
+        AtomicBoolean isSyncMocked = new AtomicBoolean(false);
         ConfigPlatformResolver.initKernelWithMultiPlatformConfig(kernel, ShadowIPCTest.class.getResource("shadow.yaml"));
-        // ensure awaitIpcServiceLatch starts
-        CountDownLatch awaitIpcServiceLatch = new CountDownLatch(2);
-        GlobalStateChangeListener listener = IPCTestUtils.getListenerForServiceRunning(awaitIpcServiceLatch, "DoAll", "aws.greengrass.ShadowManager");
+        listener = (GreengrassService service, State was, State newState) -> {
+            if (service.getName().equals(ShadowManager.SERVICE_NAME) && service.getState().equals(State.RUNNING)) {
+                shadowManager = (ShadowManager) service;
+                shadowManagerRunning.countDown();
+            }
+        };
         kernel.getContext().addGlobalStateChangeListener(listener);
+        kernel.getContext().put(MqttClient.class, mqttClient);
 
+        kernel.getContext().put(IotDataPlaneClientFactory.class, iotDataPlaneClientFactory);
+        SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
+        SyncStrategy realTimeSyncStrategy = syncHandler.getOverallSyncStrategy();
+        // set retry config to only try once so we can test failures earlier
         kernel.launch();
-        assertTrue(awaitIpcServiceLatch.await(10, TimeUnit.SECONDS));
+
+        assertTrue(shadowManagerRunning.await(30L, TimeUnit.SECONDS));
+        realTimeSyncStrategy.stop();
+
+        isSyncMocked.set(true);
+        shadowManager.startSyncingShadows(ShadowManager.StartSyncInfo.builder().build());
+
         kernel.getContext().removeGlobalStateChangeListener(listener);
 
         expectedShadowDocumentV1Json = MAPPER.readTree(expectedShadowDocumentV1Str);

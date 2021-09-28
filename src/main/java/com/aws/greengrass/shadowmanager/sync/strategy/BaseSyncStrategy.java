@@ -285,6 +285,7 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
             logger.atTrace(SYNC_EVENT_TYPE)
                     .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
                     .addKeyValue(LOG_SHADOW_NAME_KEY, request.getShadowName())
+                    .addKeyValue("type", request.getClass())
                     .log("Syncing is stopped. Ignoring sync request");
             return;
         }
