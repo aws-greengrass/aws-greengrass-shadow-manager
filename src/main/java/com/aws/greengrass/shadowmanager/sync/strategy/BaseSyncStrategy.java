@@ -152,7 +152,7 @@ public abstract class BaseSyncStrategy {
                 int remaining = syncQueue.size();
 
                 // Not clearing the queue since we need it if the customer updates the sync strategy on the fly. The
-                //queue will be transferred to the new sync strategy.
+                // queue will be transferred to the new sync strategy.
                 if (remaining > 0) {
                     logger.atInfo(SYNC_EVENT_TYPE)
                             .log("Stopped real time syncing with {} pending sync items", remaining);

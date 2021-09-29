@@ -90,7 +90,7 @@ public class RealTimeSyncStrategy extends BaseSyncStrategy implements SyncStrate
 
     @Override
     void doStop() {
-        logger.atDebug(SYNC_EVENT_TYPE).log("Cancel {} real time sync thread(s)", syncThreads.size());
+        logger.atInfo(SYNC_EVENT_TYPE).log("Cancel {} real time sync thread(s)", syncThreads.size());
         syncThreads.forEach(t -> t.cancel(true));
         syncThreads.clear();
     }
