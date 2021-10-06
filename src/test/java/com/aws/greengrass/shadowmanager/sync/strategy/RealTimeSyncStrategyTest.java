@@ -5,6 +5,7 @@
 
 package com.aws.greengrass.shadowmanager.sync.strategy;
 
+import com.aws.greengrass.logging.impl.config.LogConfig;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
 import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
@@ -24,6 +25,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.event.Level;
 import software.amazon.awssdk.aws.greengrass.model.ConflictError;
 import software.amazon.awssdk.services.iotdataplane.model.ConflictException;
 
@@ -31,7 +33,6 @@ import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.LinkedList;
 import java.util.Queue;
-import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -68,6 +69,7 @@ class RealTimeSyncStrategyTest {
 
     @BeforeEach
     void setup() {
+        LogConfig.getRootLogConfig().setLevel(Level.ERROR);
         executorService = Executors.newCachedThreadPool();
     }
 
@@ -137,17 +139,16 @@ class RealTimeSyncStrategyTest {
     }
 
     @Test
-    void GIVEN_request_queue_WHEN_put_and_clear_THEN_queue_has_correct_number_of_requests() throws InterruptedException {
+    void GIVEN_request_queue_WHEN_put_and_clear_THEN_queue_has_correct_number_of_requests() {
         strategy = new RealTimeSyncStrategy(executorService, mockRetryer);
 
         strategy.syncing.set(true);
 
-        Random rand = new Random();
-        int randomNumberOfSyncRequests = rand.nextInt(1024);
-        for (int i = 0; i < randomNumberOfSyncRequests; i++) {
+        int numberOfSyncRequests = 100;
+        for (int i = 0; i < numberOfSyncRequests; i++) {
             strategy.putSyncRequest(new FullShadowSyncRequest("foo-" + i, "bar-" + i));
         }
-        assertThat(strategy.getRemainingCapacity(), is(1024 - randomNumberOfSyncRequests));
+        assertThat(strategy.getRemainingCapacity(), is(1024 - numberOfSyncRequests));
 
         strategy.clearSyncQueue();
 
