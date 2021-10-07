@@ -58,7 +58,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
-public class LocalDeleteSyncRequestTest {
+class LocalDeleteSyncRequestTest {
 
     private static final byte[] CLOUD_DELETE_PAYLOAD = "{\"version\": 6}".getBytes();
 
@@ -109,7 +109,8 @@ public class LocalDeleteSyncRequestTest {
 
         assertThat(syncInformationCaptor.getValue(), is(notNullValue()));
         assertThat(syncInformationCaptor.getValue().getLastSyncedDocument(), is(nullValue()));
-        assertThat(syncInformationCaptor.getValue().getCloudVersion(), is(deletedVersion));
+        assertThat(syncInformationCaptor.getValue().getLocalVersion(), is(6L));
+        assertThat(syncInformationCaptor.getValue().getCloudVersion(), is(deletedVersion + 1));
         assertThat(syncInformationCaptor.getValue().getCloudUpdateTime(), is(greaterThanOrEqualTo(syncTime)));
         assertThat(syncInformationCaptor.getValue().getLastSyncTime(), is(greaterThanOrEqualTo(syncTime)));
         assertThat(syncInformationCaptor.getValue().getShadowName(), is(SHADOW_NAME));

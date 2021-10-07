@@ -89,12 +89,13 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
                 .log("Deleting shadow");
         return getShadowThing(thingName, shadowName)
                 .flatMap(shadowDocument ->
-                        execute("UPDATE documents SET deleted = 1, document = null, updateTime = ?"
+                        execute("UPDATE documents SET deleted = 1, document = null, updateTime = ?, version = ?"
                                         + " WHERE thingName = ? AND shadowName = ?",
                                 preparedStatement -> {
                                     preparedStatement.setLong(1, Instant.now().getEpochSecond());
-                                    preparedStatement.setString(2, thingName);
-                                    preparedStatement.setString(3, shadowName);
+                                    preparedStatement.setLong(2, shadowDocument.getVersion() + 1);
+                                    preparedStatement.setString(3, thingName);
+                                    preparedStatement.setString(4, shadowName);
                                     int result = preparedStatement.executeUpdate();
                                     if (result == 1) {
                                         return Optional.of(shadowDocument);
@@ -242,6 +243,32 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
                         return syncedShadowList;
                     }
                 });
+    }
+
+    /**
+     * Get the shadow document version of a deleted shadow.
+     *
+     * @param thingName  Name of the Thing for the shadow topic prefix.
+     * @param shadowName Name of shadow topic prefix for thing.
+     * @return The deleted shadow version if it was deleted or exists; Else an empty optional
+     */
+    @Override
+    public Optional<Long> getDeletedShadowVersion(String thingName, String shadowName) {
+        String sql = "SELECT version FROM documents  WHERE deleted = 1 AND thingName = ? AND shadowName = ?";
+
+        try (Connection c = database.getPool().getConnection();
+             PreparedStatement preparedStatement = c.prepareStatement(sql)) {
+            preparedStatement.setString(1, thingName);
+            preparedStatement.setString(2, shadowName);
+            try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                if (resultSet.next()) {
+                    return Optional.of(resultSet.getLong(1));
+                }
+                return Optional.empty();
+            }
+        } catch (SQLException | IllegalStateException e) {
+            throw new ShadowManagerDataException(e);
+        }
     }
 
 
