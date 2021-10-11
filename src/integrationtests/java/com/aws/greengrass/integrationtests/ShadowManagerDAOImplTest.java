@@ -10,6 +10,7 @@ import com.aws.greengrass.shadowmanager.ShadowManagerDAOImpl;
 import com.aws.greengrass.shadowmanager.ShadowManagerDatabase;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
+import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,7 +24,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.sql.SQLException;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
@@ -69,7 +69,8 @@ class ShadowManagerDAOImplTest {
     }
 
     @BeforeEach
-    public void before() throws SQLException {
+    public void before() throws IOException {
+        JsonUtil.loadSchema();
         kernel = new Kernel();
         // Might need to start the Nucleus here
         kernel.parseArgs("-r", rootDir.toAbsolutePath().toString());

@@ -178,7 +178,7 @@ public abstract class BaseSyncStrategy {
             return;
         }
         try {
-            logger.atInfo(SYNC_EVENT_TYPE)
+            logger.atDebug(SYNC_EVENT_TYPE)
                     .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
                     .addKeyValue(LOG_SHADOW_NAME_KEY, request.getShadowName())
                     .log("Adding new sync request");

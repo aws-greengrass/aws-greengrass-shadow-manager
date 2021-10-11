@@ -369,9 +369,10 @@ public class RequestBlockingQueue {
      * Take an item from the queue. Returns immediately if no item is available.
      *
      * @return the request at the head of the queue or null if no items are available.
+     * @throws InterruptedException if the thread is interrupted while waiting
      */
-    public SyncRequest poll() {
-        lock.lock();
+    public SyncRequest poll() throws InterruptedException {
+        lock.lockInterruptibly();
         try {
             if (isEmpty()) {
                 return null;

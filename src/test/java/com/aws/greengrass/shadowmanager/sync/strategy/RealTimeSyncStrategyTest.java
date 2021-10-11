@@ -5,6 +5,7 @@
 
 package com.aws.greengrass.shadowmanager.sync.strategy;
 
+import com.aws.greengrass.logging.impl.config.LogConfig;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
 import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
@@ -15,7 +16,9 @@ import com.aws.greengrass.shadowmanager.sync.model.FullShadowSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.SyncContext;
 import com.aws.greengrass.shadowmanager.sync.model.SyncRequest;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -25,6 +28,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.event.Level;
 import software.amazon.awssdk.aws.greengrass.model.ConflictError;
 import software.amazon.awssdk.services.iotdataplane.model.ConflictException;
 
@@ -67,6 +71,16 @@ class RealTimeSyncStrategyTest {
 
     private ExecutorService executorService;
     private RealTimeSyncStrategy strategy;
+
+    @BeforeAll
+    static void setupLogger() {
+        LogConfig.getRootLogConfig().setLevel(Level.ERROR);
+    }
+
+    @AfterAll
+    static void cleanupLogger() {
+        LogConfig.getRootLogConfig().setLevel(Level.INFO);
+    }
 
     @BeforeEach
     void setup() {

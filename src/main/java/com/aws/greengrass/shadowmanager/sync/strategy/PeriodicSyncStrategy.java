@@ -158,7 +158,10 @@ public class PeriodicSyncStrategy extends BaseSyncStrategy implements SyncStrate
             logger.atInfo(SYNC_EVENT_TYPE).log("Start processing sync requests");
             RetryUtils.RetryConfig retryConfig = this.retryConfig;
             SyncRequest request = syncQueue.poll();
-            while (request != null) {
+
+            // Process the sync requests until there is a sync request in the queue and until the thread has not
+            // been interrupted.
+            while (request != null && !Thread.currentThread().isInterrupted()) {
                 try {
                     logger.atInfo(SYNC_EVENT_TYPE)
                             .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
@@ -219,6 +222,9 @@ public class PeriodicSyncStrategy extends BaseSyncStrategy implements SyncStrate
                     request = syncQueue.poll();
                 }
             }
+        } catch (InterruptedException e) {
+            logger.atWarn(SYNC_EVENT_TYPE).log("Interrupted while waiting for sync requests");
+            Thread.currentThread().interrupt();
         } finally {
             isRunning.set(false);
             logger.atInfo(SYNC_EVENT_TYPE).log("Finished processing sync requests");

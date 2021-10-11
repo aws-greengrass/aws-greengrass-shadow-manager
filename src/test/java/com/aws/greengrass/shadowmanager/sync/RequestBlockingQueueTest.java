@@ -29,7 +29,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
-public class RequestBlockingQueueTest {
+class RequestBlockingQueueTest {
 
     private static final long WAIT_SECONDS = 5;
 
@@ -116,7 +116,7 @@ public class RequestBlockingQueueTest {
     }
 
     @Test
-    void GIVEN_non_empty_queue_WHEN_poll_THEN_returns_values_in_order() {
+    void GIVEN_non_empty_queue_WHEN_poll_THEN_returns_values_in_order() throws InterruptedException {
         queue.offer(thingAShadow1);
         queue.offer(thingAShadow2);
         queue.offer(thingBShadow1);
@@ -138,7 +138,7 @@ public class RequestBlockingQueueTest {
     }
 
     @Test
-    void GIVEN_items_added_to_queue_WHEN_peek_THEN_does_not_remove_value() {
+    void GIVEN_items_added_to_queue_WHEN_peek_THEN_does_not_remove_value() throws InterruptedException {
         assertThat(queue.peek(), is(nullValue()));
         queue.offer(thingAShadow1);
         assertThat(queue.peek(), is(thingAShadow1));
@@ -192,7 +192,7 @@ public class RequestBlockingQueueTest {
     }
 
     @Test
-    void GIVEN_request_exists_in_queue_WHEN_add_request_for_same_shadow_THEN_item_merged() {
+    void GIVEN_request_exists_in_queue_WHEN_add_request_for_same_shadow_THEN_item_merged() throws InterruptedException {
         queue.offer(thingAShadow1);
         assertThat(queue.size(), is(1));
 
@@ -221,7 +221,7 @@ public class RequestBlockingQueueTest {
     }
 
     @Test
-    void GIVEN_put_WHEN_not_full_THEN_returns_immediately() {
+    void GIVEN_put_WHEN_not_full_THEN_returns_immediately() throws InterruptedException {
         CountDownLatch latch = new CountDownLatch(1);
         Thread runner = new Thread(() -> {
             assertDoesNotThrow(() -> queue.put(thingAShadow1));
@@ -237,7 +237,7 @@ public class RequestBlockingQueueTest {
     }
 
     @Test
-    void GIVEN_put_WHEN_full_THEN_waits_until_has_space() {
+    void GIVEN_put_WHEN_full_THEN_waits_until_has_space() throws InterruptedException {
         assertThat("request added", queue.offer(thingAShadow1), is(true));
         assertThat("request added", queue.offer(thingAShadow2), is(true));
         assertThat("request added", queue.offer(thingBShadow1), is(true));
@@ -302,7 +302,7 @@ public class RequestBlockingQueueTest {
     }
 
     @Test
-    void GIVEN_non_empty_queue_WHEN_offerAndTake_THEN_return_head() {
+    void GIVEN_non_empty_queue_WHEN_offerAndTake_THEN_return_head() throws InterruptedException {
         queue.offer(thingAShadow2);
         assertThat(queue.offerAndTake(thingAShadow1, true), is(thingAShadow2));
         assertThat(queue.poll(), is(thingAShadow1));
@@ -325,7 +325,7 @@ public class RequestBlockingQueueTest {
     }
 
     @Test
-    void GIVEN_non_empty_queue_WHEN_offerAndTake_same_shadow_THEN_merge_and_return_head() {
+    void GIVEN_non_empty_queue_WHEN_offerAndTake_same_shadow_THEN_merge_and_return_head() throws InterruptedException {
         queue.offer(thingAShadow2);
         queue.offer(thingAShadow1);
         when(merger.merge(thingAShadow1Again, thingAShadow1)).thenReturn(thingAShadow1Merged);
