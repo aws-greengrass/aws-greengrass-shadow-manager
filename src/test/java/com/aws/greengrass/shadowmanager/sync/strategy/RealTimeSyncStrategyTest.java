@@ -15,7 +15,9 @@ import com.aws.greengrass.shadowmanager.sync.model.FullShadowSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.SyncContext;
 import com.aws.greengrass.shadowmanager.sync.model.SyncRequest;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -67,9 +69,18 @@ class RealTimeSyncStrategyTest {
     private ExecutorService executorService;
     private RealTimeSyncStrategy strategy;
 
+    @BeforeAll
+    static void setupLogger() {
+        LogConfig.getRootLogConfig().setLevel(Level.ERROR);
+    }
+
+    @AfterAll
+    static void cleanupLogger() {
+        LogConfig.getRootLogConfig().setLevel(Level.INFO);
+    }
+
     @BeforeEach
     void setup() {
-        LogConfig.getRootLogConfig().setLevel(Level.ERROR);
         executorService = Executors.newCachedThreadPool();
     }
 
