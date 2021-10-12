@@ -5,6 +5,7 @@
 
 package com.aws.greengrass.shadowmanager.sync.strategy;
 
+import com.aws.greengrass.logging.impl.config.LogConfig;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
 import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
@@ -24,6 +25,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.event.Level;
 import software.amazon.awssdk.aws.greengrass.model.ConflictError;
 import software.amazon.awssdk.services.iotdataplane.model.ConflictException;
 
@@ -68,6 +70,7 @@ class RealTimeSyncStrategyTest {
 
     @BeforeEach
     void setup() {
+        LogConfig.getRootLogConfig().setLevel(Level.ERROR);
         executorService = Executors.newCachedThreadPool();
     }
 
