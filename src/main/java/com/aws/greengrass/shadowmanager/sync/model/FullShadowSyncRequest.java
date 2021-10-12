@@ -118,7 +118,7 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
             if (isFirstSync(syncInformation.get())) {
                 handleFirstCloudSync(localShadowDocument.get());
             } else {
-                handleLocalDelete(localShadowDocument.get(), syncInformation.get());
+                handleLocalDelete(syncInformation.get());
             }
             return;
         }
@@ -225,9 +225,15 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
                                    @NonNull SyncInformation syncInformation)
             throws RetryableException, SkipSyncRequestException {
         deleteCloudShadowDocument();
+        // Since the local shadow has been deleted, we need get the deleted shadow version from the DAO.
+        long localShadowVersion = context.getDao().getDeletedShadowVersion(getThingName(), getShadowName())
+                .orElse(syncInformation.getLocalVersion() + 1);
         context.getDao().updateSyncInformation(SyncInformation.builder()
-                .localVersion(syncInformation.getLocalVersion())
-                .cloudVersion(cloudShadowDocument.getVersion())
+                .localVersion(localShadowVersion)
+                // The version number we get in the MQTT message is the version of the cloud shadow that was
+                // deleted. But the cloud shadow version after the delete has been incremented by 1. So we have
+                // synced that incremented version instead of the deleted cloud shadow version.
+                .cloudVersion(cloudShadowDocument.getVersion() + 1)
                 .shadowName(getShadowName())
                 .thingName(getThingName())
                 .cloudUpdateTime(Instant.now().getEpochSecond())
@@ -259,15 +265,21 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
      * Delete the local shadow using the request handlers and then update the sync information.
      *
      * @param syncInformation     The sync information for the thing's shadow.
-     * @param localShadowDocument The current local document.
      * @throws SkipSyncRequestException if the delete request encountered a skipable exception.
      */
-    private void handleLocalDelete(@NonNull ShadowDocument localShadowDocument,
-                                   @NonNull SyncInformation syncInformation) throws SkipSyncRequestException {
+    private void handleLocalDelete(@NonNull SyncInformation syncInformation) throws SkipSyncRequestException {
         deleteLocalShadowDocument();
+        // Since the local shadow has been deleted, we need get the deleted shadow version from the DAO.
+        long localShadowVersion = context.getDao().getDeletedShadowVersion(getThingName(), getShadowName())
+                .orElse(syncInformation.getLocalVersion() + 1);
         context.getDao().updateSyncInformation(SyncInformation.builder()
-                .localVersion(localShadowDocument.getVersion())
-                .cloudVersion(syncInformation.getCloudVersion())
+                .localVersion(localShadowVersion)
+                // If the cloud shadow was deleted, then the last synced version might be 1 higher than the last version
+                // that was synced.
+                // If the device was offline for a long time and the cloud shadow was deleted multiple times in that
+                // period, there is no way to get the correct cloud shadow version. We will eventually get the correct
+                // cloud shadow version in the next cloud shadow update.
+                .cloudVersion(syncInformation.getCloudVersion() + 1)
                 .shadowName(getShadowName())
                 .thingName(getThingName())
                 .cloudUpdateTime(syncInformation.getCloudUpdateTime())

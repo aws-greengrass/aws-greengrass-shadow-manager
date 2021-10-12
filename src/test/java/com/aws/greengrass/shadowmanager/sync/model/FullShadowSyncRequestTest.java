@@ -116,10 +116,11 @@ class FullShadowSyncRequestTest {
     private SyncContext syncContext;
 
     @BeforeEach
-    void setup() {
+    void setup() throws IOException {
         lenient().when(mockDao.updateSyncInformation(syncInformationCaptor.capture())).thenReturn(true);
         syncContext = new SyncContext(mockDao, mockUpdateThingShadowRequestHandler, mockDeleteThingShadowRequestHandler,
                 mockIotDataPlaneClientWrapper);
+        JsonUtil.loadSchema();
     }
 
     @Test
@@ -192,6 +193,7 @@ class FullShadowSyncRequestTest {
                 .build();
         when(mockIotDataPlaneClientWrapper.getThingShadow(anyString(), anyString())).thenReturn(response);
         when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.empty());
+        when(mockDao.getDeletedShadowVersion(anyString(), anyString())).thenReturn(Optional.of(5L));
         when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder()
                 .cloudUpdateTime(epochSecondsMinus60)
                 .thingName(THING_NAME)
@@ -219,8 +221,8 @@ class FullShadowSyncRequestTest {
 
         assertThat(syncInformationCaptor.getValue(), is(notNullValue()));
         assertThat(syncInformationCaptor.getValue().getLastSyncedDocument(), is(nullValue()));
-        assertThat(syncInformationCaptor.getValue().getCloudVersion(), is(5L));
-        assertThat(syncInformationCaptor.getValue().getLocalVersion(), is(1L));
+        assertThat(syncInformationCaptor.getValue().getCloudVersion(), is(6L));
+        assertThat(syncInformationCaptor.getValue().getLocalVersion(), is(5L));
         assertThat(syncInformationCaptor.getValue().getCloudUpdateTime(), is(greaterThanOrEqualTo(epochSeconds)));
         assertThat(syncInformationCaptor.getValue().getLastSyncTime(), is(greaterThanOrEqualTo(epochSeconds)));
         assertThat(syncInformationCaptor.getValue().getShadowName(), is(SHADOW_NAME));
@@ -266,6 +268,7 @@ class FullShadowSyncRequestTest {
         ShadowDocument shadowDocument = new ShadowDocument(LOCAL_DOCUMENT);
         when(mockIotDataPlaneClientWrapper.getThingShadow(anyString(), anyString())).thenThrow(ResourceNotFoundException.class);
         when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.of(shadowDocument));
+        when(mockDao.getDeletedShadowVersion(anyString(), anyString())).thenReturn(Optional.of(11L));
         when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder()
                 .cloudUpdateTime(epochSecondsMinus60)
                 .thingName(THING_NAME)
@@ -295,8 +298,8 @@ class FullShadowSyncRequestTest {
 
         assertThat(syncInformationCaptor.getValue(), is(notNullValue()));
         assertThat(syncInformationCaptor.getValue().getLastSyncedDocument(), is(nullValue()));
-        assertThat(syncInformationCaptor.getValue().getCloudVersion(), is(1L));
-        assertThat(syncInformationCaptor.getValue().getLocalVersion(), is(10L));
+        assertThat(syncInformationCaptor.getValue().getCloudVersion(), is(2L));
+        assertThat(syncInformationCaptor.getValue().getLocalVersion(), is(11L));
         assertThat(syncInformationCaptor.getValue().getCloudUpdateTime(), is(greaterThanOrEqualTo(epochSecondsMinus60)));
         assertThat(syncInformationCaptor.getValue().getLastSyncTime(), is(greaterThanOrEqualTo(epochSeconds)));
         assertThat(syncInformationCaptor.getValue().getShadowName(), is(SHADOW_NAME));

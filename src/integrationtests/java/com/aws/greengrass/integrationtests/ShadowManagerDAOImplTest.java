@@ -118,7 +118,7 @@ class ShadowManagerDAOImplTest {
     }
 
     @Test
-    void GIVEN_no_shadow_WHEN_get_shadow_thing_THEN_return_nothing() throws Exception {
+    void GIVEN_no_shadow_WHEN_get_shadow_thing_THEN_return_nothing() {
         Optional<ShadowDocument> result = dao.getShadowThing(MISSING_THING_NAME, SHADOW_NAME);
         assertThat("No shadow found", result.isPresent(), is(false));
     }
@@ -137,7 +137,7 @@ class ShadowManagerDAOImplTest {
     }
 
     @Test
-    void GIVEN_no_shadow_WHEN_delete_shadow_thing_THEN_return_nothing() throws Exception {
+    void GIVEN_no_shadow_WHEN_delete_shadow_thing_THEN_return_nothing() {
         Optional<ShadowDocument> result = dao.deleteShadowThing(THING_NAME, SHADOW_NAME);
         assertThat("No shadow found", result.isPresent(), is(false));
     }
@@ -171,14 +171,14 @@ class ShadowManagerDAOImplTest {
     }
 
     @Test
-    void GIVEN_no_shadow_WHEN_update_shadow_thing_THEN_shadow_created() throws Exception {
+    void GIVEN_no_shadow_WHEN_update_shadow_thing_THEN_shadow_created() {
         Optional<byte[]> result = dao.updateShadowThing(THING_NAME, SHADOW_NAME, UPDATED_DOCUMENT, 1);
         assertThat("Shadow created", result.isPresent(), is(true));
         assertThat(result.get(), is(equalTo(UPDATED_DOCUMENT)));
     }
 
     @Test
-    void GIVEN_multiple_named_shadows_for_thing_WHEN_list_named_shadows_for_thing_THEN_return_named_shadow_list() throws Exception {
+    void GIVEN_multiple_named_shadows_for_thing_WHEN_list_named_shadows_for_thing_THEN_return_named_shadow_list() {
         for (String shadowName : SHADOW_NAME_LIST) {
             dao.updateShadowThing(THING_NAME, shadowName, UPDATED_DOCUMENT, 1);
         }
@@ -190,7 +190,7 @@ class ShadowManagerDAOImplTest {
     }
 
     @Test
-    void GIVEN_classic_and_named_shadows_WHEN_list_named_shadows_for_thing_THEN_return_list_does_not_include_classic_shadow() throws Exception {
+    void GIVEN_classic_and_named_shadows_WHEN_list_named_shadows_for_thing_THEN_return_list_does_not_include_classic_shadow() {
         for (String shadowName : SHADOW_NAME_LIST) {
             dao.updateShadowThing(THING_NAME, shadowName, UPDATED_DOCUMENT, 1);
         }
@@ -204,7 +204,7 @@ class ShadowManagerDAOImplTest {
     }
 
     @Test
-    void GIVEN_offset_and_limit_WHEN_list_named_shadows_for_thing_THEN_return_named_shadow_subset() throws Exception {
+    void GIVEN_offset_and_limit_WHEN_list_named_shadows_for_thing_THEN_return_named_shadow_subset() {
         for (String shadowName : SHADOW_NAME_LIST) {
             dao.updateShadowThing(THING_NAME, shadowName, UPDATED_DOCUMENT, 1);
         }
@@ -249,7 +249,7 @@ class ShadowManagerDAOImplTest {
 
     @ParameterizedTest
     @MethodSource("validListTestParameters")
-    void GIVEN_valid_edge_inputs_WHEN_list_named_shadows_for_thing_THEN_return_valid_results(String thingName, int offset, int pageSize) throws Exception {
+    void GIVEN_valid_edge_inputs_WHEN_list_named_shadows_for_thing_THEN_return_valid_results(String thingName, int offset, int pageSize) {
         for (String shadowName : SHADOW_NAME_LIST) {
             dao.updateShadowThing(THING_NAME, shadowName, UPDATED_DOCUMENT, 1);
         }
@@ -382,4 +382,28 @@ class ShadowManagerDAOImplTest {
         assertThat(shadowSyncInformation, is(not(Optional.empty())));
         assertThat(shadowSyncInformation.get(), is(initialSyncInformation));
     }
+
+    @ParameterizedTest
+    @MethodSource("classicAndNamedShadow")
+    void GIVEN_named_and_classic_shadow_WHEN_delete_shadow_and_get_deleted_version_THEN_gets_shadow_deleted_version(String shadowName, byte[] expectedPayload) throws Exception {
+        createNamedShadow();
+        createClassicShadow();
+
+        // Before deleting the shadow, we should not get the shadow version.
+        Optional<Long> deletedShadowVersion = dao.getDeletedShadowVersion(THING_NAME, shadowName);
+        assertThat(deletedShadowVersion, is(Optional.empty()));
+
+        Optional<ShadowDocument> result = dao.deleteShadowThing(THING_NAME, shadowName); //NOPMD
+        assertThat("Correct payload returned", result.isPresent(), is(true));
+        assertThat(result.get().toJson(true), is(equalTo(new ShadowDocument(expectedPayload).toJson(true))));
+
+        Optional<ShadowDocument> getResults = dao.getShadowThing(THING_NAME, shadowName);
+        assertThat("Should not get the shadow document.", getResults.isPresent(), is(false));
+
+        // After the shadow has been deleted, we should get the correct deleted shadow version.
+        deletedShadowVersion = dao.getDeletedShadowVersion(THING_NAME, shadowName);
+        assertThat(deletedShadowVersion, is(not(Optional.empty())));
+        assertThat(deletedShadowVersion.get(), is(2L));
+    }
+
 }

@@ -36,6 +36,7 @@ import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.lessThanOrEqualTo;
+import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -117,22 +118,21 @@ class ShadowManagerDAOImplTest {
 
     private void assertDeleteShadowStatementMocks(long epochNow) {
         assertThat(stringArgumentCaptor.getAllValues().size(), is(4));
-        assertThat(longArgumentCaptor.getValue(), is(notNullValue()));
+        assertThat(longArgumentCaptor.getAllValues().size(), is(2));
 
         assertThat(stringArgumentCaptor.getAllValues().get(0), is(THING_NAME));
         assertThat(stringArgumentCaptor.getAllValues().get(1), is(SHADOW_NAME));
         assertThat(stringArgumentCaptor.getAllValues().get(2), is(THING_NAME));
         assertThat(stringArgumentCaptor.getAllValues().get(3), is(SHADOW_NAME));
 
-        assertThat(longArgumentCaptor.getValue(), is(greaterThanOrEqualTo(epochNow)));
+        assertThat(longArgumentCaptor.getAllValues().get(0), is(greaterThanOrEqualTo(epochNow)));
+        assertThat(longArgumentCaptor.getAllValues().get(1), is(2L));
 
     }
 
     private void setupDeleteShadowStatementMocks() throws SQLException {
-        doNothing().when(mockPreparedStatement).setString(eq(1), stringArgumentCaptor.capture());
-        doNothing().when(mockPreparedStatement).setString(eq(2), stringArgumentCaptor.capture());
-        doNothing().when(mockPreparedStatement).setString(eq(3), stringArgumentCaptor.capture());
-        doNothing().when(mockPreparedStatement).setLong(eq(1), longArgumentCaptor.capture());
+        doNothing().when(mockPreparedStatement).setString(anyInt(), stringArgumentCaptor.capture());
+        doNothing().when(mockPreparedStatement).setLong(anyInt(), longArgumentCaptor.capture());
     }
 
     private void assertListShadowStatementMocks() {
@@ -660,5 +660,73 @@ class ShadowManagerDAOImplTest {
         when(mockPreparedStatement.executeQuery()).thenThrow(SQLException.class);
         ShadowManagerDAOImpl impl = new ShadowManagerDAOImpl(mockDatabase);
         assertThrows(ShadowManagerDataException.class, () -> impl.getShadowDocumentVersion(THING_NAME, SHADOW_NAME));
+    }
+
+    @Test
+    void GIVEN_deleted_shadow_WHEN_getDeletedShadowVersion_THEN_gets_the_correct_version() throws SQLException {
+        doNothing().when(mockPreparedStatement).setString(anyInt(), stringArgumentCaptor.capture());
+
+        when(mockResultSet.next()).thenReturn(true);
+        when(mockResultSet.getLong(1)).thenReturn(10L);
+        when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+
+        ShadowManagerDAOImpl impl = new ShadowManagerDAOImpl(mockDatabase);
+        Optional<Long> deletedShadowVersion = impl.getDeletedShadowVersion(THING_NAME, SHADOW_NAME);
+
+        assertThat(deletedShadowVersion, is(not(Optional.empty())));
+        assertThat(deletedShadowVersion.get(), is(10L));
+
+        assertThat(stringArgumentCaptor.getAllValues().size(), is(2));
+
+        assertThat(stringArgumentCaptor.getAllValues().get(0), is(THING_NAME));
+        assertThat(stringArgumentCaptor.getAllValues().get(1), is(SHADOW_NAME));
+    }
+
+    @Test
+    void GIVEN_not_deleted_shadow_WHEN_getDeletedShadowVersion_THEN_gets_an_empty_optional() throws SQLException {
+        doNothing().when(mockPreparedStatement).setString(anyInt(), stringArgumentCaptor.capture());
+
+        when(mockResultSet.next()).thenReturn(false);
+        when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+
+        ShadowManagerDAOImpl impl = new ShadowManagerDAOImpl(mockDatabase);
+        Optional<Long> deletedShadowVersion = impl.getDeletedShadowVersion(THING_NAME, SHADOW_NAME);
+
+        assertThat(deletedShadowVersion, is(Optional.empty()));
+
+        assertThat(stringArgumentCaptor.getAllValues().size(), is(2));
+
+        assertThat(stringArgumentCaptor.getAllValues().get(0), is(THING_NAME));
+        assertThat(stringArgumentCaptor.getAllValues().get(1), is(SHADOW_NAME));
+    }
+
+    @Test
+    void GIVEN_bad_dao_state_WHEN_getDeletedShadowVersion_throws_SQLexception_THEN_ShadowManagerDataException_is_thrown() throws SQLException {
+        doNothing().when(mockPreparedStatement).setString(anyInt(), stringArgumentCaptor.capture());
+
+        when(mockPreparedStatement.executeQuery()).thenThrow(SQLException.class);
+
+        ShadowManagerDAOImpl impl = new ShadowManagerDAOImpl(mockDatabase);
+        assertThrows(ShadowManagerDataException.class, () -> impl.getDeletedShadowVersion(THING_NAME, SHADOW_NAME));
+
+        assertThat(stringArgumentCaptor.getAllValues().size(), is(2));
+
+        assertThat(stringArgumentCaptor.getAllValues().get(0), is(THING_NAME));
+        assertThat(stringArgumentCaptor.getAllValues().get(1), is(SHADOW_NAME));
+    }
+
+    @Test
+    void GIVEN_bad_dao_state_WHEN_getDeletedShadowVersion_throws_IllegalStateException_THEN_ShadowManagerDataException_is_thrown() throws SQLException {
+        doNothing().when(mockPreparedStatement).setString(anyInt(), stringArgumentCaptor.capture());
+
+        when(mockPreparedStatement.executeQuery()).thenThrow(IllegalStateException.class);
+
+        ShadowManagerDAOImpl impl = new ShadowManagerDAOImpl(mockDatabase);
+        assertThrows(ShadowManagerDataException.class, () -> impl.getDeletedShadowVersion(THING_NAME, SHADOW_NAME));
+
+        assertThat(stringArgumentCaptor.getAllValues().size(), is(2));
+
+        assertThat(stringArgumentCaptor.getAllValues().get(0), is(THING_NAME));
+        assertThat(stringArgumentCaptor.getAllValues().get(1), is(SHADOW_NAME));
     }
 }

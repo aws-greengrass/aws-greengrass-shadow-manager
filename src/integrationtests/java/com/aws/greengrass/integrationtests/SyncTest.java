@@ -394,8 +394,8 @@ class SyncTest extends NucleusLaunchUtils {
 
         assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
         assertThat("cloud deleted", () -> syncInfo.get().get().isCloudDeleted(), eventuallyEval(is(true)));
-        assertThat("cloud version", syncInfo.get().get().getCloudVersion(), is(10L));
-        assertThat("local version", syncInfo.get().get().getLocalVersion(), is(1L));
+        assertThat("cloud version", syncInfo.get().get().getCloudVersion(), is(11L));
+        assertThat("local version", syncInfo.get().get().getLocalVersion(), is(2L));
         assertThat("sync doc", syncInfo.get().get().getLastSyncedDocument(), is(nullValue()));
 
         assertThat("local shadow should not exist", localShadow.get().isPresent(), is(false));
@@ -440,8 +440,8 @@ class SyncTest extends NucleusLaunchUtils {
         assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
         assertThat("cloud deleted", () -> syncInfo.get().get().isCloudDeleted(), eventuallyEval(is(true)));
 
-        assertThat("cloud version", syncInfo.get().get().getCloudVersion(), is(10L));
-        assertThat("local version", syncInfo.get().get().getLocalVersion(), is(1L));
+        assertThat("cloud version", syncInfo.get().get().getCloudVersion(), is(11L));
+        assertThat("local version", syncInfo.get().get().getLocalVersion(), is(2L));
         assertThat("sync doc", syncInfo.get().get().getLastSyncedDocument(), is(nullValue()));
 
         assertThat("local shadow should not exist", localShadow.get().isPresent(), is(false));

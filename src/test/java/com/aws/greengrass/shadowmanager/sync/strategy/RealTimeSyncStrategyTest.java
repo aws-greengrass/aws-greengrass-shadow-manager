@@ -84,6 +84,7 @@ class RealTimeSyncStrategyTest {
 
     @BeforeEach
     void setup() {
+        LogConfig.getRootLogConfig().setLevel(Level.ERROR);
         executorService = Executors.newCachedThreadPool();
         this.requestBlockingQueue = new RequestBlockingQueue(new RequestMerger());
     }
