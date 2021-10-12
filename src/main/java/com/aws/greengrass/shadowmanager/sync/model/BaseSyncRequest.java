@@ -80,7 +80,7 @@ public abstract class BaseSyncRequest extends ShadowRequest implements SyncReque
      */
     protected Optional<Long> getUpdatedVersion(byte[] payload) {
         try {
-            ShadowDocument document = new ShadowDocument(payload);
+            ShadowDocument document = new ShadowDocument(payload, false);
             return Optional.of(document.getVersion());
         } catch (InvalidRequestParametersException | IOException e) {
             logger.atDebug()
