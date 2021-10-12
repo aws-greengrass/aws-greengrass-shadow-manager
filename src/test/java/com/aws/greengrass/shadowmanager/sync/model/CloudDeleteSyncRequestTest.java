@@ -97,7 +97,8 @@ class CloudDeleteSyncRequestTest {
 
         assertThat(syncInformationCaptor.getValue(), is(notNullValue()));
         assertThat(syncInformationCaptor.getValue().getLastSyncedDocument(), is(nullValue()));
-        assertThat(syncInformationCaptor.getValue().getCloudVersion(), is(1L));
+        assertThat(syncInformationCaptor.getValue().getLocalVersion(), is(1L));
+        assertThat(syncInformationCaptor.getValue().getCloudVersion(), is(2L));
         assertThat(syncInformationCaptor.getValue().getCloudUpdateTime(), is(greaterThanOrEqualTo(epochSeconds)));
         assertThat(syncInformationCaptor.getValue().getLastSyncTime(), is(greaterThanOrEqualTo(epochSeconds)));
         assertThat(syncInformationCaptor.getValue().getShadowName(), is(SHADOW_NAME));

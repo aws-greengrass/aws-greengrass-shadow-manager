@@ -77,6 +77,15 @@ public interface ShadowManagerDAO {
     List<Pair<String, String>> listSyncedShadows();
 
     /**
+     * Get the shadow document version of a deleted shadow.
+     *
+     * @param thingName  Name of the Thing for the shadow topic prefix.
+     * @param shadowName Name of shadow topic prefix for thing.
+     * @return The deleted shadow version if it was deleted or exists; Else an empty optional
+     */
+    Optional<Long> getDeletedShadowVersion(String thingName, String shadowName);
+
+    /**
      * Attempts to delete the cloud shadow document in the sync table.
      *
      * @param thingName  Name of the Thing for the shadow topic prefix.
@@ -88,8 +97,8 @@ public interface ShadowManagerDAO {
     /**
      * Attempts to get the shadow document version.
      *
-     * @param thingName       Name of the Thing for the shadow topic prefix.
-     * @param shadowName      Name of shadow topic prefix for thing.
+     * @param thingName  Name of the Thing for the shadow topic prefix.
+     * @param shadowName Name of shadow topic prefix for thing.
      * @return Optional containing the new shadow document version if document exists; Else an empty optional
      */
     Optional<Long> getShadowDocumentVersion(String thingName, String shadowName);

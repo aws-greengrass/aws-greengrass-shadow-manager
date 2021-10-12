@@ -74,13 +74,18 @@ public class LocalDeleteSyncRequest extends BaseSyncRequest {
                 context.getDeleteHandler().handleRequest(request, SHADOW_MANAGER_NAME);
 
                 long updateTime = Instant.now().getEpochSecond();
+                long localShadowVersion = context.getDao().getDeletedShadowVersion(getThingName(), getShadowName())
+                        .orElse(syncInformation.getLocalVersion() + 1);
                 context.getDao().updateSyncInformation(SyncInformation.builder()
                         .thingName(getThingName())
                         .shadowName(getShadowName())
                         .lastSyncedDocument(null)
                         .cloudUpdateTime(updateTime)
-                        .localVersion(syncInformation.getLocalVersion())
-                        .cloudVersion(deletedCloudVersion)
+                        .localVersion(localShadowVersion)
+                        // The version number we get in the MQTT message is the version of the cloud shadow that was
+                        // deleted. But the cloud shadow version after the delete has been incremented by 1. So we have
+                        // synced that incremented version instead of the deleted cloud shadow version.
+                        .cloudVersion(deletedCloudVersion + 1)
                         .lastSyncTime(updateTime)
                         .cloudDeleted(true)
                         .build());
