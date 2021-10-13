@@ -79,10 +79,15 @@ public class CloudDeleteSyncRequest extends BaseSyncRequest {
         }
 
         try {
+            // Since the local shadow has been deleted, we need get the deleted shadow version from the DAO.
+            long localShadowVersion = context.getDao().getDeletedShadowVersion(getThingName(), getShadowName())
+                    .orElse(syncInformation.map(SyncInformation::getLocalVersion).orElse(0L) + 1);
             context.getDao().updateSyncInformation(SyncInformation.builder()
                     .lastSyncedDocument(null)
-                    .cloudVersion(syncInformation.map(SyncInformation::getCloudVersion).orElse(0L))
-                    .localVersion(syncInformation.map(SyncInformation::getLocalVersion).orElse(0L))
+                    // After the cloud shadow has been deleted, the version on cloud gets incremented. So we have to
+                    // increment the synced cloud shadow version.
+                    .cloudVersion(syncInformation.map(SyncInformation::getCloudVersion).orElse(0L) + 1)
+                    .localVersion(localShadowVersion)
                     .cloudDeleted(true)
                     .shadowName(getShadowName())
                     .thingName(getThingName())
