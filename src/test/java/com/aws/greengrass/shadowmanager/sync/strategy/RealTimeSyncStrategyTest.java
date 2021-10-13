@@ -36,7 +36,6 @@ import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.LinkedList;
 import java.util.Queue;
-import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -84,7 +83,6 @@ class RealTimeSyncStrategyTest {
 
     @BeforeEach
     void setup() {
-        LogConfig.getRootLogConfig().setLevel(Level.ERROR);
         executorService = Executors.newCachedThreadPool();
         this.requestBlockingQueue = new RequestBlockingQueue(new RequestMerger());
     }
@@ -157,12 +155,11 @@ class RealTimeSyncStrategyTest {
 
         strategy.syncing.set(true);
 
-        Random rand = new Random();
-        int randomNumberOfSyncRequests = rand.nextInt(1024);
-        for (int i = 0; i < randomNumberOfSyncRequests; i++) {
+        int numberOfSyncRequests = 100;
+        for (int i = 0; i < numberOfSyncRequests; i++) {
             strategy.putSyncRequest(new FullShadowSyncRequest("foo-" + i, "bar-" + i));
         }
-        assertThat(strategy.getRemainingCapacity(), is(1024 - randomNumberOfSyncRequests));
+        assertThat(strategy.getRemainingCapacity(), is(1024 - numberOfSyncRequests));
 
         strategy.clearSyncQueue();
 
