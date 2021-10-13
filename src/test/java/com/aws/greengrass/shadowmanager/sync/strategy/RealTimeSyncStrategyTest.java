@@ -15,7 +15,9 @@ import com.aws.greengrass.shadowmanager.sync.model.FullShadowSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.SyncContext;
 import com.aws.greengrass.shadowmanager.sync.model.SyncRequest;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,7 +35,6 @@ import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.LinkedList;
 import java.util.Queue;
-import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -68,9 +69,18 @@ class RealTimeSyncStrategyTest {
     private ExecutorService executorService;
     private RealTimeSyncStrategy strategy;
 
+    @BeforeAll
+    static void setupLogger() {
+        LogConfig.getRootLogConfig().setLevel(Level.ERROR);
+    }
+
+    @AfterAll
+    static void cleanupLogger() {
+        LogConfig.getRootLogConfig().setLevel(Level.INFO);
+    }
+
     @BeforeEach
     void setup() {
-        LogConfig.getRootLogConfig().setLevel(Level.ERROR);
         executorService = Executors.newCachedThreadPool();
     }
 
@@ -140,17 +150,16 @@ class RealTimeSyncStrategyTest {
     }
 
     @Test
-    void GIVEN_request_queue_WHEN_put_and_clear_THEN_queue_has_correct_number_of_requests() throws InterruptedException {
+    void GIVEN_request_queue_WHEN_put_and_clear_THEN_queue_has_correct_number_of_requests() {
         strategy = new RealTimeSyncStrategy(executorService, mockRetryer);
 
         strategy.syncing.set(true);
 
-        Random rand = new Random();
-        int randomNumberOfSyncRequests = rand.nextInt(1024);
-        for (int i = 0; i < randomNumberOfSyncRequests; i++) {
+        int numberOfSyncRequests = 100;
+        for (int i = 0; i < numberOfSyncRequests; i++) {
             strategy.putSyncRequest(new FullShadowSyncRequest("foo-" + i, "bar-" + i));
         }
-        assertThat(strategy.getRemainingCapacity(), is(1024 - randomNumberOfSyncRequests));
+        assertThat(strategy.getRemainingCapacity(), is(1024 - numberOfSyncRequests));
 
         strategy.clearSyncQueue();
 

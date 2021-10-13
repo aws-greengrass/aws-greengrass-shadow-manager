@@ -21,6 +21,7 @@ import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.util.Pair;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -49,6 +50,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
+import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_METADATA;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static com.github.grantwest.eventually.EventuallyLambdaMatcher.eventuallyEval;
@@ -570,6 +572,8 @@ class SyncTest extends NucleusLaunchUtils {
 
         JsonNode actualNode = JsonUtil.getPayloadJson(actualRequest.payload().asByteArray()).get();
         JsonNode expectedNode = JsonUtil.getPayloadJson(mergedLocalShadowContentV2.getBytes(UTF_8)).get();
+        ((ObjectNode) actualNode).remove(SHADOW_DOCUMENT_METADATA);
+        ((ObjectNode) expectedNode).remove(SHADOW_DOCUMENT_METADATA);
 
         // check that it is request 2 merged on top of request 1 and *not* request 1 merged on top of request 2
         assertThat(actualNode, is(equalTo(expectedNode)));

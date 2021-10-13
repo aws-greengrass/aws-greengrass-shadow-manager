@@ -105,17 +105,25 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
                     .cloudVersion(syncInformation.get().getCloudVersion())
                     .shadowName(getShadowName())
                     .thingName(getThingName())
-                    .cloudUpdateTime(Instant.now().getEpochSecond())
+                    .cloudUpdateTime(syncInformation.get().getCloudUpdateTime())
+                    .lastSyncTime(syncInformation.get().getLastSyncTime())
                     .lastSyncedDocument(null)
                     .build());
             return;
         }
 
-        // If only the cloud document does not exist, check if this is the first time we are syncing this shadow. If we
-        // are, go ahead and update the cloud with the local document and update the sync information.
-        // If it's not the first time for sync, go ahead and delete the local shadow and update the sync info.
+        long localUpdateTime = Instant.now().getEpochSecond();
+
+        // If only the cloud document does not exist, check if this is the first time we are syncing this shadow or if
+        // the local shadow was updated after the last sync. If either of those conditions are true, go ahead and
+        // update the cloud with the local document and update the sync information.
+        // If not, go ahead and delete the local shadow and update the sync info. That means that the cloud shadow was
+        // deleted after the last sync.
         if (!cloudShadowDocument.isPresent()) {
-            if (isFirstSync(syncInformation.get())) {
+            if (localShadowDocument.get().getMetadata() != null) {
+                localUpdateTime = localShadowDocument.get().getMetadata().getLatestUpdatedTimestamp();
+            }
+            if (isFirstSyncOrShadowUpdatedAfterSync(syncInformation.get(), localUpdateTime)) {
                 handleFirstCloudSync(localShadowDocument.get());
             } else {
                 handleLocalDelete(syncInformation.get());
@@ -128,11 +136,13 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
             cloudUpdateTime = cloudShadowDocument.get().getMetadata().getLatestUpdatedTimestamp();
         }
 
-        // If only the local document does not exist, check if this is the first time we are syncing this shadow. If we
-        // are, go ahead and update the local with the cloud document and update the sync information.
-        // If it's not the first time for sync, go ahead and delete the cloud shadow and update the sync info.
+        // If only the local document does not exist, check if this is the first time we are syncing this shadow or if
+        // the cloud shadow was updated after the last sync. If either of those conditions are true, go ahead and
+        // update the local with the cloud document and update the sync information.
+        // If not, go ahead and delete the cloud shadow and update the sync info. That means that the local shadow was
+        // deleted after the last sync.
         if (!localShadowDocument.isPresent()) {
-            if (isFirstSync(syncInformation.get())) {
+            if (isFirstSyncOrShadowUpdatedAfterSync(syncInformation.get(), cloudUpdateTime)) {
                 handleFirstLocalSync(cloudShadowDocument.get(), cloudUpdateTime);
             } else {
                 handleCloudDelete(cloudShadowDocument.get(), syncInformation.get());
@@ -205,12 +215,16 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
 
     /**
      * Check if this is the first time there is a sync for the thing's shadow by checking the last sync time.
+     * Also check if a shadow was updated after the last sync.
      *
-     * @param syncInformation The sync information for the thing's shadow.
+     * @param syncInformation  The sync information for the thing's shadow.
+     * @param shadowUpdateTime The time the shadow was updated.
      * @return true if this is the first time the shadow is being sync; Else false.
      */
-    private boolean isFirstSync(@NonNull SyncInformation syncInformation) {
-        return syncInformation.getLastSyncTime() == Instant.EPOCH.getEpochSecond();
+    private boolean isFirstSyncOrShadowUpdatedAfterSync(@NonNull SyncInformation syncInformation,
+                                                        long shadowUpdateTime) {
+        return syncInformation.getLastSyncTime() == Instant.EPOCH.getEpochSecond()
+                || shadowUpdateTime > syncInformation.getLastSyncTime();
     }
 
     /**
