@@ -31,7 +31,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KE
  * sync requests on a particular interval. It will cache all the sync requests until the interval has elapsed; after
  * which it will empty the sync queue by executing all the cached sync requests.
  */
-public class PeriodicSyncStrategy extends BaseSyncStrategy implements SyncStrategy {
+public class PeriodicSyncStrategy extends BaseSyncStrategy {
     private static final Logger logger = LogManager.getLogger(PeriodicSyncStrategy.class);
     private final ScheduledExecutorService syncExecutorService;
     private ScheduledFuture<?> scheduledFuture;
@@ -71,17 +71,6 @@ public class PeriodicSyncStrategy extends BaseSyncStrategy implements SyncStrate
         this.interval = interval;
     }
 
-    /**
-     * Starts syncing the shadows based on the strategy.
-     *
-     * @param context         an context object for syncing
-     * @param syncParallelism number of threads to use for syncing
-     */
-    @Override
-    public void start(SyncContext context, int syncParallelism) {
-        super.startSync(context, syncParallelism);
-    }
-
     @Override
     void doStart(SyncContext context, int syncParallelism) {
         logger.atInfo(SYNC_EVENT_TYPE).kv("interval", interval).log("Start periodic syncing");
@@ -95,51 +84,6 @@ public class PeriodicSyncStrategy extends BaseSyncStrategy implements SyncStrate
         if (this.scheduledFuture != null && !this.scheduledFuture.isCancelled()) {
             this.scheduledFuture.cancel(true);
         }
-    }
-
-    /**
-     * Stops the syncing of shadows.
-     */
-    @Override
-    public void stop() {
-        super.stopSync();
-    }
-
-    /**
-     * Put a sync request into the queue if syncing is started.
-     * <p/>
-     * This will block if the queue is full. This is intentional as non-blocking requires either an unbounded queue
-     * of requests, or an Executor service which creates threads from an unbounded queue.
-     * <p/>
-     * We cannot support an unbounded queue as that will lead to memory pressure - instead requests need to be
-     * throttled.
-     * <p/>
-     * Synchronized so that there is at most only one put in progress waiting to be added if queue is full
-     *
-     * @param request request the request to add.
-     */
-    @Override
-    public void putSyncRequest(SyncRequest request) {
-        super.putSyncRequest(request, syncing);
-    }
-
-    /**
-     * Clear all the sync requests in the request blocking queue.
-     */
-    @Override
-    public void clearSyncQueue() {
-        logger.atTrace(SYNC_EVENT_TYPE).log("Clear all sync requests");
-        syncQueue.clear();
-    }
-
-    /**
-     * Get the remaining capacity in the request blocking sync queue.
-     *
-     * @return The capacity left in the sync queue.
-     */
-    @Override
-    public int getRemainingCapacity() {
-        return syncQueue.remainingCapacity();
     }
 
     /**
@@ -222,9 +166,6 @@ public class PeriodicSyncStrategy extends BaseSyncStrategy implements SyncStrate
                     request = syncQueue.poll();
                 }
             }
-        } catch (InterruptedException e) {
-            logger.atWarn(SYNC_EVENT_TYPE).log("Interrupted while waiting for sync requests");
-            Thread.currentThread().interrupt();
         } finally {
             isRunning.set(false);
             logger.atInfo(SYNC_EVENT_TYPE).log("Finished processing sync requests");

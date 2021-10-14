@@ -30,7 +30,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_K
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.LogEvents.SYNC;
 
-public abstract class BaseSyncStrategy {
+public abstract class BaseSyncStrategy implements SyncStrategy {
     private static final Logger logger = LogManager.getLogger(BaseSyncStrategy.class);
     static final String SYNC_EVENT_TYPE = SYNC.code();
 
@@ -70,11 +70,6 @@ public abstract class BaseSyncStrategy {
     final RetryUtils.RetryConfig retryConfig;
 
     /**
-     * Indicates whether syncing is running or not.
-     */
-    AtomicBoolean syncing = new AtomicBoolean(false);
-
-    /**
      * Configuration for retrying sync requests.
      */
     static final RetryUtils.RetryConfig DEFAULT_RETRY_CONFIG =
@@ -95,6 +90,10 @@ public abstract class BaseSyncStrategy {
                     .retryableExceptions(Collections.singletonList(RetryableException.class))
                     .build();
 
+    /**
+     * Indicates whether syncing is running or not.
+     */
+    AtomicBoolean syncing = new AtomicBoolean(false);
 
     /**
      * Constructor.
@@ -127,7 +126,8 @@ public abstract class BaseSyncStrategy {
      * @param context         an context object for syncing
      * @param syncParallelism number of threads to use for syncing
      */
-    void startSync(SyncContext context, int syncParallelism) {
+    @Override
+    public void start(SyncContext context, int syncParallelism) {
         synchronized (lifecycleLock) {
             this.context = context;
             if (syncing.compareAndSet(false, true)) {
@@ -141,7 +141,8 @@ public abstract class BaseSyncStrategy {
     /**
      * Stops the syncing of shadows.
      */
-    void stopSync() {
+    @Override
+    public void stop() {
         synchronized (lifecycleLock) {
             if (syncing.compareAndSet(true, false)) {
                 logger.atInfo(SYNC_EVENT_TYPE).log("Stop real time syncing");
@@ -169,7 +170,21 @@ public abstract class BaseSyncStrategy {
 
     abstract void doStop();
 
-    void putSyncRequest(SyncRequest request, AtomicBoolean syncing) {
+    /**
+     * Put a sync request into the queue if syncing is started.
+     * <p/>
+     * This will block if the queue is full. This is intentional as non-blocking requires either an unbounded queue
+     * of requests, or an Executor service which creates threads from an unbounded queue.
+     * <p/>
+     * We cannot support an unbounded queue as that will lead to memory pressure - instead requests need to be
+     * throttled.
+     * <p/>
+     * Synchronized so that there is at most only one put in progress waiting to be added if queue is full
+     *
+     * @param request request the request to add.
+     */
+    @Override
+    public void putSyncRequest(SyncRequest request) {
         if (!syncing.get()) {
             logger.atTrace(SYNC_EVENT_TYPE)
                     .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
@@ -197,5 +212,24 @@ public abstract class BaseSyncStrategy {
                     .log("Interrupted while putting sync request into queue");
             Thread.currentThread().interrupt();
         }
+    }
+
+    /**
+     * Clear all the sync requests in the request blocking queue.
+     */
+    @Override
+    public void clearSyncQueue() {
+        logger.atTrace(SYNC_EVENT_TYPE).log("Clear all sync requests");
+        syncQueue.clear();
+    }
+
+    /**
+     * Get the remaining capacity in the request blocking sync queue.
+     *
+     * @return The capacity left in the sync queue.
+     */
+    @Override
+    public int getRemainingCapacity() {
+        return syncQueue.remainingCapacity();
     }
 }

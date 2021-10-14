@@ -91,7 +91,7 @@ class PeriodicSyncStrategyTest {
 
     @AfterEach
     void tearDown() {
-        syncStrategy.stopSync();
+        syncStrategy.stop();
         scheduledExecutorService.shutdownNow();
     }
 
@@ -99,7 +99,7 @@ class PeriodicSyncStrategyTest {
     void GIVEN_sync_request_WHEN_putSyncRequest_and_sync_loop_runs_THEN_request_is_executed_successfully()
             throws Exception {
         syncStrategy = new PeriodicSyncStrategy(scheduledExecutorService, mockRetryer, 3, requestBlockingQueue);
-        syncStrategy.startSync(mockSyncContext, 3);
+        syncStrategy.start(mockSyncContext, 3);
         syncStrategy.putSyncRequest(mock(FullShadowSyncRequest.class));
 
         verify(mockRetryer, timeout(Duration.ofSeconds(5).toMillis()).times(1)).run(any(), any(), any());
@@ -127,7 +127,7 @@ class PeriodicSyncStrategyTest {
             return null;
         }).when(mockRequestBlockingQueue).put(any());
 
-        syncStrategy.startSync(mockSyncContext, 2);
+        syncStrategy.start(mockSyncContext, 2);
         syncStrategy.putSyncRequest(mock(FullShadowSyncRequest.class));
 
         verify(mockRequestBlockingQueue, timeout(Duration.ofSeconds(5).toMillis()).times(1)).put(any());
@@ -142,7 +142,7 @@ class PeriodicSyncStrategyTest {
         syncStrategy = new PeriodicSyncStrategy(scheduledExecutorService, mockRetryer, 3, mockRequestBlockingQueue);
         doThrow(InterruptedException.class).when(mockRequestBlockingQueue).put(any());
 
-        syncStrategy.startSync(mockSyncContext, 2);
+        syncStrategy.start(mockSyncContext, 2);
         syncStrategy.putSyncRequest(mock(FullShadowSyncRequest.class));
 
         verify(mockRetryer, timeout(Duration.ofSeconds(5).toMillis()).times(0)).run(any(), any(), any());
@@ -204,7 +204,7 @@ class PeriodicSyncStrategyTest {
         }).when(mockRequestBlockingQueue).poll();
         when(mockRequestBlockingQueue.offerAndTake(request1, false)).thenReturn(request1);
 
-        syncStrategy.startSync(mockSyncContext, 2);
+        syncStrategy.start(mockSyncContext, 2);
         syncStrategy.putSyncRequest(new FullShadowSyncRequest("foo", "bar"));
 
         assertThat("executed request", executeLatch.await(5, TimeUnit.SECONDS), is(true));
@@ -233,7 +233,7 @@ class PeriodicSyncStrategyTest {
 
         when(mockRequestBlockingQueue.poll()).thenReturn(request1);
 
-        syncStrategy.startSync(mockSyncContext, 2);
+        syncStrategy.start(mockSyncContext, 2);
         syncStrategy.putSyncRequest(new FullShadowSyncRequest("foo", "bar"));
 
         assertThat("executed request", executeLatch.await(5, TimeUnit.SECONDS), is(true));
@@ -280,7 +280,7 @@ class PeriodicSyncStrategyTest {
                 .thenAnswer(invocation -> invocation.getArgument(0, FullShadowSyncRequest.class));
 
         try {
-            syncStrategy.startSync(mockSyncContext, 2);
+            syncStrategy.start(mockSyncContext, 2);
 
             assertThat("executed requests", executeLatch.await(5, TimeUnit.SECONDS), is(true));
         } finally {

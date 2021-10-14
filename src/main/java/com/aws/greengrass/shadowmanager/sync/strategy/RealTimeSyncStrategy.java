@@ -27,7 +27,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KE
  * Handles syncing of shadows in real time. Whenever the device is connected, this strategy will try to execute the
  * shadow sync requests as quickly as possible.
  */
-public class RealTimeSyncStrategy extends BaseSyncStrategy implements SyncStrategy {
+public class RealTimeSyncStrategy extends BaseSyncStrategy {
 
     private static final Logger logger = LogManager.getLogger(RealTimeSyncStrategy.class);
     private final ExecutorService syncExecutorService;
@@ -60,17 +60,6 @@ public class RealTimeSyncStrategy extends BaseSyncStrategy implements SyncStrate
         this.syncExecutorService = executorService;
     }
 
-    /**
-     * Starts syncing the shadows based on the strategy.
-     *
-     * @param context         an context object for syncing
-     * @param syncParallelism number of threads to use for syncing
-     */
-    @Override
-    public void start(SyncContext context, int syncParallelism) {
-        super.startSync(context, syncParallelism);
-    }
-
     @Override
     void doStart(SyncContext context, int syncParallelism) {
         logger.atInfo(SYNC_EVENT_TYPE).log("Start real time syncing");
@@ -80,14 +69,6 @@ public class RealTimeSyncStrategy extends BaseSyncStrategy implements SyncStrate
 
     }
 
-    /**
-     * Stops the syncing of shadows.
-     */
-    @Override
-    public void stop() {
-        super.stopSync();
-    }
-
     @Override
     void doStop() {
         logger.atInfo(SYNC_EVENT_TYPE).log("Cancel {} real time sync thread(s)", syncThreads.size());
@@ -95,42 +76,6 @@ public class RealTimeSyncStrategy extends BaseSyncStrategy implements SyncStrate
         syncThreads.clear();
     }
 
-    /**
-     * Put a sync request into the queue if syncing is started.
-     * <p/>
-     * This will block if the queue is full. This is intentional as non-blocking requires either an unbounded queue
-     * of requests, or an Executor service which creates threads from an unbounded queue.
-     * <p/>
-     * We cannot support an unbounded queue as that will lead to memory pressure - instead requests need to be
-     * throttled.
-     * <p/>
-     * Synchronized so that there is at most only one put in progress waiting to be added if queue is full
-     *
-     * @param request request the request to add.
-     */
-    @Override
-    public void putSyncRequest(SyncRequest request) {
-        super.putSyncRequest(request, syncing);
-    }
-
-    /**
-     * Clear all the sync requests in the request blocking queue.
-     */
-    @Override
-    public void clearSyncQueue() {
-        logger.atTrace(SYNC_EVENT_TYPE).log("Clear all sync requests");
-        syncQueue.clear();
-    }
-
-    /**
-     * Get the remaining capacity in the request blocking sync queue.
-     *
-     * @return The capacity left in the sync queue.
-     */
-    @Override
-    public int getRemainingCapacity() {
-        return syncQueue.remainingCapacity();
-    }
 
     /**
      * Take and execute items from the sync queue. This is intended to be run in a separate thread.
