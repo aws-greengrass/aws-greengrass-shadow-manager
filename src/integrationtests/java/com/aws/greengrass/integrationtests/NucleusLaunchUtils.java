@@ -17,7 +17,9 @@ import com.aws.greengrass.shadowmanager.ShadowManagerDatabase;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientFactory;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
+import com.aws.greengrass.shadowmanager.sync.strategy.PeriodicSyncStrategy;
 import com.aws.greengrass.shadowmanager.sync.strategy.RealTimeSyncStrategy;
+import com.aws.greengrass.shadowmanager.sync.strategy.SyncStrategy;
 import com.aws.greengrass.testcommons.testutilities.GGServiceTestUtil;
 import com.aws.greengrass.util.RetryUtils;
 import org.junit.jupiter.api.io.TempDir;
@@ -29,6 +31,7 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -99,8 +102,9 @@ public class NucleusLaunchUtils extends GGServiceTestUtil {
             kernel.getContext().put(ShadowManagerDAOImpl.class, dao);
         }
         SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
-        RealTimeSyncStrategy realTimeSyncStrategy = (RealTimeSyncStrategy) syncHandler.getOverallSyncStrategy();
+        SyncStrategy realTimeSyncStrategy = syncHandler.getOverallSyncStrategy();
         ExecutorService es = kernel.getContext().get(ExecutorService.class);
+        ScheduledExecutorService ses = kernel.getContext().get(ScheduledExecutorService.class);
         // set retry config to only try once so we can test failures earlier
         kernel.launch();
 
@@ -111,12 +115,19 @@ public class NucleusLaunchUtils extends GGServiceTestUtil {
                 .maxRetryInterval(Duration.ofSeconds(1))
                 .retryableExceptions(Collections.singletonList(RetryableException.class))
                 .build();
-        RealTimeSyncStrategy syncStrategy = new RealTimeSyncStrategy(es, realTimeSyncStrategy.getRetryer(), retryConfig);
+        SyncStrategy syncStrategy;
+        if (RealTimeSyncStrategy.class.equals(config.getSyncClazz())) {
+            syncStrategy = new RealTimeSyncStrategy(es, ((RealTimeSyncStrategy) realTimeSyncStrategy).getRetryer(), retryConfig);
+            kernel.getContext().put(RealTimeSyncStrategy.class, (RealTimeSyncStrategy) syncStrategy);
+        } else {
+            syncStrategy = new PeriodicSyncStrategy(ses, ((RealTimeSyncStrategy) realTimeSyncStrategy).getRetryer(), 3, retryConfig);
+            kernel.getContext().put(PeriodicSyncStrategy.class, (PeriodicSyncStrategy) syncStrategy);
+
+        }
         syncHandler.setOverallSyncStrategy(syncStrategy);
         isSyncMocked.set(true);
-        shadowManager.startSyncingShadows();
+        shadowManager.startSyncingShadows(ShadowManager.StartSyncInfo.builder().updateCloudSubscriptions(true).build());
 
-        kernel.getContext().put(RealTimeSyncStrategy.class, syncStrategy);
     }
 
     @Deprecated()

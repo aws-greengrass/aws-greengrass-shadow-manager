@@ -6,6 +6,7 @@
 package com.aws.greengrass.integrationtests;
 
 import com.aws.greengrass.dependency.State;
+import com.aws.greengrass.shadowmanager.sync.strategy.RealTimeSyncStrategy;
 import lombok.Builder;
 import lombok.Data;
 import lombok.Getter;
@@ -22,4 +23,6 @@ public class NucleusLaunchUtilsConfig {
     State expectedState = State.RUNNING;
     @Builder.Default
     boolean mqttConnected = true;
+    @Builder.Default
+    Class syncClazz = RealTimeSyncStrategy.class;
 }

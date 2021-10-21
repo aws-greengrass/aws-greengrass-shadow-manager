@@ -701,6 +701,11 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
 
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_STRATEGY_TOPIC)).thenReturn(strategyTopics);
         doNothing().when(shadowManager.getSyncHandler()).setSyncStrategy(strategyCaptor.capture());
+        shadowManager.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurations(new HashSet<>()).build());
+        ThingShadowSyncConfiguration config = mock(ThingShadowSyncConfiguration.class);
+        shadowManager.getSyncConfiguration().getSyncConfigurations().add(config);
+
+        when(mockMqttClient.connected()).thenReturn(true);
         shadowManager.install();
 
         assertFalse(shadowManager.isErrored());
@@ -711,6 +716,9 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
             assertThat(strategyCaptor.getValue().getType(), is(StrategyType.PERIODIC));
         }
         assertThat(strategyCaptor.getValue().getDelay(), is(equalTo(interval)));
+        verify(mockSyncHandler, times(1)).stop();
+        verify(mockSyncHandler, times(1)).start(any(), anyInt());
+        verify(mockCloudDataClient, never()).updateSubscriptions(any());
     }
 
     @Test

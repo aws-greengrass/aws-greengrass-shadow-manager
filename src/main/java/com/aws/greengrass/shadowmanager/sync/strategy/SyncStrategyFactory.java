@@ -5,36 +5,54 @@
 
 package com.aws.greengrass.shadowmanager.sync.strategy;
 
+import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
 import com.aws.greengrass.shadowmanager.sync.Retryer;
 import com.aws.greengrass.shadowmanager.sync.strategy.model.Strategy;
 
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ScheduledExecutorService;
 
+/**
+ * Class to handle sync strategy clients.
+ */
 public class SyncStrategyFactory {
     /**
      * Interface for executing sync requests.
      */
     private final Retryer retryer;
     private final ExecutorService syncExecutorService;
+    private final ScheduledExecutorService syncScheduledExecutorService;
 
-    public SyncStrategyFactory(Retryer retryer, ExecutorService syncExecutorService) {
+    /**
+     * Constructor for SyncStrategyFactory to maintain sync strategy clients.
+     *
+     * @param retryer                  The retryer object.
+     * @param executorService          The executor service object.
+     * @param scheduledExecutorService The scheduled executor service object.
+     */
+    public SyncStrategyFactory(Retryer retryer, ExecutorService executorService,
+                               ScheduledExecutorService scheduledExecutorService) {
         this.retryer = retryer;
-        this.syncExecutorService = syncExecutorService;
+        this.syncExecutorService = executorService;
+        this.syncScheduledExecutorService = scheduledExecutorService;
     }
 
     /**
      * Gets the sync strategy based on the Strategy object provided.
      *
      * @param syncStrategy The sync strategy.
+     * @param syncQueue    The sync queue from the previous strategy if any.
+     * @return The sync strategy client to handle syncing of shadows.
      */
     @SuppressWarnings("PMD.MissingBreakInSwitch")
-    public SyncStrategy getSyncStrategy(Strategy syncStrategy) {
+    public SyncStrategy createSyncStrategy(Strategy syncStrategy, RequestBlockingQueue syncQueue) {
         switch (syncStrategy.getType()) {
             case PERIODIC:
-                return new PeriodicSyncStrategy(retryer);
+                return new PeriodicSyncStrategy(syncScheduledExecutorService, retryer, syncStrategy.getDelay(),
+                        syncQueue);
             case REALTIME:
             default:
-                return new RealTimeSyncStrategy(syncExecutorService, retryer);
+                return new RealTimeSyncStrategy(syncExecutorService, retryer, syncQueue);
         }
     }
 }

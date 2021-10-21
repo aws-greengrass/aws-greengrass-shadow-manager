@@ -14,6 +14,7 @@ import com.aws.greengrass.shadowmanager.sync.model.FullShadowSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.LocalDeleteSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.LocalUpdateSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.SyncContext;
+import com.aws.greengrass.shadowmanager.sync.strategy.BaseSyncStrategy;
 import com.aws.greengrass.shadowmanager.sync.strategy.SyncStrategy;
 import com.aws.greengrass.shadowmanager.sync.strategy.SyncStrategyFactory;
 import com.aws.greengrass.shadowmanager.sync.strategy.model.Strategy;
@@ -28,6 +29,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ScheduledExecutorService;
 import javax.inject.Inject;
 
 import static com.aws.greengrass.shadowmanager.model.LogEvents.SYNC;
@@ -74,11 +76,12 @@ public class SyncHandler {
     /**
      * Construct a new instance.
      *
-     * @param executorService provider of threads for syncing
+     * @param executorService              provider of threads for real time syncing
+     * @param syncScheduledExecutorService provider of thread for periodic syncing
      */
     @Inject
-    public SyncHandler(ExecutorService executorService) {
-        this(executorService,
+    public SyncHandler(ExecutorService executorService, ScheduledExecutorService syncScheduledExecutorService) {
+        this(executorService, syncScheduledExecutorService,
                 // retry wrapper so that requests can be mocked
                 (config, request, context) ->
                         RetryUtils.runWithRetry(config,
@@ -92,11 +95,13 @@ public class SyncHandler {
     /**
      * Constructor.
      *
-     * @param executorService provider of threads for syncing
-     * @param retryer         The retryer object.
+     * @param executorService              provider of threads for syncing
+     * @param syncScheduledExecutorService provider of thread for periodic syncing
+     * @param retryer                      The retryer object.
      */
-    private SyncHandler(ExecutorService executorService, Retryer retryer) {
-        this(new SyncStrategyFactory(retryer, executorService));
+    private SyncHandler(ExecutorService executorService, ScheduledExecutorService syncScheduledExecutorService,
+                        Retryer retryer) {
+        this(new SyncStrategyFactory(retryer, executorService, syncScheduledExecutorService));
     }
 
     /**
@@ -115,7 +120,11 @@ public class SyncHandler {
      * @param syncStrategy The sync strategy.
      */
     public void setSyncStrategy(Strategy syncStrategy) {
-        this.overallSyncStrategy = this.syncStrategyFactory.getSyncStrategy(syncStrategy);
+        RequestBlockingQueue syncQueue = null;
+        if (this.overallSyncStrategy != null) {
+            syncQueue = ((BaseSyncStrategy) this.overallSyncStrategy).getSyncQueue();
+        }
+        this.overallSyncStrategy = this.syncStrategyFactory.createSyncStrategy(syncStrategy, syncQueue);
     }
 
     /**

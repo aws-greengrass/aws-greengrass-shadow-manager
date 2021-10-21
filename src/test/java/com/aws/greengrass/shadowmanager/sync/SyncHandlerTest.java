@@ -33,6 +33,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ScheduledExecutorService;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
@@ -56,6 +57,9 @@ class SyncHandlerTest {
     ExecutorService executorService;
 
     @Mock
+    ScheduledExecutorService scheduledExecutorService;
+
+    @Mock
     SyncStrategyFactory mockSyncStrategyFactory;
 
     @Mock
@@ -71,7 +75,7 @@ class SyncHandlerTest {
 
     @BeforeEach
     void setup() {
-        syncHandler = new SyncHandler(executorService);
+        syncHandler = new SyncHandler(executorService, scheduledExecutorService);
         syncHandler.setOverallSyncStrategy(mockSyncStrategy);
     }
 
@@ -119,7 +123,7 @@ class SyncHandlerTest {
         syncHandler.setSyncStrategy(mock(Strategy.class));
 
         // THEN
-        verify(mockSyncStrategyFactory, times(2)).getSyncStrategy(any());
+        verify(mockSyncStrategyFactory, times(2)).createSyncStrategy(any(), any());
     }
 
     @Test
