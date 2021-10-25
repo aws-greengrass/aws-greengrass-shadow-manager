@@ -70,6 +70,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.after;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -228,7 +229,6 @@ class SyncTest extends NucleusLaunchUtils {
     @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
     void GIVEN_sync_config_and_no_cloud_WHEN_startup_THEN_cloud_version_updated_via_full_sync(Class<?> clazz, ExtensionContext context)
             throws IOException, InterruptedException {
-        ignoreExceptionOfType(context, InterruptedException.class);
         ignoreExceptionOfType(context, ResourceNotFoundException.class);
 
         when(mockUpdateThingShadowResponse.payload()).thenReturn(SdkBytes.fromString("{\"version\": 1}", UTF_8));
@@ -271,7 +271,10 @@ class SyncTest extends NucleusLaunchUtils {
         assertThat(cloudUpdateThingShadowRequestCaptor.getValue().shadowName(), is(CLASSIC_SHADOW));
 
         verify(dao, never()).updateShadowThing(anyString(), anyString(), any(byte[].class), anyLong());
-        verify(iotDataPlaneClientFactory.getIotDataPlaneClient(), times(1)).updateThingShadow(
+        // Checking that the cloud shadow is updated at least once since there is a possibility that the older
+        // sync strategy (specifically real time syncing) can start executing a request before we have had a chance to
+        // replace it.
+        verify(iotDataPlaneClientFactory.getIotDataPlaneClient(), atLeastOnce()).updateThingShadow(
                 any(software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowRequest.class));
     }
 
@@ -365,7 +368,7 @@ class SyncTest extends NucleusLaunchUtils {
 
     @ParameterizedTest
     @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
-    void GIVEN_synced_shadow_WHEN_local_delete_THEN_cloud_deletes(Class<?> clazz, ExtensionContext context) throws IOException, InterruptedException {
+    void GIVEN_synced_shadow_WHEN_local_delete_THEN_cloud_deletes(Class<?> clazz, ExtensionContext context) throws InterruptedException {
         ignoreExceptionOfType(context, ResourceNotFoundException.class);
         ignoreExceptionOfType(context, InterruptedException.class);
 
@@ -376,8 +379,8 @@ class SyncTest extends NucleusLaunchUtils {
         lenient().when(shadowResponse.payload().asByteArray()).thenReturn(cloudShadowContentV10.getBytes(UTF_8));
 
         // return existing doc for full sync
-        when(iotDataPlaneClientFactory.getIotDataPlaneClient()
-                .getThingShadow(any(GetThingShadowRequest.class))).thenReturn(shadowResponse);
+        when(iotDataPlaneClientFactory.getIotDataPlaneClient().getThingShadow(any(GetThingShadowRequest.class)))
+                .thenReturn(shadowResponse);
 
         startNucleusWithConfig(NucleusLaunchUtilsConfig.builder()
                 .configFile(getSyncConfigFile(clazz))
@@ -387,6 +390,7 @@ class SyncTest extends NucleusLaunchUtils {
 
         // we have a local shadow from the initial full sync
         assertThat("local shadow exists", () -> localShadow.get().isPresent(), eventuallyEval(is(true)));
+        assertEmptySyncQueue(clazz);
 
         DeleteThingShadowRequestHandler deleteHandler = shadowManager.getDeleteThingShadowRequestHandler();
         DeleteThingShadowRequest request = new DeleteThingShadowRequest();
@@ -436,7 +440,7 @@ class SyncTest extends NucleusLaunchUtils {
 
         syncHandler.pushLocalDeleteSyncRequest(MOCK_THING_NAME_1, CLASSIC_SHADOW, "{\"version\": 10}".getBytes(UTF_8));
 
-        // wait for it to process
+        // wait for it to process all sync requests.
         assertEmptySyncQueue(clazz);
 
         assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));

@@ -699,16 +699,19 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         strategyTopics.createLeafChild("type").withValue(strategyType);
         strategyTopics.createLeafChild("delay").withValue(interval);
 
+        ShadowManager s = spy(shadowManager);
+
+        doReturn(true).when(s).inState(eq(State.RUNNING));
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_STRATEGY_TOPIC)).thenReturn(strategyTopics);
         doNothing().when(shadowManager.getSyncHandler()).setSyncStrategy(strategyCaptor.capture());
-        shadowManager.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurations(new HashSet<>()).build());
+        s.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurations(new HashSet<>()).build());
         ThingShadowSyncConfiguration config = mock(ThingShadowSyncConfiguration.class);
-        shadowManager.getSyncConfiguration().getSyncConfigurations().add(config);
+        s.getSyncConfiguration().getSyncConfigurations().add(config);
 
         when(mockMqttClient.connected()).thenReturn(true);
-        shadowManager.install();
+        s.install();
 
-        assertFalse(shadowManager.isErrored());
+        assertFalse(s.isErrored());
         assertThat(strategyCaptor.getValue(), is(notNullValue()));
         if (STRATEGY_TYPE_REAL_TIME.equals(strategyType)) {
             assertThat(strategyCaptor.getValue().getType(), is(StrategyType.REALTIME));

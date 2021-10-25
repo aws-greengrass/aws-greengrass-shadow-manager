@@ -379,10 +379,10 @@ public class ShadowManager extends PluginService {
         try {
             database.open();
 
-            startSyncingShadows(StartSyncInfo.builder().reInitializeSyncInfo(true)
+            reportState(State.RUNNING);
+            startSyncingShadows(StartSyncInfo.builder().reInitializeSyncInfo(true).overrideRunningCheck(true)
                     .updateCloudSubscriptions(true).build());
 
-            reportState(State.RUNNING);
         } catch (Exception e) {
             serviceErrored(e);
         }
@@ -425,6 +425,13 @@ public class ShadowManager extends PluginService {
      */
     @Synchronized
     public void startSyncingShadows(StartSyncInfo startSyncInfo) {
+        // Do not start syncing shadows until the shadow manager is running.
+        // Also check if this condition needs to be ignored by overriding it. ONLY supposed to be used in startup.
+        if (!startSyncInfo.isOverrideRunningCheck() && !inState(State.RUNNING)) {
+            logger.atTrace().log("Not starting to sync shadows since Shadow Manager is not running yet");
+            return;
+        }
+
         // Only reinitialize the sync info if the synchronize configuration has been updated.
         if (startSyncInfo.reInitializeSyncInfo) {
             // Remove sync information of shadows that are no longer being synced.
@@ -468,5 +475,12 @@ public class ShadowManager extends PluginService {
          * Whether or not to update the MQTT subscriptions for cloud shadows.
          */
         boolean updateCloudSubscriptions;
+
+        /**
+         * Whether or not the override the RUNNING state check for starting to sync shadows. We need this since it is
+         * not guaranteed that the state topic is updated in startup to RUNNING before the check is executed.
+         * ONLY supposed to be used in startup.
+         */
+        boolean overrideRunningCheck;
     }
 }

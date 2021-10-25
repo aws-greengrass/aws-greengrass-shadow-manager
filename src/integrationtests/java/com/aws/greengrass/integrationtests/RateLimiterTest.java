@@ -7,6 +7,7 @@ package com.aws.greengrass.integrationtests;
 
 import com.aws.greengrass.integrationtests.ipc.IPCTestUtils;
 import com.aws.greengrass.lifecyclemanager.Kernel;
+import com.aws.greengrass.logging.impl.config.LogConfig;
 import com.aws.greengrass.shadowmanager.exception.ThrottledRequestException;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
@@ -15,12 +16,14 @@ import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.event.Level;
 import software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCClient;
 import software.amazon.awssdk.aws.greengrass.model.GetThingShadowRequest;
 import software.amazon.awssdk.aws.greengrass.model.ServiceError;
@@ -51,7 +54,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
-public class RateLimiterTest extends NucleusLaunchUtils {
+class RateLimiterTest extends NucleusLaunchUtils {
     private static final int MAX_CALLS = 10;
 
     private static final String localShadowContentV1 = "{\"version\":1,\"state\":{\"desired\":{\"SomeKey\":\"foo\"}}}";
@@ -59,6 +62,12 @@ public class RateLimiterTest extends NucleusLaunchUtils {
 
     @Mock
     UpdateThingShadowResponse mockUpdateThingShadowResponse;
+
+    @BeforeAll
+    static void setupValidator() throws IOException {
+        LogConfig.getRootLogConfig().setLevel(Level.TRACE);
+        JsonUtil.loadSchema();
+    }
 
     @BeforeEach
     void setup() {
@@ -88,7 +97,7 @@ public class RateLimiterTest extends NucleusLaunchUtils {
                         .cloudVersion(0).build()));
         lenient().when(dao.updateSyncInformation(any(SyncInformation.class))).thenReturn(true);
 
-        startNucleusWithConfig("rateLimits.yaml", true, true);
+        startNucleusWithConfig(NucleusLaunchUtilsConfig.builder().configFile("rateLimits.yaml").mockCloud(true).mockDao(true).build());
         SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
         JsonNode updateDocument = JsonUtil.getPayloadJson(localShadowContentV1.getBytes()).get();
 
@@ -99,6 +108,8 @@ public class RateLimiterTest extends NucleusLaunchUtils {
         }
 
         // verify that some requests have been throttled
+        verify(iotDataPlaneClientFactory.getIotDataPlaneClient(), after(1000).atLeastOnce()).updateThingShadow(
+                any(software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowRequest.class));
         verify(iotDataPlaneClientFactory.getIotDataPlaneClient(), after(1000).atMost(6)).updateThingShadow(
                 any(software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowRequest.class));
 
@@ -163,7 +174,8 @@ public class RateLimiterTest extends NucleusLaunchUtils {
 
         when(dao.getShadowThing(anyString(), any())).thenReturn(Optional.of(new ShadowDocument(localShadowContentV1.getBytes())));
 
-        startNucleusWithConfig("rateLimits.yaml", true, true);
+        startNucleusWithConfig(NucleusLaunchUtilsConfig.builder().configFile("rateLimits.yaml").mockCloud(true)
+                .mockDao(true).build());
 
         try (EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
             GreengrassCoreIPCClient ipcClient = new GreengrassCoreIPCClient(connection);
@@ -240,7 +252,8 @@ public class RateLimiterTest extends NucleusLaunchUtils {
 
         when(dao.getShadowThing(anyString(), any())).thenReturn(Optional.of(new ShadowDocument(localShadowContentV1.getBytes())));
 
-        startNucleusWithConfig("rateLimits.yaml", true, true);
+        startNucleusWithConfig(NucleusLaunchUtilsConfig.builder().configFile("rateLimits.yaml").mockCloud(true)
+                .mockDao(true).build());
 
         try (EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
             GreengrassCoreIPCClient ipcClient = new GreengrassCoreIPCClient(connection);

@@ -145,7 +145,7 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
     public void stop() {
         synchronized (lifecycleLock) {
             if (syncing.compareAndSet(true, false)) {
-                logger.atInfo(SYNC_EVENT_TYPE).log("Stop real time syncing");
+                logger.atInfo(SYNC_EVENT_TYPE).log("Stop syncing");
                 syncing.set(false);
 
                 doStop();
@@ -196,6 +196,7 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
             logger.atDebug(SYNC_EVENT_TYPE)
                     .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
                     .addKeyValue(LOG_SHADOW_NAME_KEY, request.getShadowName())
+                    .addKeyValue("type", request.getClass())
                     .log("Adding new sync request");
 
             syncQueue.put(request);

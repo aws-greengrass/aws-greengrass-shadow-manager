@@ -109,6 +109,7 @@ public class NucleusLaunchUtils extends GGServiceTestUtil {
         kernel.launch();
 
         assertTrue(shadowManagerRunning.await(TEST_TIME_OUT_SEC, TimeUnit.SECONDS));
+        realTimeSyncStrategy.stop();
 
         RetryUtils.RetryConfig retryConfig = RetryUtils.RetryConfig.builder()
                 .maxAttempt(1)
@@ -126,7 +127,7 @@ public class NucleusLaunchUtils extends GGServiceTestUtil {
         }
         syncHandler.setOverallSyncStrategy(syncStrategy);
         isSyncMocked.set(true);
-        shadowManager.startSyncingShadows(ShadowManager.StartSyncInfo.builder().updateCloudSubscriptions(true).build());
+        shadowManager.startSyncingShadows(ShadowManager.StartSyncInfo.builder().build());
 
     }
 
