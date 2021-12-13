@@ -20,6 +20,8 @@ public final class Constants {
     public static final String LOG_SHADOW_NAME_KEY = "shadow name";
     public static final String LOG_LOCAL_VERSION_KEY = "local-version";
     public static final String LOG_CLOUD_VERSION_KEY = "cloud-version";
+    public static final String LOG_DELETED_CLOUD_VERSION_KEY = "deleted-cloud-version";
+    public static final String LOG_UPDATED_CLOUD_VERSION_KEY = "updated-cloud-version";
     public static final String LOG_TOPIC = "topic";
     public static final String SHADOW_DOCUMENT_VERSION = "version";
     public static final String SHADOW_DOCUMENT_TIMESTAMP = "timestamp";

@@ -22,6 +22,9 @@ import software.amazon.awssdk.aws.greengrass.model.UnauthorizedError;
 import java.io.IOException;
 import java.time.Instant;
 
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_CLOUD_VERSION_KEY;
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_DELETED_CLOUD_VERSION_KEY;
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_LOCAL_VERSION_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_VERSION;
@@ -89,18 +92,40 @@ public class LocalDeleteSyncRequest extends BaseSyncRequest {
                         .lastSyncTime(updateTime)
                         .cloudDeleted(true)
                         .build());
+                logger.atDebug()
+                        .kv(LOG_THING_NAME_KEY, getThingName())
+                        .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                        .kv(LOG_LOCAL_VERSION_KEY, localShadowVersion)
+                        .kv(LOG_CLOUD_VERSION_KEY, deletedCloudVersion + 1)
+                        .log("Successfully deleted local shadow");
 
             } catch (ResourceNotFoundError e) {
                 logger.atInfo()
                         .kv(LOG_THING_NAME_KEY, getThingName())
                         .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                        .kv(LOG_LOCAL_VERSION_KEY, syncInformation.getLocalVersion())
+                        .kv(LOG_CLOUD_VERSION_KEY, syncInformation.getCloudVersion())
+                        .kv(LOG_DELETED_CLOUD_VERSION_KEY, deletedCloudVersion)
                         .setCause(e)
                         .log("Attempted to delete shadow that was already deleted");
             } catch (ShadowManagerDataException | UnauthorizedError | InvalidArgumentsError | ServiceError e) {
+                logger.atDebug()
+                        .kv(LOG_THING_NAME_KEY, getThingName())
+                        .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                        .kv(LOG_LOCAL_VERSION_KEY, syncInformation.getLocalVersion())
+                        .kv(LOG_CLOUD_VERSION_KEY, deletedCloudVersion)
+                        .log("Skipping delete for local shadow");
                 throw new SkipSyncRequestException(e);
             }
         // missed cloud update(s) need to do full sync
         } else {
+            logger.atDebug()
+                    .kv(LOG_THING_NAME_KEY, getThingName())
+                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                    .kv(LOG_LOCAL_VERSION_KEY, syncInformation.getLocalVersion())
+                    .kv(LOG_CLOUD_VERSION_KEY, syncInformation.getCloudVersion())
+                    .kv(LOG_DELETED_CLOUD_VERSION_KEY, deletedCloudVersion)
+                    .log("Unable to delete local shadow since some update(s) were missed from the cloud");
             throw new ConflictError("Missed update(s) from the cloud");
         }
     }

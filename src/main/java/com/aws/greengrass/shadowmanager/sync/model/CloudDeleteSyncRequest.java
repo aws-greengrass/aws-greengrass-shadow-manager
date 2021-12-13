@@ -21,6 +21,8 @@ import software.amazon.awssdk.services.iotdataplane.model.ThrottlingException;
 import java.time.Instant;
 import java.util.Optional;
 
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_CLOUD_VERSION_KEY;
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_LOCAL_VERSION_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
 
@@ -61,6 +63,8 @@ public class CloudDeleteSyncRequest extends BaseSyncRequest {
             logger.atInfo()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                    .kv(LOG_LOCAL_VERSION_KEY, syncInformation.get().getLocalVersion())
+                    .kv(LOG_CLOUD_VERSION_KEY, syncInformation.get().getCloudVersion())
                     .log("Not deleting cloud shadow document since it is already deleted");
             return;
         }
@@ -69,25 +73,34 @@ public class CloudDeleteSyncRequest extends BaseSyncRequest {
             logger.atDebug()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                    .kv(LOG_LOCAL_VERSION_KEY, syncInformation.get().getLocalVersion())
+                    .kv(LOG_CLOUD_VERSION_KEY, syncInformation.get().getCloudVersion())
                     .log("Deleting cloud shadow document");
 
             context.getIotDataPlaneClientWrapper().deleteThingShadow(getThingName(), getShadowName());
         } catch (ThrottlingException | ServiceUnavailableException | InternalFailureException e) {
             throw new RetryableException(e);
         } catch (SdkServiceException | SdkClientException e) {
+            logger.atDebug()
+                    .kv(LOG_THING_NAME_KEY, getThingName())
+                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                    .kv(LOG_LOCAL_VERSION_KEY, syncInformation.get().getLocalVersion())
+                    .kv(LOG_CLOUD_VERSION_KEY, syncInformation.get().getCloudVersion())
+                    .log("Skipping delete for cloud shadow");
             throw new SkipSyncRequestException(e);
         }
 
+        long cloudDeletedVersion = syncInformation.map(SyncInformation::getCloudVersion).orElse(0L) + 1;
+        long localDeletedVersion = context.getDao().getDeletedShadowVersion(getThingName(), getShadowName())
+                .orElse(syncInformation.map(SyncInformation::getLocalVersion).orElse(0L) + 1);
         try {
             // Since the local shadow has been deleted, we need get the deleted shadow version from the DAO.
-            long localShadowVersion = context.getDao().getDeletedShadowVersion(getThingName(), getShadowName())
-                    .orElse(syncInformation.map(SyncInformation::getLocalVersion).orElse(0L) + 1);
             context.getDao().updateSyncInformation(SyncInformation.builder()
                     .lastSyncedDocument(null)
                     // After the cloud shadow has been deleted, the version on cloud gets incremented. So we have to
                     // increment the synced cloud shadow version.
-                    .cloudVersion(syncInformation.map(SyncInformation::getCloudVersion).orElse(0L) + 1)
-                    .localVersion(localShadowVersion)
+                    .cloudVersion(cloudDeletedVersion)
+                    .localVersion(localDeletedVersion)
                     .cloudDeleted(true)
                     .shadowName(getShadowName())
                     .thingName(getThingName())
@@ -97,6 +110,8 @@ public class CloudDeleteSyncRequest extends BaseSyncRequest {
             logger.atWarn()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                    .kv(LOG_LOCAL_VERSION_KEY, localDeletedVersion)
+                    .kv(LOG_CLOUD_VERSION_KEY, cloudDeletedVersion)
                     .cause(e).log("Failed to update sync table after deleting cloud shadow");
         }
     }

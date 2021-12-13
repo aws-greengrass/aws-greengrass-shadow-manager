@@ -31,6 +31,8 @@ import software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowRespo
 import java.io.IOException;
 import java.util.Optional;
 
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_CLOUD_VERSION_KEY;
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_LOCAL_VERSION_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_VERSION;
@@ -96,31 +98,49 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
             logger.atWarn()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                    .kv(LOG_LOCAL_VERSION_KEY, currentSyncInformation.getLocalVersion())
+                    .kv(LOG_CLOUD_VERSION_KEY, currentSyncInformation.getCloudVersion())
                     .log("Cloud shadow already contains update payload. No sync is necessary");
             return;
         }
 
         long cloudVersion = getAndUpdateCloudVersionInRequest(currentSyncInformation);
+        long cloudUpdatedVersion;
         UpdateThingShadowResponse response;
         try {
             logger.atDebug()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                    .kv(LOG_LOCAL_VERSION_KEY, currentSyncInformation.getLocalVersion())
+                    .kv(LOG_CLOUD_VERSION_KEY, currentSyncInformation.getCloudVersion())
                     .log("Updating cloud shadow document");
             response = context.getIotDataPlaneClientWrapper().updateThingShadow(getThingName(), getShadowName(),
                     JsonUtil.getPayloadBytes(updateDocument));
+            cloudUpdatedVersion = getUpdatedVersion(response.payload().asByteArray()).orElse(cloudVersion + 1);
+            logger.atDebug()
+                    .kv(LOG_THING_NAME_KEY, getThingName())
+                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                    .kv(LOG_LOCAL_VERSION_KEY, currentSyncInformation.getLocalVersion())
+                    .kv(LOG_CLOUD_VERSION_KEY, cloudUpdatedVersion)
+                    .log("Successfully updated cloud shadow document");
         } catch (ConflictException e) {  // NOPMD - Throw ConflictException instead of treated as SdkServiceException
             throw e;
         } catch (ThrottlingException | ServiceUnavailableException | InternalFailureException e) {
             throw new RetryableException(e);
         } catch (SdkServiceException | SdkClientException | IOException e) {
+            logger.atDebug()
+                    .kv(LOG_THING_NAME_KEY, getThingName())
+                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                    .kv(LOG_LOCAL_VERSION_KEY, currentSyncInformation.getLocalVersion())
+                    .kv(LOG_CLOUD_VERSION_KEY, currentSyncInformation.getCloudVersion())
+                    .log("Skipping update for cloud shadow document");
             throw new SkipSyncRequestException(e);
         }
 
         try {
             context.getDao().updateSyncInformation(SyncInformation.builder()
                     .lastSyncedDocument(JsonUtil.getPayloadBytes(shadowDocument.get().toJson(false)))
-                    .cloudVersion(getUpdatedVersion(response.payload().asByteArray()).orElse(cloudVersion + 1))
+                    .cloudVersion(cloudUpdatedVersion)
                     .cloudDeleted(false)
                     .shadowName(getShadowName())
                     .thingName(getThingName())
