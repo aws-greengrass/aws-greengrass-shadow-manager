@@ -42,6 +42,7 @@ import java.util.Optional;
 
 import static com.aws.greengrass.ipc.common.ExceptionUtil.translateExceptions;
 import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_DOCUMENT_SIZE;
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_LOCAL_VERSION_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_METADATA;
@@ -163,6 +164,8 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
                             .setCause(e)
                             .kv(LOG_THING_NAME_KEY, thingName)
                             .kv(LOG_SHADOW_NAME_KEY, shadowName)
+                            .kv(LOG_LOCAL_VERSION_KEY, currentDocument == null ? Long.valueOf(1) :
+                                    currentDocument.getVersion())
                             .log("Conflicting version in shadow update message");
                     publishErrorMessage(thingName, shadowName, clientToken, ErrorMessage.VERSION_CONFLICT_MESSAGE,
                             Operation.UPDATE_SHADOW);
@@ -190,6 +193,7 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
                                 .setEventType(LogEvents.UPDATE_THING_SHADOW.code())
                                 .kv(LOG_THING_NAME_KEY, thingName)
                                 .kv(LOG_SHADOW_NAME_KEY, shadowName)
+                                .kv(LOG_LOCAL_VERSION_KEY, currentDocument.getVersion())
                                 .setCause(error)
                                 .log();
                         publishErrorMessage(thingName, shadowName, clientToken,
@@ -224,6 +228,7 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
                     logger.atInfo()
                             .kv(LOG_THING_NAME_KEY, thingName)
                             .kv(LOG_SHADOW_NAME_KEY, shadowName)
+                            .kv(LOG_LOCAL_VERSION_KEY, updatedDocument.getVersion())
                             .kv("service-name", serviceName)
                             .log("Successfully updated shadow");
                     removeMetadataNode(updateDocumentRequest);

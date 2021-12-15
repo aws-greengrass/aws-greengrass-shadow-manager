@@ -30,8 +30,11 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.Optional;
 
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_CLOUD_VERSION_KEY;
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_LOCAL_VERSION_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_UPDATED_CLOUD_VERSION_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_VERSION;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_MANAGER_NAME;
 
@@ -121,24 +124,44 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
 
                 byte[] updatedDocument = response.getCurrentDocument();
                 long updateTime = Instant.now().getEpochSecond();
+                long localUpdatedVersion = getUpdatedVersion(response.getUpdateThingShadowResponse().getPayload())
+                        .orElse(currentLocalVersion + 1);
                 context.getDao().updateSyncInformation(SyncInformation.builder()
                         .thingName(getThingName())
                         .shadowName(getShadowName())
                         .lastSyncedDocument(updatedDocument)
                         .cloudUpdateTime(updateTime)
-                        .localVersion(getUpdatedVersion(response.getUpdateThingShadowResponse().getPayload())
-                                .orElse(currentLocalVersion + 1))
+                        .localVersion(localUpdatedVersion)
                         .cloudVersion(cloudUpdateVersion)
                         .lastSyncTime(updateTime)
                         .cloudDeleted(false)
                         .build());
+                logger.atDebug()
+                        .kv(LOG_THING_NAME_KEY, getThingName())
+                        .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                        .kv(LOG_LOCAL_VERSION_KEY, localUpdatedVersion)
+                        .kv(LOG_CLOUD_VERSION_KEY, cloudUpdateVersion)
+                        .log("Successfully updated local shadow");
             } catch (ShadowManagerDataException | UnauthorizedError | InvalidArgumentsError | ServiceError
                     | IOException e) {
+                logger.atDebug()
+                        .kv(LOG_THING_NAME_KEY, getThingName())
+                        .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                        .kv(LOG_LOCAL_VERSION_KEY, currentLocalVersion)
+                        .kv(LOG_CLOUD_VERSION_KEY, cloudUpdateVersion)
+                        .log("Skipping update for local shadow");
                 throw new SkipSyncRequestException(e);
             }
 
             // edge case where might have missed sync update from cloud
         } else if (cloudUpdateVersion > currentCloudVersion + 1) {
+            logger.atDebug()
+                    .kv(LOG_THING_NAME_KEY, getThingName())
+                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                    .kv(LOG_LOCAL_VERSION_KEY, currentSyncInformation.getLocalVersion())
+                    .kv(LOG_CLOUD_VERSION_KEY, currentSyncInformation.getCloudVersion())
+                    .kv(LOG_UPDATED_CLOUD_VERSION_KEY, cloudUpdateVersion)
+                    .log("Unable to update local shadow since some update(s) were missed from the cloud");
             throw new ConflictError("Missed update(s) from the cloud");
         }
     }
