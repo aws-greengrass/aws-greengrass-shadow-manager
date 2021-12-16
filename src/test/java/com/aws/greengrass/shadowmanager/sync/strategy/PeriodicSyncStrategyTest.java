@@ -68,6 +68,8 @@ class PeriodicSyncStrategyTest {
     private SyncContext mockSyncContext;
     @Mock
     private RequestBlockingQueue mockRequestBlockingQueue;
+    @Mock
+    private FullShadowSyncRequest mockFullShadowSyncRequest;
     private RequestBlockingQueue requestBlockingQueue;
 
     private ScheduledExecutorService scheduledExecutorService;
@@ -87,6 +89,7 @@ class PeriodicSyncStrategyTest {
     void setup() {
         scheduledExecutorService = new ScheduledThreadPoolExecutor(1);
         this.requestBlockingQueue = new RequestBlockingQueue(new RequestMerger());
+        lenient().when(mockFullShadowSyncRequest.isUpdateNecessary(any())).thenReturn(true);
     }
 
     @AfterEach
@@ -100,7 +103,7 @@ class PeriodicSyncStrategyTest {
             throws Exception {
         syncStrategy = new PeriodicSyncStrategy(scheduledExecutorService, mockRetryer, 3, requestBlockingQueue);
         syncStrategy.start(mockSyncContext, 3);
-        syncStrategy.putSyncRequest(mock(FullShadowSyncRequest.class));
+        syncStrategy.putSyncRequest(mockFullShadowSyncRequest);
 
         verify(mockRetryer, timeout(Duration.ofSeconds(5).toMillis()).times(1)).run(any(), any(), any());
     }
@@ -128,7 +131,7 @@ class PeriodicSyncStrategyTest {
         }).when(mockRequestBlockingQueue).put(any());
 
         syncStrategy.start(mockSyncContext, 2);
-        syncStrategy.putSyncRequest(mock(FullShadowSyncRequest.class));
+        syncStrategy.putSyncRequest(mockFullShadowSyncRequest);
 
         verify(mockRequestBlockingQueue, timeout(Duration.ofSeconds(5).toMillis()).times(1)).put(any());
         verify(mockRequestBlockingQueue, times(1)).remove(any());
@@ -143,7 +146,7 @@ class PeriodicSyncStrategyTest {
         doThrow(InterruptedException.class).when(mockRequestBlockingQueue).put(any());
 
         syncStrategy.start(mockSyncContext, 2);
-        syncStrategy.putSyncRequest(mock(FullShadowSyncRequest.class));
+        syncStrategy.putSyncRequest(mockFullShadowSyncRequest);
 
         verify(mockRetryer, timeout(Duration.ofSeconds(5).toMillis()).times(0)).run(any(), any(), any());
         // check that we are interrupted by our "fake" exception. This also clears the thread state so cleanup

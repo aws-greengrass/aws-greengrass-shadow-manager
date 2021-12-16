@@ -57,13 +57,14 @@ import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -333,16 +334,22 @@ class LocalUpdateSyncRequestTest {
     }
 
     @Test
-    void GIVEN_no_change_WHEN_execute_THEN_does_not_update_local_shadow_and_sync_information() throws IOException {
+    void GIVEN_no_change_WHEN_isUpdateNecessary_THEN_returns_false() throws IOException, SkipSyncRequestException {
         ShadowDocument shadowDocument = new ShadowDocument(UPDATE_DOCUMENT);
         when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(shadowDocument));
 
         LocalUpdateSyncRequest request = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, UPDATE_DOCUMENT);
 
-        assertDoesNotThrow(() -> request.execute(syncContext));
+        assertFalse(request.isUpdateNecessary(syncContext));
+    }
 
-        verify(mockDao, never()).updateSyncInformation(any());
-        verify(mockUpdateThingShadowRequestHandler, never()).handleRequest(any(), any());
+    @Test
+    void GIVEN_new_shadow_WHEN_isUpdateNecessary_THEN_returns_true() throws IOException, SkipSyncRequestException {
+        when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.empty());
+
+        LocalUpdateSyncRequest request = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, UPDATE_DOCUMENT);
+
+        assertTrue(request.isUpdateNecessary(syncContext));
     }
 
     static Stream<Arguments> currentUpdatePayloads() {

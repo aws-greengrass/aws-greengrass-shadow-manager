@@ -59,13 +59,14 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 class RealTimeSyncStrategyTest {
-
     @Mock
     private Retryer mockRetryer;
     @Mock
     private SyncContext mockSyncContext;
     @Mock
     private RequestBlockingQueue mockRequestBlockingQueue;
+    @Mock
+    private FullShadowSyncRequest mockFullShadowSyncRequest;
     private RequestBlockingQueue requestBlockingQueue;
 
     private ExecutorService executorService;
@@ -85,6 +86,7 @@ class RealTimeSyncStrategyTest {
     void setup() {
         executorService = Executors.newCachedThreadPool();
         this.requestBlockingQueue = new RequestBlockingQueue(new RequestMerger());
+        lenient().when(mockFullShadowSyncRequest.isUpdateNecessary(any())).thenReturn(true);
     }
 
     @AfterEach
@@ -98,7 +100,7 @@ class RealTimeSyncStrategyTest {
             throws Exception {
         strategy = new RealTimeSyncStrategy(executorService, mockRetryer, requestBlockingQueue);
         strategy.start(mockSyncContext, 1);
-        strategy.putSyncRequest(mock(FullShadowSyncRequest.class));
+        strategy.putSyncRequest(mockFullShadowSyncRequest);
 
         verify(mockRetryer, timeout(Duration.ofSeconds(5).toMillis()).times(1)).run(any(), any(), any());
     }
@@ -125,7 +127,7 @@ class RealTimeSyncStrategyTest {
         }).when(mockRequestBlockingQueue).put(any());
 
         strategy.start(mockSyncContext, 1);
-        strategy.putSyncRequest(mock(FullShadowSyncRequest.class));
+        strategy.putSyncRequest(mockFullShadowSyncRequest);
 
         verify(mockRequestBlockingQueue, timeout(Duration.ofSeconds(5).toMillis()).times(1)).put(any());
         verify(mockRequestBlockingQueue, times(1)).remove(any());
@@ -140,7 +142,7 @@ class RealTimeSyncStrategyTest {
         doThrow(InterruptedException.class).when(mockRequestBlockingQueue).put(any());
 
         strategy.start(mockSyncContext, 1);
-        strategy.putSyncRequest(mock(FullShadowSyncRequest.class));
+        strategy.putSyncRequest(mockFullShadowSyncRequest);
 
         verify(mockRetryer, timeout(Duration.ofSeconds(5).toMillis()).times(0)).run(any(), any(), any());
         // check that we are interrupted by our "fake" exception. This also clears the thread state so cleanup

@@ -302,25 +302,24 @@ public class ShadowManager extends PluginService {
 
         Topics strategyTopics = config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_STRATEGY_TOPIC);
         strategyTopics.subscribe((why, newv) -> {
-                    Strategy strategy;
-                    Map<String, Object> strategyPojo = strategyTopics.toPOJO();
-                    if (WhatHappened.removed.equals(why) || strategyPojo == null || strategyPojo.isEmpty()) {
-                        strategy = DEFAULT_STRATEGY;
-                    } else {
-                        // Get the correct sync strategy configuration from the POJO.
-                        try {
-                            strategy = Strategy.fromPojo(strategyPojo);
-                        } catch (InvalidConfigurationException e) {
-                            serviceErrored(e);
-                            return;
-                        }
-                    }
-                    stopSyncingShadows(false);
-                    syncHandler.setSyncStrategy(strategy);
-                    startSyncingShadows(StartSyncInfo.builder().build());
-                });
+            Strategy strategy;
+            Map<String, Object> strategyPojo = strategyTopics.toPOJO();
+            if (WhatHappened.removed.equals(why) || strategyPojo == null || strategyPojo.isEmpty()) {
+                strategy = DEFAULT_STRATEGY;
+            } else {
+                // Get the correct sync strategy configuration from the POJO.
+                try {
+                    strategy = Strategy.fromPojo(strategyPojo);
+                } catch (InvalidConfigurationException e) {
+                    serviceErrored(e);
+                    return;
+                }
+            }
+            stopSyncingShadows(false);
+            syncHandler.setSyncStrategy(strategy);
+            startSyncingShadows(StartSyncInfo.builder().build());
+        });
     }
-
 
 
     private void deleteRemovedSyncInformation() {
