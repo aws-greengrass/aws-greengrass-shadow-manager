@@ -53,8 +53,6 @@ import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_METADATA;
@@ -116,11 +114,9 @@ class SyncTest extends NucleusLaunchUtils {
 
     private Supplier<Optional<SyncInformation>> syncInfo;
     private Supplier<Optional<ShadowDocument>> localShadow;
-    private final Lock sequential = new ReentrantLock();
 
     @BeforeEach
     void setup() {
-        sequential.lock();
         kernel = new Kernel();
         syncInfo = () -> kernel.getContext().get(ShadowManagerDAOImpl.class).getShadowSyncInformation(MOCK_THING_NAME_1,
                 CLASSIC_SHADOW);
@@ -131,7 +127,6 @@ class SyncTest extends NucleusLaunchUtils {
     @AfterEach
     void cleanup() {
         kernel.shutdown();
-        sequential.unlock();
     }
 
     private String getSyncConfigFile(Class<?extends BaseSyncStrategy> clazz) {

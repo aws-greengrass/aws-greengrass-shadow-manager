@@ -106,7 +106,7 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
     /**
      * Getter for syncing boolean.
      *
-     * @return true if Shadow Manger is syncing.
+     * @return true if Shadow Manager is syncing.
      */
     public boolean isSyncing() {
         return syncing.get();
@@ -115,7 +115,7 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
     /**
      * Getter for executing boolean.
      *
-     * @return true if Shadow Manger is executing.
+     * @return true if Shadow Manager is executing.
      */
     public boolean isExecuting() {
         return executing.get();
