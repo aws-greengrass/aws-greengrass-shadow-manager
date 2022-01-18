@@ -48,7 +48,7 @@ public class LocalDeleteSyncRequest extends BaseSyncRequest {
      * @param deletePayload Delete response payload containing the deleted shadow version
      */
     public LocalDeleteSyncRequest(String thingName, String shadowName, byte[] deletePayload) {
-         super(thingName,shadowName);
+        super(thingName, shadowName);
         this.deletePayload = deletePayload;
     }
 
@@ -117,7 +117,7 @@ public class LocalDeleteSyncRequest extends BaseSyncRequest {
                         .log("Skipping delete for local shadow");
                 throw new SkipSyncRequestException(e);
             }
-        // missed cloud update(s) need to do full sync
+            // missed cloud update(s) need to do full sync
         } else {
             logger.atDebug()
                     .kv(LOG_THING_NAME_KEY, getThingName())
@@ -128,5 +128,16 @@ public class LocalDeleteSyncRequest extends BaseSyncRequest {
                     .log("Unable to delete local shadow since some update(s) were missed from the cloud");
             throw new ConflictError("Missed update(s) from the cloud");
         }
+    }
+
+    /**
+     * Returning true for delete since multiple deletes will never happen from the cloud or device.
+     *
+     * @param context the execution context.
+     * @return true.
+     */
+    @Override
+    public boolean isUpdateNecessary(SyncContext context) {
+        return true;
     }
 }

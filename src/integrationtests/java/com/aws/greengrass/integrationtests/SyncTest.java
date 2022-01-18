@@ -15,7 +15,9 @@ import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
+import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
+import com.aws.greengrass.shadowmanager.sync.strategy.BaseSyncStrategy;
 import com.aws.greengrass.shadowmanager.sync.strategy.PeriodicSyncStrategy;
 import com.aws.greengrass.shadowmanager.sync.strategy.RealTimeSyncStrategy;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
@@ -127,7 +129,7 @@ class SyncTest extends NucleusLaunchUtils {
         kernel.shutdown();
     }
 
-    private String getSyncConfigFile(Class<?> clazz) {
+    private String getSyncConfigFile(Class<?extends BaseSyncStrategy> clazz) {
         if (RealTimeSyncStrategy.class.equals(clazz)) {
             return "sync.yaml";
         } else {
@@ -135,18 +137,23 @@ class SyncTest extends NucleusLaunchUtils {
         }
     }
 
-    private void assertEmptySyncQueue(Class<?> clazz) {
-        if (RealTimeSyncStrategy.class.equals(clazz)) {
-            assertThat(() -> kernel.getContext().get(RealTimeSyncStrategy.class).getSyncQueue().size(), eventuallyEval(is(0)));
-        } else {
-            assertThat(() -> kernel.getContext().get(PeriodicSyncStrategy.class).getSyncQueue().size(), eventuallyEval(is(0)));
-        }
+    private void assertEmptySyncQueue(Class<? extends BaseSyncStrategy> clazz) {
+        BaseSyncStrategy s = kernel.getContext().get(clazz);
+
+        assertThat("syncing has started", s::isSyncing, eventuallyEval(is(true)));
+
+        RequestBlockingQueue q = s.getSyncQueue();
+
+        // queue is eventually empty (full syncs are added and then eventually removed)
+        assertThat("sync queue is eventually empty", () -> q.isEmpty() && !s.isExecuting(),
+                eventuallyEval(is(true), Duration.ofSeconds(10)));
     }
 
     @ParameterizedTest
     @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
-    void GIVEN_sync_config_and_no_local_WHEN_startup_THEN_local_version_updated_via_full_sync(Class<?> clazz, ExtensionContext context)
+    void GIVEN_sync_config_and_no_local_WHEN_startup_THEN_local_version_updated_via_full_sync(Class<?extends BaseSyncStrategy> clazz, ExtensionContext context)
             throws IOException, InterruptedException {
+        LogConfig.getRootLogConfig().setLevel(Level.DEBUG);
         ignoreExceptionOfType(context, InterruptedException.class);
 
         GetThingShadowResponse shadowResponse = mock(GetThingShadowResponse.class, Answers.RETURNS_DEEP_STUBS);
@@ -227,7 +234,7 @@ class SyncTest extends NucleusLaunchUtils {
 
     @ParameterizedTest
     @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
-    void GIVEN_sync_config_and_no_cloud_WHEN_startup_THEN_cloud_version_updated_via_full_sync(Class<?> clazz, ExtensionContext context)
+    void GIVEN_sync_config_and_no_cloud_WHEN_startup_THEN_cloud_version_updated_via_full_sync(Class<?extends BaseSyncStrategy> clazz, ExtensionContext context)
             throws IOException, InterruptedException {
         ignoreExceptionOfType(context, ResourceNotFoundException.class);
 
@@ -280,7 +287,7 @@ class SyncTest extends NucleusLaunchUtils {
 
     @ParameterizedTest
     @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
-    void GIVEN_synced_shadow_WHEN_local_update_THEN_cloud_updates(Class<?> clazz, ExtensionContext context) throws IOException,
+    void GIVEN_synced_shadow_WHEN_local_update_THEN_cloud_updates(Class<?extends BaseSyncStrategy> clazz, ExtensionContext context) throws IOException,
             InterruptedException {
         ignoreExceptionOfType(context, ResourceNotFoundException.class);
         ignoreExceptionOfType(context, InterruptedException.class);
@@ -329,7 +336,7 @@ class SyncTest extends NucleusLaunchUtils {
 
     @ParameterizedTest
     @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
-    void GIVEN_synced_shadow_WHEN_cloud_update_THEN_local_updates(Class<?> clazz, ExtensionContext context) throws IOException, InterruptedException {
+    void GIVEN_synced_shadow_WHEN_cloud_update_THEN_local_updates(Class<?extends BaseSyncStrategy> clazz, ExtensionContext context) throws IOException, InterruptedException {
         ignoreExceptionOfType(context, InterruptedException.class);
         ignoreExceptionOfType(context, ResourceNotFoundException.class);
 
@@ -368,7 +375,7 @@ class SyncTest extends NucleusLaunchUtils {
 
     @ParameterizedTest
     @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
-    void GIVEN_synced_shadow_WHEN_local_delete_THEN_cloud_deletes(Class<?> clazz, ExtensionContext context) throws InterruptedException {
+    void GIVEN_synced_shadow_WHEN_local_delete_THEN_cloud_deletes(Class<?extends BaseSyncStrategy> clazz, ExtensionContext context) throws InterruptedException {
         ignoreExceptionOfType(context, ResourceNotFoundException.class);
         ignoreExceptionOfType(context, InterruptedException.class);
 
@@ -412,7 +419,7 @@ class SyncTest extends NucleusLaunchUtils {
 
     @ParameterizedTest
     @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
-    void GIVEN_synced_shadow_WHEN_cloud_delete_THEN_local_deletes(Class<?> clazz, ExtensionContext context) throws InterruptedException {
+    void GIVEN_synced_shadow_WHEN_cloud_delete_THEN_local_deletes(Class<?extends BaseSyncStrategy> clazz, ExtensionContext context) throws InterruptedException {
         ignoreExceptionOfType(context, InterruptedException.class);
         ignoreExceptionOfType(context, ResourceNotFoundException.class);
 
@@ -432,6 +439,9 @@ class SyncTest extends NucleusLaunchUtils {
                 .mockCloud(true)
                 .build());
 
+        // wait for it to process all full sync requests to finish.
+        assertEmptySyncQueue(clazz);
+
         SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
 
         // we have a local shadow from the initial full sync
@@ -440,7 +450,7 @@ class SyncTest extends NucleusLaunchUtils {
 
         syncHandler.pushLocalDeleteSyncRequest(MOCK_THING_NAME_1, CLASSIC_SHADOW, "{\"version\": 10}".getBytes(UTF_8));
 
-        // wait for it to process all sync requests.
+        // Wait for Local Delete to finish.
         assertEmptySyncQueue(clazz);
 
         assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
@@ -458,7 +468,7 @@ class SyncTest extends NucleusLaunchUtils {
 
     @ParameterizedTest
     @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
-    void GIVEN_unsynced_shadow_WHEN_local_deletes_THEN_no_cloud_delete(Class<?> clazz, ExtensionContext context) throws InterruptedException {
+    void GIVEN_unsynced_shadow_WHEN_local_deletes_THEN_no_cloud_delete(Class<?extends BaseSyncStrategy> clazz, ExtensionContext context) throws InterruptedException {
         ignoreExceptionOfType(context, ResourceNotFoundException.class);
         ignoreExceptionOfType(context, InterruptedException.class);
 
@@ -502,7 +512,7 @@ class SyncTest extends NucleusLaunchUtils {
 
     @ParameterizedTest
     @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
-    void GIVEN_unsynced_shadow_WHEN_local_updates_THEN_no_cloud_update(Class<?> clazz, ExtensionContext context) throws InterruptedException {
+    void GIVEN_unsynced_shadow_WHEN_local_updates_THEN_no_cloud_update(Class<?extends BaseSyncStrategy> clazz, ExtensionContext context) throws InterruptedException {
         ignoreExceptionOfType(context, ResourceNotFoundException.class);
         ignoreExceptionOfType(context, InterruptedException.class);
 
@@ -536,7 +546,7 @@ class SyncTest extends NucleusLaunchUtils {
 
     @ParameterizedTest
     @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
-    void GIVEN_cloud_update_request_WHEN_retryable_thrown_AND_new_cloud_update_request_THEN_retries_with_merged_request(Class<?> clazz, ExtensionContext context)
+    void GIVEN_cloud_update_request_WHEN_retryable_thrown_AND_new_cloud_update_request_THEN_retries_with_merged_request(Class<?extends BaseSyncStrategy> clazz, ExtensionContext context)
             throws InterruptedException, IOException {
         LogConfig.getRootLogConfig().setLevel(Level.DEBUG);
         ignoreExceptionOfType(context, ResourceNotFoundException.class);

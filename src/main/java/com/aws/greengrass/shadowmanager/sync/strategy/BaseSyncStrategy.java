@@ -8,6 +8,8 @@ package com.aws.greengrass.shadowmanager.sync.strategy;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
+import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
+import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
 import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
 import com.aws.greengrass.shadowmanager.sync.RequestMerger;
 import com.aws.greengrass.shadowmanager.sync.Retryer;
@@ -46,6 +48,7 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
 
     /**
      * The request blocking queue holding all the sync requests.
+     *
      * @implNote The Setter is only used in unit tests. The Getter is used in integration tests.
      */
     @Getter
@@ -96,6 +99,29 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
     AtomicBoolean syncing = new AtomicBoolean(false);
 
     /**
+     * Indicates whether a sync request is executing or not.
+     */
+    AtomicBoolean executing = new AtomicBoolean(false);
+
+    /**
+     * Getter for syncing boolean.
+     *
+     * @return true if Shadow Manager is syncing.
+     */
+    public boolean isSyncing() {
+        return syncing.get();
+    }
+
+    /**
+     * Getter for executing boolean.
+     *
+     * @return true if Shadow Manager is executing.
+     */
+    public boolean isExecuting() {
+        return executing.get();
+    }
+
+    /**
      * Constructor.
      *
      * @param retryer The retryer object.
@@ -114,7 +140,14 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
      * @param retryConfig The config to be used by the retryer.
      */
     public BaseSyncStrategy(Retryer retryer, RetryUtils.RetryConfig retryConfig) {
-        this.retryer = retryer;
+        this.retryer = (config, request, context) -> {
+            try {
+                executing.set(true);
+                retryer.run(config, request, context);
+            } finally {
+                executing.set(false);
+            }
+        };
         this.retryConfig = retryConfig;
         RequestMerger requestMerger = new RequestMerger();
         this.syncQueue = new RequestBlockingQueue(requestMerger);
@@ -192,6 +225,24 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
                     .log("Syncing is stopped. Ignoring sync request");
             return;
         }
+
+        try {
+            if (!request.isUpdateNecessary(context)) {
+                logger.atDebug()
+                        .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
+                        .addKeyValue(LOG_SHADOW_NAME_KEY, request.getShadowName())
+                        .addKeyValue("type", request.getClass())
+                        .log("Ignoring sync request since update is not necessary");
+                return;
+            }
+        } catch (SkipSyncRequestException | RetryableException | UnknownShadowException e) {
+            logger.atWarn(SYNC_EVENT_TYPE)
+                    .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
+                    .addKeyValue(LOG_SHADOW_NAME_KEY, request.getShadowName())
+                    .log("Ignoring sync request since update is not necessary");
+            return;
+        }
+
         try {
             logger.atDebug(SYNC_EVENT_TYPE)
                     .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())

@@ -115,4 +115,15 @@ public class CloudDeleteSyncRequest extends BaseSyncRequest {
                     .cause(e).log("Failed to update sync table after deleting cloud shadow");
         }
     }
+
+    /**
+     * Returning true for delete since multiple deletes will never happen from the cloud or device.
+     *
+     * @param context the execution context.
+     * @return true.
+     */
+    @Override
+    public boolean isUpdateNecessary(SyncContext context) {
+        return true;
+    }
 }

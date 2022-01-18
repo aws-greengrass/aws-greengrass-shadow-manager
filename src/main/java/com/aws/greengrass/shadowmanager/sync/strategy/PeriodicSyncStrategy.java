@@ -19,7 +19,6 @@ import software.amazon.awssdk.aws.greengrass.model.ConflictError;
 import software.amazon.awssdk.services.iotdataplane.model.ConflictException;
 
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -34,7 +33,6 @@ import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KE
 public class PeriodicSyncStrategy extends BaseSyncStrategy {
     private static final Logger logger = LogManager.getLogger(PeriodicSyncStrategy.class);
     private final ScheduledExecutorService syncExecutorService;
-    private ScheduledFuture<?> scheduledFuture;
     private final long interval;
     private final AtomicBoolean isRunning = new AtomicBoolean();
 
@@ -74,16 +72,19 @@ public class PeriodicSyncStrategy extends BaseSyncStrategy {
     @Override
     void doStart(SyncContext context, int syncParallelism) {
         logger.atInfo(SYNC_EVENT_TYPE).kv("interval", interval).log("Start periodic syncing");
-        this.scheduledFuture = syncExecutorService
-                .scheduleAtFixedRate(this::syncLoop, 0, interval, TimeUnit.SECONDS);
+        this.syncThreads.add(syncExecutorService
+                .scheduleAtFixedRate(this::syncLoop, 0, interval, TimeUnit.SECONDS));
     }
 
     @Override
     void doStop() {
         logger.atInfo(SYNC_EVENT_TYPE).log("Cancel {} periodic sync thread(s)", syncThreads.size());
-        if (this.scheduledFuture != null && !this.scheduledFuture.isCancelled()) {
-            this.scheduledFuture.cancel(true);
-        }
+        syncThreads.forEach(t -> {
+            if (t != null && !t.isCancelled()) {
+                t.cancel(true);
+            }
+        });
+        syncThreads.clear();
     }
 
     /**

@@ -70,6 +70,17 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
     }
 
     /**
+     * Returning true for full sync since we have already figured out that both cloud and local have been updated.
+     *
+     * @param context the execution context.
+     * @return true.
+     */
+    @Override
+    public boolean isUpdateNecessary(SyncContext context) {
+        return true;
+    }
+
+    /**
      * Executes a full shadow sync.
      *
      * @param context the execution context.
@@ -278,7 +289,7 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
     /**
      * Delete the local shadow using the request handlers and then update the sync information.
      *
-     * @param syncInformation     The sync information for the thing's shadow.
+     * @param syncInformation The sync information for the thing's shadow.
      * @throws SkipSyncRequestException if the delete request encountered a skipable exception.
      */
     private void handleLocalDelete(@NonNull SyncInformation syncInformation) throws SkipSyncRequestException {

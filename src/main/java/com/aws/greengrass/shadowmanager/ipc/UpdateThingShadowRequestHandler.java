@@ -81,7 +81,6 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
         this.syncHandler = syncHandler;
     }
 
-
     /**
      * Handles UpdateThingShadow Requests from IPC.
      *
@@ -233,6 +232,7 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
                             .log("Successfully updated shadow");
                     removeMetadataNode(updateDocumentRequest);
                     this.syncHandler.pushCloudUpdateSyncRequest(thingName, shadowName, updateDocumentRequest);
+
                     return new UpdateThingShadowHandlerResponse(updateThingShadowResponse, updateDocumentBytes);
                 } catch (ShadowManagerDataException | IOException e) {
                     throwServiceError(thingName, shadowName, clientToken, e);

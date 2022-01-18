@@ -91,9 +91,7 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
             throw new SkipSyncRequestException(e);
         }
 
-        Optional<ShadowDocument> currentLocal = context.getDao().getShadowThing(getThingName(), getShadowName());
-        if (currentLocal.isPresent() && !isUpdateNecessary(currentLocal.get().toJson(false),
-                shadowDocument.toJson(false))) {
+        if (!isUpdateNecessary(context, shadowDocument)) {
             logger.atDebug()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
@@ -164,6 +162,40 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
                     .log("Unable to update local shadow since some update(s) were missed from the cloud");
             throw new ConflictError("Missed update(s) from the cloud");
         }
+    }
+
+    /**
+     * Checks if it is necessary to perform an update to the local shadow.
+     *
+     * @param context the execution context.
+     * @return true if local shadow update is necessary; Else false.
+     * @throws SkipSyncRequestException if unable to deserialize cloud shadow update payload,
+     */
+    @Override
+    public boolean isUpdateNecessary(SyncContext context) throws SkipSyncRequestException {
+        //TODO: store this information in a return object to avoid unnecessary calls to DAO.
+        ShadowDocument shadowDocument;
+        try {
+            shadowDocument = new ShadowDocument(updateDocument);
+        } catch (IOException | InvalidRequestParametersException e) {
+            throw new SkipSyncRequestException(e);
+        }
+
+        return isUpdateNecessary(context, shadowDocument);
+    }
+
+    private boolean isUpdateNecessary(SyncContext context, ShadowDocument shadowDocument) {
+        Optional<ShadowDocument> currentLocal = context.getDao().getShadowThing(getThingName(), getShadowName());
+        if (currentLocal.isPresent() && !isUpdateNecessary(currentLocal.get().toJson(false),
+                shadowDocument.toJson(false))) {
+            logger.atDebug()
+                    .kv(LOG_THING_NAME_KEY, getThingName())
+                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                    .log("Local shadow already contains update payload. No sync is necessary");
+            return false;
+        }
+
+        return true;
     }
 
     private void updateRequestWithLocalVersion(long updatedLocalVersion) throws IOException {
