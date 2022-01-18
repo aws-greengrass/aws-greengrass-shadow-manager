@@ -35,6 +35,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.LOG_CLOUD_VERSION
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_LOCAL_VERSION_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_UPDATED_CLOUD_VERSION_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_VERSION;
 
 /**
@@ -110,7 +111,7 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
                     .kv(LOG_LOCAL_VERSION_KEY, currentSyncInformation.getLocalVersion())
                     .kv(LOG_CLOUD_VERSION_KEY, currentSyncInformation.getCloudVersion())
-                    .kv(LOG_CLOUD_VERSION_KEY, cloudUpdatedVersion)
+                    .kv(LOG_UPDATED_CLOUD_VERSION_KEY, cloudUpdatedVersion)
                     .log("Successfully updated cloud shadow document");
         } catch (ConflictException e) {  // NOPMD - Throw ConflictException instead of treated as SdkServiceException
             throw e;
