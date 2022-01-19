@@ -90,6 +90,5 @@ public abstract class BaseSyncRequest extends ShadowRequest implements SyncReque
                     .log("Unable to get the updated version from the payload");
             return Optional.empty();
         }
-
     }
 }

@@ -63,8 +63,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.atMostOnce;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -334,18 +336,71 @@ class LocalUpdateSyncRequestTest {
     }
 
     @Test
-    void GIVEN_no_change_WHEN_isUpdateNecessary_THEN_returns_false() throws IOException, SkipSyncRequestException {
+    void GIVEN_no_change_to_shadow_content_but_version_change_WHEN_isUpdateNecessary_THEN_returns_false_and_updates_sync_info() throws IOException, SkipSyncRequestException, UnknownShadowException {
+        when(mockDao.updateSyncInformation(syncInformationCaptor.capture())).thenReturn(true);
         ShadowDocument shadowDocument = new ShadowDocument(UPDATE_DOCUMENT);
         when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(shadowDocument));
 
-        LocalUpdateSyncRequest request = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, UPDATE_DOCUMENT);
+        long epochSeconds = Instant.now().getEpochSecond();
+        when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder()
+                .cloudUpdateTime(epochSeconds)
+                .thingName(THING_NAME)
+                .shadowName(SHADOW_NAME)
+                .cloudDeleted(false)
+                .lastSyncedDocument(UPDATE_DOCUMENT)
+                .cloudVersion(5L)
+                .lastSyncTime(epochSeconds)
+                .build()));
 
+        LocalUpdateSyncRequest request = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, UPDATE_DOCUMENT);
         assertFalse(request.isUpdateNecessary(syncContext));
+        verify(mockDao, atMostOnce()).updateSyncInformation(any());
+
+        assertThat(syncInformationCaptor.getValue(), is(notNullValue()));
+        assertThat(syncInformationCaptor.getValue().getLastSyncedDocument(), is(equalTo(UPDATE_DOCUMENT)));
+        assertThat(syncInformationCaptor.getValue().getCloudVersion(), is(6L));
+        assertThat(syncInformationCaptor.getValue().getCloudUpdateTime(), is(greaterThanOrEqualTo(epochSeconds)));
+        assertThat(syncInformationCaptor.getValue().getLastSyncTime(), is(greaterThanOrEqualTo(epochSeconds)));
+        assertThat(syncInformationCaptor.getValue().getShadowName(), is(SHADOW_NAME));
+        assertThat(syncInformationCaptor.getValue().getThingName(), is(THING_NAME));
+        assertThat(syncInformationCaptor.getValue().isCloudDeleted(), is(false));
     }
 
     @Test
-    void GIVEN_new_shadow_WHEN_isUpdateNecessary_THEN_returns_true() throws IOException, SkipSyncRequestException {
+    void GIVEN_no_change_to_shadow_content_and_no_version_change_WHEN_isUpdateNecessary_THEN_returns_false_and_does_not_update_sync_info() throws IOException, SkipSyncRequestException, UnknownShadowException {
+        ShadowDocument shadowDocument = new ShadowDocument(UPDATE_DOCUMENT);
+        when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(shadowDocument));
+
+        long epochSeconds = Instant.now().getEpochSecond();
+        when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder()
+                .cloudUpdateTime(epochSeconds)
+                .thingName(THING_NAME)
+                .shadowName(SHADOW_NAME)
+                .cloudDeleted(false)
+                .lastSyncedDocument(UPDATE_DOCUMENT)
+                .cloudVersion(6L)
+                .lastSyncTime(epochSeconds)
+                .build()));
+
+        LocalUpdateSyncRequest request = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, UPDATE_DOCUMENT);
+        assertFalse(request.isUpdateNecessary(syncContext));
+        verify(mockDao, never()).updateSyncInformation(any());
+    }
+
+    @Test
+    void GIVEN_new_shadow_WHEN_isUpdateNecessary_THEN_returns_true() throws IOException, SkipSyncRequestException, UnknownShadowException {
         when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.empty());
+
+        long epochSeconds = Instant.now().getEpochSecond();
+        when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder()
+                .cloudUpdateTime(epochSeconds)
+                .thingName(THING_NAME)
+                .shadowName(SHADOW_NAME)
+                .cloudDeleted(false)
+                .lastSyncedDocument(null)
+                .cloudVersion(5L)
+                .lastSyncTime(epochSeconds)
+                .build()));
 
         LocalUpdateSyncRequest request = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, UPDATE_DOCUMENT);
 

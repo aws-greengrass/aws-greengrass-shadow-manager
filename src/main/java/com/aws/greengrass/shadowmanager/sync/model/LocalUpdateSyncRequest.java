@@ -91,17 +91,17 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
             throw new SkipSyncRequestException(e);
         }
 
-        if (!isUpdateNecessary(context, shadowDocument)) {
+        SyncInformation currentSyncInformation = context.getDao()
+                .getShadowSyncInformation(getThingName(), getShadowName())
+                .orElseThrow(() -> new UnknownShadowException("Shadow not found in sync table"));
+
+        if (!isUpdateNecessary(context, shadowDocument, currentSyncInformation)) {
             logger.atDebug()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
                     .log("Local shadow already contains update payload. No sync is necessary");
             return;
         }
-
-        SyncInformation currentSyncInformation = context.getDao()
-                .getShadowSyncInformation(getThingName(), getShadowName())
-                .orElseThrow(() -> new UnknownShadowException("Shadow not found in sync table"));
 
         long cloudUpdateVersion = shadowDocument.getVersion();
         long currentCloudVersion = currentSyncInformation.getCloudVersion();
@@ -172,7 +172,7 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
      * @throws SkipSyncRequestException if unable to deserialize cloud shadow update payload,
      */
     @Override
-    public boolean isUpdateNecessary(SyncContext context) throws SkipSyncRequestException {
+    public boolean isUpdateNecessary(SyncContext context) throws SkipSyncRequestException, UnknownShadowException {
         //TODO: store this information in a return object to avoid unnecessary calls to DAO.
         ShadowDocument shadowDocument;
         try {
@@ -181,10 +181,15 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
             throw new SkipSyncRequestException(e);
         }
 
-        return isUpdateNecessary(context, shadowDocument);
+        SyncInformation currentSyncInformation = context.getDao()
+                .getShadowSyncInformation(getThingName(), getShadowName())
+                .orElseThrow(() -> new UnknownShadowException("Shadow not found in sync table"));
+
+        return isUpdateNecessary(context, shadowDocument, currentSyncInformation);
     }
 
-    private boolean isUpdateNecessary(SyncContext context, ShadowDocument shadowDocument) {
+    private boolean isUpdateNecessary(SyncContext context, ShadowDocument shadowDocument,
+                                      SyncInformation currentSyncInformation) {
         Optional<ShadowDocument> currentLocal = context.getDao().getShadowThing(getThingName(), getShadowName());
         if (currentLocal.isPresent() && !isUpdateNecessary(currentLocal.get().toJson(false),
                 shadowDocument.toJson(false))) {
@@ -192,10 +197,37 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
                     .log("Local shadow already contains update payload. No sync is necessary");
+            updateSyncInformationVersion(context, shadowDocument, currentSyncInformation);
             return false;
         }
 
         return true;
+    }
+
+    private void updateSyncInformationVersion(SyncContext context, ShadowDocument shadowDocument,
+                                              SyncInformation currentSyncInformation) {
+        if (currentSyncInformation.getCloudVersion() != shadowDocument.getVersion()) {
+            try {
+                long updateTime = Instant.now().getEpochSecond();
+                context.getDao().updateSyncInformation(SyncInformation.builder()
+                        .thingName(getThingName())
+                        .shadowName(getShadowName())
+                        .lastSyncedDocument(currentSyncInformation.getLastSyncedDocument())
+                        .cloudUpdateTime(updateTime)
+                        .localVersion(currentSyncInformation.getLocalVersion())
+                        .cloudVersion(shadowDocument.getVersion())
+                        .lastSyncTime(updateTime)
+                        .cloudDeleted(false)
+                        .build());
+            } catch (ShadowManagerDataException e) {
+                logger.atError()
+                        .kv(LOG_THING_NAME_KEY, getThingName())
+                        .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                        .kv(LOG_LOCAL_VERSION_KEY, currentSyncInformation.getLocalVersion())
+                        .kv(LOG_CLOUD_VERSION_KEY, currentSyncInformation.getCloudVersion())
+                        .cause(e).log("Failed to update sync table after updating cloud shadow");
+            }
+        }
     }
 
     private void updateRequestWithLocalVersion(long updatedLocalVersion) throws IOException {
