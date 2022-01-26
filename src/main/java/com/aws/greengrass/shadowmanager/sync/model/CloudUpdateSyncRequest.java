@@ -5,6 +5,7 @@
 
 package com.aws.greengrass.shadowmanager.sync.model;
 
+import com.aws.greengrass.logging.api.LogEventBuilder;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
@@ -20,6 +21,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.LongNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.NonNull;
+import software.amazon.awssdk.core.exception.AbortedException;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.exception.SdkServiceException;
 import software.amazon.awssdk.services.iotdataplane.model.ConflictException;
@@ -77,10 +79,11 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
      * @throws RetryableException       if the cloud is throttling the request or some other transient issue.
      * @throws SkipSyncRequestException if the update request on the cloud shadow failed for another 400 exception.
      * @throws UnknownShadowException   if the shadow sync information is missing
+     * @throws InterruptedException     if the thread is interrupted while syncing shadow with cloud.
      */
     @Override
     public void execute(SyncContext context) throws RetryableException, SkipSyncRequestException,
-            ConflictException, UnknownShadowException {
+            ConflictException, UnknownShadowException, InterruptedException {
 
         Optional<ShadowDocument> shadowDocument = context.getDao().getShadowThing(getThingName(), getShadowName());
 
@@ -117,6 +120,23 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
             throw e;
         } catch (ThrottlingException | ServiceUnavailableException | InternalFailureException e) {
             throw new RetryableException(e);
+        } catch (AbortedException e) {
+            LogEventBuilder l = logger.atDebug()
+                    .kv(LOG_THING_NAME_KEY, getThingName())
+                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                    .kv(LOG_LOCAL_VERSION_KEY, currentSyncInformation.getLocalVersion())
+                    .kv(LOG_CLOUD_VERSION_KEY, currentSyncInformation.getCloudVersion());
+            Throwable cause = e.getCause();
+            if (cause instanceof InterruptedException) {
+                l.log("Interrupted while updating cloud shadow");
+                throw (InterruptedException) cause;
+            }
+            if (e.retryable()) {
+                l.log("Aborted while updating cloud shadow. Will retry");
+                throw new RetryableException(e);
+            }
+            l.log("Skipping update for cloud shadow");
+            throw new SkipSyncRequestException(e);
         } catch (SdkServiceException | SdkClientException | IOException e) {
             logger.atDebug()
                     .kv(LOG_THING_NAME_KEY, getThingName())

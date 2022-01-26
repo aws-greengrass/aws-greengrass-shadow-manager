@@ -51,6 +51,7 @@ import static org.hamcrest.core.Is.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.atMostOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
@@ -153,6 +154,7 @@ class PeriodicSyncStrategyTest {
         // happens correctly
         assertThat(Thread.interrupted(), is(true));
 
+        verify(mockRequestBlockingQueue, atMostOnce()).offer(any());
     }
 
     @Test

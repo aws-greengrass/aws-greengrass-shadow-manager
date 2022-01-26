@@ -139,6 +139,8 @@ public class PeriodicSyncStrategy extends BaseSyncStrategy {
                     }
                 } catch (InterruptedException e) {
                     logger.atWarn(SYNC_EVENT_TYPE).log("Interrupted while waiting for sync requests");
+                    // Add the sync request back in the queue since we still need to process this later.
+                    syncQueue.offer(request);
                     Thread.currentThread().interrupt();
                 } catch (ConflictException | ConflictError e) {
                     logger.atWarn(SYNC_EVENT_TYPE)

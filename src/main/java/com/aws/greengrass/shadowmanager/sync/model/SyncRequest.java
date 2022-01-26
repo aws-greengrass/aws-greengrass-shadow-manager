@@ -25,9 +25,10 @@ public interface SyncRequest {
      * @throws RetryableException       When error occurs in sync operation indicating a request needs to be retried
      * @throws SkipSyncRequestException When error occurs in sync operation indicating a request needs to be skipped.
      * @throws UnknownShadowException   When shadow not found in the sync table.
+     * @throws InterruptedException     if the thread is interrupted while syncing shadow with cloud.
      */
     void execute(SyncContext context) throws RetryableException, SkipSyncRequestException,
-            UnknownShadowException;
+            UnknownShadowException, InterruptedException;
 
     /**
      * Check if an update is neccessary or not.

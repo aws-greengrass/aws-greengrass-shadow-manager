@@ -5,6 +5,7 @@
 
 package com.aws.greengrass.shadowmanager.sync.model;
 
+import com.aws.greengrass.logging.api.LogEventBuilder;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
@@ -12,6 +13,7 @@ import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
+import software.amazon.awssdk.core.exception.AbortedException;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.exception.SdkServiceException;
 import software.amazon.awssdk.services.iotdataplane.model.InternalFailureException;
@@ -48,10 +50,11 @@ public class CloudDeleteSyncRequest extends BaseSyncRequest {
      * @throws RetryableException       if the cloud version is not the same as the version of the shadow on the cloud
      *                                  or if the cloud is throttling the request.
      * @throws SkipSyncRequestException if the update request on the cloud shadow failed for another 400 exception.
+     * @throws InterruptedException     if the thread is interrupted while syncing shadow with cloud.
      */
     @Override
     public void execute(SyncContext context)
-            throws RetryableException, SkipSyncRequestException, UnknownShadowException {
+            throws RetryableException, SkipSyncRequestException, UnknownShadowException, InterruptedException {
 
         Optional<SyncInformation> syncInformation = context.getDao().getShadowSyncInformation(getThingName(),
                 getShadowName());
@@ -80,6 +83,19 @@ public class CloudDeleteSyncRequest extends BaseSyncRequest {
             context.getIotDataPlaneClientWrapper().deleteThingShadow(getThingName(), getShadowName());
         } catch (ThrottlingException | ServiceUnavailableException | InternalFailureException e) {
             throw new RetryableException(e);
+        } catch (AbortedException e) {
+            LogEventBuilder l = logger.atDebug()
+                    .kv(LOG_THING_NAME_KEY, getThingName())
+                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                    .kv(LOG_LOCAL_VERSION_KEY, syncInformation.get().getLocalVersion())
+                    .kv(LOG_CLOUD_VERSION_KEY, syncInformation.get().getCloudVersion());
+            Throwable cause = e.getCause();
+            if (cause instanceof InterruptedException) {
+                l.log("Interrupted while deleting cloud shadow");
+                throw (InterruptedException) cause;
+            }
+            l.log("Skipping delete for cloud shadow");
+            throw new SkipSyncRequestException(e);
         } catch (SdkServiceException | SdkClientException e) {
             logger.atDebug()
                     .kv(LOG_THING_NAME_KEY, getThingName())
