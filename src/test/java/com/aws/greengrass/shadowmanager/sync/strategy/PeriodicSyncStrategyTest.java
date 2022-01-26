@@ -102,11 +102,11 @@ class PeriodicSyncStrategyTest {
     @Test
     void GIVEN_sync_request_WHEN_putSyncRequest_and_sync_loop_runs_THEN_request_is_executed_successfully()
             throws Exception {
-        syncStrategy = new PeriodicSyncStrategy(scheduledExecutorService, mockRetryer, 3, requestBlockingQueue);
+        syncStrategy = new PeriodicSyncStrategy(scheduledExecutorService, mockRetryer, 1, requestBlockingQueue);
         syncStrategy.start(mockSyncContext, 3);
-        syncStrategy.putSyncRequest(mockFullShadowSyncRequest);
+        syncStrategy.putSyncRequest(new FullShadowSyncRequest("thing", "shadow"));
 
-        verify(mockRetryer, timeout(Duration.ofSeconds(5).toMillis()).times(1)).run(any(), any(), any());
+        verify(mockRetryer, timeout(Duration.ofSeconds(7).toMillis()).times(1)).run(any(), any(), any());
     }
 
 
@@ -205,7 +205,8 @@ class PeriodicSyncStrategyTest {
         CountDownLatch takeLatch = new CountDownLatch(2);
         doAnswer(invocation -> {
             takeLatch.countDown();
-            return requests.poll();
+            FullShadowSyncRequest request = requests.poll();
+            return request == null ? mock(FullShadowSyncRequest.class) : request;
         }).when(mockRequestBlockingQueue).poll();
         when(mockRequestBlockingQueue.offerAndTake(request1, false)).thenReturn(request1);
 

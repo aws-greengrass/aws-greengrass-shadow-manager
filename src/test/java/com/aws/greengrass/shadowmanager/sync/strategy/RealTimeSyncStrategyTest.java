@@ -127,6 +127,11 @@ class RealTimeSyncStrategyTest {
             return null;
         }).when(mockRequestBlockingQueue).put(any());
 
+        lenient().doAnswer(invocation -> {
+            TimeUnit.SECONDS.sleep(10);
+            return mockFullShadowSyncRequest;
+        }).when(mockRequestBlockingQueue).take();
+
         strategy.start(mockSyncContext, 1);
         strategy.putSyncRequest(mockFullShadowSyncRequest);
 
@@ -141,6 +146,11 @@ class RealTimeSyncStrategyTest {
         ignoreExceptionOfType(extensionContext, InterruptedException.class);
         strategy = new RealTimeSyncStrategy(executorService, mockRetryer, mockRequestBlockingQueue);
         doThrow(InterruptedException.class).when(mockRequestBlockingQueue).put(any());
+
+        lenient().doAnswer(invocation -> {
+            TimeUnit.SECONDS.sleep(10);
+            return mockFullShadowSyncRequest;
+        }).when(mockRequestBlockingQueue).take();
 
         strategy.start(mockSyncContext, 1);
         strategy.putSyncRequest(mockFullShadowSyncRequest);
@@ -200,7 +210,8 @@ class RealTimeSyncStrategyTest {
         CountDownLatch takeLatch = new CountDownLatch(2);
         doAnswer(invocation -> {
             takeLatch.countDown();
-            return requests.poll();
+            FullShadowSyncRequest request = requests.poll();
+            return request == null ? mock(FullShadowSyncRequest.class) : request;
         }).when(mockRequestBlockingQueue).take();
         when(mockRequestBlockingQueue.offerAndTake(request1, false)).thenReturn(request1);
 
