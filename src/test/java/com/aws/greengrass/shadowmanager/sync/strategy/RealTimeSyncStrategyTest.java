@@ -48,6 +48,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.hamcrest.core.Is.is;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.atMostOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
@@ -126,6 +127,11 @@ class RealTimeSyncStrategyTest {
             return null;
         }).when(mockRequestBlockingQueue).put(any());
 
+        lenient().doAnswer(invocation -> {
+            TimeUnit.SECONDS.sleep(10);
+            return mockFullShadowSyncRequest;
+        }).when(mockRequestBlockingQueue).take();
+
         strategy.start(mockSyncContext, 1);
         strategy.putSyncRequest(mockFullShadowSyncRequest);
 
@@ -141,6 +147,11 @@ class RealTimeSyncStrategyTest {
         strategy = new RealTimeSyncStrategy(executorService, mockRetryer, mockRequestBlockingQueue);
         doThrow(InterruptedException.class).when(mockRequestBlockingQueue).put(any());
 
+        lenient().doAnswer(invocation -> {
+            TimeUnit.SECONDS.sleep(10);
+            return mockFullShadowSyncRequest;
+        }).when(mockRequestBlockingQueue).take();
+
         strategy.start(mockSyncContext, 1);
         strategy.putSyncRequest(mockFullShadowSyncRequest);
 
@@ -149,6 +160,7 @@ class RealTimeSyncStrategyTest {
         // happens correctly
         assertThat(Thread.interrupted(), is(true));
 
+        verify(mockRequestBlockingQueue, atMostOnce()).offer(any());
     }
 
     @Test
@@ -198,7 +210,8 @@ class RealTimeSyncStrategyTest {
         CountDownLatch takeLatch = new CountDownLatch(2);
         doAnswer(invocation -> {
             takeLatch.countDown();
-            return requests.poll();
+            FullShadowSyncRequest request = requests.poll();
+            return request == null ? mock(FullShadowSyncRequest.class) : request;
         }).when(mockRequestBlockingQueue).take();
         when(mockRequestBlockingQueue.offerAndTake(request1, false)).thenReturn(request1);
 

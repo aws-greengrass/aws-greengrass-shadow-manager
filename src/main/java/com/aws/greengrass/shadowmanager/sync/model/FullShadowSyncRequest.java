@@ -5,6 +5,7 @@
 
 package com.aws.greengrass.shadowmanager.sync.model;
 
+import com.aws.greengrass.logging.api.LogEventBuilder;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.ShadowManager;
@@ -28,6 +29,7 @@ import software.amazon.awssdk.aws.greengrass.model.ConflictError;
 import software.amazon.awssdk.aws.greengrass.model.InvalidArgumentsError;
 import software.amazon.awssdk.aws.greengrass.model.ServiceError;
 import software.amazon.awssdk.aws.greengrass.model.UnauthorizedError;
+import software.amazon.awssdk.core.exception.AbortedException;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.exception.SdkServiceException;
 import software.amazon.awssdk.services.iotdataplane.model.ConflictException;
@@ -87,9 +89,10 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
      * @throws RetryableException       if the cloud version is not the same as the version of the shadow on the cloud
      *                                  or if the cloud is throttling the request.
      * @throws SkipSyncRequestException if the update request on the cloud shadow failed for another 400 exception.
+     * @throws InterruptedException     if the thread is interrupted while syncing shadow with cloud.
      */
     @Override
-    public void execute(SyncContext context) throws RetryableException, SkipSyncRequestException {
+    public void execute(SyncContext context) throws RetryableException, SkipSyncRequestException, InterruptedException {
         Optional<SyncInformation> syncInformation = context.getDao().getShadowSyncInformation(getThingName(),
                 getShadowName());
 
@@ -245,10 +248,11 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
      * @param cloudShadowDocument The current cloud document.
      * @throws RetryableException       if the delete request to cloud encountered a retryable exception.
      * @throws SkipSyncRequestException if the delete request to cloud encountered a skipable exception.
+     * @throws InterruptedException     if the thread is interrupted while syncing shadow with cloud.
      */
     private void handleCloudDelete(@NonNull ShadowDocument cloudShadowDocument,
                                    @NonNull SyncInformation syncInformation)
-            throws RetryableException, SkipSyncRequestException {
+            throws RetryableException, SkipSyncRequestException, InterruptedException {
         deleteCloudShadowDocument();
         // Since the local shadow has been deleted, we need get the deleted shadow version from the DAO.
         long localShadowVersion = context.getDao().getDeletedShadowVersion(getThingName(), getShadowName())
@@ -317,9 +321,10 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
      *
      * @param localShadowDocument The current local document.
      * @throws SkipSyncRequestException if the update request to cloud encountered a skipable exception.
+     * @throws InterruptedException     if the thread is interrupted while syncing shadow with cloud.
      */
     private void handleFirstCloudSync(@NonNull ShadowDocument localShadowDocument)
-            throws SkipSyncRequestException, RetryableException {
+            throws SkipSyncRequestException, RetryableException, InterruptedException {
         logger.atInfo()
                 .kv(LOG_THING_NAME_KEY, getThingName())
                 .kv(LOG_SHADOW_NAME_KEY, getShadowName())
@@ -388,9 +393,10 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
      * @throws RetryableException       if the delete request to cloud encountered a retryable exception or if the
      *                                  serialization of the update request payload failed.
      * @throws SkipSyncRequestException if the delete request to cloud encountered a skipable exception.
+     * @throws InterruptedException     if the thread is interrupted while syncing shadow with cloud.
      */
     private long updateCloudDocumentAndGetUpdatedVersion(ObjectNode updateDocument, Optional<Long> cloudDocumentVersion)
-            throws SkipSyncRequestException, RetryableException {
+            throws SkipSyncRequestException, RetryableException, InterruptedException {
         cloudDocumentVersion.ifPresent(version ->
                 updateDocument.set(SHADOW_DOCUMENT_VERSION, new LongNode(version)));
         byte[] payloadBytes = getPayloadBytes(updateDocument);
@@ -483,9 +489,10 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
      * @return an optional of the cloud shadow document if it existed.
      * @throws RetryableException       if the get request encountered errors which should be retried.
      * @throws SkipSyncRequestException if the get request encountered errors which should be skipped.
+     * @throws InterruptedException     if the thread is interrupted while syncing shadow with cloud.
      */
     private Optional<ShadowDocument> getCloudShadowDocument() throws RetryableException,
-            SkipSyncRequestException {
+            SkipSyncRequestException, InterruptedException {
         logger.atTrace()
                 .kv(LOG_THING_NAME_KEY, getThingName())
                 .kv(LOG_SHADOW_NAME_KEY, getShadowName())
@@ -508,6 +515,17 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
                     .log("Could not execute cloud shadow get request");
             throw new RetryableException(e);
+        } catch (AbortedException e) {
+            LogEventBuilder l = logger.atDebug()
+                    .kv(LOG_THING_NAME_KEY, getThingName())
+                    .kv(LOG_SHADOW_NAME_KEY, getShadowName());
+            Throwable cause = e.getCause();
+            if (cause instanceof InterruptedException) {
+                l.log("Interrupted while getting cloud shadow");
+                throw (InterruptedException) cause;
+            }
+            l.log("Skipping get for cloud shadow");
+            throw new SkipSyncRequestException(e);
         } catch (SdkServiceException | SdkClientException | InvalidRequestParametersException | IOException e) {
             logger.atError()
                     .kv(LOG_THING_NAME_KEY, getThingName())
@@ -575,9 +593,10 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
      * @throws ConflictException        if the update request for cloud had a bad version.
      * @throws RetryableException       if the update request encountered errors which should be retried.
      * @throws SkipSyncRequestException if the update request encountered errors which should be skipped.
+     * @throws InterruptedException     if the thread is interrupted while syncing shadow with cloud.
      */
     private Optional<Long> updateCloudShadowDocument(byte[] updateDocument)
-            throws ConflictException, RetryableException, SkipSyncRequestException {
+            throws ConflictException, RetryableException, SkipSyncRequestException, InterruptedException {
         UpdateThingShadowResponse response;
         try {
             logger.atDebug()
@@ -599,6 +618,17 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
                     .log("Could not execute cloud shadow update request");
             throw new RetryableException(e);
+        } catch (AbortedException e) {
+            LogEventBuilder l = logger.atDebug()
+                    .kv(LOG_THING_NAME_KEY, getThingName())
+                    .kv(LOG_SHADOW_NAME_KEY, getShadowName());
+            Throwable cause = e.getCause();
+            if (cause instanceof InterruptedException) {
+                l.log("Interrupted while updating cloud shadow");
+                throw (InterruptedException) cause;
+            }
+            l.log("Skipping update for cloud shadow");
+            throw new SkipSyncRequestException(e);
         } catch (SdkServiceException | SdkClientException e) {
             logger.atError()
                     .kv(LOG_THING_NAME_KEY, getThingName())
@@ -614,8 +644,9 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
      *
      * @throws RetryableException       if the delete request encountered errors which should be retried.
      * @throws SkipSyncRequestException if the delete request encountered errors which should be skipped.
+     * @throws InterruptedException     if the thread is interrupted while syncing shadow with cloud.
      */
-    private void deleteCloudShadowDocument() throws RetryableException, SkipSyncRequestException {
+    private void deleteCloudShadowDocument() throws RetryableException, SkipSyncRequestException, InterruptedException {
         try {
             logger.atInfo()
                     .kv(LOG_THING_NAME_KEY, getThingName())
@@ -628,6 +659,17 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
                     .log("Could not execute cloud shadow delete request");
             throw new RetryableException(e);
+        } catch (AbortedException e) {
+            LogEventBuilder l = logger.atDebug()
+                    .kv(LOG_THING_NAME_KEY, getThingName())
+                    .kv(LOG_SHADOW_NAME_KEY, getShadowName());
+            Throwable cause = e.getCause();
+            if (cause instanceof InterruptedException) {
+                l.log("Interrupted while deleting cloud shadow");
+                throw (InterruptedException) cause;
+            }
+            l.log("Skipping delete for cloud shadow");
+            throw new SkipSyncRequestException(e);
         } catch (SdkServiceException | SdkClientException e) {
             logger.atError()
                     .kv(LOG_THING_NAME_KEY, getThingName())

@@ -292,7 +292,7 @@ class SyncTest extends NucleusLaunchUtils {
     }
 
     @ParameterizedTest
-    @ValueSource(classes = {PeriodicSyncStrategy.class})
+    @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
     void GIVEN_synced_shadow_WHEN_local_update_THEN_cloud_updates(Class<?extends BaseSyncStrategy> clazz, ExtensionContext context) throws IOException,
             InterruptedException {
         ignoreExceptionOfType(context, ResourceNotFoundException.class);

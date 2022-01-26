@@ -80,21 +80,26 @@ public class RealTimeSyncStrategy extends BaseSyncStrategy {
     /**
      * Take and execute items from the sync queue. This is intended to be run in a separate thread.
      */
-    @SuppressWarnings({"PMD.CompareObjectsWithEquals", "PMD.AvoidCatchingGenericException"})
+    @SuppressWarnings({"PMD.CompareObjectsWithEquals", "PMD.AvoidCatchingGenericException", "PMD.NullAssignment"})
     private void syncLoop() {
         logger.atInfo(SYNC_EVENT_TYPE).log("Start waiting for sync requests");
         try {
             SyncRequest request = syncQueue.take();
             RetryUtils.RetryConfig retryConfig = this.retryConfig;
+            String currProcessingThingName = null;
+            String currProcessingShadowName = null;
             do {
                 try {
+                    currProcessingThingName = request.getThingName();
+                    currProcessingShadowName = request.getShadowName();
                     logger.atInfo(SYNC_EVENT_TYPE)
-                            .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
-                            .addKeyValue(LOG_SHADOW_NAME_KEY, request.getShadowName())
+                            .addKeyValue(LOG_THING_NAME_KEY, currProcessingThingName)
+                            .addKeyValue(LOG_SHADOW_NAME_KEY, currProcessingShadowName)
                             .addKeyValue("Type", request.getClass().getSimpleName())
                             .log("Executing sync request");
 
                     retryer.run(retryConfig, request, context);
+                    request = null;
                     retryConfig = this.retryConfig; // reset the retry config back to default after success
 
                     logger.atDebug(SYNC_EVENT_TYPE).log("Waiting for next sync request");
@@ -103,8 +108,8 @@ public class RealTimeSyncStrategy extends BaseSyncStrategy {
                     // this will be rethrown if all retries fail in RetryUtils
                     logger.atDebug(SYNC_EVENT_TYPE)
                             .cause(e)
-                            .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
-                            .addKeyValue(LOG_SHADOW_NAME_KEY, request.getShadowName())
+                            .addKeyValue(LOG_THING_NAME_KEY, currProcessingThingName)
+                            .addKeyValue(LOG_SHADOW_NAME_KEY, currProcessingShadowName)
                             .log("Retry sync request. Adding back to queue");
 
                     // put request to back of queue and get the front of queue in a single operation
@@ -124,17 +129,17 @@ public class RealTimeSyncStrategy extends BaseSyncStrategy {
                 } catch (ConflictException | ConflictError e) {
                     logger.atWarn(SYNC_EVENT_TYPE)
                             .cause(e)
-                            .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
-                            .addKeyValue(LOG_SHADOW_NAME_KEY, request.getShadowName())
+                            .addKeyValue(LOG_THING_NAME_KEY, currProcessingThingName)
+                            .addKeyValue(LOG_SHADOW_NAME_KEY, currProcessingShadowName)
                             .log("Received conflict when processing request. Retrying as a full sync");
                     // add back to queue to merge over any shadow request that came in while it was executing
-                    request = syncQueue.offerAndTake(new FullShadowSyncRequest(request.getThingName(),
-                            request.getShadowName()), true);
+                    request = syncQueue.offerAndTake(new FullShadowSyncRequest(currProcessingThingName,
+                            currProcessingShadowName), true);
                 } catch (UnknownShadowException e) {
                     logger.atWarn(SYNC_EVENT_TYPE)
                             .cause(e)
-                            .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
-                            .addKeyValue(LOG_SHADOW_NAME_KEY, request.getShadowName())
+                            .addKeyValue(LOG_THING_NAME_KEY, currProcessingThingName)
+                            .addKeyValue(LOG_SHADOW_NAME_KEY, currProcessingShadowName)
                             .log("Received unknown shadow when processing request. Retrying as a full sync");
                     // add back to queue to merge over any shadow request that came in while it was executing
                     request = syncQueue.offerAndTake(new FullShadowSyncRequest(request.getThingName(),
@@ -142,12 +147,19 @@ public class RealTimeSyncStrategy extends BaseSyncStrategy {
                 } catch (Exception e) {
                     logger.atError(SYNC_EVENT_TYPE)
                             .cause(e)
-                            .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
-                            .addKeyValue(LOG_SHADOW_NAME_KEY, request.getShadowName())
+                            .addKeyValue(LOG_THING_NAME_KEY, currProcessingThingName)
+                            .addKeyValue(LOG_SHADOW_NAME_KEY, currProcessingShadowName)
                             .log("Skipping sync request");
                     request = syncQueue.take();
+                    currProcessingThingName = request.getThingName();
+                    currProcessingShadowName = request.getShadowName();
                 }
             } while (!Thread.currentThread().isInterrupted());
+
+            // Add the sync request back in the queue if it was not processed.
+            if (request != null) {
+                syncQueue.offer(request);
+            }
         } catch (InterruptedException e) {
             logger.atWarn(SYNC_EVENT_TYPE).log("Interrupted while waiting for sync requests");
         }

@@ -23,6 +23,7 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
+import software.amazon.awssdk.core.exception.AbortedException;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.services.iotdataplane.model.InternalFailureException;
 import software.amazon.awssdk.services.iotdataplane.model.InvalidRequestException;
@@ -85,7 +86,7 @@ class CloudDeleteSyncRequestTest {
     }
 
     @Test
-    void GIVEN_good_cloud_delete_request_WHEN_execute_THEN_successfully_updates_cloud_shadow_and_sync_information() throws RetryableException, SkipSyncRequestException, UnknownShadowException {
+    void GIVEN_good_cloud_delete_request_WHEN_execute_THEN_successfully_updates_cloud_shadow_and_sync_information() throws RetryableException, SkipSyncRequestException, UnknownShadowException, InterruptedException {
         long epochSeconds = Instant.now().getEpochSecond();
         CloudDeleteSyncRequest request = new CloudDeleteSyncRequest(THING_NAME, SHADOW_NAME);
 
@@ -136,7 +137,8 @@ class CloudDeleteSyncRequestTest {
 
     @ParameterizedTest
     @ValueSource(classes = {RequestEntityTooLargeException.class, InvalidRequestException.class, UnauthorizedException.class,
-            MethodNotAllowedException.class, UnsupportedDocumentEncodingException.class, AwsServiceException.class, SdkClientException.class})
+            MethodNotAllowedException.class, UnsupportedDocumentEncodingException.class, AwsServiceException.class, SdkClientException.class,
+            AbortedException.class})
     void GIVEN_bad_cloud_delete_request_WHEN_execute_and_updateShadow_throws_skipable_error_THEN_does_not_update_cloud_shadow_and_sync_information(Class clazz, ExtensionContext context) {
         ignoreExceptionOfType(context, clazz);
         doThrow(clazz).when(mockIotDataPlaneClientWrapper).deleteThingShadow(anyString(), anyString());
@@ -145,6 +147,20 @@ class CloudDeleteSyncRequestTest {
         SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class,
                 () -> request.execute(mockContext));
         assertThat(thrown.getCause(), is(instanceOf(clazz)));
+
+        verify(mockDao, times(1)).getShadowSyncInformation(anyString(), anyString());
+        verify(mockDao, times(0)).updateSyncInformation(any());
+        verify(mockIotDataPlaneClientWrapper, times(1)).deleteThingShadow(anyString(), anyString());
+    }
+
+    @Test
+    void GIVEN_bad_cloud_delete_request_WHEN_execute_and_updateShadow_throws_interrupted_error_THEN_does_not_update_cloud_shadow_and_sync_information(ExtensionContext context) {
+        ignoreExceptionOfType(context, InterruptedException.class);
+        doThrow(AbortedException.create("", new InterruptedException("")))
+                .when(mockIotDataPlaneClientWrapper).deleteThingShadow(anyString(), anyString());
+        CloudDeleteSyncRequest request = new CloudDeleteSyncRequest(THING_NAME, SHADOW_NAME);
+
+        assertThrows(InterruptedException.class, () -> request.execute(mockContext));
 
         verify(mockDao, times(1)).getShadowSyncInformation(anyString(), anyString());
         verify(mockDao, times(0)).updateSyncInformation(any());

@@ -189,11 +189,11 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
                 // queue will be transferred to the new sync strategy.
                 if (remaining > 0) {
                     logger.atInfo(SYNC_EVENT_TYPE)
-                            .log("Stopped real time syncing with {} pending sync items", remaining);
+                            .log("Stopped syncing with {} pending sync items", remaining);
                 }
             } else {
                 logger.atDebug(SYNC_EVENT_TYPE)
-                        .log("Real time Syncing is already stopped. Ignoring request to stop");
+                        .log("Syncing is already stopped. Ignoring request to stop");
             }
         }
     }
