@@ -7,6 +7,7 @@ package com.aws.greengrass.integrationtests;
 
 import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.logging.impl.config.LogConfig;
+import com.aws.greengrass.shadowmanager.ShadowManager;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAOImpl;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
@@ -174,7 +175,7 @@ class SyncTest extends NucleusLaunchUtils {
                 .mockCloud(true)
                 .syncClazz(clazz)
                 .build());
-    
+
         assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
         assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(10L)));
         assertThat("local version", syncInfo.get().get().getLocalVersion(), is(1L));
@@ -189,6 +190,40 @@ class SyncTest extends NucleusLaunchUtils {
 
         verify(iotDataPlaneClientFactory.getIotDataPlaneClient(), never()).updateThingShadow(
                 any(software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowRequest.class));
+    }
+
+    @ParameterizedTest
+    @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
+    void GIVEN_sync_config_WHEN_repeat_turn_sync_on_and_off_THEN_no_exceptions_thrown(Class<?
+            extends BaseSyncStrategy> clazz, ExtensionContext context) throws InterruptedException {
+        Level l = LogConfig.getRootLogConfig().getLevel();
+        LogConfig.getRootLogConfig().setLevel(Level.ERROR); // set to ERROR level to avoid spamming logs
+        try {
+            GetThingShadowResponse shadowResponse = mock(GetThingShadowResponse.class, Answers.RETURNS_DEEP_STUBS);
+            lenient().when(shadowResponse.payload().asByteArray()).thenReturn(cloudShadowContentV10.getBytes(UTF_8));
+
+            // existing document
+            when(iotDataPlaneClientFactory.getIotDataPlaneClient().getThingShadow(any(GetThingShadowRequest.class))).thenReturn(shadowResponse);
+
+            startNucleusWithConfig(
+                    NucleusLaunchUtilsConfig.builder().configFile(getSyncConfigFile(clazz)).mockCloud(true).syncClazz(clazz).build());
+
+            ShadowManager.StartSyncInfo syncInfo =
+                    ShadowManager.StartSyncInfo.builder().reInitializeSyncInfo(false).overrideRunningCheck(true).updateCloudSubscriptions(false).build();
+
+            SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
+            Instant end = Instant.now().plusSeconds(30);
+            // this is more of a sanity check to ensure that cancelling threads doesn't cause any errors
+
+            // stop and start syncing for 30 seconds. Sync requests will be added when syncing starts.
+            while (end.isAfter(Instant.now())) {
+                syncHandler.stop();
+                shadowManager.startSyncingShadows(syncInfo);
+            }
+            // no exceptions should be thrown so this test should pass
+        } finally {
+            LogConfig.getRootLogConfig().setLevel(l);
+        }
     }
 
     @Test
@@ -360,6 +395,12 @@ class SyncTest extends NucleusLaunchUtils {
                 .build());
 
         assertEmptySyncQueue(clazz);
+
+        assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
+
+        assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(0L)));
+        assertThat("local version", syncInfo.get().get().getLocalVersion(), is(0L));
+
         SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
         syncHandler.pushLocalUpdateSyncRequest(MOCK_THING_NAME_1, CLASSIC_SHADOW, JsonUtil.getPayloadBytes(cloudDocument));
         assertEmptySyncQueue(clazz);

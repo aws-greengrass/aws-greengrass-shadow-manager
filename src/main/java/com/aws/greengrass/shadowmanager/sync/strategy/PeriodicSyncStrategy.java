@@ -7,23 +7,16 @@ package com.aws.greengrass.shadowmanager.sync.strategy;
 
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
-import com.aws.greengrass.shadowmanager.exception.RetryableException;
-import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
 import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
 import com.aws.greengrass.shadowmanager.sync.Retryer;
-import com.aws.greengrass.shadowmanager.sync.model.FullShadowSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.SyncContext;
 import com.aws.greengrass.shadowmanager.sync.model.SyncRequest;
 import com.aws.greengrass.util.RetryUtils;
-import software.amazon.awssdk.aws.greengrass.model.ConflictError;
-import software.amazon.awssdk.services.iotdataplane.model.ConflictException;
 
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-
-import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
-import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
 
 /**
  * Handles syncing of shadows on a specific cadence. With this strategy, the Shadow manager will only execute the
@@ -34,7 +27,6 @@ public class PeriodicSyncStrategy extends BaseSyncStrategy {
     private static final Logger logger = LogManager.getLogger(PeriodicSyncStrategy.class);
     private final ScheduledExecutorService syncExecutorService;
     private final long interval;
-    private final AtomicBoolean isRunning = new AtomicBoolean();
 
     /**
      * Constructor.
@@ -46,12 +38,9 @@ public class PeriodicSyncStrategy extends BaseSyncStrategy {
      */
     public PeriodicSyncStrategy(ScheduledExecutorService ses, Retryer retryer, long interval,
                                 RequestBlockingQueue syncQueue) {
-        super(retryer);
+        super(retryer, syncQueue);
         this.syncExecutorService = ses;
         this.interval = interval;
-        if (syncQueue != null) {
-            this.syncQueue = syncQueue;
-        }
     }
 
     /**
@@ -72,118 +61,15 @@ public class PeriodicSyncStrategy extends BaseSyncStrategy {
     @Override
     void doStart(SyncContext context, int syncParallelism) {
         logger.atInfo(SYNC_EVENT_TYPE).kv("interval", interval).log("Start periodic syncing");
+        latch = new CountDownLatch(1);
+        this.syncParallelism = 1; // ignore sync parallelism as there is only 1 thread running
+        this.exec = new Semaphore(1);
         this.syncThreads.add(syncExecutorService
                 .scheduleAtFixedRate(this::syncLoop, 0, interval, TimeUnit.SECONDS));
     }
 
     @Override
-    void doStop() {
-        logger.atInfo(SYNC_EVENT_TYPE).log("Cancel {} periodic sync thread(s)", syncThreads.size());
-        syncThreads.forEach(t -> {
-            if (t != null && !t.isCancelled()) {
-                t.cancel(true);
-            }
-        });
-        syncThreads.clear();
-    }
-
-    /**
-     * Take and execute items from the sync queue. This is intended to be run in a separate thread.
-     * This will work on all the sync requests in the queue until it's empty.
-     */
-    @SuppressWarnings({"PMD.CompareObjectsWithEquals", "PMD.AvoidCatchingGenericException", "PMD.NullAssignment"})
-    private void syncLoop() {
-        // If another thread is already running, then return.
-        if (!isRunning.compareAndSet(false, true)) {
-            logger.atDebug()
-                    .log("Not processing sync request on a new thread since a previous thread is still processing");
-            return;
-        }
-        try {
-            logger.atInfo(SYNC_EVENT_TYPE).log("Start processing sync requests");
-            RetryUtils.RetryConfig retryConfig = this.retryConfig;
-            SyncRequest request = syncQueue.poll();
-            String currProcessingThingName = null;
-            String currProcessingShadowName = null;
-
-            // Process the sync requests until there is a sync request in the queue and until the thread has not
-            // been interrupted.
-            while (request != null && !Thread.currentThread().isInterrupted()) {
-                try {
-                    currProcessingThingName = request.getThingName();
-                    currProcessingShadowName = request.getShadowName();
-                    logger.atInfo(SYNC_EVENT_TYPE)
-                            .addKeyValue(LOG_THING_NAME_KEY, currProcessingThingName)
-                            .addKeyValue(LOG_SHADOW_NAME_KEY, currProcessingShadowName)
-                            .addKeyValue("Type", request.getClass().getSimpleName())
-                            .log("Executing sync request");
-
-                    retryer.run(retryConfig, request, context);
-
-                    // Reset the request here since we have already processed it successfully.
-                    request = null;
-                    retryConfig = this.retryConfig; // reset the retry config back to default after success
-
-                    request = syncQueue.poll();
-                } catch (RetryableException e) {
-                    // this will be rethrown if all retries fail in RetryUtils
-                    logger.atDebug(SYNC_EVENT_TYPE)
-                            .cause(e)
-                            .addKeyValue(LOG_THING_NAME_KEY, currProcessingThingName)
-                            .addKeyValue(LOG_SHADOW_NAME_KEY, currProcessingShadowName)
-                            .log("Retry sync request. Adding back to queue");
-
-                    // put request to back of queue and get the front of queue in a single operation
-                    SyncRequest failedRequest = request;
-
-                    // tell queue this is not a new value so it merges correctly with any update that came in
-                    request = syncQueue.offerAndTake(request, false);
-
-                    // if queue was empty, we are going to immediately retrying the same request. For this case don't
-                    // use the default retry configuration - keep from spamming too quickly
-                    if (request == failedRequest) {
-                        retryConfig = FAILED_RETRY_CONFIG;
-                    }
-                } catch (InterruptedException e) {
-                    logger.atWarn(SYNC_EVENT_TYPE).log("Interrupted while waiting for sync requests");
-                    Thread.currentThread().interrupt();
-                } catch (ConflictException | ConflictError e) {
-                    logger.atWarn(SYNC_EVENT_TYPE)
-                            .cause(e)
-                            .addKeyValue(LOG_THING_NAME_KEY, currProcessingThingName)
-                            .addKeyValue(LOG_SHADOW_NAME_KEY, currProcessingShadowName)
-                            .log("Received conflict when processing request. Retrying as a full sync");
-                    // add back to queue to merge over any shadow request that came in while it was executing
-                    request = syncQueue.offerAndTake(new FullShadowSyncRequest(currProcessingThingName,
-                            currProcessingShadowName), true);
-                } catch (UnknownShadowException e) {
-                    logger.atWarn(SYNC_EVENT_TYPE)
-                            .cause(e)
-                            .addKeyValue(LOG_THING_NAME_KEY, currProcessingThingName)
-                            .addKeyValue(LOG_SHADOW_NAME_KEY, currProcessingShadowName)
-                            .log("Received unknown shadow when processing request. Retrying as a full sync");
-                    // add back to queue to merge over any shadow request that came in while it was executing
-                    request = syncQueue.offerAndTake(new FullShadowSyncRequest(currProcessingThingName,
-                            currProcessingShadowName), true);
-                } catch (Exception e) {
-                    logger.atError(SYNC_EVENT_TYPE)
-                            .cause(e)
-                            .addKeyValue(LOG_THING_NAME_KEY, currProcessingThingName)
-                            .addKeyValue(LOG_SHADOW_NAME_KEY, currProcessingShadowName)
-                            .log("Skipping sync request");
-                    request = syncQueue.poll();
-                    currProcessingThingName = request.getThingName();
-                    currProcessingShadowName = request.getShadowName();
-                }
-            }
-
-            // Add the sync request back in the queue if it was not processed.
-            if (request != null) {
-                syncQueue.offer(request);
-            }
-        } finally {
-            isRunning.set(false);
-            logger.atInfo(SYNC_EVENT_TYPE).log("Finished processing sync requests");
-        }
+    SyncRequest getRequest() {
+        return syncQueue.poll();
     }
 }
