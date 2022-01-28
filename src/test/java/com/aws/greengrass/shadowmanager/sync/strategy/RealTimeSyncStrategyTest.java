@@ -130,7 +130,7 @@ class RealTimeSyncStrategyTest extends SyncStrategyTestBase<RealTimeSyncStrategy
         strategy = new RealTimeSyncStrategy(executorService, mockRetryer,
                 new RequestBlockingQueue(new RequestMerger()));
         strategy.syncing.set(true);
-        strategy.latch = new CountDownLatch(0); // no sync actually running
+        strategy.syncThreadEnd = new CountDownLatch(0); // no sync actually running
 
         int numberOfSyncRequests = 100;
         for (int i = 0; i < numberOfSyncRequests; i++) {

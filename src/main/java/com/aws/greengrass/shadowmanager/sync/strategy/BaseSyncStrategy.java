@@ -108,9 +108,17 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
      */
     AtomicBoolean executing = new AtomicBoolean(false);
 
-    Semaphore exec;
+    /**
+     * Acquired during execution of sync requests and when stopping syncing.
+     */
+    Semaphore criticalExecBlock;
+
+    /**
+     * Track whether a sync thread has exited.
+     */
+    CountDownLatch syncThreadEnd;
     int syncParallelism;
-    CountDownLatch latch;
+
 
     /**
      * Getter for syncing boolean.
@@ -168,8 +176,8 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
 
         // initialize some defaults
         this.syncParallelism = 1;
-        this.exec = new Semaphore(1);
-        this.latch = new CountDownLatch(1);
+        this.criticalExecBlock = new Semaphore(1);
+        this.syncThreadEnd = new CountDownLatch(1);
     }
 
     /**
@@ -183,9 +191,9 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
         synchronized (lifecycleLock) {
             this.context = context;
             if (syncing.compareAndSet(false, true)) {
-                exec = new Semaphore(syncParallelism);
+                criticalExecBlock = new Semaphore(syncParallelism);
                 this.syncParallelism = syncParallelism;
-                latch = new CountDownLatch(syncParallelism);
+                syncThreadEnd = new CountDownLatch(syncParallelism);
                 doStart(context, syncParallelism);
             } else {
                 logger.atDebug(SYNC_EVENT_TYPE).log("Already started syncing");
@@ -237,25 +245,24 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
             // There is a latch that is decremented when the syncLoop exits - this allows us to know when stopped or
             // cancelled threads have actually exited. Cancelling a future will not let you know when the thread has
             // actually finished.
-            if (!exec.tryAcquire(syncParallelism)) {
+            if (!criticalExecBlock.tryAcquire(syncParallelism)) {
                 logger.atInfo(SYNC_EVENT_TYPE).log("Waiting for in-flight sync requests to finish");
-                exec.acquireUninterruptibly(syncParallelism);
+                criticalExecBlock.acquireUninterruptibly(syncParallelism);
                 logger.atInfo(SYNC_EVENT_TYPE).log("Finished waiting for sync requests to finish");
             }
             syncThreads.forEach(t -> t.cancel(true));
 
-            // wait for threads to actually exit
             try {
                 // wait for threads to actually exit but don't block forever
-                if (!latch.await(30, TimeUnit.SECONDS)) {
-                    logger.atWarn(SYNC_EVENT_TYPE).log("{} threads did not exit in time", latch.getCount());
+                if (!syncThreadEnd.await(30, TimeUnit.SECONDS)) {
+                    logger.atWarn(SYNC_EVENT_TYPE).log("{} threads did not exit in time", syncThreadEnd.getCount());
                 }
             } catch (InterruptedException e) {
                 logger.atDebug(SYNC_EVENT_TYPE).log("Interrupted while waiting for threads to finish");
             }
             syncThreads.clear();
         } finally {
-            exec.release(syncParallelism);
+            criticalExecBlock.release(syncParallelism);
         }
     }
 
@@ -369,7 +376,7 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
                     currProcessingShadowName = request.getShadowName();
 
                     // acquire a permit so that if syncing is stopped while executing, we get to finish the request
-                    exec.acquire();
+                    criticalExecBlock.acquire();
                     try {
                         // if we are currently stopped - don't run the current request
                         if (!syncing.get()) {
@@ -387,7 +394,7 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
                                 .log("Executing sync request");
                         retryer.run(retryConfig, request, context);
                     } finally {
-                        exec.release();
+                        criticalExecBlock.release();
                     }
                     request = null; // Reset the request here since we have already processed it successfully.
 
@@ -454,7 +461,7 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
                 syncQueue.offer(request);
             }
             logger.atInfo(SYNC_EVENT_TYPE).log("Finished processing sync requests");
-            latch.countDown();
+            syncThreadEnd.countDown();
         }
     }
 }

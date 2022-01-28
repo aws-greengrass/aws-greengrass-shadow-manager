@@ -61,9 +61,9 @@ public class PeriodicSyncStrategy extends BaseSyncStrategy {
     @Override
     void doStart(SyncContext context, int syncParallelism) {
         logger.atInfo(SYNC_EVENT_TYPE).kv("interval", interval).log("Start periodic syncing");
-        latch = new CountDownLatch(1);
+        syncThreadEnd = new CountDownLatch(1);
         this.syncParallelism = 1; // ignore sync parallelism as there is only 1 thread running
-        this.exec = new Semaphore(1);
+        this.criticalExecBlock = new Semaphore(1);
         this.syncThreads.add(syncExecutorService
                 .scheduleAtFixedRate(this::syncLoop, 0, interval, TimeUnit.SECONDS));
     }

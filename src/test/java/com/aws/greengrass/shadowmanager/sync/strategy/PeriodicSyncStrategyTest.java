@@ -122,7 +122,7 @@ class PeriodicSyncStrategyTest extends SyncStrategyTestBase<PeriodicSyncStrategy
         strategy = new PeriodicSyncStrategy(executorService, mockRetryer, 3,
                 new RequestBlockingQueue(new RequestMerger()));
         strategy.syncing.set(true);
-        strategy.latch = new CountDownLatch(0); // not actually syncing
+        strategy.syncThreadEnd = new CountDownLatch(0); // not actually syncing
         Random rand = new Random();
         int randomNumberOfSyncRequests = rand.nextInt(1024);
         for (int i = 0; i < randomNumberOfSyncRequests; i++) {

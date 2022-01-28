@@ -161,7 +161,7 @@ public abstract class SyncStrategyTestBase<T extends BaseSyncStrategy, S extends
         when(strategy.getRequest())
                 .thenAnswer(i -> mockFullShadowSyncRequest)
                 .thenAnswer(i -> {
-                    strategy.exec = s;
+                    strategy.criticalExecBlock = s;
                     // wait for the stop to try and acquire - it will then wait until requests have finished
                     stopFuture[0] = Executors.newSingleThreadExecutor().submit(() -> strategy.stop());
                     return request2;
