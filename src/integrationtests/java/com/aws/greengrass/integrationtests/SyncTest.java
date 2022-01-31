@@ -7,6 +7,7 @@ package com.aws.greengrass.integrationtests;
 
 import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.logging.impl.config.LogConfig;
+import com.aws.greengrass.shadowmanager.ShadowManager;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAOImpl;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
@@ -50,8 +51,14 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Optional;
+import java.util.Random;
+import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
@@ -68,6 +75,7 @@ import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -174,7 +182,7 @@ class SyncTest extends NucleusLaunchUtils {
                 .mockCloud(true)
                 .syncClazz(clazz)
                 .build());
-    
+
         assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
         assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(10L)));
         assertThat("local version", syncInfo.get().get().getLocalVersion(), is(1L));
@@ -189,6 +197,93 @@ class SyncTest extends NucleusLaunchUtils {
 
         verify(iotDataPlaneClientFactory.getIotDataPlaneClient(), never()).updateThingShadow(
                 any(software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowRequest.class));
+    }
+
+
+
+    @ParameterizedTest
+    @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
+    void GIVEN_sync_config_WHEN_repeat_turn_sync_on_and_off_THEN_no_exceptions_thrown(Class<?
+            extends BaseSyncStrategy> clazz, ExtensionContext context) throws InterruptedException {
+        Level l = LogConfig.getRootLogConfig().getLevel();
+        LogConfig.getRootLogConfig().setLevel(Level.ERROR); // set to ERROR level to avoid spamming logs
+        // this test is more of a sanity check to ensure that cancelling threads doesn't cause any errors
+
+        try {
+            GetThingShadowResponse shadowResponse = mock(GetThingShadowResponse.class, Answers.RETURNS_DEEP_STUBS);
+            byte[] bytes = cloudShadowContentV10.getBytes(UTF_8);
+            lenient().when(shadowResponse.payload().asByteArray()).thenReturn(bytes);
+
+            // existing document
+            when(iotDataPlaneClientFactory.getIotDataPlaneClient().getThingShadow(any(GetThingShadowRequest.class))).thenReturn(shadowResponse);
+
+            startNucleusWithConfig(
+                    NucleusLaunchUtilsConfig.builder().configFile(getSyncConfigFile(clazz)).mockCloud(true).syncClazz(clazz).build());
+
+            ShadowManager.StartSyncInfo syncInfo =
+                    ShadowManager.StartSyncInfo.builder().reInitializeSyncInfo(true).overrideRunningCheck(true).updateCloudSubscriptions(true).build();
+
+            SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
+
+
+            // set up more shadows to sync
+            Set<ThingShadowSyncConfiguration> syncConfigs = new HashSet<>();
+            ThingShadowSyncConfiguration.ThingShadowSyncConfigurationBuilder b =
+                    ThingShadowSyncConfiguration.builder()
+                            .thingName(MOCK_THING_NAME_1)
+                            .shadowName(CLASSIC_SHADOW)
+                            .shadowName("foo");
+            for (int i = 0; i < 100; i++) {
+                b = b.shadowName("bar" + i);
+            }
+            syncConfigs.add(b.build());
+
+            syncHandler.setSyncConfigurations(syncConfigs);
+            AtomicBoolean done = new AtomicBoolean();
+            final Random r = new Random();
+            CountDownLatch finished = new CountDownLatch(1);
+
+            Supplier<byte[]> updateBytes = () -> {
+                String s = "{\"state\":{ \"desired\": { \"SomeKey\": \"foo\"}, "
+                        + "\"reported\":{\"SomeKey\":\"bar\",\"OtherKey\":" + r.nextLong() + "}}}";
+                return s.getBytes(UTF_8);
+            };
+
+            // create thread to make local updated that will sync to the cloud
+            Executors.newSingleThreadExecutor().submit(() -> {
+                try {
+                    while (!done.get()) {
+                        UpdateThingShadowRequest request = new UpdateThingShadowRequest();
+                        request.setThingName(MOCK_THING_NAME_1);
+                        request.setShadowName(r.nextBoolean() ? "foo" : "bar" + r.nextInt(100));
+                        request.setPayload(updateBytes.get());
+                        shadowManager.getUpdateThingShadowRequestHandler().handleRequest(request, "DoAll");
+                        try {
+                            Thread.sleep(r.nextInt(10));
+                        } catch (InterruptedException e) {
+                            return;
+                        }
+                    }
+                } finally {
+                    finished.countDown();
+                }
+            });
+
+            Instant end = Instant.now().plusSeconds(30);
+            // stop and start syncing for 30 seconds.
+            while (end.isAfter(Instant.now())) {
+                syncHandler.stop();
+                Thread.sleep(r.nextInt(2000)); // sleep for up to 2 seconds to let sync happen at various speeds
+                shadowManager.startSyncingShadows(syncInfo);
+            }
+            // no exceptions should be thrown so this test should pass
+            done.set(true);
+            if (!finished.await(5, TimeUnit.SECONDS)) {
+                fail("did not finish sync request generation thread");
+            }
+        } finally {
+            LogConfig.getRootLogConfig().setLevel(l);
+        }
     }
 
     @Test
@@ -360,6 +455,12 @@ class SyncTest extends NucleusLaunchUtils {
                 .build());
 
         assertEmptySyncQueue(clazz);
+
+        assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
+
+        assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(0L)));
+        assertThat("local version", syncInfo.get().get().getLocalVersion(), is(0L));
+
         SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
         syncHandler.pushLocalUpdateSyncRequest(MOCK_THING_NAME_1, CLASSIC_SHADOW, JsonUtil.getPayloadBytes(cloudDocument));
         assertEmptySyncQueue(clazz);

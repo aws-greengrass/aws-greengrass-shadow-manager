@@ -31,7 +31,7 @@ public interface SyncRequest {
             UnknownShadowException, InterruptedException;
 
     /**
-     * Check if an update is neccessary or not.
+     * Check if an update is necessary or not.
      *
      * @param context context object containing useful objects for requests to use when executing.
      * @return true if an update is necessary; Else false.

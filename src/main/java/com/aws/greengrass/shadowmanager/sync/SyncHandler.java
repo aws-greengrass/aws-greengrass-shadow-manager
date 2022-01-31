@@ -14,7 +14,6 @@ import com.aws.greengrass.shadowmanager.sync.model.FullShadowSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.LocalDeleteSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.LocalUpdateSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.SyncContext;
-import com.aws.greengrass.shadowmanager.sync.strategy.BaseSyncStrategy;
 import com.aws.greengrass.shadowmanager.sync.strategy.SyncStrategy;
 import com.aws.greengrass.shadowmanager.sync.strategy.SyncStrategyFactory;
 import com.aws.greengrass.shadowmanager.sync.strategy.model.Strategy;
@@ -74,13 +73,20 @@ public class SyncHandler {
     private final SyncStrategyFactory syncStrategyFactory;
 
     /**
+     * Request queue.
+     */
+    private final RequestBlockingQueue syncQueue;
+
+    /**
      * Construct a new instance.
      *
      * @param executorService              provider of threads for real time syncing
      * @param syncScheduledExecutorService provider of thread for periodic syncing
+     * @param syncQueue                    a request queue
      */
     @Inject
-    public SyncHandler(ExecutorService executorService, ScheduledExecutorService syncScheduledExecutorService) {
+    public SyncHandler(ExecutorService executorService, ScheduledExecutorService syncScheduledExecutorService,
+                       RequestBlockingQueue syncQueue) {
         this(executorService, syncScheduledExecutorService,
                 // retry wrapper so that requests can be mocked
                 (config, request, context) ->
@@ -89,7 +95,7 @@ public class SyncHandler {
                                     request.execute(context);
                                     return null;
                                 },
-                                SYNC_EVENT_TYPE, logger));
+                                SYNC_EVENT_TYPE, logger), syncQueue);
     }
 
     /**
@@ -98,19 +104,22 @@ public class SyncHandler {
      * @param executorService              provider of threads for syncing
      * @param syncScheduledExecutorService provider of thread for periodic syncing
      * @param retryer                      The retryer object.
+     * @param syncQueue                    a request queue.
      */
     private SyncHandler(ExecutorService executorService, ScheduledExecutorService syncScheduledExecutorService,
-                        Retryer retryer) {
-        this(new SyncStrategyFactory(retryer, executorService, syncScheduledExecutorService));
+                        Retryer retryer, RequestBlockingQueue syncQueue) {
+        this(new SyncStrategyFactory(retryer, executorService, syncScheduledExecutorService), syncQueue);
     }
 
     /**
      * Constructor for testing.
      *
      * @param syncStrategyFactory The sync strategy factory object to generate.
+     * @param syncQueue           a request queue.
      */
-    SyncHandler(SyncStrategyFactory syncStrategyFactory) {
+    SyncHandler(SyncStrategyFactory syncStrategyFactory, RequestBlockingQueue syncQueue) {
         this.syncStrategyFactory = syncStrategyFactory;
+        this.syncQueue = syncQueue;
         setSyncStrategy(Strategy.builder().type(StrategyType.REALTIME).build());
     }
 
@@ -120,10 +129,6 @@ public class SyncHandler {
      * @param syncStrategy The sync strategy.
      */
     public void setSyncStrategy(Strategy syncStrategy) {
-        RequestBlockingQueue syncQueue = null;
-        if (this.overallSyncStrategy != null) {
-            syncQueue = ((BaseSyncStrategy) this.overallSyncStrategy).getSyncQueue();
-        }
         this.overallSyncStrategy = this.syncStrategyFactory.createSyncStrategy(syncStrategy, syncQueue);
     }
 
