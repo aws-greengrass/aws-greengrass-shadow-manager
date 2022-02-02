@@ -59,6 +59,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.inject.Inject;
 
 import static com.aws.greengrass.componentmanager.KernelConfigResolver.CONFIGURATION_CONFIG_KEY;
@@ -302,9 +303,12 @@ public class ShadowManager extends PluginService {
                 });
 
         Topics strategyTopics = config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_STRATEGY_TOPIC);
+        final AtomicReference<Strategy> currentStrategy = new AtomicReference<>(DEFAULT_STRATEGY);
+
         strategyTopics.subscribe((why, newv) -> {
             Strategy strategy;
             Map<String, Object> strategyPojo = strategyTopics.toPOJO();
+
             if (WhatHappened.removed.equals(why) || strategyPojo == null || strategyPojo.isEmpty()) {
                 strategy = DEFAULT_STRATEGY;
             } else {
@@ -316,12 +320,20 @@ public class ShadowManager extends PluginService {
                     return;
                 }
             }
-            stopSyncingShadows(false);
-            syncHandler.setSyncStrategy(strategy);
-            startSyncingShadows(StartSyncInfo.builder().build());
+
+            currentStrategy.set(replaceStrategyIfNecessary(currentStrategy.get(), strategy));
         });
     }
 
+    Strategy replaceStrategyIfNecessary(Strategy currentStrategy, Strategy strategy) {
+        if (!currentStrategy.equals(strategy)) {
+            currentStrategy = strategy;
+            stopSyncingShadows(false);
+            syncHandler.setSyncStrategy(strategy);
+            startSyncingShadows(StartSyncInfo.builder().build());
+        }
+        return currentStrategy;
+    }
 
     private void deleteRemovedSyncInformation() {
         Set<Pair<String, String>> removedShadows = new HashSet<>(this.dao.listSyncedShadows());

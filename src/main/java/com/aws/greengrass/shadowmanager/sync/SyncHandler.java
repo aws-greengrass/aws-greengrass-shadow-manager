@@ -23,6 +23,7 @@ import com.aws.greengrass.util.RetryUtils;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.Synchronized;
 
 import java.util.Iterator;
 import java.util.List;
@@ -160,6 +161,7 @@ public class SyncHandler {
      * @param context         an context object for syncing
      * @param syncParallelism number of threads to use for syncing
      */
+    @Synchronized
     public void start(SyncContext context, int syncParallelism) {
         overallSyncStrategy.start(context, syncParallelism);
         this.context = context;
@@ -169,6 +171,7 @@ public class SyncHandler {
     /**
      * Stops sync threads and clear syncing queue.
      */
+    @Synchronized
     public void stop() {
         overallSyncStrategy.stop();
     }

@@ -57,6 +57,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -617,7 +618,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         assertThat(captor.getValue().getThingName(), is("thing"));
         assertThat(captor.getValue().getShadowName(), is("shadow"));
     }
-
+    
     private void createSyncConfigForSingleShadow(String thing, String shadow) {
         shadowManager.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurations(new HashSet<>()).build());
         ThingShadowSyncConfiguration config = mock(ThingShadowSyncConfiguration.class);
@@ -735,5 +736,47 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
 
         assertTrue(shadowManager.isErrored());
         verify(mockSyncHandler, never()).setSyncStrategy(any());
+    }
+
+    @Test
+    void GIVEN_sync_strategy_WHEN_change_THEN_syncing_restarts(ExtensionContext extensionContext) {
+
+
+        ShadowManager s = spy(shadowManager);
+
+        // set up mocks so sync start gets called
+
+        when(mockMqttClient.connected()).thenReturn(true);
+        Set<ThingShadowSyncConfiguration> syncConfigs = new HashSet<ThingShadowSyncConfiguration>() {{
+            add(ThingShadowSyncConfiguration.builder().thingName("foo").shadowName("bar").build());
+        }};
+
+        ShadowSyncConfiguration config = ShadowSyncConfiguration.builder()
+                .syncConfigurations(syncConfigs)
+                .build();
+        s.setSyncConfiguration(config);
+        doReturn(true,true).when(s).inState(eq(State.RUNNING));
+        s.install();
+
+        // GIVEN
+        Strategy update = Strategy.builder().type(StrategyType.PERIODIC).delay(500L).build();
+        // WHEN
+        Strategy ret = s.replaceStrategyIfNecessary(Strategy.DEFAULT_STRATEGY, update);
+        // THEN
+        assertThat(ret, equalTo(update));
+        verify(mockSyncHandler, times(1)).stop();
+        verify(mockSyncHandler, times(1)).start(any(), anyInt());
+    }
+
+    @Test
+    void GIVEN_sync_strategy_WHEN_no_change_THEN_syncing_does_not_restart(ExtensionContext extensionContext) {
+        ShadowManager s = spy(shadowManager);
+
+        // GIVEN / WHEN
+        Strategy ret = s.replaceStrategyIfNecessary(Strategy.DEFAULT_STRATEGY, Strategy.DEFAULT_STRATEGY);
+        // THEN
+        assertThat(ret, equalTo(Strategy.DEFAULT_STRATEGY));
+        verify(mockSyncHandler, never()).stop();
+        verify(mockSyncHandler, never()).start(any(), anyInt());
     }
 }

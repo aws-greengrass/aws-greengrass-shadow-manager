@@ -28,10 +28,8 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
@@ -41,6 +39,7 @@ import static com.aws.greengrass.shadowmanager.model.LogEvents.SYNC;
 public abstract class BaseSyncStrategy implements SyncStrategy {
     private static final Logger logger = LogManager.getLogger(BaseSyncStrategy.class);
     static final String SYNC_EVENT_TYPE = SYNC.code();
+    static final int THREAD_END_WAIT_TIME_SECONDS = 10;
 
     /**
      * Lock used to synchronize start and stop of the sync strategy.
@@ -113,10 +112,6 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
      */
     Semaphore criticalExecBlock;
 
-    /**
-     * Track whether a sync thread has exited.
-     */
-    CountDownLatch syncThreadEnd;
     int syncParallelism;
 
 
@@ -177,7 +172,6 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
         // initialize some defaults
         this.syncParallelism = 1;
         this.criticalExecBlock = new Semaphore(1);
-        this.syncThreadEnd = new CountDownLatch(1);
     }
 
     /**
@@ -193,7 +187,6 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
             if (syncing.compareAndSet(false, true)) {
                 criticalExecBlock = new Semaphore(syncParallelism);
                 this.syncParallelism = syncParallelism;
-                syncThreadEnd = new CountDownLatch(syncParallelism);
                 doStart(context, syncParallelism);
             } else {
                 logger.atDebug(SYNC_EVENT_TYPE).log("Already started syncing");
@@ -251,12 +244,8 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
                 logger.atInfo(SYNC_EVENT_TYPE).log("Finished waiting for sync requests to finish");
             }
             syncThreads.forEach(t -> t.cancel(true));
-
             try {
-                // wait for threads to actually exit but don't block forever
-                if (!syncThreadEnd.await(30, TimeUnit.SECONDS)) {
-                    logger.atWarn(SYNC_EVENT_TYPE).log("{} threads did not exit in time", syncThreadEnd.getCount());
-                }
+                waitForSyncEnd();
             } catch (InterruptedException e) {
                 logger.atDebug(SYNC_EVENT_TYPE).log("Interrupted while waiting for threads to finish");
             }
@@ -265,6 +254,11 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
             criticalExecBlock.release(syncParallelism);
         }
     }
+
+    /**
+     * Wait (briefly) for sync threads to finish to ensure we don't start any more while others are shutting down.
+     */
+    protected abstract void waitForSyncEnd() throws InterruptedException;
 
     /**
      * Get the request from the queue.
@@ -461,7 +455,6 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
                 syncQueue.offer(request);
             }
             logger.atInfo(SYNC_EVENT_TYPE).log("Finished processing sync requests");
-            syncThreadEnd.countDown();
         }
     }
 }

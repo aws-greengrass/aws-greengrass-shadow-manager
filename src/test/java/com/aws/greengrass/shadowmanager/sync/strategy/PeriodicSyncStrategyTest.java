@@ -38,6 +38,7 @@ import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.core.Is.is;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
@@ -122,7 +123,6 @@ class PeriodicSyncStrategyTest extends SyncStrategyTestBase<PeriodicSyncStrategy
         strategy = new PeriodicSyncStrategy(executorService, mockRetryer, 3,
                 new RequestBlockingQueue(new RequestMerger()));
         strategy.syncing.set(true);
-        strategy.syncThreadEnd = new CountDownLatch(0); // not actually syncing
         Random rand = new Random();
         int randomNumberOfSyncRequests = rand.nextInt(1024);
         for (int i = 0; i < randomNumberOfSyncRequests; i++) {
@@ -203,6 +203,32 @@ class PeriodicSyncStrategyTest extends SyncStrategyTestBase<PeriodicSyncStrategy
         assertThat("executed request", executeLatch.await(5, TimeUnit.SECONDS), is(true));
         verify(mockRequestBlockingQueue, atLeastOnce()).poll();
         verify(mockRequestBlockingQueue, times(0)).offerAndTake(request1, false);
+    }
+
+    @Test
+    void GIVEN_no_sync_executing_WHEN_stop_THEN_no_wait(ExtensionContext extensionContext) throws InterruptedException {
+        // set large interval so we can stop while the thread is scheduled but not executing
+        strategy = new PeriodicSyncStrategy(executorService, mockRetryer, 300, mockRequestBlockingQueue);
+        strategy.start(mockSyncContext, 1);
+        CountDownLatch done = new CountDownLatch(1);
+        Executors.newSingleThreadExecutor().submit(() -> {
+            while (strategy.isExecuting()) {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    fail("interrupted");
+                }
+            }
+            strategy.syncThreadLock.lock();
+            try {
+                strategy.doStop();
+                done.countDown();
+            } finally {
+                strategy.syncThreadLock.unlock();
+            }
+        });
+
+        assertThat("no wait for shutdown", done.await(1, TimeUnit.SECONDS), is(true));
     }
 
     @ParameterizedTest
