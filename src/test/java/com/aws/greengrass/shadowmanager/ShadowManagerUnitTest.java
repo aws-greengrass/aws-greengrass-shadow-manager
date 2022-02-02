@@ -618,28 +618,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         assertThat(captor.getValue().getThingName(), is("thing"));
         assertThat(captor.getValue().getShadowName(), is("shadow"));
     }
-
-    @Test
-    void GIVEN_shadow_manager_sync_config_WHEN_sync_config_changes_THEN_sync_handler_restarts() {
-        createSyncConfigForSingleShadow("thing", "shadow");
-        when(mockDao.listSyncedShadows()).thenReturn(Collections.singletonList(new Pair<>("foo", "bar")));
-
-        when(mockMqttClient.connected()).thenReturn(true);
-        shadowManager.startup();
-
-        verify(mockCloudDataClient, times(1)).updateSubscriptions(anySet());
-        verify(mockSyncHandler, times(1)).start(any(SyncContext.class), anyInt());
-
-        verify(mockDatabase, times(1)).open();
-        verify(mockDao, times(1)).deleteSyncInformation("foo", "bar");
-
-        ArgumentCaptor<SyncInformation> captor = ArgumentCaptor.forClass(SyncInformation.class);
-        verify(mockDao, times(1)).insertSyncInfoIfNotExists(captor.capture());
-        assertThat(captor.getValue().getThingName(), is("thing"));
-        assertThat(captor.getValue().getShadowName(), is("shadow"));
-    }
-
-
+    
     private void createSyncConfigForSingleShadow(String thing, String shadow) {
         shadowManager.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurations(new HashSet<>()).build());
         ThingShadowSyncConfiguration config = mock(ThingShadowSyncConfiguration.class);
