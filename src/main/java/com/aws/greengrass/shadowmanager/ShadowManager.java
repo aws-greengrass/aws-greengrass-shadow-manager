@@ -302,9 +302,12 @@ public class ShadowManager extends PluginService {
                 });
 
         Topics strategyTopics = config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_STRATEGY_TOPIC);
+        final Strategy[] currentStrategy = { DEFAULT_STRATEGY };
+
         strategyTopics.subscribe((why, newv) -> {
             Strategy strategy;
             Map<String, Object> strategyPojo = strategyTopics.toPOJO();
+
             if (WhatHappened.removed.equals(why) || strategyPojo == null || strategyPojo.isEmpty()) {
                 strategy = DEFAULT_STRATEGY;
             } else {
@@ -316,9 +319,12 @@ public class ShadowManager extends PluginService {
                     return;
                 }
             }
-            stopSyncingShadows(false);
-            syncHandler.setSyncStrategy(strategy);
-            startSyncingShadows(StartSyncInfo.builder().build());
+            if (!currentStrategy[0].equals(strategy)) {
+                currentStrategy[0] = strategy;
+                stopSyncingShadows(false);
+                syncHandler.setSyncStrategy(strategy);
+                startSyncingShadows(StartSyncInfo.builder().build());
+            }
         });
     }
 
