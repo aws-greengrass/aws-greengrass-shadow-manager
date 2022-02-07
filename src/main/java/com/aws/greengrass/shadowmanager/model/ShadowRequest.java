@@ -21,11 +21,12 @@ import static com.aws.greengrass.shadowmanager.model.Constants.NAMED_SHADOW_TOPI
 public class ShadowRequest {
     String thingName;
     String shadowName;
+    String operation;
 
     /**
      * ShadowRequest constructor.
      *
-     * @param thingName the thing name of the shadow request
+     * @param thingName  the thing name of the shadow request
      * @param shadowName the shadow name of the shadow request
      */
     public ShadowRequest(String thingName, String shadowName) {
@@ -38,11 +39,13 @@ public class ShadowRequest {
     /**
      * ShadowRequest constructor for classic shadows.
      *
-     * @param thingName the thing name of the shadow request
+     * @param thingName  the thing name of the shadow request
+     * @param shadowName the shadow name of the shadow request
+     * @param operation  the shadow operation to be performed
      */
-    public ShadowRequest(String thingName) {
-        this.thingName = thingName;
-        this.shadowName = CLASSIC_SHADOW_IDENTIFIER;
+    public ShadowRequest(String thingName, String shadowName, String operation) {
+        this(thingName, shadowName);
+        this.operation = operation;
     }
 
     /**

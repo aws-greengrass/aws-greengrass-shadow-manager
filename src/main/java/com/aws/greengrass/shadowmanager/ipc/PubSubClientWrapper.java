@@ -6,16 +6,20 @@
 package com.aws.greengrass.shadowmanager.ipc;
 
 import com.aws.greengrass.builtin.services.pubsub.PubSubIPCEventStreamAgent;
+import com.aws.greengrass.builtin.services.pubsub.PublishEvent;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.ipc.model.PubSubRequest;
 import software.amazon.awssdk.aws.greengrass.model.InvalidArgumentsError;
 
+import java.util.function.Consumer;
 import javax.inject.Inject;
 
 import static com.aws.greengrass.shadowmanager.ShadowManager.SERVICE_NAME;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
+import static com.aws.greengrass.shadowmanager.model.Constants.PUBSUB_SUBSCRIBE_TOPIC;
+import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_MANAGER_NAME;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_PUBLISH_ACCEPTED_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_PUBLISH_DELTA_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_PUBLISH_DOCUMENTS_TOPIC;
@@ -112,5 +116,23 @@ public class PubSubClientWrapper {
         String shadowTopicPrefix = ipcRequest.getShadowTopicPrefix();
         String publishTopicOp = ipcRequest.getPublishOperation().getOp();
         return shadowTopicPrefix + publishTopicOp + topic;
+    }
+
+    /**
+     * Subscribes to the shadow topic over local PubSub.
+     *
+     * @param cb Cosnumer to invoke upon receiving a new message over local PubSub.
+     */
+    public void subscribe(Consumer<PublishEvent> cb) {
+        this.pubSubIPCEventStreamAgent.subscribe(PUBSUB_SUBSCRIBE_TOPIC, cb, SHADOW_MANAGER_NAME);
+    }
+
+    /**
+     * Unsubscribes to the shadow topic over local PubSub.
+     *
+     * @param cb Cosnumer to invoke upon receiving a new message over local PubSub.
+     */
+    public void unsubscribe(Consumer<PublishEvent> cb) {
+        this.pubSubIPCEventStreamAgent.unsubscribe(PUBSUB_SUBSCRIBE_TOPIC, cb, SHADOW_MANAGER_NAME);
     }
 }
