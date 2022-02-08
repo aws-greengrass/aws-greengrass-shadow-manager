@@ -6,6 +6,7 @@
 package com.aws.greengrass.shadowmanager;
 
 import com.aws.greengrass.builtin.services.pubsub.PublishEvent;
+import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.ipc.GetThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.ipc.PubSubClientWrapper;
@@ -23,10 +24,14 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import software.amazon.awssdk.aws.greengrass.model.ConflictError;
 import software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowRequest;
 import software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowResponse;
 import software.amazon.awssdk.aws.greengrass.model.GetThingShadowRequest;
 import software.amazon.awssdk.aws.greengrass.model.GetThingShadowResponse;
+import software.amazon.awssdk.aws.greengrass.model.InvalidArgumentsError;
+import software.amazon.awssdk.aws.greengrass.model.ResourceNotFoundError;
+import software.amazon.awssdk.aws.greengrass.model.ServiceError;
 import software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest;
 
 import java.util.function.Consumer;
@@ -39,6 +44,7 @@ import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -46,7 +52,9 @@ import static org.mockito.Mockito.atMostOnce;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 class PubSubIntegratorTest {
@@ -114,7 +122,7 @@ class PubSubIntegratorTest {
 
     @ParameterizedTest
     @MethodSource("classicAndNamedShadow")
-    void GIVEN_classic_shadow_op_invocation_WHEN_accept_THEN_calls_the_corret_handler(String shadowName, String op, ExtensionContext extensionContext) {
+    void GIVEN_classic_shadow_op_invocation_WHEN_accept_THEN_calls_the_correct_handler(String shadowName, String op, ExtensionContext extensionContext) {
         ignoreExceptionOfType(extensionContext, IllegalArgumentException.class);
         PubSubIntegrator integrator = new PubSubIntegrator(mockPubSubClientWrapper, mockDeleteThingShadowRequestHandler,
                 mockUpdateThingShadowRequestHandler, mockGetThingShadowRequestHandler);
@@ -176,6 +184,83 @@ class PubSubIntegratorTest {
         verify(mockUpdateThingShadowRequestHandler, never()).handleRequest(any(UpdateThingShadowRequest.class), eq(SHADOW_MANAGER_NAME));
         verify(mockDeleteThingShadowRequestHandler, never()).handleRequest(any(DeleteThingShadowRequest.class), eq(SHADOW_MANAGER_NAME));
         verify(mockGetThingShadowRequestHandler, never()).handleRequest(any(GetThingShadowRequest.class), eq(SHADOW_MANAGER_NAME));
+    }
 
+    @Test
+    void GIVEN_update_command_WHEN_update_throws_errors_THEN_pubsub_integrator_does_not_rethrow(ExtensionContext extensionContext) {
+        ignoreExceptionOfType(extensionContext, ConflictError.class);
+        ignoreExceptionOfType(extensionContext, ServiceError.class);
+        ignoreExceptionOfType(extensionContext, InvalidArgumentsError.class);
+        ignoreExceptionOfType(extensionContext, InvalidRequestParametersException.class);
+
+        when(mockUpdateThingShadowRequestHandler.handleRequest(any(), eq(SHADOW_MANAGER_NAME))).thenThrow(new ConflictError());
+        PubSubIntegrator integrator = new PubSubIntegrator(mockPubSubClientWrapper, mockDeleteThingShadowRequestHandler,
+                mockUpdateThingShadowRequestHandler, mockGetThingShadowRequestHandler);
+        integrator.subscribe();
+        assertDoesNotThrow(() -> publishEventCaptor.getValue().accept(PublishEvent.builder().topic("$aws/things/" + MOCK_THING + "/shadow/update").payload(PAYLOAD).build()));
+        verify(mockUpdateThingShadowRequestHandler, atMostOnce()).handleRequest(any(UpdateThingShadowRequest.class), eq(SHADOW_MANAGER_NAME));
+
+        reset(mockUpdateThingShadowRequestHandler);
+        when(mockUpdateThingShadowRequestHandler.handleRequest(any(), eq(SHADOW_MANAGER_NAME))).thenThrow(new InvalidArgumentsError());
+        assertDoesNotThrow(() -> publishEventCaptor.getValue().accept(PublishEvent.builder().topic("$aws/things/" + MOCK_THING + "/shadow/update").payload(PAYLOAD).build()));
+        verify(mockUpdateThingShadowRequestHandler, atMostOnce()).handleRequest(any(UpdateThingShadowRequest.class), eq(SHADOW_MANAGER_NAME));
+
+        reset(mockUpdateThingShadowRequestHandler);
+        when(mockUpdateThingShadowRequestHandler.handleRequest(any(), eq(SHADOW_MANAGER_NAME))).thenThrow(new ServiceError());
+        assertDoesNotThrow(() -> publishEventCaptor.getValue().accept(PublishEvent.builder().topic("$aws/things/" + MOCK_THING + "/shadow/update").payload(PAYLOAD).build()));
+        verify(mockUpdateThingShadowRequestHandler, atMostOnce()).handleRequest(any(UpdateThingShadowRequest.class), eq(SHADOW_MANAGER_NAME));
+
+        reset(mockUpdateThingShadowRequestHandler);
+        when(mockUpdateThingShadowRequestHandler.handleRequest(any(), eq(SHADOW_MANAGER_NAME))).thenThrow(InvalidRequestParametersException.class);
+        assertDoesNotThrow(() -> publishEventCaptor.getValue().accept(PublishEvent.builder().topic("$aws/things/" + MOCK_THING + "/shadow/update").payload(PAYLOAD).build()));
+        verify(mockUpdateThingShadowRequestHandler, atMostOnce()).handleRequest(any(UpdateThingShadowRequest.class), eq(SHADOW_MANAGER_NAME));
+    }
+
+    @Test
+    void GIVEN_delete_command_WHEN_delete_throws_errors_THEN_pubsub_integrator_does_not_rethrow(ExtensionContext extensionContext) {
+        ignoreExceptionOfType(extensionContext, ResourceNotFoundError.class);
+        ignoreExceptionOfType(extensionContext, ServiceError.class);
+        ignoreExceptionOfType(extensionContext, InvalidArgumentsError.class);
+
+        when(mockDeleteThingShadowRequestHandler.handleRequest(any(), eq(SHADOW_MANAGER_NAME))).thenThrow(new ResourceNotFoundError());
+        PubSubIntegrator integrator = new PubSubIntegrator(mockPubSubClientWrapper, mockDeleteThingShadowRequestHandler,
+                mockUpdateThingShadowRequestHandler, mockGetThingShadowRequestHandler);
+        integrator.subscribe();
+        assertDoesNotThrow(() -> publishEventCaptor.getValue().accept(PublishEvent.builder().topic("$aws/things/" + MOCK_THING + "/shadow/delete").payload(PAYLOAD).build()));
+        verify(mockDeleteThingShadowRequestHandler, atMostOnce()).handleRequest(any(DeleteThingShadowRequest.class), eq(SHADOW_MANAGER_NAME));
+
+        reset(mockDeleteThingShadowRequestHandler);
+        when(mockDeleteThingShadowRequestHandler.handleRequest(any(), eq(SHADOW_MANAGER_NAME))).thenThrow(new InvalidArgumentsError());
+        assertDoesNotThrow(() -> publishEventCaptor.getValue().accept(PublishEvent.builder().topic("$aws/things/" + MOCK_THING + "/shadow/delete").payload(PAYLOAD).build()));
+        verify(mockDeleteThingShadowRequestHandler, atMostOnce()).handleRequest(any(DeleteThingShadowRequest.class), eq(SHADOW_MANAGER_NAME));
+
+        reset(mockDeleteThingShadowRequestHandler);
+        when(mockDeleteThingShadowRequestHandler.handleRequest(any(), eq(SHADOW_MANAGER_NAME))).thenThrow(new ServiceError());
+        assertDoesNotThrow(() -> publishEventCaptor.getValue().accept(PublishEvent.builder().topic("$aws/things/" + MOCK_THING + "/shadow/delete").payload(PAYLOAD).build()));
+        verify(mockDeleteThingShadowRequestHandler, atMostOnce()).handleRequest(any(DeleteThingShadowRequest.class), eq(SHADOW_MANAGER_NAME));
+    }
+
+    @Test
+    void GIVEN_get_command_WHEN_get_throws_errors_THEN_pubsub_integrator_does_not_rethrow(ExtensionContext extensionContext) {
+        ignoreExceptionOfType(extensionContext, ResourceNotFoundError.class);
+        ignoreExceptionOfType(extensionContext, ServiceError.class);
+        ignoreExceptionOfType(extensionContext, InvalidArgumentsError.class);
+
+        when(mockGetThingShadowRequestHandler.handleRequest(any(), eq(SHADOW_MANAGER_NAME))).thenThrow(new ResourceNotFoundError());
+        PubSubIntegrator integrator = new PubSubIntegrator(mockPubSubClientWrapper, mockDeleteThingShadowRequestHandler,
+                mockUpdateThingShadowRequestHandler, mockGetThingShadowRequestHandler);
+        integrator.subscribe();
+        assertDoesNotThrow(() -> publishEventCaptor.getValue().accept(PublishEvent.builder().topic("$aws/things/" + MOCK_THING + "/shadow/get").payload(PAYLOAD).build()));
+        verify(mockGetThingShadowRequestHandler, atMostOnce()).handleRequest(any(GetThingShadowRequest.class), eq(SHADOW_MANAGER_NAME));
+
+        reset(mockGetThingShadowRequestHandler);
+        when(mockGetThingShadowRequestHandler.handleRequest(any(), eq(SHADOW_MANAGER_NAME))).thenThrow(new InvalidArgumentsError());
+        assertDoesNotThrow(() -> publishEventCaptor.getValue().accept(PublishEvent.builder().topic("$aws/things/" + MOCK_THING + "/shadow/get").payload(PAYLOAD).build()));
+        verify(mockGetThingShadowRequestHandler, atMostOnce()).handleRequest(any(GetThingShadowRequest.class), eq(SHADOW_MANAGER_NAME));
+
+        reset(mockGetThingShadowRequestHandler);
+        when(mockGetThingShadowRequestHandler.handleRequest(any(), eq(SHADOW_MANAGER_NAME))).thenThrow(new ServiceError());
+        assertDoesNotThrow(() -> publishEventCaptor.getValue().accept(PublishEvent.builder().topic("$aws/things/" + MOCK_THING + "/shadow/get").payload(PAYLOAD).build()));
+        verify(mockGetThingShadowRequestHandler, atMostOnce()).handleRequest(any(GetThingShadowRequest.class), eq(SHADOW_MANAGER_NAME));
     }
 }

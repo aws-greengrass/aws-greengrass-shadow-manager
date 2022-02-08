@@ -8,14 +8,15 @@ package com.aws.greengrass.shadowmanager;
 import com.aws.greengrass.builtin.services.pubsub.PublishEvent;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
+import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.ipc.GetThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.ipc.PubSubClientWrapper;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowRequestHandler;
-import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.model.ShadowRequest;
 import software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowRequest;
 import software.amazon.awssdk.aws.greengrass.model.GetThingShadowRequest;
+import software.amazon.awssdk.aws.greengrass.model.GreengrassCoreIPCError;
 import software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest;
 
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -98,12 +99,11 @@ public class PubSubIntegrator {
         logger.atWarn()
                 .kv("topic", topic)
                 .log("Unable to parse shadow topic for thing name, shadow name and shadow operation");
-        throw new IllegalArgumentException("Unable to parse shadow topic for thing name shadow name "
-                + "and shadow operation");
+        throw new IllegalArgumentException("Unable to parse shadow topic");
     }
 
     /**
-     * Handle the new message that is published oveg local PubSub. Extract the necessary information from the shadow
+     * Handle the new message that is published over local PubSub. Extract the necessary information from the shadow
      * topic to accurately route the message to the appropriate handler.
      * It will ignore the message if it is unable to extract all the necessary information from the shadow topic.
      *
@@ -112,8 +112,17 @@ public class PubSubIntegrator {
     private void handlePublishedMessage(PublishEvent publishEvent) {
         String topic = publishEvent.getTopic();
         logger.atDebug().kv(LOG_TOPIC, topic).log("Processing new shadow operation message over local PubSub");
+        ShadowRequest shadowRequest;
         try {
-            ShadowRequest shadowRequest = extractShadowFromTopic(topic);
+            shadowRequest = extractShadowFromTopic(topic);
+        } catch (IllegalArgumentException e) {
+            logger.atWarn()
+                    .setCause(e)
+                    .kv(LOG_TOPIC, topic)
+                    .log("Unable to process shadow operation request over PubSub");
+            return;
+        }
+        try {
             switch (shadowRequest.getOperation().toLowerCase()) {
                 case "update":
                     UpdateThingShadowRequest request = new UpdateThingShadowRequest();
@@ -122,11 +131,6 @@ public class PubSubIntegrator {
                     request.setPayload(publishEvent.getPayload());
 
                     this.updateThingShadowRequestHandler.handleRequest(request, SHADOW_MANAGER_NAME);
-                    logger.atTrace()
-                            .setEventType(LogEvents.UPDATE_THING_SHADOW.code())
-                            .kv(LOG_THING_NAME_KEY, shadowRequest.getThingName())
-                            .kv(LOG_SHADOW_NAME_KEY, shadowRequest.getShadowName())
-                            .log("Successfully updated shadow");
                     break;
                 case "delete":
                     DeleteThingShadowRequest deleteRequest = new DeleteThingShadowRequest();
@@ -134,11 +138,6 @@ public class PubSubIntegrator {
                     deleteRequest.setShadowName(shadowRequest.getShadowName());
 
                     this.deleteThingShadowRequestHandler.handleRequest(deleteRequest, SHADOW_MANAGER_NAME);
-                    logger.atTrace()
-                            .setEventType(LogEvents.DELETE_THING_SHADOW.code())
-                            .kv(LOG_THING_NAME_KEY, shadowRequest.getThingName())
-                            .kv(LOG_SHADOW_NAME_KEY, shadowRequest.getShadowName())
-                            .log("Successfully deleted shadow");
                     break;
                 case "get":
                     GetThingShadowRequest getRequest = new GetThingShadowRequest();
@@ -146,28 +145,26 @@ public class PubSubIntegrator {
                     getRequest.setShadowName(shadowRequest.getShadowName());
 
                     this.getThingShadowRequestHandler.handleRequest(getRequest, SHADOW_MANAGER_NAME);
-                    logger.atTrace()
-                            .setEventType(LogEvents.DELETE_THING_SHADOW.code())
-                            .kv(LOG_THING_NAME_KEY, shadowRequest.getThingName())
-                            .kv(LOG_SHADOW_NAME_KEY, shadowRequest.getShadowName())
-                            .log("Successfully retrieved shadow");
                     break;
                 default:
                     logger.atWarn()
                             .kv(LOG_THING_NAME_KEY, shadowRequest.getThingName())
                             .kv(LOG_SHADOW_NAME_KEY, shadowRequest.getShadowName())
                             .kv(LOG_OPERATION, shadowRequest.getOperation())
-                            .log("Unable to perform shadow operation due to unknown value");
+                            .log("Unable to perform shadow operation due to unknown operation value");
                     break;
             }
             logger.atDebug().kv(LOG_TOPIC, topic)
                     .log("Finished processing new shadow operation message over local PubSub");
-        } catch (IllegalArgumentException e) {
+        } catch (InvalidRequestParametersException | GreengrassCoreIPCError e) {
+            // The only other exception that can be thrown AuthorizationException which will not happen since we are
+            // sending the shadow manager service name to be authorized which will always be authorized.
+            // Not setting the cause here since it would already be logged in the caller.
             logger.atWarn()
-                    .setEventType(LogEvents.UPDATE_THING_SHADOW.code())
-                    .setCause(e)
-                    .kv(LOG_TOPIC, topic)
-                    .log("Unable to process shadow operation request over PubSub");
+                    .kv(LOG_THING_NAME_KEY, shadowRequest.getThingName())
+                    .kv(LOG_SHADOW_NAME_KEY, shadowRequest.getShadowName())
+                    .kv(LOG_OPERATION, shadowRequest.getOperation())
+                    .log("Unable to perform shadow operation");
         }
     }
 }

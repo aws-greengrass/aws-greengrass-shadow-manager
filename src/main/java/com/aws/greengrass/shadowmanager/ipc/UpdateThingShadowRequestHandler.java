@@ -87,10 +87,11 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
      * @param request     UpdateThingShadow request from IPC API
      * @param serviceName the service name making the request.
      * @return UpdateThingShadow response
-     * @throws ConflictError         if version conflict found when updating shadow document
-     * @throws UnauthorizedError     if UpdateThingShadow call not authorized
-     * @throws InvalidArgumentsError if validation error occurred with supplied request fields
-     * @throws ServiceError          if database error occurs
+     * @throws ConflictError                     if version conflict found when updating shadow document
+     * @throws UnauthorizedError                 if UpdateThingShadow call not authorized
+     * @throws InvalidArgumentsError             if validation error occurred with supplied request fields
+     * @throws ServiceError                      if database error occurs
+     * @throws InvalidRequestParametersException if the payload is empty or too large.
      */
     @SuppressWarnings({"PMD.PreserveStackTrace", "PMD.PrematureDeclaration", "checkstyle:JavadocMethod"})
     public UpdateThingShadowHandlerResponse handleRequest(UpdateThingShadowRequest request, String serviceName) {

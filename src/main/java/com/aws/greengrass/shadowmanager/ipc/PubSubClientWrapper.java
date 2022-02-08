@@ -121,7 +121,7 @@ public class PubSubClientWrapper {
     /**
      * Subscribes to the shadow topic over local PubSub.
      *
-     * @param cb Cosnumer to invoke upon receiving a new message over local PubSub.
+     * @param cb Consumer to invoke upon receiving a new message over local PubSub.
      */
     public void subscribe(Consumer<PublishEvent> cb) {
         this.pubSubIPCEventStreamAgent.subscribe(PUBSUB_SUBSCRIBE_TOPIC, cb, SHADOW_MANAGER_NAME);
@@ -130,7 +130,7 @@ public class PubSubClientWrapper {
     /**
      * Unsubscribes to the shadow topic over local PubSub.
      *
-     * @param cb Cosnumer to invoke upon receiving a new message over local PubSub.
+     * @param cb Consumer to invoke upon receiving a new message over local PubSub.
      */
     public void unsubscribe(Consumer<PublishEvent> cb) {
         this.pubSubIPCEventStreamAgent.unsubscribe(PUBSUB_SUBSCRIBE_TOPIC, cb, SHADOW_MANAGER_NAME);

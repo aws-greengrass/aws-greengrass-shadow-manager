@@ -408,9 +408,9 @@ public class ShadowManager extends PluginService {
     protected void shutdown() throws InterruptedException {
         try {
             stopSyncingShadows(true);
-            database.close();
-            inboundRateLimiter.clear();
             pubSubIntegrator.unsubscribe();
+            inboundRateLimiter.clear();
+            database.close();
         } catch (IOException e) {
             logger.atError()
                     .setEventType(LogEvents.DATABASE_CLOSE_ERROR.code())

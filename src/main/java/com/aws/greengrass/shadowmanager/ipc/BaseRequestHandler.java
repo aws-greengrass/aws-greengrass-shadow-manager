@@ -73,7 +73,7 @@ public class BaseRequestHandler {
      * @param shadowName  The shadow name.
      * @param clientToken The client token.
      * @param e           The Exception thrown
-     * @throws InvalidRequestParametersException always
+     * @throws InvalidArgumentsError always
      */
     @SuppressWarnings("PMD.AvoidUncheckedExceptionsInSignatures")
     void throwInvalidArgumentsError(String thingName, String shadowName, Optional<String> clientToken,
