@@ -16,7 +16,9 @@ import com.aws.greengrass.shadowmanager.ShadowManagerDAOImpl;
 import com.aws.greengrass.shadowmanager.ShadowManagerDatabase;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientFactory;
+import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
+import com.aws.greengrass.shadowmanager.sync.strategy.BaseSyncStrategy;
 import com.aws.greengrass.shadowmanager.sync.strategy.PeriodicSyncStrategy;
 import com.aws.greengrass.shadowmanager.sync.strategy.RealTimeSyncStrategy;
 import com.aws.greengrass.shadowmanager.sync.strategy.SyncStrategy;
@@ -35,6 +37,9 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static com.github.grantwest.eventually.EventuallyLambdaMatcher.eventuallyEval;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.lenient;
 
@@ -169,5 +174,29 @@ public class NucleusLaunchUtils extends GGServiceTestUtil {
         kernel.launch();
 
         assertTrue(shadowManagerRunning.await(TEST_TIME_OUT_SEC, TimeUnit.SECONDS));
+    }
+
+    protected void assertEmptySyncQueue(Class<? extends BaseSyncStrategy> clazz) {
+        BaseSyncStrategy s = kernel.getContext().get(clazz);
+
+        assertThat("syncing has started", s::isSyncing, eventuallyEval(is(true)));
+
+        RequestBlockingQueue q = s.getSyncQueue();
+
+        // queue is eventually empty (full syncs are added and then eventually removed)
+        assertThat("sync queue is eventually empty", () -> q.isEmpty() && !s.isExecuting(),
+                eventuallyEval(is(true), Duration.ofSeconds(10)));
+    }
+
+    protected void assertNotEmptySyncQueue(Class<? extends BaseSyncStrategy> clazz) {
+        BaseSyncStrategy s = kernel.getContext().get(clazz);
+
+        assertThat("syncing has started", s::isSyncing, eventuallyEval(is(true)));
+
+        RequestBlockingQueue q = s.getSyncQueue();
+
+        // queue is eventually empty (full syncs are added and then eventually removed)
+        assertThat("sync queue is eventually not empty", () -> !q.isEmpty(),
+                eventuallyEval(is(true), Duration.ofSeconds(10)));
     }
 }

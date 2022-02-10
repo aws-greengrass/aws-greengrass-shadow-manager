@@ -328,14 +328,14 @@ public class ShadowManager extends PluginService {
         if (installConfig.configureSyncDirectionConfig) {
             config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC,
                     CONFIGURATION_SYNC_DIRECTION_TOPIC)
-                    .dflt(Direction.BIDIRECTIONAL)
+                    .dflt(Direction.BETWEEN_DEVICE_AND_CLOUD.getCode())
                     .subscribe((why, newv) -> {
                         Direction newSyncDirection;
                         if (WhatHappened.removed.equals(why)) {
-                            newSyncDirection = Direction.BIDIRECTIONAL;
+                            newSyncDirection = Direction.BETWEEN_DEVICE_AND_CLOUD;
                         } else {
                             try {
-                                newSyncDirection = Direction.valueOf(Coerce.toString(newv));
+                                newSyncDirection = Direction.getDirection(Coerce.toString(newv));
                             } catch (IllegalArgumentException e) {
                                 serviceErrored(e);
                                 return;
@@ -392,7 +392,7 @@ public class ShadowManager extends PluginService {
     }
 
     private void setupSync(Direction newSyncDirection, Optional<Direction> currentDirection) {
-        if (Direction.FROMDEVICEONLY.equals(newSyncDirection)) {
+        if (Direction.DEVICE_TO_CLOUD.equals(newSyncDirection)) {
             // If we are going to update the cloud after a local shadow has been updated, then stop
             // the existing sync loop future which is trying to subscribe to shadow topics.
             // Also unsubscribe all the shadow topics that we have already subscribed to.
@@ -404,13 +404,13 @@ public class ShadowManager extends PluginService {
                     .reInitializeSyncInfo(!currentDirection.isPresent())
                     .startSyncStrategy(!currentDirection.isPresent())
                     .build());
-        } else if (Direction.FROMCLOUDONLY.equals(newSyncDirection)) {
+        } else if (Direction.CLOUD_TO_DEVICE.equals(newSyncDirection)) {
             // If we are only going to get an update after a cloud shadow has been updated, then
             // update the shadow subscriptions if the current direction was FROMDEVICEONLY (since we
             // would have unsubscribed from all topics).
             // Stop the sync strategy loop.
             // TODO: do we need to clear the sync queue?
-            if (!currentDirection.isPresent() || Direction.FROMDEVICEONLY.equals(currentDirection.get())) {
+            if (!currentDirection.isPresent() || Direction.DEVICE_TO_CLOUD.equals(currentDirection.get())) {
                 cloudDataClient.updateSubscriptions(syncConfiguration.getSyncShadows());
             }
             startSyncingShadows(StartSyncInfo.builder()
@@ -426,7 +426,7 @@ public class ShadowManager extends PluginService {
             startSyncingShadows(StartSyncInfo.builder()
                     .startSyncStrategy(!currentDirection.isPresent())
                     .updateCloudSubscriptions(!currentDirection.isPresent()
-                            || Direction.FROMDEVICEONLY.equals(currentDirection.get()))
+                            || Direction.DEVICE_TO_CLOUD.equals(currentDirection.get()))
                     .reInitializeSyncInfo(!currentDirection.isPresent())
                     .overrideRunningCheck(!currentDirection.isPresent())
                     .build());

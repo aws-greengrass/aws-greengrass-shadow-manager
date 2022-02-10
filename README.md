@@ -17,7 +17,7 @@ Manifests:
           type: periodic // default realTime
           delay: 300 // in seconds
         synchronize:
-          direction: BIDIRECTIONAL
+          direction: betweenDeviceAndCloud
           # explicit config for Nucleus
           coreThing:
             classic: true // default is true
@@ -65,7 +65,7 @@ Manifests:
     "delay": 300  // in seconds
   },
   "synchronize":{
-    "direction": "BIDIRECTIONAL"
+    "direction": "betweenDeviceAndCloud"
     "coreThing":{
       "classic":true,
       "namedShadows":[

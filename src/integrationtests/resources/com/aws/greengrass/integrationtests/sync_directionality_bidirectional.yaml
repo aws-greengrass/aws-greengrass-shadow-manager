@@ -7,7 +7,7 @@ services:
   aws.greengrass.ShadowManager:
     configuration:
       synchronize:
-        direction: BIDIRECTIONAL
+        direction: betweenDeviceAndCloud
         shadowDocumentsMap:
           Thing1:
             classic: true

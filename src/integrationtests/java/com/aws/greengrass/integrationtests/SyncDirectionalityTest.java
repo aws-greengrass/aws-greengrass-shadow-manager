@@ -7,6 +7,7 @@ package com.aws.greengrass.integrationtests;
 
 import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.logging.impl.config.LogConfig;
+import com.aws.greengrass.shadowmanager.ShadowManager;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAOImpl;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
@@ -113,8 +114,7 @@ class SyncDirectionalityTest extends NucleusLaunchUtils {
         request.setPayload(localShadowContentV1.getBytes(UTF_8));
 
         updateHandler.handleRequest(request, "DoAll");
-        SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
-        assertThat(() -> ((RealTimeSyncStrategy) syncHandler.getOverallSyncStrategy()).getSyncQueue().size(), eventuallyEval(is(0)));
+        assertEmptySyncQueue(RealTimeSyncStrategy.class);
 
         assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
 
@@ -147,8 +147,12 @@ class SyncDirectionalityTest extends NucleusLaunchUtils {
                 .mockCloud(true)
                 .resetRetryConfig(false)
                 .build());
-        assertThat(() -> kernel.getContext().get(RealTimeSyncStrategy.class).getSyncQueue().size(), eventuallyEval(is(0)));
-        TimeUnit.SECONDS.sleep(5);
+        shadowManager.startSyncingShadows(ShadowManager.StartSyncInfo.builder().build());
+        // There is a race condition which can cause us to check queue is empty before having inserted any full sync
+        // requests in it. This check avoids that.
+        assertNotEmptySyncQueue(RealTimeSyncStrategy.class);
+        assertEmptySyncQueue(RealTimeSyncStrategy.class);
+
         UpdateThingShadowRequestHandler updateHandler = shadowManager.getUpdateThingShadowRequestHandler();
 
         // update local shadow
@@ -158,9 +162,9 @@ class SyncDirectionalityTest extends NucleusLaunchUtils {
         request.setPayload(localShadowContentV1.getBytes(UTF_8));
 
         updateHandler.handleRequest(request, "DoAll");
-        assertThat(() -> kernel.getContext().get(RealTimeSyncStrategy.class).getSyncQueue().size(), eventuallyEval(is(0)));
+        assertEmptySyncQueue(RealTimeSyncStrategy.class);
 
-        assertThat("local shadow exists", localShadow.get().isPresent(), is(true));
+        assertThat("local shadow exists", () -> localShadow.get().isPresent(), eventuallyEval(is(true)));
         ShadowDocument shadowDocument = localShadow.get().get();
         // remove metadata node and version (JsonNode version will fail a comparison of long vs int)
         shadowDocument = new ShadowDocument(shadowDocument.getState(), null, null);
@@ -190,12 +194,13 @@ class SyncDirectionalityTest extends NucleusLaunchUtils {
                 .mockCloud(true)
                 .resetRetryConfig(false)
                 .build());
-        assertThat(() -> kernel.getContext().get(RealTimeSyncStrategy.class).getSyncQueue().size(), eventuallyEval(is(0)));
-        TimeUnit.SECONDS.sleep(2);
+
+        shadowManager.startSyncingShadows(ShadowManager.StartSyncInfo.builder().build());
+        assertEmptySyncQueue(RealTimeSyncStrategy.class);
 
         SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
         syncHandler.pushLocalUpdateSyncRequest(MOCK_THING_NAME_1, CLASSIC_SHADOW, JsonUtil.getPayloadBytes(cloudDocument));
-        assertThat(() -> kernel.getContext().get(RealTimeSyncStrategy.class).getSyncQueue().size(), eventuallyEval(is(0)));
+        assertEmptySyncQueue(RealTimeSyncStrategy.class);
 
         assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
         assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(1L)));
@@ -220,12 +225,12 @@ class SyncDirectionalityTest extends NucleusLaunchUtils {
                 .mockCloud(true)
                 .resetRetryConfig(false)
                 .build());
-        assertThat(() -> kernel.getContext().get(RealTimeSyncStrategy.class).getSyncQueue().size(), eventuallyEval(is(0)));
-        TimeUnit.SECONDS.sleep(2);
+        shadowManager.startSyncingShadows(ShadowManager.StartSyncInfo.builder().build());
+        assertEmptySyncQueue(RealTimeSyncStrategy.class);
 
         SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
         syncHandler.pushLocalUpdateSyncRequest(MOCK_THING_NAME_1, CLASSIC_SHADOW, JsonUtil.getPayloadBytes(cloudDocument));
-        assertThat(() -> kernel.getContext().get(RealTimeSyncStrategy.class).getSyncQueue().size(), eventuallyEval(is(0)));
+        assertEmptySyncQueue(RealTimeSyncStrategy.class);
 
         TimeUnit.SECONDS.sleep(2);
 

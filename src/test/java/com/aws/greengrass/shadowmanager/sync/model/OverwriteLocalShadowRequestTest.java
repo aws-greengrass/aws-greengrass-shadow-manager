@@ -80,7 +80,7 @@ class OverwriteLocalShadowRequestTest {
 
     @BeforeEach
     void setup() throws IOException {
-        lenient().when(mockDao.updateSyncInformation(syncInformationCaptor.capture())).thenReturn(true);
+        lenient().when(mockDao.updateSyncInformation(any())).thenReturn(true);
         syncContext = new SyncContext(mockDao, mockUpdateThingShadowRequestHandler, mockDeleteThingShadowRequestHandler,
                 mockIotDataPlaneClientWrapper);
         JsonUtil.loadSchema();
@@ -113,7 +113,7 @@ class OverwriteLocalShadowRequestTest {
 
         verify(mockIotDataPlaneClientWrapper, times(1)).getThingShadow(anyString(), anyString());
         verify(mockDao, never()).getShadowThing(anyString(), anyString());
-        verify(mockDao, times(1)).updateSyncInformation(any());
+        verify(mockDao, times(1)).updateSyncInformation(syncInformationCaptor.capture());
         verify(mockUpdateThingShadowRequestHandler, times(1)).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest.class), anyString());
         verify(mockDeleteThingShadowRequestHandler, never()).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowRequest.class), anyString());
         verify(mockIotDataPlaneClientWrapper, never()).updateThingShadow(anyString(), anyString(), any(byte[].class));
@@ -169,7 +169,7 @@ class OverwriteLocalShadowRequestTest {
 
         verify(mockIotDataPlaneClientWrapper, times(1)).getThingShadow(anyString(), anyString());
         verify(mockDao, never()).getShadowThing(anyString(), anyString());
-        verify(mockDao, times(1)).updateSyncInformation(any());
+        verify(mockDao, times(1)).updateSyncInformation(syncInformationCaptor.capture());
         verify(mockUpdateThingShadowRequestHandler, never()).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest.class), anyString());
         verify(mockDeleteThingShadowRequestHandler, times(1)).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowRequest.class), anyString());
         verify(mockIotDataPlaneClientWrapper, never()).updateThingShadow(anyString(), anyString(), any(byte[].class));

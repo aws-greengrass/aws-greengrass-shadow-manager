@@ -7,7 +7,7 @@ services:
   aws.greengrass.ShadowManager:
     configuration:
       synchronize:
-        direction: FROMCLOUDONLY
+        direction: cloudToDevice
         shadowDocumentsMap:
           Thing1:
             classic: true

@@ -87,7 +87,7 @@ public class CloudDataClient {
     /**
      * Unsubscribe to all shadow topics.
      */
-    public void unsubscribeForAllShadowsTopics() {
+    public synchronized void unsubscribeForAllShadowsTopics() {
         unsubscribeForAllShadowsTopics(subscribedUpdateShadowTopics, this::handleUpdate);
         unsubscribeForAllShadowsTopics(subscribedDeleteShadowTopics, this::handleDelete);
     }
@@ -98,24 +98,24 @@ public class CloudDataClient {
      * @param topics   topics to unsubscribe
      * @param callback Callback function applied to shadow topic
      */
-    public synchronized void unsubscribeForAllShadowsTopics(Set<String> topics, Consumer<MqttMessage> callback) {
+    private synchronized void unsubscribeForAllShadowsTopics(Set<String> topics, Consumer<MqttMessage> callback) {
         Set<String> topicsToUnsubscribe = new HashSet<>(topics);
         for (String topic : topicsToUnsubscribe) {
             try {
                 mqttClient.unsubscribe(UnsubscribeRequest.builder().callback(callback).topic(topic).build());
-                logger.atDebug().log("Unsubscribed to {}", topic);
+                logger.atDebug().log("Unsubscribed from {}", topic);
                 topics.remove(topic);
             } catch (TimeoutException | ExecutionException e) {
                 logger.atWarn()
                         .setEventType(LogEvents.CLOUD_DATA_CLIENT_SUBSCRIPTION_ERROR.code())
                         .kv(LOG_TOPIC, topic)
                         .setCause(e)
-                        .log("Failed to unsubscribe to shadow topic");
+                        .log("Failed to unsubscribe from shadow topic");
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 logger.atError()
                         .setEventType(LogEvents.CLOUD_DATA_CLIENT_SUBSCRIPTION_ERROR.code())
-                        .log("Failed to unsubscribe to all shadow topics");
+                        .log("Failed from unsubscribe to all shadow topics");
             }
         }
     }
@@ -125,7 +125,7 @@ public class CloudDataClient {
      *
      * @param shadowSet Set of shadow topic prefixes to subscribe to the update/delete topic
      */
-    public void updateSubscriptions(Set<Pair<String, String>> shadowSet) {
+    public synchronized void updateSubscriptions(Set<Pair<String, String>> shadowSet) {
         Set<String> newUpdateTopics = new HashSet<>();
         Set<String> newDeleteTopics = new HashSet<>();
 

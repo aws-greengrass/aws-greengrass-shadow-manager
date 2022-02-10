@@ -70,7 +70,7 @@ public abstract class BaseSyncRequest extends ShadowRequest implements SyncReque
      * @param shadowName The shadow name associated with the sync shadow update
      */
     protected BaseSyncRequest(String thingName,
-                           String shadowName) {
+                              String shadowName) {
         super(thingName, shadowName);
     }
 
@@ -153,6 +153,7 @@ public abstract class BaseSyncRequest extends ShadowRequest implements SyncReque
                 .thingName(getThingName())
                 .cloudUpdateTime(Instant.now().getEpochSecond())
                 .lastSyncedDocument(null)
+                .cloudDeleted(true)
                 .build());
     }
 

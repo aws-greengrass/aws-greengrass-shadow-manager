@@ -206,29 +206,29 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         SyncStrategy mockSyncStrategy = mock(SyncStrategy.class);
         lenient().when(mockSyncHandler.getOverallSyncStrategy()).thenReturn(mockSyncStrategy);
         when(mockSyncHandler.getSyncDirection()).thenReturn(current);
-        Topic directionTopic = Topic.of(context, CONFIGURATION_SYNC_DIRECTION_TOPIC, Direction.BIDIRECTIONAL);
+        Topic directionTopic = Topic.of(context, CONFIGURATION_SYNC_DIRECTION_TOPIC, Direction.BETWEEN_DEVICE_AND_CLOUD.getCode());
         when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC, CONFIGURATION_SYNC_DIRECTION_TOPIC))
                 .thenReturn(directionTopic);
         s.install(ShadowManager.InstallConfig.builder().configureSyncDirectionConfig(true).build());
 
         assertFalse(s.isErrored());
 
-        if (Direction.BIDIRECTIONAL.equals(current)) {
+        if (Direction.BETWEEN_DEVICE_AND_CLOUD.equals(current)) {
             verify(mockSyncHandler, never()).start(any(), anyInt());
             verify(mockCloudDataClient, never()).updateSubscriptions(any());
             verify(mockSyncHandler, never()).stop();
-            verify(mockSyncHandler, never()).setSyncDirection(eq(Direction.BIDIRECTIONAL));
+            verify(mockSyncHandler, never()).setSyncDirection(eq(Direction.BETWEEN_DEVICE_AND_CLOUD));
             return;
         }
 
-        if (Direction.FROMDEVICEONLY.equals(current)) {
+        if (Direction.DEVICE_TO_CLOUD.equals(current)) {
             verify(mockSyncHandler, never()).start(any(), anyInt());
             verify(mockCloudDataClient, times(1)).updateSubscriptions(any());
         } else {
             verify(mockCloudDataClient, never()).updateSubscriptions(any());
         }
         verify(mockSyncHandler, never()).stop();
-        verify(mockSyncHandler, times(1)).setSyncDirection(eq(Direction.BIDIRECTIONAL));
+        verify(mockSyncHandler, times(1)).setSyncDirection(eq(Direction.BETWEEN_DEVICE_AND_CLOUD));
         verify(mockDao, never()).listSyncedShadows();
         verify(mockDao, never()).deleteSyncInformation(anyString(), anyString());
         verify(mockDao, never()).insertSyncInfoIfNotExists(any());
@@ -248,18 +248,18 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         SyncStrategy mockSyncStrategy = mock(SyncStrategy.class);
         lenient().when(mockSyncHandler.getOverallSyncStrategy()).thenReturn(mockSyncStrategy);
         when(mockSyncHandler.getSyncDirection()).thenReturn(current);
-        Topic directionTopic = Topic.of(context, CONFIGURATION_SYNC_DIRECTION_TOPIC, Direction.FROMDEVICEONLY);
+        Topic directionTopic = Topic.of(context, CONFIGURATION_SYNC_DIRECTION_TOPIC, Direction.DEVICE_TO_CLOUD.getCode());
         when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC, CONFIGURATION_SYNC_DIRECTION_TOPIC))
                 .thenReturn(directionTopic);
         s.install(ShadowManager.InstallConfig.builder().configureSyncDirectionConfig(true).build());
 
         assertFalse(s.isErrored());
 
-        if (Direction.FROMDEVICEONLY.equals(current)) {
+        if (Direction.DEVICE_TO_CLOUD.equals(current)) {
             verify(mockSyncHandler, never()).start(any(), anyInt());
             verify(mockCloudDataClient, never()).updateSubscriptions(any());
             verify(mockSyncHandler, never()).stop();
-            verify(mockSyncHandler, never()).setSyncDirection(eq(Direction.BIDIRECTIONAL));
+            verify(mockSyncHandler, never()).setSyncDirection(eq(Direction.BETWEEN_DEVICE_AND_CLOUD));
             return;
         }
 
@@ -268,7 +268,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         verify(mockCloudDataClient, never()).updateSubscriptions(any());
         verify(mockSyncHandler, never()).stop();
 
-        verify(mockSyncHandler, times(1)).setSyncDirection(eq(Direction.FROMDEVICEONLY));
+        verify(mockSyncHandler, times(1)).setSyncDirection(eq(Direction.DEVICE_TO_CLOUD));
         verify(mockDao, never()).listSyncedShadows();
         verify(mockDao, never()).deleteSyncInformation(anyString(), anyString());
         verify(mockDao, never()).insertSyncInfoIfNotExists(any());
@@ -288,22 +288,22 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         SyncStrategy mockSyncStrategy = mock(SyncStrategy.class);
         lenient().when(mockSyncHandler.getOverallSyncStrategy()).thenReturn(mockSyncStrategy);
         when(mockSyncHandler.getSyncDirection()).thenReturn(current);
-        Topic directionTopic = Topic.of(context, CONFIGURATION_SYNC_DIRECTION_TOPIC, Direction.FROMCLOUDONLY);
+        Topic directionTopic = Topic.of(context, CONFIGURATION_SYNC_DIRECTION_TOPIC, Direction.CLOUD_TO_DEVICE.getCode());
         when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC, CONFIGURATION_SYNC_DIRECTION_TOPIC))
                 .thenReturn(directionTopic);
         s.install(ShadowManager.InstallConfig.builder().configureSyncDirectionConfig(true).build());
 
         assertFalse(s.isErrored());
 
-        if (Direction.FROMCLOUDONLY.equals(current)) {
+        if (Direction.CLOUD_TO_DEVICE.equals(current)) {
             verify(mockSyncHandler, never()).start(any(), anyInt());
             verify(mockCloudDataClient, never()).updateSubscriptions(any());
             verify(mockSyncHandler, never()).stop();
-            verify(mockSyncHandler, never()).setSyncDirection(eq(Direction.BIDIRECTIONAL));
+            verify(mockSyncHandler, never()).setSyncDirection(eq(Direction.BETWEEN_DEVICE_AND_CLOUD));
             return;
         }
 
-        if (Direction.BIDIRECTIONAL.equals(current)) {
+        if (Direction.BETWEEN_DEVICE_AND_CLOUD.equals(current)) {
             verify(mockCloudDataClient, never()).updateSubscriptions(any());
         } else {
             verify(mockCloudDataClient, times(1)).updateSubscriptions(any());
@@ -311,7 +311,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
 
         verify(mockSyncHandler, never()).stop();
         verify(mockSyncHandler, never()).start(any(), anyInt());
-        verify(mockSyncHandler, times(1)).setSyncDirection(eq(Direction.FROMCLOUDONLY));
+        verify(mockSyncHandler, times(1)).setSyncDirection(eq(Direction.CLOUD_TO_DEVICE));
         verify(mockDao, never()).listSyncedShadows();
         verify(mockDao, never()).deleteSyncInformation(anyString(), anyString());
         verify(mockDao, never()).insertSyncInfoIfNotExists(any());

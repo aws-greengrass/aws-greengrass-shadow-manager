@@ -138,15 +138,15 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
      *
      * @param retryer The retryer object.
      */
-    public BaseSyncStrategy(Retryer retryer) {
+    protected BaseSyncStrategy(Retryer retryer) {
         this(retryer, DEFAULT_RETRY_CONFIG);
     }
 
-    public BaseSyncStrategy(Retryer retryer, RequestBlockingQueue syncQueue) {
+    protected BaseSyncStrategy(Retryer retryer, RequestBlockingQueue syncQueue) {
         this(retryer, DEFAULT_RETRY_CONFIG, syncQueue);
     }
 
-    public BaseSyncStrategy(Retryer retryer, RetryUtils.RetryConfig retryConfig) {
+    protected BaseSyncStrategy(Retryer retryer, RetryUtils.RetryConfig retryConfig) {
         this(retryer, retryConfig, new RequestBlockingQueue(new RequestMerger()));
     }
 
@@ -157,7 +157,7 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
      * @param retryConfig The config to be used by the retryer.
      * @param syncQueue   A queue to use for sync requests.
      */
-    public BaseSyncStrategy(Retryer retryer, RetryUtils.RetryConfig retryConfig, RequestBlockingQueue syncQueue) {
+    private BaseSyncStrategy(Retryer retryer, RetryUtils.RetryConfig retryConfig, RequestBlockingQueue syncQueue) {
         this.retryer = (config, request, context) -> {
             try {
                 executing.set(true);

@@ -75,7 +75,7 @@ class OverwriteCloudShadowRequestTest {
 
     @BeforeEach
     void setup() throws IOException {
-        lenient().when(mockDao.updateSyncInformation(syncInformationCaptor.capture())).thenReturn(true);
+        lenient().when(mockDao.updateSyncInformation(any())).thenReturn(true);
         syncContext = new SyncContext(mockDao, mockUpdateThingShadowRequestHandler, mockDeleteThingShadowRequestHandler,
                 mockIotDataPlaneClientWrapper);
         JsonUtil.loadSchema();
@@ -105,7 +105,7 @@ class OverwriteCloudShadowRequestTest {
         request.execute(syncContext);
 
         verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
-        verify(mockDao, times(1)).updateSyncInformation(any());
+        verify(mockDao, times(1)).updateSyncInformation(syncInformationCaptor.capture());
         verify(mockUpdateThingShadowRequestHandler, never()).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest.class), anyString());
         verify(mockIotDataPlaneClientWrapper, times(1)).updateThingShadow(anyString(), anyString(), any(byte[].class));
 
@@ -150,7 +150,7 @@ class OverwriteCloudShadowRequestTest {
         request.execute(syncContext);
 
         verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
-        verify(mockDao, times(1)).updateSyncInformation(any());
+        verify(mockDao, times(1)).updateSyncInformation(syncInformationCaptor.capture());
         verify(mockUpdateThingShadowRequestHandler, never()).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest.class), anyString());
         verify(mockDeleteThingShadowRequestHandler, never()).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowRequest.class), anyString());
         verify(mockIotDataPlaneClientWrapper, never()).updateThingShadow(anyString(), anyString(), any(byte[].class));
@@ -167,7 +167,7 @@ class OverwriteCloudShadowRequestTest {
         assertThat(syncInformationCaptor.getValue().getLastSyncTime(), is(greaterThanOrEqualTo(epochSeconds)));
         assertThat(syncInformationCaptor.getValue().getShadowName(), is(SHADOW_NAME));
         assertThat(syncInformationCaptor.getValue().getThingName(), is(THING_NAME));
-        assertThat(syncInformationCaptor.getValue().isCloudDeleted(), is(false));
+        assertThat(syncInformationCaptor.getValue().isCloudDeleted(), is(true));
     }
 
     @Test
