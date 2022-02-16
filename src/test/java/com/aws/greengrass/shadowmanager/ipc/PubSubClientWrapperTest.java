@@ -36,10 +36,14 @@ import java.time.Instant;
 import java.util.Optional;
 
 import static com.aws.greengrass.shadowmanager.ShadowManager.SERVICE_NAME;
+import static com.aws.greengrass.shadowmanager.model.Constants.PUBSUB_SUBSCRIBE_TOPIC;
+import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_MANAGER_NAME;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atMostOnce;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -196,5 +200,19 @@ class PubSubClientWrapperTest {
                 .build());
         verify(mockPubSubIPCEventStreamAgent, times(1)).publish(topicCaptor.capture(),
                 payloadCaptor.capture(), serviceNameCaptor.capture());
+    }
+
+    @Test
+    void GIVEN_consumer_to_subscribe_WHEN_subscribe_THEN_calls_pubsub_agent_to_subscribe() {
+        PubSubClientWrapper pubSubClientWrapper = new PubSubClientWrapper(mockPubSubIPCEventStreamAgent);
+        pubSubClientWrapper.subscribe(publishEvent -> {});
+        verify(mockPubSubIPCEventStreamAgent, atMostOnce()).subscribe(eq(PUBSUB_SUBSCRIBE_TOPIC), any(), eq(SHADOW_MANAGER_NAME));
+    }
+
+    @Test
+    void GIVEN_consumer_to_unsubscribe_WHEN_unsubscribe_THEN_calls_pubsub_agent_to_unsubscribe() {
+        PubSubClientWrapper pubSubClientWrapper = new PubSubClientWrapper(mockPubSubIPCEventStreamAgent);
+        pubSubClientWrapper.unsubscribe(publishEvent -> {});
+        verify(mockPubSubIPCEventStreamAgent, atMostOnce()).unsubscribe(eq(PUBSUB_SUBSCRIBE_TOPIC), any(), eq(SHADOW_MANAGER_NAME));
     }
 }

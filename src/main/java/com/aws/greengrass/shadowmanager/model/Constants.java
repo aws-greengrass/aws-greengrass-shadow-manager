@@ -23,6 +23,7 @@ public final class Constants {
     public static final String LOG_DELETED_CLOUD_VERSION_KEY = "deleted-cloud-version";
     public static final String LOG_UPDATED_CLOUD_VERSION_KEY = "updated-cloud-version";
     public static final String LOG_TOPIC = "topic";
+    public static final String LOG_OPERATION = "operation";
     public static final String SHADOW_DOCUMENT_VERSION = "version";
     public static final String SHADOW_DOCUMENT_TIMESTAMP = "timestamp";
     public static final String SHADOW_DOCUMENT_CLIENT_TOKEN = "clientToken";
@@ -79,6 +80,7 @@ public final class Constants {
     public static final String STRATEGY_TYPE_REAL_TIME = "realTime";
     public static final String STRATEGY_TYPE_PERIODIC = "periodic";
 
+    public static final String PUBSUB_SUBSCRIBE_TOPIC = "$aws/things/+/shadow/#";
 
     private Constants() {
     }

@@ -101,6 +101,7 @@ public class ShadowManager extends PluginService {
     private final SyncHandler syncHandler;
     private final CloudDataClient cloudDataClient;
     private final MqttClient mqttClient;
+    private final PubSubIntegrator pubSubIntegrator;
     public final MqttClientConnectionEvents callbacks = new MqttClientConnectionEvents() {
         @Override
         public void onConnectionInterrupted(int errorCode) {
@@ -176,6 +177,8 @@ public class ShadowManager extends PluginService {
         this.getThingShadowRequestHandler = new GetThingShadowRequestHandler(dao, authorizationHandlerWrapper,
                 pubSubClientWrapper);
         this.deviceThingNameWatcher = this::handleDeviceThingNameChange;
+        this.pubSubIntegrator = new PubSubIntegrator(pubSubClientWrapper, deleteThingShadowRequestHandler,
+                updateThingShadowRequestHandler, getThingShadowRequestHandler);
     }
 
     private void registerHandlers() {
@@ -474,6 +477,7 @@ public class ShadowManager extends PluginService {
         // Register IPC and Authorization
         registerHandlers();
 
+        pubSubIntegrator.subscribe();
         if (!deviceConfiguration.isDeviceConfiguredToTalkToCloud()) {
             logger.atWarn().log("Device not configured to talk to AWS Iot cloud. Not syncing shadows to the cloud");
             // Right now the connection cannot be brought online without a restart.
@@ -500,8 +504,9 @@ public class ShadowManager extends PluginService {
     protected void shutdown() throws InterruptedException {
         try {
             stopSyncingShadows(true);
-            database.close();
+            pubSubIntegrator.unsubscribe();
             inboundRateLimiter.clear();
+            database.close();
         } catch (IOException e) {
             logger.atError()
                     .setEventType(LogEvents.DATABASE_CLOSE_ERROR.code())
