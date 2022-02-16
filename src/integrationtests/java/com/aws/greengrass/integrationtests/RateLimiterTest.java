@@ -108,9 +108,7 @@ class RateLimiterTest extends NucleusLaunchUtils {
         }
 
         // verify that some requests have been throttled
-        verify(iotDataPlaneClientFactory.getIotDataPlaneClient(), after(1000).atLeastOnce()).updateThingShadow(
-                any(software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowRequest.class));
-        verify(iotDataPlaneClientFactory.getIotDataPlaneClient(), after(1000).atMost(6)).updateThingShadow(
+        verify(iotDataPlaneClientFactory.getIotDataPlaneClient(), after(500).atMost(4)).updateThingShadow(
                 any(software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowRequest.class));
 
         // verify that the rest of the requests are eventually handled

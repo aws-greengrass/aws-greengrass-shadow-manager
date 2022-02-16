@@ -16,7 +16,6 @@ import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
-import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
 import com.aws.greengrass.shadowmanager.sync.strategy.BaseSyncStrategy;
 import com.aws.greengrass.shadowmanager.sync.strategy.PeriodicSyncStrategy;
@@ -149,18 +148,6 @@ class SyncTest extends NucleusLaunchUtils {
         } else {
             return "periodic_sync.yaml";
         }
-    }
-
-    private void assertEmptySyncQueue(Class<? extends BaseSyncStrategy> clazz) {
-        BaseSyncStrategy s = kernel.getContext().get(clazz);
-
-        assertThat("syncing has started", s::isSyncing, eventuallyEval(is(true)));
-
-        RequestBlockingQueue q = s.getSyncQueue();
-
-        // queue is eventually empty (full syncs are added and then eventually removed)
-        assertThat("sync queue is eventually empty", () -> q.isEmpty() && !s.isExecuting(),
-                eventuallyEval(is(true), Duration.ofSeconds(10)));
     }
 
     @ParameterizedTest

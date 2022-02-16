@@ -67,38 +67,6 @@ class IotDataPlaneClientFactoryTest {
     }
 
     @Test
-    void GIVEN_good_config_WHEN_configure_client_THEN_correctly_configures_iot_data_client() {
-        clientFactory = new IotDataPlaneClientFactory(mockDeviceConfiguration);
-        assertThat(clientFactory.getIotDataPlaneClient(), is(notNullValue()));
-
-        verify(mockDeviceConfiguration, times(1)).getIotDataEndpoint();
-        verify(mockDeviceConfiguration, times(1)).getAWSRegion();
-        verify(mockDeviceConfiguration, times(1)).getPrivateKeyFilePath();
-        verify(mockDeviceConfiguration, times(1)).getCertificateFilePath();
-
-        reset(mockDeviceConfiguration);
-        Topic regionTopic = Topic.of(mockContext, DEVICE_PARAM_AWS_REGION, "dummyRegion");
-        ccCaptor.getValue().childChanged(WhatHappened.childChanged, regionTopic);
-
-        assertThat(clientFactory.getIotDataPlaneClient(), is(notNullValue()));
-
-        verify(mockDeviceConfiguration, times(1)).getIotDataEndpoint();
-        verify(mockDeviceConfiguration, times(1)).getAWSRegion();
-        verify(mockDeviceConfiguration, times(1)).getPrivateKeyFilePath();
-        verify(mockDeviceConfiguration, times(1)).getCertificateFilePath();
-
-        reset(mockDeviceConfiguration);
-        Topic endpointTopic = Topic.of(mockContext, DEVICE_PARAM_IOT_DATA_ENDPOINT, "dummyEndpoint");
-        ccCaptor.getValue().childChanged(WhatHappened.childChanged, endpointTopic);
-
-        assertThat(clientFactory.getIotDataPlaneClient(), is(notNullValue()));
-
-        verify(mockDeviceConfiguration, times(1)).getIotDataEndpoint();
-        verify(mockDeviceConfiguration, times(1)).getAWSRegion();
-        verify(mockDeviceConfiguration, times(1)).getPrivateKeyFilePath();
-        verify(mockDeviceConfiguration, times(1)).getCertificateFilePath();
-    }
-    @Test
     void GIVEN_bad_config_WHEN_configure_client_THEN_does_not_reconfigure_iot_data_client() {
         clientFactory = new IotDataPlaneClientFactory(mockDeviceConfiguration);
         assertThat(clientFactory.getIotDataPlaneClient(), is(notNullValue()));

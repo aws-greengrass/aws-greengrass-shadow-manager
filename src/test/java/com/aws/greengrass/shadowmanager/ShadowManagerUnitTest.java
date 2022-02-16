@@ -24,7 +24,9 @@ import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.CloudDataClient;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientWrapper;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
+import com.aws.greengrass.shadowmanager.sync.model.Direction;
 import com.aws.greengrass.shadowmanager.sync.model.SyncContext;
+import com.aws.greengrass.shadowmanager.sync.strategy.SyncStrategy;
 import com.aws.greengrass.shadowmanager.sync.strategy.model.Strategy;
 import com.aws.greengrass.shadowmanager.sync.strategy.model.StrategyType;
 import com.aws.greengrass.shadowmanager.util.ShadowWriteSynchronizeHelper;
@@ -39,6 +41,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -77,6 +80,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SHA
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SHADOW_DOCUMENTS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_STRATEGY_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SYNCHRONIZATION_TOPIC;
+import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SYNC_DIRECTION_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_THING_NAME_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_DOCUMENT_SIZE;
 import static com.aws.greengrass.shadowmanager.model.Constants.MAX_SHADOW_DOCUMENT_SIZE;
@@ -93,6 +97,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anySet;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atMostOnce;
 import static org.mockito.Mockito.doAnswer;
@@ -162,17 +167,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper,
                 mockPubSubClientWrapper, mockInboundRateLimiter, mockDeviceConfiguration, mockSynchronizeHelper,
                 mockIotDataPlaneClientWrapper, mockSyncHandler, mockCloudDataClient, mockMqttClient);
-
-        Topic maxDocSizeTopic = Topic.of(context, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC, DEFAULT_DOCUMENT_SIZE);
-
-        lenient().when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC))
-                .thenReturn(maxDocSizeTopic);
-        lenient().when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
-                .thenReturn(mock(Topics.class));
-        lenient().when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_RATE_LIMITS_TOPIC))
-                .thenReturn(mock(Topics.class));
-        lenient().when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_STRATEGY_TOPIC))
-                .thenReturn(mock(Topics.class));
     }
 
     @ParameterizedTest
@@ -181,7 +175,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         Topic maxDocSizeTopic = Topic.of(context, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC, maxDocSize);
         when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC))
                 .thenReturn(maxDocSizeTopic);
-        shadowManager.install();
+        shadowManager.install(ShadowManager.InstallConfig.builder().configureMaxDocSizeLimitConfig(true).build());
 
         assertFalse(shadowManager.isErrored());
         assertThat(Validator.getMaxShadowDocumentSize(), is(maxDocSize));
@@ -194,8 +188,148 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         Topic maxDocSizeTopic = Topic.of(context, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC, maxDocSize);
         when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC))
                 .thenReturn(maxDocSizeTopic);
-        shadowManager.install();
+        shadowManager.install(ShadowManager.InstallConfig.builder().configureMaxDocSizeLimitConfig(true).build());
         assertTrue(shadowManager.isErrored());
+    }
+
+    @ParameterizedTest
+    @EnumSource(Direction.class)
+    void GIVEN_current_direction_WHEN_updated_to_BIDRECTIONAL_THEN_appropriately_handles_the_sync_direction(Direction current) {
+        ShadowManager s = spy(shadowManager);
+
+        lenient().doReturn(true).when(s).inState(eq(State.RUNNING));
+
+        s.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurations(new HashSet<>()).build());
+        ThingShadowSyncConfiguration syncConfiguration = mock(ThingShadowSyncConfiguration.class);
+        s.getSyncConfiguration().getSyncConfigurations().add(syncConfiguration);
+
+        lenient().when(mockMqttClient.connected()).thenReturn(true);
+        SyncStrategy mockSyncStrategy = mock(SyncStrategy.class);
+        lenient().when(mockSyncHandler.getOverallSyncStrategy()).thenReturn(mockSyncStrategy);
+        when(mockSyncHandler.getSyncDirection()).thenReturn(current);
+        Topic directionTopic = Topic.of(context, CONFIGURATION_SYNC_DIRECTION_TOPIC, Direction.BETWEEN_DEVICE_AND_CLOUD.getCode());
+        when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC, CONFIGURATION_SYNC_DIRECTION_TOPIC))
+                .thenReturn(directionTopic);
+        s.install(ShadowManager.InstallConfig.builder().configureSyncDirectionConfig(true).build());
+
+        assertFalse(s.isErrored());
+
+        if (Direction.BETWEEN_DEVICE_AND_CLOUD.equals(current)) {
+            verify(mockSyncHandler, never()).start(any(), anyInt());
+            verify(mockCloudDataClient, never()).updateSubscriptions(any());
+            verify(mockSyncHandler, never()).stop();
+            verify(mockSyncHandler, never()).setSyncDirection(eq(Direction.BETWEEN_DEVICE_AND_CLOUD));
+            return;
+        }
+
+        if (Direction.DEVICE_TO_CLOUD.equals(current)) {
+            verify(mockSyncHandler, never()).start(any(), anyInt());
+            verify(mockCloudDataClient, times(1)).updateSubscriptions(any());
+        } else {
+            verify(mockCloudDataClient, never()).updateSubscriptions(any());
+        }
+        verify(mockSyncHandler, never()).stop();
+        verify(mockSyncHandler, times(1)).setSyncDirection(eq(Direction.BETWEEN_DEVICE_AND_CLOUD));
+        verify(mockDao, never()).listSyncedShadows();
+        verify(mockDao, never()).deleteSyncInformation(anyString(), anyString());
+        verify(mockDao, never()).insertSyncInfoIfNotExists(any());
+    }
+
+    @ParameterizedTest
+    @EnumSource(Direction.class)
+    void GIVEN_current_direction_WHEN_updated_to_FROMDEVICEONLY_THEN_appropriately_handles_the_sync_direction(Direction current) {
+        ShadowManager s = spy(shadowManager);
+
+        lenient().doReturn(true).when(s).inState(eq(State.RUNNING));
+        s.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurations(new HashSet<>()).build());
+        ThingShadowSyncConfiguration syncConfiguration = mock(ThingShadowSyncConfiguration.class);
+        s.getSyncConfiguration().getSyncConfigurations().add(syncConfiguration);
+
+        lenient().when(mockMqttClient.connected()).thenReturn(true);
+        SyncStrategy mockSyncStrategy = mock(SyncStrategy.class);
+        lenient().when(mockSyncHandler.getOverallSyncStrategy()).thenReturn(mockSyncStrategy);
+        when(mockSyncHandler.getSyncDirection()).thenReturn(current);
+        Topic directionTopic = Topic.of(context, CONFIGURATION_SYNC_DIRECTION_TOPIC, Direction.DEVICE_TO_CLOUD.getCode());
+        when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC, CONFIGURATION_SYNC_DIRECTION_TOPIC))
+                .thenReturn(directionTopic);
+        s.install(ShadowManager.InstallConfig.builder().configureSyncDirectionConfig(true).build());
+
+        assertFalse(s.isErrored());
+
+        if (Direction.DEVICE_TO_CLOUD.equals(current)) {
+            verify(mockSyncHandler, never()).start(any(), anyInt());
+            verify(mockCloudDataClient, never()).updateSubscriptions(any());
+            verify(mockSyncHandler, never()).stop();
+            verify(mockSyncHandler, never()).setSyncDirection(eq(Direction.BETWEEN_DEVICE_AND_CLOUD));
+            return;
+        }
+
+        verify(mockCloudDataClient, times(1)).stopSubscribing();
+        verify(mockSyncHandler, never()).start(any(), anyInt());
+        verify(mockCloudDataClient, never()).updateSubscriptions(any());
+        verify(mockSyncHandler, never()).stop();
+
+        verify(mockSyncHandler, times(1)).setSyncDirection(eq(Direction.DEVICE_TO_CLOUD));
+        verify(mockDao, never()).listSyncedShadows();
+        verify(mockDao, never()).deleteSyncInformation(anyString(), anyString());
+        verify(mockDao, never()).insertSyncInfoIfNotExists(any());
+    }
+
+    @ParameterizedTest
+    @EnumSource(Direction.class)
+    void GIVEN_current_direction_WHEN_updated_to_FROMCLOUDONLY_THEN_appropriately_handles_the_sync_direction(Direction current) {
+        ShadowManager s = spy(shadowManager);
+
+        lenient().doReturn(true).when(s).inState(eq(State.RUNNING));
+        s.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurations(new HashSet<>()).build());
+        ThingShadowSyncConfiguration syncConfiguration = mock(ThingShadowSyncConfiguration.class);
+        s.getSyncConfiguration().getSyncConfigurations().add(syncConfiguration);
+
+        lenient().when(mockMqttClient.connected()).thenReturn(true);
+        SyncStrategy mockSyncStrategy = mock(SyncStrategy.class);
+        lenient().when(mockSyncHandler.getOverallSyncStrategy()).thenReturn(mockSyncStrategy);
+        when(mockSyncHandler.getSyncDirection()).thenReturn(current);
+        Topic directionTopic = Topic.of(context, CONFIGURATION_SYNC_DIRECTION_TOPIC, Direction.CLOUD_TO_DEVICE.getCode());
+        when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC, CONFIGURATION_SYNC_DIRECTION_TOPIC))
+                .thenReturn(directionTopic);
+        s.install(ShadowManager.InstallConfig.builder().configureSyncDirectionConfig(true).build());
+
+        assertFalse(s.isErrored());
+
+        if (Direction.CLOUD_TO_DEVICE.equals(current)) {
+            verify(mockSyncHandler, never()).start(any(), anyInt());
+            verify(mockCloudDataClient, never()).updateSubscriptions(any());
+            verify(mockSyncHandler, never()).stop();
+            verify(mockSyncHandler, never()).setSyncDirection(eq(Direction.BETWEEN_DEVICE_AND_CLOUD));
+            return;
+        }
+
+        if (Direction.BETWEEN_DEVICE_AND_CLOUD.equals(current)) {
+            verify(mockCloudDataClient, never()).updateSubscriptions(any());
+        } else {
+            verify(mockCloudDataClient, times(1)).updateSubscriptions(any());
+        }
+
+        verify(mockSyncHandler, never()).stop();
+        verify(mockSyncHandler, never()).start(any(), anyInt());
+        verify(mockSyncHandler, times(1)).setSyncDirection(eq(Direction.CLOUD_TO_DEVICE));
+        verify(mockDao, never()).listSyncedShadows();
+        verify(mockDao, never()).deleteSyncInformation(anyString(), anyString());
+        verify(mockDao, never()).insertSyncInfoIfNotExists(any());
+    }
+
+    @Test
+    void GIVEN_bad_sync_direction_WHEN_initialize_THEN_throws_exception(ExtensionContext extensionContext) {
+        ignoreExceptionOfType(extensionContext, IllegalArgumentException.class);
+        Topic syncDirectionTopic = Topic.of(context, CONFIGURATION_SYNC_DIRECTION_TOPIC, "badValue");
+        when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC, CONFIGURATION_SYNC_DIRECTION_TOPIC))
+                .thenReturn(syncDirectionTopic);
+        ShadowManager s = spy(shadowManager);
+
+        lenient().doReturn(true).when(s).inState(eq(State.RUNNING));
+
+        s.install(ShadowManager.InstallConfig.builder().configureSyncDirectionConfig(true).build());
+        assertTrue(s.isErrored());
     }
 
     @Test
@@ -205,7 +339,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_RATE_LIMITS_TOPIC))
                 .thenReturn(rateLimitsTopics);
 
-        shadowManager.install();
+        shadowManager.install(ShadowManager.InstallConfig.builder().configureRateLimitsConfig(true).build());
 
         assertFalse(shadowManager.isErrored());
         verify(mockInboundRateLimiter, times(0)).setRate(anyInt());
@@ -223,7 +357,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_RATE_LIMITS_TOPIC))
                 .thenReturn(rateLimitsTopics);
 
-        shadowManager.install();
+        shadowManager.install(ShadowManager.InstallConfig.builder().configureRateLimitsConfig(true).build());
 
         assertTrue(shadowManager.isErrored());
         verify(mockInboundRateLimiter, times(0)).setRate(anyInt());
@@ -238,7 +372,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_RATE_LIMITS_TOPIC))
                 .thenReturn(rateLimitsTopics);
 
-        shadowManager.install();
+        shadowManager.install(ShadowManager.InstallConfig.builder().configureRateLimitsConfig(true).build());
 
         assertFalse(shadowManager.isErrored());
         verify(mockIotDataPlaneClientWrapper, times(0)).setRate(anyInt());
@@ -256,7 +390,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_RATE_LIMITS_TOPIC))
                 .thenReturn(rateLimitsTopics);
 
-        shadowManager.install();
+        shadowManager.install(ShadowManager.InstallConfig.builder().configureRateLimitsConfig(true).build());
 
         assertTrue(shadowManager.isErrored());
         verify(mockInboundRateLimiter, times(0)).setRate(anyInt());
@@ -271,7 +405,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_RATE_LIMITS_TOPIC))
                 .thenReturn(rateLimitsTopics);
 
-        shadowManager.install();
+        shadowManager.install(ShadowManager.InstallConfig.builder().configureRateLimitsConfig(true).build());
 
         assertFalse(shadowManager.isErrored());
         verify(mockInboundRateLimiter, times(0)).setTotalRate(anyInt());
@@ -289,7 +423,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_RATE_LIMITS_TOPIC))
                 .thenReturn(rateLimitsTopics);
 
-        shadowManager.install();
+        shadowManager.install(ShadowManager.InstallConfig.builder().configureRateLimitsConfig(true).build());
 
         assertTrue(shadowManager.isErrored());
         verify(mockInboundRateLimiter, times(0)).setRate(anyInt());
@@ -320,7 +454,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
                 .thenReturn(configTopics);
         when(mockDeviceConfiguration.getThingName()).thenReturn(thingNameTopic);
-        shadowManager.install();
+        shadowManager.install(ShadowManager.InstallConfig.builder().configureSynchronizeConfig(true).build());
 
         verify(thingNameTopic, times(1)).subscribeGeneric(any());
         verify(thingNameTopic, times(0)).remove(any());
@@ -356,7 +490,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
                 .thenReturn(configTopics);
         when(mockDeviceConfiguration.getThingName()).thenReturn(thingNameTopic);
-        shadowManager.install();
+        shadowManager.install(ShadowManager.InstallConfig.builder().configureSynchronizeConfig(true).build());
 
         verify(thingNameTopic, times(0)).subscribeGeneric(any());
         verify(thingNameTopic, times(1)).remove(any());
@@ -384,7 +518,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
                 .thenReturn(configTopics);
         when(mockDeviceConfiguration.getThingName()).thenReturn(thingNameTopic);
-        shadowManager.install();
+        shadowManager.install(ShadowManager.InstallConfig.builder().configureSynchronizeConfig(true).build());
 
         verify(thingNameTopic, times(0)).subscribeGeneric(any());
         verify(thingNameTopic, times(1)).remove(any());
@@ -423,7 +557,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
                 .thenReturn(configTopics);
         when(mockDeviceConfiguration.getThingName()).thenReturn(thingNameTopic);
-        shadowManager.install();
+        shadowManager.install(ShadowManager.InstallConfig.builder().configureSynchronizeConfig(true).build());
 
         verify(thingNameTopic, times(0)).subscribeGeneric(any());
         verify(thingNameTopic, times(1)).remove(any());
@@ -449,7 +583,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
                 .thenReturn(configTopics);
         when(mockDeviceConfiguration.getThingName()).thenReturn(thingNameTopic);
-        shadowManager.install();
+        shadowManager.install(ShadowManager.InstallConfig.builder().configureSynchronizeConfig(true).build());
 
         assertFalse(shadowManager.isErrored());
         assertThat(shadowManager.getSyncConfiguration().getSyncConfigurations(),
@@ -474,7 +608,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
                 .thenReturn(configTopics);
         when(mockDeviceConfiguration.getThingName()).thenReturn(thingNameTopic);
-        shadowManager.install();
+        shadowManager.install(ShadowManager.InstallConfig.builder().configureSynchronizeConfig(true).build());
         assertTrue(shadowManager.isErrored());
     }
 
@@ -482,7 +616,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
     void GIVEN_bad_field_in_thing_sync_configuration_WHEN_initialize_THEN_service_errors(ExtensionContext extensionContext) throws UnsupportedInputTypeException {
         ignoreExceptionOfType(extensionContext, MismatchedInputException.class);
         ignoreExceptionOfType(extensionContext, InvalidConfigurationException.class);
-        Topic maxDocSizeTopic = Topic.of(context, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC, DEFAULT_DOCUMENT_SIZE);
         Topics configTopics = Topics.of(context, CONFIGURATION_SYNCHRONIZATION_TOPIC, null);
         configTopics.createLeafChild(CONFIGURATION_CORE_THING_TOPIC).withValueChecked(null);
         List<Map<String, Object>> shadowDocumentsList = new ArrayList<>();
@@ -495,18 +628,15 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
 
         Topic thingNameTopic = Topic.of(context, DEVICE_PARAM_THING_NAME, KERNEL_THING);
         when(mockDeviceConfiguration.getThingName()).thenReturn(thingNameTopic);
-        when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC))
-                .thenReturn(maxDocSizeTopic);
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
                 .thenReturn(configTopics);
-        shadowManager.install();
+        shadowManager.install(ShadowManager.InstallConfig.builder().configureSynchronizeConfig(true).build());
         assertTrue(shadowManager.isErrored());
     }
 
     @Test
     void GIVEN_bad_type_of_thing_sync_configuration_WHEN_initialize_THEN_service_errors(ExtensionContext extensionContext) throws UnsupportedInputTypeException {
         ignoreExceptionOfType(extensionContext, InvalidConfigurationException.class);
-        Topic maxDocSizeTopic = Topic.of(context, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC, DEFAULT_DOCUMENT_SIZE);
         Topics configTopics = Topics.of(context, CONFIGURATION_SYNCHRONIZATION_TOPIC, null);
         configTopics.createLeafChild(CONFIGURATION_CORE_THING_TOPIC).withValueChecked(null);
         Topics shadowDocumentsTopics = configTopics.createInteriorChild(CONFIGURATION_SHADOW_DOCUMENTS_TOPIC);
@@ -514,11 +644,9 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         shadowDocumentsTopics.createLeafChild(CONFIGURATION_NAMED_SHADOWS_TOPIC).withValue(Collections.singletonList("boo2"));
         shadowDocumentsTopics.createLeafChild(CONFIGURATION_THING_NAME_TOPIC).withValue(THING_NAME_A);
 
-        when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC))
-                .thenReturn(maxDocSizeTopic);
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
                 .thenReturn(configTopics);
-        shadowManager.install();
+        shadowManager.install(ShadowManager.InstallConfig.builder().configureSynchronizeConfig(true).build());
         assertTrue(shadowManager.isErrored());
     }
 
@@ -545,7 +673,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC))
                 .thenReturn(configTopics);
         when(mockDeviceConfiguration.getThingName()).thenReturn(thingNameTopic);
-        shadowManager.install();
+        shadowManager.install(ShadowManager.InstallConfig.builder().configureSynchronizeConfig(true).build());
         assertTrue(shadowManager.isErrored());
     }
 
@@ -574,7 +702,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
                 .thenReturn(configTopics);
         when(mockDeviceConfiguration.getThingName()).thenReturn(thingNameTopic);
 
-        shadowManager.install();
+        shadowManager.install(ShadowManager.InstallConfig.builder().configureSynchronizeConfig(true).build());
         assertTrue(shadowManager.isErrored());
     }
 
@@ -676,7 +804,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
             when(thingNameTopic.getOnce()).thenReturn(KERNEL_THING);
             when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC)).thenReturn(configTopics);
             when(mockDeviceConfiguration.getThingName()).thenReturn(thingNameTopic);
-            s.install();
+            s.install(ShadowManager.InstallConfig.builder().configureSynchronizeConfig(true).build());
 
             // no dao access for sync during install
             verify(mockDao, never()).listSyncedShadows();
@@ -719,14 +847,15 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         ShadowManager s = spy(shadowManager);
 
         doReturn(true).when(s).inState(eq(State.RUNNING));
-        when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_STRATEGY_TOPIC)).thenReturn(strategyTopics);
+        when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_STRATEGY_TOPIC))
+                .thenReturn(strategyTopics);
         doNothing().when(shadowManager.getSyncHandler()).setSyncStrategy(strategyCaptor.capture());
         s.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurations(new HashSet<>()).build());
         ThingShadowSyncConfiguration config = mock(ThingShadowSyncConfiguration.class);
         s.getSyncConfiguration().getSyncConfigurations().add(config);
 
         when(mockMqttClient.connected()).thenReturn(true);
-        s.install();
+        s.install(ShadowManager.InstallConfig.builder().configureStrategyConfig(true).build());
 
         assertFalse(s.isErrored());
         assertThat(strategyCaptor.getValue(), is(notNullValue()));
@@ -748,20 +877,23 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         strategyTopics.createLeafChild("type").withValue("real Time");
 
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_STRATEGY_TOPIC)).thenReturn(strategyTopics);
-        shadowManager.install();
+        shadowManager.install(ShadowManager.InstallConfig.builder().configureStrategyConfig(true).build());
 
         assertTrue(shadowManager.isErrored());
         verify(mockSyncHandler, never()).setSyncStrategy(any());
     }
 
     @Test
-    void GIVEN_sync_strategy_WHEN_change_THEN_syncing_restarts(ExtensionContext extensionContext) {
-
+    void GIVEN_sync_strategy_WHEN_change_THEN_syncing_restarts() {
+        Topics strategyTopics = Topics.of(context, CONFIGURATION_STRATEGY_TOPIC, null);
+        strategyTopics.createLeafChild("type").withValue("realTime");
+        strategyTopics.createLeafChild("delay").withValue(30);
 
         ShadowManager s = spy(shadowManager);
 
         // set up mocks so sync start gets called
-
+        when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_STRATEGY_TOPIC))
+                .thenReturn(strategyTopics);
         when(mockMqttClient.connected()).thenReturn(true);
         Set<ThingShadowSyncConfiguration> syncConfigs = new HashSet<ThingShadowSyncConfiguration>() {{
             add(ThingShadowSyncConfiguration.builder().thingName("foo").shadowName("bar").build());
@@ -772,8 +904,8 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
                 .build();
         s.setSyncConfiguration(config);
         doReturn(true,true).when(s).inState(eq(State.RUNNING));
-        s.install();
-
+        s.install(ShadowManager.InstallConfig.builder().configureStrategyConfig(true).build());
+        reset(mockSyncHandler);
         // GIVEN
         Strategy update = Strategy.builder().type(StrategyType.PERIODIC).delay(500L).build();
         // WHEN

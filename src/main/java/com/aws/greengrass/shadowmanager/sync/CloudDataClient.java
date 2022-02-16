@@ -15,6 +15,8 @@ import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.model.ShadowRequest;
 import com.aws.greengrass.util.Pair;
 import com.aws.greengrass.util.RetryUtils;
+import lombok.AccessLevel;
+import lombok.Getter;
 import software.amazon.awssdk.crt.mqtt.MqttMessage;
 
 import java.time.Duration;
@@ -45,7 +47,9 @@ public class CloudDataClient {
     private final SyncHandler syncHandler;
     private final MqttClient mqttClient;
     private final ExecutorService executorService;
+    @Getter(AccessLevel.PACKAGE)
     private final Set<String> subscribedUpdateShadowTopics = new HashSet<>();
+    @Getter(AccessLevel.PACKAGE)
     private final Set<String> subscribedDeleteShadowTopics = new HashSet<>();
     private final Pattern shadowPattern = Pattern.compile("\\$aws\\/things\\/(.*)\\/shadow(\\/name\\/(.*))?"
             + "\\/(update|delete)\\/(accepted|rejected|delta|documents)");
@@ -81,11 +85,47 @@ public class CloudDataClient {
     }
 
     /**
+     * Unsubscribe to all shadow topics.
+     */
+    public synchronized void unsubscribeForAllShadowsTopics() {
+        unsubscribeForAllShadowsTopics(subscribedUpdateShadowTopics, this::handleUpdate);
+        unsubscribeForAllShadowsTopics(subscribedDeleteShadowTopics, this::handleDelete);
+    }
+
+    /**
+     * Unsubscribe from all the shadow topics.
+     *
+     * @param topics   topics to unsubscribe
+     * @param callback Callback function applied to shadow topic
+     */
+    private synchronized void unsubscribeForAllShadowsTopics(Set<String> topics, Consumer<MqttMessage> callback) {
+        Set<String> topicsToUnsubscribe = new HashSet<>(topics);
+        for (String topic : topicsToUnsubscribe) {
+            try {
+                mqttClient.unsubscribe(UnsubscribeRequest.builder().callback(callback).topic(topic).build());
+                logger.atDebug().log("Unsubscribed from {}", topic);
+                topics.remove(topic);
+            } catch (TimeoutException | ExecutionException e) {
+                logger.atWarn()
+                        .setEventType(LogEvents.CLOUD_DATA_CLIENT_SUBSCRIPTION_ERROR.code())
+                        .kv(LOG_TOPIC, topic)
+                        .setCause(e)
+                        .log("Failed to unsubscribe from shadow topic");
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                logger.atError()
+                        .setEventType(LogEvents.CLOUD_DATA_CLIENT_SUBSCRIPTION_ERROR.code())
+                        .log("Failed from unsubscribe to all shadow topics");
+            }
+        }
+    }
+
+    /**
      * Updates and subscribes to set of update/delete topics for set of shadows.
      *
      * @param shadowSet Set of shadow topic prefixes to subscribe to the update/delete topic
      */
-    public void updateSubscriptions(Set<Pair<String, String>> shadowSet) {
+    public synchronized void updateSubscriptions(Set<Pair<String, String>> shadowSet) {
         Set<String> newUpdateTopics = new HashSet<>();
         Set<String> newDeleteTopics = new HashSet<>();
 
@@ -184,8 +224,8 @@ public class CloudDataClient {
      * @param callback            Callback function applied to shadow topic
      * @throws InterruptedException Interrupt occurred while trying to unsubscribe to shadows
      */
-    private void unsubscribeToShadows(Set<String> currentTopics, Set<String> topicsToUnsubscribe,
-                                      Consumer<MqttMessage> callback) throws InterruptedException {
+    private synchronized void unsubscribeToShadows(Set<String> currentTopics, Set<String> topicsToUnsubscribe,
+                                                   Consumer<MqttMessage> callback) throws InterruptedException {
         Set<String> tempHashSet = new HashSet<>(topicsToUnsubscribe);
         for (String topic : tempHashSet) {
             try {
@@ -211,8 +251,8 @@ public class CloudDataClient {
      * @param callback          Callback function applied to shadow topic
      * @throws InterruptedException Interrupt occurred while trying to subscribe to shadows
      */
-    private void subscribeToShadows(Set<String> currentTopics, Set<String> topicsToSubscribe,
-                                    Consumer<MqttMessage> callback) throws InterruptedException {
+    private synchronized void subscribeToShadows(Set<String> currentTopics, Set<String> topicsToSubscribe,
+                                                 Consumer<MqttMessage> callback) throws InterruptedException {
         Set<String> tempHashSet = new HashSet<>(topicsToSubscribe);
 
         for (String topic : tempHashSet) {

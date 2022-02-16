@@ -73,6 +73,7 @@ public final class Constants {
     public static final String CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC =
             "maxLocalRequestsPerSecondPerThing";
     public static final String CONFIGURATION_STRATEGY_TOPIC = "strategy";
+    public static final String CONFIGURATION_SYNC_DIRECTION_TOPIC = "direction";
     public static final String UNEXPECTED_TYPE_FORMAT = "Unexpected type in %s: %s";
     public static final String UNEXPECTED_VALUE_FORMAT = "Unexpected value in %s: %s";
 

@@ -25,4 +25,6 @@ public class NucleusLaunchUtilsConfig {
     boolean mqttConnected = true;
     @Builder.Default
     Class syncClazz = RealTimeSyncStrategy.class;
+    @Builder.Default
+    boolean resetRetryConfig = true;
 }

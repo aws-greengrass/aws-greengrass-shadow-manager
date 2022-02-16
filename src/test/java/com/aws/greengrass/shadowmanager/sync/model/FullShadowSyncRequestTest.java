@@ -230,7 +230,7 @@ class FullShadowSyncRequestTest {
         assertThat(syncInformationCaptor.getValue().getLastSyncTime(), is(greaterThanOrEqualTo(epochSeconds)));
         assertThat(syncInformationCaptor.getValue().getShadowName(), is(SHADOW_NAME));
         assertThat(syncInformationCaptor.getValue().getThingName(), is(THING_NAME));
-        assertThat(syncInformationCaptor.getValue().isCloudDeleted(), is(false));
+        assertThat(syncInformationCaptor.getValue().isCloudDeleted(), is(true));
     }
 
     @Test

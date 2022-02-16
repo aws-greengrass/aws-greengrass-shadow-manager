@@ -56,7 +56,7 @@ class CloudDataClientTest {
         add(new Pair<>("thing2", "shadow2"));
         add(new Pair<>("thing3", "shadow3"));
     }};
-    
+
     @Mock
     MqttClient mockMqttClient;
 
@@ -278,5 +278,21 @@ class CloudDataClientTest {
         ShadowRequest request = cloudDataClient.extractShadowFromTopic(topic);
         assertThat(request.getThingName(), is("MyThinge2e-1619675861291-941d61c9-c99c-43e1-bf31-411a58d1fc23"));
         assertThat(request.getShadowName(), is(CLASSIC_SHADOW_IDENTIFIER));
+    }
+
+    @Test
+    void GIVEN_100_synced_shadows_WHEN_unsubscribeForAllShadowsTopics_THEN_unsubscribes_to_200_shadow_topics()
+            throws InterruptedException, ExecutionException, TimeoutException {
+        CloudDataClient cloudDataClient = new CloudDataClient(mockSyncHandler, mockMqttClient, executorService);
+        for (int i = 0; i < 100; i++) {
+            cloudDataClient.getSubscribedUpdateShadowTopics().add("$aws/things/MyThing-" + i + "/shadow/update/accepted");
+            cloudDataClient.getSubscribedDeleteShadowTopics().add("$aws/things/MyThing-" + i + "/shadow/delete/accepted");
+        }
+
+        cloudDataClient.unsubscribeForAllShadowsTopics();
+
+        verify(mockMqttClient, times(200)).unsubscribe(any());
+        assertThat(cloudDataClient.getSubscribedUpdateShadowTopics().size(), is(0));
+        assertThat(cloudDataClient.getSubscribedDeleteShadowTopics().size(), is(0));
     }
 }
