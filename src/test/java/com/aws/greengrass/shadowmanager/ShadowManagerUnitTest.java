@@ -94,6 +94,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atMostOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
@@ -597,6 +598,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         mqttCallbacksCaptor.getValue().onConnectionInterrupted(0);
         verify(mockCloudDataClient, times(1)).stopSubscribing();
         verify(mockSyncHandler, times(1)).stop();
+        verify(mockPubSubClientWrapper, atMostOnce()).subscribe(any());
     }
 
     @Test
@@ -625,6 +627,20 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         when(config.getThingName()).thenReturn(thing);
         when(config.getShadowName()).thenReturn(shadow);
         shadowManager.getSyncConfiguration().getSyncConfigurations().add(config);
+    }
+
+    @Test
+    void GIVEN_shadow_manager_WHEN_shutdown_THEN_shuts_down_gracefully() throws IOException {
+        shadowManager.setGreengrassCoreIPCService(mockGreengrassCoreIPCService);
+        shadowManager.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurations(new HashSet<>()).build());
+        shadowManager.getSyncConfiguration().getSyncConfigurations().add(mock(ThingShadowSyncConfiguration.class));
+        doNothing().when(mockMqttClient).addToCallbackEvents(mqtOnConnectCallbackCaptor.capture(), mqttCallbacksCaptor.capture());
+        when(mockDeviceConfiguration.isDeviceConfiguredToTalkToCloud()).thenReturn(true);
+        shadowManager.postInject();
+        assertDoesNotThrow(() -> shadowManager.shutdown());
+        verify(mockDatabase, atMostOnce()).close();
+        verify(mockInboundRateLimiter, atMostOnce()).clear();
+        verify(mockPubSubClientWrapper, atMostOnce()).unsubscribe(any());
     }
 
     @Test
