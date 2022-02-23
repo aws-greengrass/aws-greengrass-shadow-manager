@@ -48,7 +48,7 @@ public class PubSubClientWrapper {
      * @param rejectRequest The request object containing the reject information.
      */
     public void reject(PubSubRequest rejectRequest) {
-        handlePubSubMessagePblish(rejectRequest, SHADOW_PUBLISH_REJECTED_TOPIC);
+        handlePubSubMessagePublish(rejectRequest, SHADOW_PUBLISH_REJECTED_TOPIC);
     }
 
     /**
@@ -57,7 +57,7 @@ public class PubSubClientWrapper {
      * @param acceptRequest The request object containing the accepted information.
      */
     public void accept(PubSubRequest acceptRequest) {
-        handlePubSubMessagePblish(acceptRequest, SHADOW_PUBLISH_ACCEPTED_TOPIC);
+        handlePubSubMessagePublish(acceptRequest, SHADOW_PUBLISH_ACCEPTED_TOPIC);
     }
 
 
@@ -68,7 +68,7 @@ public class PubSubClientWrapper {
      * @param acceptRequest The request object containing the delta information.
      */
     public void delta(PubSubRequest acceptRequest) {
-        handlePubSubMessagePblish(acceptRequest, SHADOW_PUBLISH_DELTA_TOPIC);
+        handlePubSubMessagePublish(acceptRequest, SHADOW_PUBLISH_DELTA_TOPIC);
     }
 
     /**
@@ -78,7 +78,7 @@ public class PubSubClientWrapper {
      * @param acceptRequest The request object containing the documents information.
      */
     public void documents(PubSubRequest acceptRequest) {
-        handlePubSubMessagePblish(acceptRequest, SHADOW_PUBLISH_DOCUMENTS_TOPIC);
+        handlePubSubMessagePublish(acceptRequest, SHADOW_PUBLISH_DOCUMENTS_TOPIC);
     }
 
     /**
@@ -87,7 +87,7 @@ public class PubSubClientWrapper {
      * @param pubSubRequest     The request object containing the accepted information.
      * @param shadowTopicFormat The format for the shadow topic on which to publish the message
      */
-    private void handlePubSubMessagePblish(PubSubRequest pubSubRequest, String shadowTopicFormat) {
+    private void handlePubSubMessagePublish(PubSubRequest pubSubRequest, String shadowTopicFormat) {
         try {
             this.pubSubIPCEventStreamAgent.publish(getShadowPublishTopic(pubSubRequest, shadowTopicFormat),
                     pubSubRequest.getPayload(), SERVICE_NAME);

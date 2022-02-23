@@ -187,6 +187,26 @@ class PubSubIntegratorTest {
     }
 
     @Test
+    void GIVEN_response_topic_WHEN_accept_THEN_does_not_perform_shadow_op() {
+        PubSubIntegrator integrator = new PubSubIntegrator(mockPubSubClientWrapper, mockDeleteThingShadowRequestHandler,
+                mockUpdateThingShadowRequestHandler, mockGetThingShadowRequestHandler);
+        integrator.subscribe();
+        // No shadow name or op
+        publishEventCaptor.getValue().accept(PublishEvent.builder().topic("$aws/things/" + MOCK_THING + "/shadow/update/accepted").payload(PAYLOAD).build());
+
+        verify(mockUpdateThingShadowRequestHandler, never()).handleRequest(any(UpdateThingShadowRequest.class), eq(SHADOW_MANAGER_NAME));
+        verify(mockDeleteThingShadowRequestHandler, never()).handleRequest(any(DeleteThingShadowRequest.class), eq(SHADOW_MANAGER_NAME));
+        verify(mockGetThingShadowRequestHandler, never()).handleRequest(any(GetThingShadowRequest.class), eq(SHADOW_MANAGER_NAME));
+
+        // No op
+        publishEventCaptor.getValue().accept(PublishEvent.builder().topic("$aws/things/" + MOCK_THING + "/shadow/name/shadow1/update/accepted" + SHADOW_NAME).payload(PAYLOAD).build());
+
+        verify(mockUpdateThingShadowRequestHandler, never()).handleRequest(any(UpdateThingShadowRequest.class), eq(SHADOW_MANAGER_NAME));
+        verify(mockDeleteThingShadowRequestHandler, never()).handleRequest(any(DeleteThingShadowRequest.class), eq(SHADOW_MANAGER_NAME));
+        verify(mockGetThingShadowRequestHandler, never()).handleRequest(any(GetThingShadowRequest.class), eq(SHADOW_MANAGER_NAME));
+    }
+
+    @Test
     void GIVEN_update_command_WHEN_update_throws_errors_THEN_pubsub_integrator_does_not_rethrow(ExtensionContext extensionContext) {
         ignoreExceptionOfType(extensionContext, ConflictError.class);
         ignoreExceptionOfType(extensionContext, ServiceError.class);

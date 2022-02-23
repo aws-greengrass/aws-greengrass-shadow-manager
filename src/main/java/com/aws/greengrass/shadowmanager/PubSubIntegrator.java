@@ -42,6 +42,8 @@ public class PubSubIntegrator {
     private final PubSubClientWrapper pubSubClientWrapper;
     private final Pattern shadowPattern = Pattern.compile("\\$aws\\/things\\/(.*)\\/shadow(\\/name\\/(.*))?"
             + "\\/(update|delete|get)");
+    private final Pattern shadowResponsePattern = Pattern.compile("\\$aws\\/things\\/(.*)\\/shadow(\\/name\\/(.*))?"
+            + "\\/(update|delete|get)\\/(accepted|rejected|delta|documents)");
     private final AtomicBoolean subscribed = new AtomicBoolean(false);
 
     /**
@@ -111,6 +113,13 @@ public class PubSubIntegrator {
      */
     private void handlePublishedMessage(PublishEvent publishEvent) {
         String topic = publishEvent.getTopic();
+
+        if (isResponseMessage(topic)) {
+            logger.atDebug().kv(LOG_TOPIC, topic)
+                    .log("Not processing message since it is a response message to a shadow operation");
+            return;
+        }
+
         logger.atDebug().kv(LOG_TOPIC, topic).log("Processing new shadow operation message over local PubSub");
         ShadowRequest shadowRequest;
         try {
@@ -166,5 +175,16 @@ public class PubSubIntegrator {
                     .kv(LOG_OPERATION, shadowRequest.getOperation())
                     .log("Unable to perform shadow operation");
         }
+    }
+
+    /**
+     * Checks if the message received is a response message or not.
+     *
+     * @param topic the topic on which the PubSub message was sent.
+     * @return true if the message is a response message to a shadow operation; Else false.
+     */
+    private boolean isResponseMessage(String topic) {
+        final Matcher matcher = shadowResponsePattern.matcher(topic);
+        return matcher.find() && matcher.groupCount() == 5;
     }
 }
