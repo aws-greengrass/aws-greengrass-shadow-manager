@@ -41,9 +41,9 @@ public class PubSubIntegrator {
     private final GetThingShadowRequestHandler getThingShadowRequestHandler;
     private final PubSubClientWrapper pubSubClientWrapper;
     private final Pattern shadowPattern = Pattern.compile("\\$aws\\/things\\/(.*)\\/shadow(\\/name\\/(.*))?"
-            + "\\/(update|delete|get)");
-    private final Pattern shadowResponsePattern = Pattern.compile("\\$aws\\/things\\/(.*)\\/shadow(\\/name\\/(.*))?"
-            + "\\/(update|delete|get)\\/(accepted|rejected|delta|documents)");
+            + "\\/(update|delete|get)$");
+    private final Pattern shadowResponsePattern = Pattern.compile("\\$aws\\/things\\/(.*)\\/shadow(\\/name\\/(.*))"
+            + "?\\/(update|delete|get)\\/(accepted|rejected|delta|documents)$");
     private final AtomicBoolean subscribed = new AtomicBoolean(false);
 
     /**
@@ -81,27 +81,6 @@ public class PubSubIntegrator {
             this.pubSubClientWrapper.unsubscribe(this::handlePublishedMessage);
         }
 
-    }
-
-    /**
-     * Helper function to extract the thingName, shadowName and shadow operation from mqtt topic.
-     *
-     * @param topic PubSub topic on which the message was sent.
-     * @return ShadowRequest object with shadow details
-     */
-    ShadowRequest extractShadowFromTopic(String topic) {
-        final Matcher matcher = shadowPattern.matcher(topic);
-
-        if (matcher.find() && matcher.groupCount() == 4) {
-            String thingName = matcher.group(1);
-            String shadowName = matcher.group(3);
-            String operation = matcher.group(4);
-            return new ShadowRequest(thingName, shadowName, operation);
-        }
-        logger.atWarn()
-                .kv("topic", topic)
-                .log("Unable to parse shadow topic for thing name, shadow name and shadow operation");
-        throw new IllegalArgumentException("Unable to parse shadow topic");
     }
 
     /**
@@ -178,13 +157,34 @@ public class PubSubIntegrator {
     }
 
     /**
+     * Helper function to extract the thingName, shadowName and shadow operation from mqtt topic.
+     *
+     * @param topic PubSub topic on which the message was sent.
+     * @return ShadowRequest object with shadow details
+     */
+    ShadowRequest extractShadowFromTopic(String topic) {
+        final Matcher matcher = shadowPattern.matcher(topic);
+
+        if (matcher.find() && matcher.groupCount() == 4) {
+            String thingName = matcher.group(1);
+            String shadowName = matcher.group(3);
+            String operation = matcher.group(4);
+            return new ShadowRequest(thingName, shadowName, operation);
+        }
+        logger.atWarn()
+                .kv("topic", topic)
+                .log("Unable to parse shadow topic for thing name, shadow name and shadow operation");
+        throw new IllegalArgumentException("Unable to parse shadow topic");
+    }
+
+    /**
      * Checks if the message received is a response message or not.
      *
      * @param topic the topic on which the PubSub message was sent.
      * @return true if the message is a response message to a shadow operation; Else false.
      */
-    private boolean isResponseMessage(String topic) {
+    boolean isResponseMessage(String topic) {
         final Matcher matcher = shadowResponsePattern.matcher(topic);
-        return matcher.find() && matcher.groupCount() == 5;
+        return matcher.matches();
     }
 }
