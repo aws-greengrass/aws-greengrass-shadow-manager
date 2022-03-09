@@ -20,6 +20,7 @@ import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
@@ -45,6 +46,9 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -60,6 +64,7 @@ import static org.mockito.Mockito.when;
 class PubSubIntegratorTest {
     private static final byte[] PAYLOAD = "{\"version\": 10, \"state\": {\"reported\": {\"name\": \"The Beach Boys\", \"NewField\": 100}, \"desired\": {\"name\": \"Pink Floyd\", \"SomethingNew\": true}}}".getBytes();
     private static final String MOCK_THING = "thing1";
+    private static final String MOCK_SHADOW = "shadow1";
 
     @Mock
     private DeleteThingShadowRequestHandler mockDeleteThingShadowRequestHandler;
@@ -187,6 +192,27 @@ class PubSubIntegratorTest {
     }
 
     @Test
+    void GIVEN_response_topic_WHEN_accept_THEN_does_not_perform_shadow_op(ExtensionContext extensionContext) {
+        ignoreExceptionOfType(extensionContext, IllegalArgumentException.class);
+        PubSubIntegrator integrator = new PubSubIntegrator(mockPubSubClientWrapper, mockDeleteThingShadowRequestHandler,
+                mockUpdateThingShadowRequestHandler, mockGetThingShadowRequestHandler);
+        integrator.subscribe();
+        // No shadow name or op
+        publishEventCaptor.getValue().accept(PublishEvent.builder().topic("$aws/things/" + MOCK_THING + "/shadow/update/accepted").payload(PAYLOAD).build());
+
+        verify(mockUpdateThingShadowRequestHandler, never()).handleRequest(any(UpdateThingShadowRequest.class), eq(SHADOW_MANAGER_NAME));
+        verify(mockDeleteThingShadowRequestHandler, never()).handleRequest(any(DeleteThingShadowRequest.class), eq(SHADOW_MANAGER_NAME));
+        verify(mockGetThingShadowRequestHandler, never()).handleRequest(any(GetThingShadowRequest.class), eq(SHADOW_MANAGER_NAME));
+
+        // No op
+        publishEventCaptor.getValue().accept(PublishEvent.builder().topic("$aws/things/" + MOCK_THING + "/shadow/name/shadow1/update/accepted" + SHADOW_NAME).payload(PAYLOAD).build());
+
+        verify(mockUpdateThingShadowRequestHandler, never()).handleRequest(any(UpdateThingShadowRequest.class), eq(SHADOW_MANAGER_NAME));
+        verify(mockDeleteThingShadowRequestHandler, never()).handleRequest(any(DeleteThingShadowRequest.class), eq(SHADOW_MANAGER_NAME));
+        verify(mockGetThingShadowRequestHandler, never()).handleRequest(any(GetThingShadowRequest.class), eq(SHADOW_MANAGER_NAME));
+    }
+
+    @Test
     void GIVEN_update_command_WHEN_update_throws_errors_THEN_pubsub_integrator_does_not_rethrow(ExtensionContext extensionContext) {
         ignoreExceptionOfType(extensionContext, ConflictError.class);
         ignoreExceptionOfType(extensionContext, ServiceError.class);
@@ -262,5 +288,75 @@ class PubSubIntegratorTest {
         when(mockGetThingShadowRequestHandler.handleRequest(any(), eq(SHADOW_MANAGER_NAME))).thenThrow(new ServiceError());
         assertDoesNotThrow(() -> publishEventCaptor.getValue().accept(PublishEvent.builder().topic("$aws/things/" + MOCK_THING + "/shadow/get").payload(PAYLOAD).build()));
         verify(mockGetThingShadowRequestHandler, atMostOnce()).handleRequest(any(GetThingShadowRequest.class), eq(SHADOW_MANAGER_NAME));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", MOCK_SHADOW})
+    void GIVEN_response_topic_WHEN_isResponseMessage_THEN_returns_true(String shadowName) {
+        PubSubIntegrator integrator = new PubSubIntegrator(mockPubSubClientWrapper, mockDeleteThingShadowRequestHandler,
+                mockUpdateThingShadowRequestHandler, mockGetThingShadowRequestHandler);
+
+        String shadowPrefix = "";
+        if (!"".equals(shadowName)) {
+            shadowPrefix = "/name/" + shadowName;
+        }
+        assertTrue(integrator.isResponseMessage("$aws/things/" + MOCK_THING + "/shadow" + shadowPrefix + "/get/accepted"));
+        assertTrue(integrator.isResponseMessage("$aws/things/" + MOCK_THING + "/shadow" + shadowPrefix + "/get/rejected"));
+        assertTrue(integrator.isResponseMessage("$aws/things/" + MOCK_THING + "/shadow" + shadowPrefix + "/delete/accepted"));
+        assertTrue(integrator.isResponseMessage("$aws/things/" + MOCK_THING + "/shadow" + shadowPrefix + "/delete/rejected"));
+        assertTrue(integrator.isResponseMessage("$aws/things/" + MOCK_THING + "/shadow" + shadowPrefix + "/update/accepted"));
+        assertTrue(integrator.isResponseMessage("$aws/things/" + MOCK_THING + "/shadow" + shadowPrefix + "/update/rejected"));
+        assertTrue(integrator.isResponseMessage("$aws/things/" + MOCK_THING + "/shadow" + shadowPrefix + "/update/delta"));
+        assertTrue(integrator.isResponseMessage("$aws/things/" + MOCK_THING + "/shadow" + shadowPrefix + "/update/documents"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", MOCK_SHADOW})
+    void GIVEN_not_response_topic_WHEN_isResponseMessage_THEN_returns_false(String shadowName) {
+        PubSubIntegrator integrator = new PubSubIntegrator(mockPubSubClientWrapper, mockDeleteThingShadowRequestHandler,
+                mockUpdateThingShadowRequestHandler, mockGetThingShadowRequestHandler);
+
+        String shadowPrefix = "";
+        if (!"".equals(shadowName)) {
+            shadowPrefix = "/name/" + shadowName;
+        }
+        assertFalse(integrator.isResponseMessage("$aws/things/" + MOCK_THING + "/shadow" + shadowPrefix + "/get"));
+        assertFalse(integrator.isResponseMessage("$aws/things/" + MOCK_THING + "/shadow" + shadowPrefix + "/delete"));
+        assertFalse(integrator.isResponseMessage("$aws/things/" + MOCK_THING + "/shadow" + shadowPrefix + "/update"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", MOCK_SHADOW})
+    void GIVEN_response_topic_WHEN_extractShadowFromTopic_THEN_throws_IllegalArgumentException(String shadowName) {
+        PubSubIntegrator integrator = new PubSubIntegrator(mockPubSubClientWrapper, mockDeleteThingShadowRequestHandler,
+                mockUpdateThingShadowRequestHandler, mockGetThingShadowRequestHandler);
+
+        StringBuilder shadowPrefix = new StringBuilder();
+        if (!"".equals(shadowName)) {
+            shadowPrefix.append("/name/").append(shadowName);
+        }
+        assertThrows(IllegalArgumentException.class, () -> integrator.extractShadowFromTopic("$aws/things/" + MOCK_THING + "/shadow" + shadowPrefix + "/get/accepted"));
+        assertThrows(IllegalArgumentException.class, () -> integrator.extractShadowFromTopic("$aws/things/" + MOCK_THING + "/shadow" + shadowPrefix + "/get/rejected"));
+        assertThrows(IllegalArgumentException.class, () -> integrator.extractShadowFromTopic("$aws/things/" + MOCK_THING + "/shadow" + shadowPrefix + "/delete/accepted"));
+        assertThrows(IllegalArgumentException.class, () -> integrator.extractShadowFromTopic("$aws/things/" + MOCK_THING + "/shadow" + shadowPrefix + "/delete/rejected"));
+        assertThrows(IllegalArgumentException.class, () -> integrator.extractShadowFromTopic("$aws/things/" + MOCK_THING + "/shadow" + shadowPrefix + "/update/accepted"));
+        assertThrows(IllegalArgumentException.class, () -> integrator.extractShadowFromTopic("$aws/things/" + MOCK_THING + "/shadow" + shadowPrefix + "/update/rejected"));
+        assertThrows(IllegalArgumentException.class, () -> integrator.extractShadowFromTopic("$aws/things/" + MOCK_THING + "/shadow" + shadowPrefix + "/update/delta"));
+        assertThrows(IllegalArgumentException.class, () -> integrator.extractShadowFromTopic("$aws/things/" + MOCK_THING + "/shadow" + shadowPrefix + "/update/documents"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", MOCK_SHADOW})
+    void GIVEN_not_response_topic_WHEN_extractShadowFromTopic_THEN_returns_(String shadowName) {
+        PubSubIntegrator integrator = new PubSubIntegrator(mockPubSubClientWrapper, mockDeleteThingShadowRequestHandler,
+                mockUpdateThingShadowRequestHandler, mockGetThingShadowRequestHandler);
+
+        StringBuilder shadowPrefix = new StringBuilder();
+        if (!"".equals(shadowName)) {
+            shadowPrefix.append("/name/").append(shadowName);
+        }
+        assertDoesNotThrow(() -> integrator.extractShadowFromTopic("$aws/things/" + MOCK_THING + "/shadow" + shadowPrefix + "/get"));
+        assertDoesNotThrow(() -> integrator.extractShadowFromTopic("$aws/things/" + MOCK_THING + "/shadow" + shadowPrefix + "/delete"));
+        assertDoesNotThrow(() -> integrator.extractShadowFromTopic("$aws/things/" + MOCK_THING + "/shadow" + shadowPrefix + "/update"));
     }
 }
