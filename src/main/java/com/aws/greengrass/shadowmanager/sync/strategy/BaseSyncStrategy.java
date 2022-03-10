@@ -11,7 +11,6 @@ import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
 import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
-import com.aws.greengrass.shadowmanager.sync.RequestMerger;
 import com.aws.greengrass.shadowmanager.sync.Retryer;
 import com.aws.greengrass.shadowmanager.sync.model.FullShadowSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.SyncContext;
@@ -133,21 +132,8 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
         return executing.get();
     }
 
-    /**
-     * Constructor.
-     *
-     * @param retryer The retryer object.
-     */
-    protected BaseSyncStrategy(Retryer retryer) {
-        this(retryer, DEFAULT_RETRY_CONFIG);
-    }
-
     protected BaseSyncStrategy(Retryer retryer, RequestBlockingQueue syncQueue) {
         this(retryer, DEFAULT_RETRY_CONFIG, syncQueue);
-    }
-
-    protected BaseSyncStrategy(Retryer retryer, RetryUtils.RetryConfig retryConfig) {
-        this(retryer, retryConfig, new RequestBlockingQueue(new RequestMerger()));
     }
 
     /**
@@ -157,7 +143,7 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
      * @param retryConfig The config to be used by the retryer.
      * @param syncQueue   A queue to use for sync requests.
      */
-    private BaseSyncStrategy(Retryer retryer, RetryUtils.RetryConfig retryConfig, RequestBlockingQueue syncQueue) {
+    protected BaseSyncStrategy(Retryer retryer, RetryUtils.RetryConfig retryConfig, RequestBlockingQueue syncQueue) {
         this.retryer = (config, request, context) -> {
             try {
                 executing.set(true);
