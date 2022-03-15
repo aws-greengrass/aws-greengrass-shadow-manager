@@ -33,7 +33,6 @@ import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfi
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.CloudDataClient;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientWrapper;
-import com.aws.greengrass.shadowmanager.sync.RequestMerger;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
 import com.aws.greengrass.shadowmanager.sync.model.Direction;
 import com.aws.greengrass.shadowmanager.sync.model.SyncContext;
@@ -103,7 +102,6 @@ public class ShadowManager extends PluginService {
     private final CloudDataClient cloudDataClient;
     private final MqttClient mqttClient;
     private final PubSubIntegrator pubSubIntegrator;
-    private final RequestMerger merger;
     public final MqttClientConnectionEvents callbacks = new MqttClientConnectionEvents() {
         @Override
         public void onConnectionInterrupted(int errorCode) {
@@ -146,7 +144,6 @@ public class ShadowManager extends PluginService {
      * @param syncHandler                 a synchronization handler
      * @param cloudDataClient             the data client subscribing to cloud shadow topics
      * @param mqttClient                  the mqtt client connected to IoT Core
-     * @param merger                      the request merger
      */
     @SuppressWarnings("PMD.ExcessiveParameterList")
     @Inject
@@ -162,8 +159,7 @@ public class ShadowManager extends PluginService {
             IotDataPlaneClientWrapper iotDataPlaneClientWrapper,
             SyncHandler syncHandler,
             CloudDataClient cloudDataClient,
-            MqttClient mqttClient,
-            RequestMerger merger) {
+            MqttClient mqttClient) {
         super(topics);
         this.database = database;
         this.authorizationHandlerWrapper = authorizationHandlerWrapper;
@@ -174,7 +170,6 @@ public class ShadowManager extends PluginService {
         this.syncHandler = syncHandler;
         this.cloudDataClient = cloudDataClient;
         this.mqttClient = mqttClient;
-        this.merger = merger;
         this.deleteThingShadowRequestHandler = new DeleteThingShadowRequestHandler(dao, authorizationHandlerWrapper,
                 pubSubClientWrapper, synchronizeHelper, this.syncHandler);
         this.updateThingShadowRequestHandler = new UpdateThingShadowRequestHandler(dao, authorizationHandlerWrapper,
@@ -361,7 +356,6 @@ public class ShadowManager extends PluginService {
 
                         setupSync(newSyncDirection, Optional.of(currentDirection));
                         syncHandler.setSyncDirection(newSyncDirection);
-                        merger.setSyncDirection(newSyncDirection);
                     });
         }
 

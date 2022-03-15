@@ -23,7 +23,6 @@ import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfi
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.CloudDataClient;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientWrapper;
-import com.aws.greengrass.shadowmanager.sync.RequestMerger;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
 import com.aws.greengrass.shadowmanager.sync.model.Direction;
 import com.aws.greengrass.shadowmanager.sync.model.SyncContext;
@@ -149,8 +148,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
     private MqttClient mockMqttClient;
     @Mock
     private GreengrassCoreIPCService mockGreengrassCoreIPCService;
-    @Mock
-    private RequestMerger mockRequestMerger;
 
     @Captor
     private ArgumentCaptor<Integer> intObjectCaptor;
@@ -169,7 +166,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         initializeMockedConfig();
         shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper,
                 mockPubSubClientWrapper, mockInboundRateLimiter, mockDeviceConfiguration, mockSynchronizeHelper,
-                mockIotDataPlaneClientWrapper, mockSyncHandler, mockCloudDataClient, mockMqttClient, mockRequestMerger);
+                mockIotDataPlaneClientWrapper, mockSyncHandler, mockCloudDataClient, mockMqttClient);
     }
 
     @ParameterizedTest
@@ -222,7 +219,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
             verify(mockCloudDataClient, never()).updateSubscriptions(any());
             verify(mockSyncHandler, never()).stop();
             verify(mockSyncHandler, never()).setSyncDirection(eq(Direction.BETWEEN_DEVICE_AND_CLOUD));
-            verify(mockRequestMerger, never()).setSyncDirection(eq(Direction.BETWEEN_DEVICE_AND_CLOUD));
             return;
         }
 
@@ -234,7 +230,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         }
         verify(mockSyncHandler, never()).stop();
         verify(mockSyncHandler, times(1)).setSyncDirection(eq(Direction.BETWEEN_DEVICE_AND_CLOUD));
-        verify(mockRequestMerger, times(1)).setSyncDirection(eq(Direction.BETWEEN_DEVICE_AND_CLOUD));
         verify(mockDao, never()).listSyncedShadows();
         verify(mockDao, never()).deleteSyncInformation(anyString(), anyString());
         verify(mockDao, never()).insertSyncInfoIfNotExists(any());
@@ -266,7 +261,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
             verify(mockCloudDataClient, never()).updateSubscriptions(any());
             verify(mockSyncHandler, never()).stop();
             verify(mockSyncHandler, never()).setSyncDirection(eq(Direction.BETWEEN_DEVICE_AND_CLOUD));
-            verify(mockRequestMerger, never()).setSyncDirection(eq(Direction.BETWEEN_DEVICE_AND_CLOUD));
             return;
         }
 
@@ -276,7 +270,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         verify(mockSyncHandler, never()).stop();
 
         verify(mockSyncHandler, times(1)).setSyncDirection(eq(Direction.DEVICE_TO_CLOUD));
-        verify(mockRequestMerger, times(1)).setSyncDirection(eq(Direction.DEVICE_TO_CLOUD));
         verify(mockDao, never()).listSyncedShadows();
         verify(mockDao, never()).deleteSyncInformation(anyString(), anyString());
         verify(mockDao, never()).insertSyncInfoIfNotExists(any());
@@ -308,7 +301,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
             verify(mockCloudDataClient, never()).updateSubscriptions(any());
             verify(mockSyncHandler, never()).stop();
             verify(mockSyncHandler, never()).setSyncDirection(eq(Direction.BETWEEN_DEVICE_AND_CLOUD));
-            verify(mockRequestMerger, never()).setSyncDirection(eq(Direction.BETWEEN_DEVICE_AND_CLOUD));
             return;
         }
 
@@ -321,7 +313,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         verify(mockSyncHandler, never()).stop();
         verify(mockSyncHandler, never()).start(any(), anyInt());
         verify(mockSyncHandler, times(1)).setSyncDirection(eq(Direction.CLOUD_TO_DEVICE));
-        verify(mockRequestMerger, times(1)).setSyncDirection(eq(Direction.CLOUD_TO_DEVICE));
         verify(mockDao, never()).listSyncedShadows();
         verify(mockDao, never()).deleteSyncInformation(anyString(), anyString());
         verify(mockDao, never()).insertSyncInfoIfNotExists(any());

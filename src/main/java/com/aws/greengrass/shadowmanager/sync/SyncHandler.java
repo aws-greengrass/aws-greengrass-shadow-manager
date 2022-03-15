@@ -77,13 +77,17 @@ public class SyncHandler {
      * The direction of syncing shadows to/from the cloud.
      */
     @Getter
-    @Setter
     private Direction syncDirection = Direction.BETWEEN_DEVICE_AND_CLOUD;
 
     /**
      * The sync strategy factory object to generate.
      */
     private final SyncStrategyFactory syncStrategyFactory;
+
+    /**
+     * The sync strategy factory object to generate.
+     */
+    private final RequestMerger merger;
 
     /**
      * Request queue.
@@ -96,10 +100,11 @@ public class SyncHandler {
      * @param executorService              provider of threads for real time syncing
      * @param syncScheduledExecutorService provider of thread for periodic syncing
      * @param syncQueue                    a request queue
+     * @param merger                       the request merger
      */
     @Inject
     public SyncHandler(ExecutorService executorService, ScheduledExecutorService syncScheduledExecutorService,
-                       RequestBlockingQueue syncQueue) {
+                       RequestBlockingQueue syncQueue, RequestMerger merger) {
         this(executorService, syncScheduledExecutorService,
                 // retry wrapper so that requests can be mocked
                 (config, request, context) ->
@@ -108,7 +113,7 @@ public class SyncHandler {
                                     request.execute(context);
                                     return null;
                                 },
-                                SYNC_EVENT_TYPE, logger), syncQueue);
+                                SYNC_EVENT_TYPE, logger), syncQueue, merger);
     }
 
     /**
@@ -118,10 +123,11 @@ public class SyncHandler {
      * @param syncScheduledExecutorService provider of thread for periodic syncing
      * @param retryer                      The retryer object.
      * @param syncQueue                    a request queue.
+     * @param merger                       the request merger
      */
     private SyncHandler(ExecutorService executorService, ScheduledExecutorService syncScheduledExecutorService,
-                        Retryer retryer, RequestBlockingQueue syncQueue) {
-        this(new SyncStrategyFactory(retryer, executorService, syncScheduledExecutorService), syncQueue);
+                        Retryer retryer, RequestBlockingQueue syncQueue, RequestMerger merger) {
+        this(new SyncStrategyFactory(retryer, executorService, syncScheduledExecutorService), syncQueue, merger);
     }
 
     /**
@@ -129,10 +135,12 @@ public class SyncHandler {
      *
      * @param syncStrategyFactory The sync strategy factory object to generate.
      * @param syncQueue           a request queue.
+     * @param merger              the request merger
      */
-    SyncHandler(SyncStrategyFactory syncStrategyFactory, RequestBlockingQueue syncQueue) {
+    SyncHandler(SyncStrategyFactory syncStrategyFactory, RequestBlockingQueue syncQueue, RequestMerger merger) {
         this.syncStrategyFactory = syncStrategyFactory;
         this.syncQueue = syncQueue;
+        this.merger = merger;
         setSyncStrategy(Strategy.builder().type(StrategyType.REALTIME).build());
     }
 
@@ -143,6 +151,16 @@ public class SyncHandler {
      */
     public void setSyncStrategy(Strategy syncStrategy) {
         this.overallSyncStrategy = this.syncStrategyFactory.createSyncStrategy(syncStrategy, syncQueue);
+    }
+
+    /**
+     * Sets the sync direction in SyncHandler as well as RequestMerger.
+     *
+     * @param syncDirection The sync direction.
+     */
+    public void setSyncDirection(Direction syncDirection) {
+        this.syncDirection = syncDirection;
+        this.merger.setSyncDirection(syncDirection);
     }
 
     /**
