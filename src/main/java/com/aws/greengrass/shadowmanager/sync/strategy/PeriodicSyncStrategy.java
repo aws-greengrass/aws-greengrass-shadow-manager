@@ -51,10 +51,11 @@ public class PeriodicSyncStrategy extends BaseSyncStrategy {
      * @param retryer     The retryer object.
      * @param interval    The interval at which to sync the shadows.
      * @param retryConfig The retryer configuration.
+     * @param syncQueue   The sync queue from the previous strategy if any.
      */
     public PeriodicSyncStrategy(ScheduledExecutorService ses, Retryer retryer, long interval,
-                                RetryUtils.RetryConfig retryConfig) {
-        super(retryer, retryConfig);
+                                RetryUtils.RetryConfig retryConfig, RequestBlockingQueue syncQueue) {
+        super(retryer, retryConfig, syncQueue);
         this.syncExecutorService = ses;
         this.interval = interval;
     }

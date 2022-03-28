@@ -49,10 +49,11 @@ public class RealTimeSyncStrategy extends BaseSyncStrategy {
      * @param executorService executor service.
      * @param retryer         The retryer object.
      * @param retryConfig     The retryer configuration.
+     * @param syncQueue       The sync queue from the previous strategy if any.
      */
     public RealTimeSyncStrategy(ExecutorService executorService, Retryer retryer,
-                                RetryUtils.RetryConfig retryConfig) {
-        super(retryer, retryConfig);
+                                RetryUtils.RetryConfig retryConfig, RequestBlockingQueue syncQueue) {
+        super(retryer, retryConfig, syncQueue);
         this.syncExecutorService = executorService;
     }
 
@@ -79,7 +80,7 @@ public class RealTimeSyncStrategy extends BaseSyncStrategy {
         // wait for threads to actually exit but don't block forever
         if (!syncThreadEnd.await(THREAD_END_WAIT_TIME_SECONDS, TimeUnit.SECONDS)) {
             logger.atWarn(SYNC_EVENT_TYPE).log("{} thread(s) did not exit after {} seconds",
-                    syncThreadEnd.getCount(),THREAD_END_WAIT_TIME_SECONDS);
+                    syncThreadEnd.getCount(), THREAD_END_WAIT_TIME_SECONDS);
         }
     }
 

@@ -330,7 +330,7 @@ public class ShadowManager extends PluginService {
 
         if (installConfig.configureSyncDirectionConfig) {
             config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC,
-                    CONFIGURATION_SYNC_DIRECTION_TOPIC)
+                            CONFIGURATION_SYNC_DIRECTION_TOPIC)
                     .dflt(Direction.BETWEEN_DEVICE_AND_CLOUD.getCode())
                     .subscribe((why, newv) -> {
                         Direction newSyncDirection;

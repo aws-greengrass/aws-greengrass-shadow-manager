@@ -115,6 +115,7 @@ public class NucleusLaunchUtils extends GGServiceTestUtil {
         kernel.getContext().put(RealTimeSyncStrategy.class, (RealTimeSyncStrategy) realTimeSyncStrategy);
         ExecutorService es = kernel.getContext().get(ExecutorService.class);
         ScheduledExecutorService ses = kernel.getContext().get(ScheduledExecutorService.class);
+        RequestBlockingQueue queue = kernel.getContext().get(RequestBlockingQueue.class);
         // set retry config to only try once so we can test failures earlier
         kernel.launch();
 
@@ -129,10 +130,10 @@ public class NucleusLaunchUtils extends GGServiceTestUtil {
                     .build();
             SyncStrategy syncStrategy;
             if (RealTimeSyncStrategy.class.equals(config.getSyncClazz())) {
-                syncStrategy = new RealTimeSyncStrategy(es, ((RealTimeSyncStrategy) realTimeSyncStrategy).getRetryer(), retryConfig);
+                syncStrategy = new RealTimeSyncStrategy(es, ((RealTimeSyncStrategy) realTimeSyncStrategy).getRetryer(), retryConfig, queue);
                 kernel.getContext().put(RealTimeSyncStrategy.class, (RealTimeSyncStrategy) syncStrategy);
             } else {
-                syncStrategy = new PeriodicSyncStrategy(ses, ((RealTimeSyncStrategy) realTimeSyncStrategy).getRetryer(), 3, retryConfig);
+                syncStrategy = new PeriodicSyncStrategy(ses, ((RealTimeSyncStrategy) realTimeSyncStrategy).getRetryer(), 3, retryConfig, queue);
                 kernel.getContext().put(PeriodicSyncStrategy.class, (PeriodicSyncStrategy) syncStrategy);
 
             }
