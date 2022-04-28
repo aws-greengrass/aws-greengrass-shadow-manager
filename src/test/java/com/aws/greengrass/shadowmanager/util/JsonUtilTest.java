@@ -100,15 +100,29 @@ class JsonUtilTest {
     @Test
     void GIVEN_state_with_6_levels_WHEN_validatePayload_THEN_successfully_validates() throws IOException {
         ShadowDocument source = new ShadowDocument();
-        JsonNode updateNode = getPayloadJson("{\"state\": {\"desired\": {\"1\": {\"2\": {\"3\": {\"4\": {\"5\": {\"6\": \"The Beatles\"}}}}}}}}".getBytes()).get();
-        assertDoesNotThrow(() -> JsonUtil.validatePayload(source, updateNode));
+        JsonNode desiredNode = getPayloadJson("{\"state\": {\"desired\": {\"1\": {\"2\": {\"3\": {\"4\": {\"5\": {\"6\": \"The Beatles\"}}}}}}}}".getBytes()).get();
+        assertDoesNotThrow(() -> JsonUtil.validatePayload(source, desiredNode));
+        JsonNode reportedNode = getPayloadJson("{\"state\": {\"reported\": {\"1\": {\"2\": {\"3\": {\"4\": {\"5\": {\"6\": \"The Beatles\"}}}}}}}}".getBytes()).get();
+        assertDoesNotThrow(() -> JsonUtil.validatePayload(source, reportedNode));
     }
 
     @Test
     void GIVEN_state_with_7_levels_WHEN_validatePayload_THEN_throws_invalid_request_parameters_exception() throws IOException {
         ShadowDocument source = new ShadowDocument();
-        JsonNode updateNode = getPayloadJson("{\"state\": {\"desired\": {\"1\": {\"2\": {\"3\": {\"4\": {\"5\": {\"6\": {\"7\": \"The Beatles\"}}}}}}}}}".getBytes()).get();
-        InvalidRequestParametersException thrown =  assertThrows(InvalidRequestParametersException.class, () -> JsonUtil.validatePayload(source, updateNode));
+        JsonNode desiredNode = getPayloadJson("{\"state\": {\"desired\": {\"1\": {\"2\": {\"3\": {\"4\": {\"5\": {\"6\": {\"7\": \"The Beatles\"}}}}}}}}}".getBytes()).get();
+        InvalidRequestParametersException thrown =  assertThrows(InvalidRequestParametersException.class, () -> JsonUtil.validatePayload(source, desiredNode));
+        assertThat(thrown.getErrorMessage(), is(notNullValue()));
+        assertThat(thrown.getErrorMessage().getErrorCode(), is(400));
+        assertThat(thrown.getErrorMessage().getMessage(), is("JSON contains too many levels of nesting; maximum is 6"));
+
+        JsonNode reportedNode = getPayloadJson("{\"state\": {\"reported\": {\"1\": {\"2\": {\"3\": {\"4\": {\"5\": {\"6\": {\"7\": \"The Beatles\"}}}}}}}}}".getBytes()).get();
+        thrown =  assertThrows(InvalidRequestParametersException.class, () -> JsonUtil.validatePayload(source, reportedNode));
+        assertThat(thrown.getErrorMessage(), is(notNullValue()));
+        assertThat(thrown.getErrorMessage().getErrorCode(), is(400));
+        assertThat(thrown.getErrorMessage().getMessage(), is("JSON contains too many levels of nesting; maximum is 6"));
+
+        JsonNode reportedAndDesiredNode = getPayloadJson("{\"state\": {\"desired\": {\"1\": {\"2\": {\"3\": {\"4\": {\"5\": {\"6\": \"The Beatles\"}}}}}},\"reported\": {\"1\": {\"2\": {\"3\": {\"4\": {\"5\": {\"6\": {\"7\": \"The Beatles\"}}}}}}}}}".getBytes()).get();
+        thrown =  assertThrows(InvalidRequestParametersException.class, () -> JsonUtil.validatePayload(source, reportedAndDesiredNode));
         assertThat(thrown.getErrorMessage(), is(notNullValue()));
         assertThat(thrown.getErrorMessage().getErrorCode(), is(400));
         assertThat(thrown.getErrorMessage().getMessage(), is("JSON contains too many levels of nesting; maximum is 6"));
