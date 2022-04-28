@@ -96,4 +96,21 @@ class JsonUtilTest {
         assertThat(thrown.getErrorMessage().getErrorCode(), is(400));
         assertThat(thrown.getErrorMessage().getMessage(), is("Invalid version"));
     }
+
+    @Test
+    void GIVEN_state_with_6_levels_WHEN_validatePayload_THEN_successfully_validates() throws IOException {
+        ShadowDocument source = new ShadowDocument();
+        JsonNode updateNode = getPayloadJson("{\"state\": {\"desired\": {\"1\": {\"2\": {\"3\": {\"4\": {\"5\": {\"6\": \"The Beatles\"}}}}}}}}".getBytes()).get();
+        assertDoesNotThrow(() -> JsonUtil.validatePayload(source, updateNode));
+    }
+
+    @Test
+    void GIVEN_state_with_7_levels_WHEN_validatePayload_THEN_throws_invalid_request_parameters_exception() throws IOException {
+        ShadowDocument source = new ShadowDocument();
+        JsonNode updateNode = getPayloadJson("{\"state\": {\"desired\": {\"1\": {\"2\": {\"3\": {\"4\": {\"5\": {\"6\": {\"7\": \"The Beatles\"}}}}}}}}}".getBytes()).get();
+        InvalidRequestParametersException thrown =  assertThrows(InvalidRequestParametersException.class, () -> JsonUtil.validatePayload(source, updateNode));
+        assertThat(thrown.getErrorMessage(), is(notNullValue()));
+        assertThat(thrown.getErrorMessage().getErrorCode(), is(400));
+        assertThat(thrown.getErrorMessage().getMessage(), is("JSON contains too many levels of nesting; maximum is 6"));
+    }
 }
