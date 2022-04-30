@@ -6,7 +6,6 @@
 package com.aws.greengrass.shadowmanager.util;
 
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
-import com.aws.greengrass.shadowmanager.model.Constants;
 import com.aws.greengrass.shadowmanager.model.ErrorMessage;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -28,8 +27,11 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.StringJoiner;
 
+import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_DOCUMENT_STATE_DEPTH;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_CLIENT_TOKEN;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE;
+import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE_DESIRED;
+import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE_REPORTED;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_VERSION;
 import static com.aws.greengrass.shadowmanager.model.ErrorMessage.createInvalidPayloadJsonMessage;
 
@@ -109,26 +111,28 @@ public final class JsonUtil {
      * @param stateJson The state node to validate
      * @throws InvalidRequestParametersException when the state node has depth more than the max
      */
-    private static int validatePayloadStateDepth(JsonNode stateJson) throws InvalidRequestParametersException {
-        return calculateDepth(stateJson, 0, Constants.DEFAULT_DOCUMENT_STATE_DEPTH);
+    private static void validatePayloadStateDepth(JsonNode stateJson) throws InvalidRequestParametersException {
+        calculateDepth(stateJson.get(SHADOW_DOCUMENT_STATE_REPORTED), 1, DEFAULT_DOCUMENT_STATE_DEPTH);
+        calculateDepth(stateJson.get(SHADOW_DOCUMENT_STATE_DESIRED), 1, DEFAULT_DOCUMENT_STATE_DEPTH);
     }
 
     private static int calculateDepth(final JsonNode node, final int currentDepth, final int maxDepth)
             throws InvalidRequestParametersException {
-        // If the Node is not a value node (i.e. either an object or an array), then add another level to the depth.
-        int newDepth = node.isValueNode() ? currentDepth : currentDepth + 1;
+        if (node == null || node.isEmpty()) {
+            return 0;
+        }
 
-        // If the new depth is greater than the max depth, then raise an invalid request parameters error for max
+        // If the current depth is greater than the max depth, then raise an invalid request parameters error for max
         //depth reached.
-        if (newDepth > maxDepth) {
+        if (currentDepth > maxDepth) {
             throw new InvalidRequestParametersException(ErrorMessage.INVALID_STATE_NODE_DEPTH_MESSAGE);
         }
 
         // Now recurse over all the children nodes if the node is not a value node to check their depth.
-        int maxChildDepth = newDepth;
+        int maxChildDepth = currentDepth;
         if (!node.isValueNode()) {
             for (JsonNode child : node) {
-                int currentChildDepth = calculateDepth(child, newDepth, maxDepth);
+                int currentChildDepth = calculateDepth(child, currentDepth + 1, maxDepth);
                 maxChildDepth = Math.max(currentChildDepth, maxChildDepth);
             }
         }
