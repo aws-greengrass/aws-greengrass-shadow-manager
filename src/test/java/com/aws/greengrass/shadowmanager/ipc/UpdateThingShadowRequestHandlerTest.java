@@ -6,6 +6,7 @@
 package com.aws.greengrass.shadowmanager.ipc;
 
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
+import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
@@ -37,6 +38,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.event.Level;
 import software.amazon.awssdk.aws.greengrass.model.ConflictError;
 import software.amazon.awssdk.aws.greengrass.model.InvalidArgumentsError;
 import software.amazon.awssdk.aws.greengrass.model.ServiceError;
@@ -55,7 +57,6 @@ import static com.aws.greengrass.shadowmanager.TestUtils.SAMPLE_EXCEPTION_MESSAG
 import static com.aws.greengrass.shadowmanager.TestUtils.SHADOW_NAME;
 import static com.aws.greengrass.shadowmanager.TestUtils.TEST_SERVICE;
 import static com.aws.greengrass.shadowmanager.TestUtils.THING_NAME;
-import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_DOCUMENT_SIZE;
 import static com.aws.greengrass.shadowmanager.model.Constants.ERROR_CODE_FIELD_NAME;
 import static com.aws.greengrass.shadowmanager.model.Constants.ERROR_MESSAGE_FIELD_NAME;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_METADATA;
@@ -581,7 +582,7 @@ class UpdateThingShadowRequestHandlerTest {
     }
 
     @Test
-    void GIVEN_update_thing_shadow_request_WHEN_missing_payload_THEN_update_thing_shadow(ExtensionContext context) throws IOException {
+    void GIVEN_update_thing_shadow_request_WHEN_missing_payload_THEN_throw_invalid_arguments_error(ExtensionContext context) throws IOException {
         ignoreExceptionOfType(context, InvalidRequestParametersException.class);
         UpdateThingShadowRequest request = new UpdateThingShadowRequest();
         request.setThingName(THING_NAME);
@@ -798,12 +799,59 @@ class UpdateThingShadowRequestHandlerTest {
     }
 
     @Test
-    void GIVEN_bad_update_with_payload_size_greater_than_max_size_WHEN_handle_request_THEN_throw_invalid_argument_error_and_send_message_on_rejected_topic(ExtensionContext context)
+    void GIVEN_bad_update_with_payload_size_causing_shadow_greater_than_max_size_WHEN_handle_request_THEN_throw_invalid_argument_error_and_send_message_on_rejected_topic(ExtensionContext context)
             throws IOException, URISyntaxException {
+        // this has been verified on cloud to be 8193 bytes which exceeds the default of 8192
         byte[] initialDocument = getJsonFromResource(RESOURCE_DIRECTORY_NAME + GOOD_INITIAL_DOCUMENT_FILE_NAME);
-        byte[] badUpdateRequest = new byte[DEFAULT_DOCUMENT_SIZE + 1];
+        byte[] badUpdateRequest = getJsonFromResource(RESOURCE_DIRECTORY_NAME +
+                "bad_update_document_with_large_reported.json");
         String expectedErrorString = "The payload exceeds the maximum size allowed";
         int expectedErrorCode = 413;
         assertInvalidArgumentsErrorFromPayloadUpdate(initialDocument, badUpdateRequest, expectedErrorString, expectedErrorCode, context);
+    }
+
+    @Test
+    void GIVEN_good_update_with_payload_size_causing_shadow_equal_to_max_size_WHEN_handle_request_THEN_update_shadow(ExtensionContext context)
+            throws IOException, URISyntaxException {
+        LogManager.getRootLogConfiguration().setLevel(Level.DEBUG);
+        // this has been verified on cloud to be 8192 bytes which equals the default of 8192
+        byte[] initialDocument = getJsonFromResource(RESOURCE_DIRECTORY_NAME + GOOD_INITIAL_DOCUMENT_FILE_NAME);
+        byte[] updateRequest = getJsonFromResource(RESOURCE_DIRECTORY_NAME +
+                "good_update_document_with_large_reported.json");
+
+        ShadowDocument initial = new ShadowDocument(initialDocument);
+
+        JsonNode payloadJson = JsonUtil.getPayloadJson(updateRequest).get();
+        ((ObjectNode) payloadJson).remove(SHADOW_DOCUMENT_VERSION);
+        updateRequest = JsonUtil.getPayloadBytes(payloadJson);
+
+        UpdateThingShadowRequest request = new UpdateThingShadowRequest();
+        request.setThingName(THING_NAME);
+        request.setShadowName("shadowName");
+        request.setPayload(updateRequest);
+
+
+
+        UpdateThingShadowRequestHandler updateThingShadowIPCHandler = new UpdateThingShadowRequestHandler(mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockSynchronizeHelper, mockSyncHandler);
+        when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(initial));
+        when(mockDao.updateShadowThing(any(), any(), any(), anyLong())).thenReturn(Optional.of(new byte[]{}));
+
+        UpdateThingShadowHandlerResponse actualResponse = updateThingShadowIPCHandler.handleRequest(request, TEST_SERVICE);
+        Optional<JsonNode> responseJson = JsonUtil.getPayloadJson(actualResponse.getUpdateThingShadowResponse().getPayload());
+        assertTrue(responseJson.isPresent());
+        assertAndRemoveTsAndMetadata(responseJson.get());
+        Optional<JsonNode> currentDocumentJson = JsonUtil.getPayloadJson(actualResponse.getCurrentDocument());
+        assertAndRemoveMetadata(currentDocumentJson.get());
+
+        // validate the output
+
+        // bump version on the update request - request contains full shadow and will be the response
+        Optional<JsonNode> expectedAcceptedJson = JsonUtil.getPayloadJson(updateRequest);
+        assertTrue(expectedAcceptedJson.isPresent());
+        ((ObjectNode) expectedAcceptedJson.get()).set(SHADOW_DOCUMENT_VERSION, new IntNode(2));
+        assertThat(responseJson.get(), is(expectedAcceptedJson.get()));
+
+        JsonNode updatedDocument = JsonUtil.getPayloadJson(actualResponse.getCurrentDocument()).get();
+        assertThat(updatedDocument, is(expectedAcceptedJson.get()));
     }
 }

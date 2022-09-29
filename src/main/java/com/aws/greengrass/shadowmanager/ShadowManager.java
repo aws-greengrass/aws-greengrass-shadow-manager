@@ -321,7 +321,6 @@ public class ShadowManager extends PluginService {
                         try {
                             Validator.validateMaxShadowSize(newMaxShadowSize);
                             Validator.setMaxShadowDocumentSize(newMaxShadowSize);
-                            updateThingShadowRequestHandler.setMaxShadowSize(newMaxShadowSize);
                         } catch (InvalidConfigurationException e) {
                             serviceErrored(new InvalidConfigurationException(e));
                         }

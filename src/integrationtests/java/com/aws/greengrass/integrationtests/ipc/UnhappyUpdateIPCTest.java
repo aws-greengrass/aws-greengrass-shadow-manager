@@ -10,6 +10,7 @@ import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.model.ErrorMessage;
+import com.aws.greengrass.shadowmanager.util.Validator;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.util.Coerce;
 import org.junit.jupiter.api.AfterEach;
@@ -107,7 +108,7 @@ class UnhappyUpdateIPCTest extends NucleusLaunchUtils {
 
         eventually(() -> {
             assertThat(Coerce.toInt(shadowManager.getConfig().lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC)), is(20 * 1024));
-            assertThat(Coerce.toInt(updateHandler.getMaxShadowSize()), is(20 * 1024));
+            assertThat(Coerce.toInt(Validator.getMaxShadowDocumentSize()), is(20 * 1024));
             return null;
         }, 10, ChronoUnit.SECONDS);
 
@@ -120,7 +121,7 @@ class UnhappyUpdateIPCTest extends NucleusLaunchUtils {
 
         shadowManager.getConfig().remove();
         eventually(() -> {
-            assertThat(Coerce.toInt(updateHandler.getMaxShadowSize()), is(DEFAULT_DOCUMENT_SIZE));
+            assertThat(Coerce.toInt(Validator.getMaxShadowDocumentSize()), is(DEFAULT_DOCUMENT_SIZE));
             return null;
         }, 10, ChronoUnit.SECONDS);
 

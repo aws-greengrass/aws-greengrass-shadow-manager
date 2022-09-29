@@ -27,8 +27,6 @@ import com.aws.greengrass.shadowmanager.util.Validator;
 import com.aws.greengrass.util.Pair;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import lombok.Getter;
-import lombok.Setter;
 import software.amazon.awssdk.aws.greengrass.model.ConflictError;
 import software.amazon.awssdk.aws.greengrass.model.InvalidArgumentsError;
 import software.amazon.awssdk.aws.greengrass.model.ServiceError;
@@ -41,7 +39,6 @@ import java.time.Instant;
 import java.util.Optional;
 
 import static com.aws.greengrass.ipc.common.ExceptionUtil.translateExceptions;
-import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_DOCUMENT_SIZE;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_LOCAL_VERSION_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
@@ -56,9 +53,6 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
     private final AuthorizationHandlerWrapper authorizationHandlerWrapper;
     private final ShadowWriteSynchronizeHelper synchronizeHelper;
     private final SyncHandler syncHandler;
-    @Setter
-    @Getter
-    private int maxShadowSize = DEFAULT_DOCUMENT_SIZE;
 
     /**
      * IPC Handler class for responding to UpdateThingShadow requests.
@@ -116,7 +110,6 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
 
             synchronized (synchronizeHelper.getThingShadowLock(shadowRequest)) {
                 try {
-
                     if (updatedDocumentRequestBytes == null || updatedDocumentRequestBytes.length == 0) {
                         throw new InvalidRequestParametersException(ErrorMessage.PAYLOAD_MISSING_MESSAGE);
                     }
@@ -131,11 +124,6 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
                     // 3. The depth of the state node to ensure it is within the boundaries.
                     // 4. The version of the payload to ensure that its current version + 1.
 
-                    // If the payload size is greater than the maximum default shadow document size, then raise an
-                    // invalid parameters error for payload too large.
-                    if (updatedDocumentRequestBytes.length > maxShadowSize) {
-                        throw new InvalidRequestParametersException(ErrorMessage.PAYLOAD_TOO_LARGE_MESSAGE);
-                    }
                     updateDocumentRequest = JsonUtil.getPayloadJson(updatedDocumentRequestBytes)
                             .filter(d -> !isNullOrMissing(d))
                             .orElseThrow(() ->
@@ -178,9 +166,28 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
 
                 try {
                     // Generate the new merged document based on the update shadow patch payload.
-                    ShadowDocument updatedDocument = new ShadowDocument(currentDocument);
-                    final Pair<JsonNode, JsonNode> patchStateMetadataPair = updatedDocument
-                            .update(updateDocumentRequest);
+                    final ShadowDocument updatedDocument = new ShadowDocument(currentDocument);
+                    final JsonNode metadata = updatedDocument.update(updateDocumentRequest);
+
+                    // shadow size is based on desired + reported length. Ideally we would just store these separately
+                    // to avoid double serialization, but DB stores the single document
+                    int desiredLength = 0;
+                    int reportedLength = 0;
+                    if (!isNullOrMissing(updatedDocument.getState().getDesired())) {
+                        desiredLength = JsonUtil.getPayloadBytes(updatedDocument.getState().getDesired()).length;
+                    }
+                    if (!isNullOrMissing(updatedDocument.getState().getReported())) {
+                        reportedLength = JsonUtil.getPayloadBytes(updatedDocument.getState().getReported()).length;
+                    }
+
+                    // Make sure new document is not too big
+                    logger.atDebug()
+                            .setEventType(LogEvents.UPDATE_THING_SHADOW.code())
+                            .kv(LOG_THING_NAME_KEY, thingName)
+                            .kv(LOG_SHADOW_NAME_KEY, shadowName)
+                            .kv("mergedShadowStateSize", desiredLength + reportedLength)
+                            .log();
+                    Validator.validateShadowSize(desiredLength + reportedLength);
 
                     // Update the new document in the DAO.
                     byte[] updateDocumentBytes = JsonUtil.getPayloadBytes(updatedDocument.toJson(false));
@@ -188,7 +195,7 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
                             updatedDocument.getVersion());
                     if (!result.isPresent()) {
                         ServiceError error = new ServiceError("Unexpected error occurred in trying to "
-                                + "update shadow thing.");
+                                + "update shadow thing");
                         logger.atError()
                                 .setEventType(LogEvents.UPDATE_THING_SHADOW.code())
                                 .kv(LOG_THING_NAME_KEY, thingName)
@@ -213,8 +220,8 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
                             .withVersion(updatedDocument.getVersion())
                             .withClientToken(clientToken)
                             .withTimestamp(Instant.now())
-                            .withState(patchStateMetadataPair.getLeft())
-                            .withMetadata(patchStateMetadataPair.getRight())
+                            .withState(updateDocumentRequest.get("state"))
+                            .withMetadata(metadata)
                             .build();
                     byte[] responseNodeBytes = JsonUtil.getPayloadBytes(responseNode);
 
@@ -235,6 +242,8 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
                     this.syncHandler.pushCloudUpdateSyncRequest(thingName, shadowName, updateDocumentRequest);
 
                     return new UpdateThingShadowHandlerResponse(updateThingShadowResponse, updateDocumentBytes);
+                } catch (InvalidRequestParametersException e) {
+                    throwInvalidArgumentsError(thingName, shadowName, clientToken, e, Operation.UPDATE_SHADOW);
                 } catch (ShadowManagerDataException | IOException e) {
                     throwServiceError(thingName, shadowName, clientToken, e);
                 }
