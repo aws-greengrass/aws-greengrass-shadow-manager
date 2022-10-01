@@ -154,7 +154,7 @@ public final class Validator {
      * @throws InvalidRequestParametersException if the shadow is too large
      */
     public static void validateShadowSize(int size) throws InvalidRequestParametersException {
-        if (size > Validator.getMaxShadowDocumentSize()) {
+        if (size > maxShadowDocumentSize) {
             throw new InvalidRequestParametersException(ErrorMessage.PAYLOAD_TOO_LARGE_MESSAGE);
         }
     }

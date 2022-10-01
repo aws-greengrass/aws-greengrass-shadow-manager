@@ -143,10 +143,10 @@ public class ShadowDocument {
     }
 
     /**
-     * Calculates the documents node based on the current version of the shadow document and the new updated
-     * version of the shadow document sent in the update request.
+     * Updates the documents node based on the current version of the shadow document and the requested update.
      *
      * @param updateDocumentRequest The JSON containing the shadow document update request.
+     * @return the metadata of the updated state
      */
     public JsonNode update(JsonNode updateDocumentRequest) {
         JsonNode updatedStateNode = updateDocumentRequest.get(SHADOW_DOCUMENT_STATE);

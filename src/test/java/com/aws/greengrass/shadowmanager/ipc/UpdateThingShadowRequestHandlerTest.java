@@ -831,7 +831,6 @@ class UpdateThingShadowRequestHandlerTest {
         request.setPayload(updateRequest);
 
 
-
         UpdateThingShadowRequestHandler updateThingShadowIPCHandler = new UpdateThingShadowRequestHandler(mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockSynchronizeHelper, mockSyncHandler);
         when(mockDao.getShadowThing(any(), any())).thenReturn(Optional.of(initial));
         when(mockDao.updateShadowThing(any(), any(), any(), anyLong())).thenReturn(Optional.of(new byte[]{}));
@@ -843,8 +842,6 @@ class UpdateThingShadowRequestHandlerTest {
         Optional<JsonNode> currentDocumentJson = JsonUtil.getPayloadJson(actualResponse.getCurrentDocument());
         assertAndRemoveMetadata(currentDocumentJson.get());
 
-        // validate the output
-
         // bump version on the update request - request contains full shadow and will be the response
         Optional<JsonNode> expectedAcceptedJson = JsonUtil.getPayloadJson(updateRequest);
         assertTrue(expectedAcceptedJson.isPresent());
@@ -852,6 +849,6 @@ class UpdateThingShadowRequestHandlerTest {
         assertThat(responseJson.get(), is(expectedAcceptedJson.get()));
 
         JsonNode updatedDocument = JsonUtil.getPayloadJson(actualResponse.getCurrentDocument()).get();
-        assertThat(updatedDocument, is(expectedAcceptedJson.get()));
+        assertThat(updatedDocument.get("state"), is(expectedAcceptedJson.get().get("state")));
     }
 }
