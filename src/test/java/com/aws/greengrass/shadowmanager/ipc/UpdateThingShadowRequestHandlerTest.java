@@ -6,7 +6,6 @@
 package com.aws.greengrass.shadowmanager.ipc;
 
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
-import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
@@ -38,7 +37,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.slf4j.event.Level;
 import software.amazon.awssdk.aws.greengrass.model.ConflictError;
 import software.amazon.awssdk.aws.greengrass.model.InvalidArgumentsError;
 import software.amazon.awssdk.aws.greengrass.model.ServiceError;
@@ -813,7 +811,6 @@ class UpdateThingShadowRequestHandlerTest {
     @Test
     void GIVEN_good_update_with_payload_size_causing_shadow_equal_to_max_size_WHEN_handle_request_THEN_update_shadow(ExtensionContext context)
             throws IOException, URISyntaxException {
-        LogManager.getRootLogConfiguration().setLevel(Level.DEBUG);
         // this has been verified on cloud to be 8192 bytes which equals the default of 8192
         byte[] initialDocument = getJsonFromResource(RESOURCE_DIRECTORY_NAME + GOOD_INITIAL_DOCUMENT_FILE_NAME);
         byte[] updateRequest = getJsonFromResource(RESOURCE_DIRECTORY_NAME +

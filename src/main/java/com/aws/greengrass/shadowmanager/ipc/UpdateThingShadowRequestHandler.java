@@ -185,9 +185,20 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
                             .setEventType(LogEvents.UPDATE_THING_SHADOW.code())
                             .kv(LOG_THING_NAME_KEY, thingName)
                             .kv(LOG_SHADOW_NAME_KEY, shadowName)
-                            .kv("mergedShadowStateSize", desiredLength + reportedLength)
+                            .kv("updatedShadowStateSize", desiredLength + reportedLength)
                             .log();
-                    Validator.validateShadowSize(desiredLength + reportedLength);
+                    try {
+                        Validator.validateShadowSize(desiredLength + reportedLength);
+                    } catch (InvalidRequestParametersException e) {
+                        logger.atWarn()
+                                .setEventType(LogEvents.UPDATE_THING_SHADOW.code())
+                                .kv(LOG_THING_NAME_KEY, thingName)
+                                .kv(LOG_SHADOW_NAME_KEY, shadowName)
+                                .kv("updatedShadowStateSize", desiredLength + reportedLength)
+                                .kv("maxShadowStateSize", Validator.getMaxShadowDocumentSize())
+                                .log("Requested update is too large");
+                        throw e;
+                    }
 
                     // Update the new document in the DAO.
                     byte[] updateDocumentBytes = JsonUtil.getPayloadBytes(updatedDocument.toJson(false));
