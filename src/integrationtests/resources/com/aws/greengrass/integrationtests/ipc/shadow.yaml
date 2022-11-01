@@ -3,7 +3,7 @@ services:
   aws.greengrass.Nucleus:
     configuration:
       runWithDefault:
-        posixUser: battler
+        posixUser: nobody
   aws.greengrass.ShadowManager:
     configuration:
       rateLimits:
