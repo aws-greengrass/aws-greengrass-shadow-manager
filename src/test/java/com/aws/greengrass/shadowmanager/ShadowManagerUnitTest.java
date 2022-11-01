@@ -35,6 +35,7 @@ import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.testcommons.testutilities.GGServiceTestUtil;
 import com.aws.greengrass.util.Pair;
 import com.fasterxml.jackson.databind.exc.MismatchedInputException;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -167,6 +168,12 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper,
                 mockPubSubClientWrapper, mockInboundRateLimiter, mockDeviceConfiguration, mockSynchronizeHelper,
                 mockIotDataPlaneClientWrapper, mockSyncHandler, mockCloudDataClient, mockMqttClient);
+    }
+
+    @AfterEach
+    void tearDown() {
+        // reset static value so it doesn't interfere with other tests
+        Validator.setMaxShadowDocumentSize(DEFAULT_DOCUMENT_SIZE);
     }
 
     @ParameterizedTest

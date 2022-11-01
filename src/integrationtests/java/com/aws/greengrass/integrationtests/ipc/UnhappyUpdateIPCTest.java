@@ -58,6 +58,8 @@ class UnhappyUpdateIPCTest extends NucleusLaunchUtils {
 
     @AfterEach
     void cleanup() {
+        // reset static value so it doesn't interfere with other tests
+        Validator.setMaxShadowDocumentSize(DEFAULT_DOCUMENT_SIZE);
         kernel.shutdown();
     }
 
