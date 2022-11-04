@@ -13,11 +13,8 @@ services:
       - DoAll
   DoAll:
     lifecycle:
-      run:
-        windows:
-          powershell -command sleep 1
-        posix:
-          sleep 1
+      startup: echo "Running"
+      shutdown: echo "Stopping"
     dependencies:
       - aws.greengrass.ShadowManager
     configuration:

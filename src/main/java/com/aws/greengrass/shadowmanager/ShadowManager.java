@@ -321,7 +321,10 @@ public class ShadowManager extends PluginService {
                         try {
                             Validator.validateMaxShadowSize(newMaxShadowSize);
                             Validator.setMaxShadowDocumentSize(newMaxShadowSize);
-                            updateThingShadowRequestHandler.setMaxShadowSize(newMaxShadowSize);
+                            logger.atDebug()
+                                    .setEventType("config")
+                                    .kv("maxShadowSize", newMaxShadowSize)
+                                    .log();
                         } catch (InvalidConfigurationException e) {
                             serviceErrored(new InvalidConfigurationException(e));
                         }
@@ -345,12 +348,13 @@ public class ShadowManager extends PluginService {
                             }
                         }
 
+                        logger.atDebug()
+                                .setEventType("config")
+                                .kv("syncDirection", newSyncDirection.toString())
+                                .log();
                         Direction currentDirection = syncHandler.getSyncDirection();
                         // if the sync direction is the same, then just return and do nothing.
                         if (newSyncDirection.equals(currentDirection)) {
-                            logger.atDebug()
-                                    .log("Not processing sync direction config change since it is the same {}",
-                                            currentDirection);
                             return;
                         }
 
@@ -378,7 +382,10 @@ public class ShadowManager extends PluginService {
                         return;
                     }
                 }
-
+                logger.atDebug()
+                        .setEventType("config")
+                        .kv("syncStrategy", strategy.getType().getCode())
+                        .log();
                 currentStrategy.set(replaceStrategyIfNecessary(currentStrategy.get(), strategy));
             });
         }
