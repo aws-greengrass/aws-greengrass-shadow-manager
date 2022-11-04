@@ -143,13 +143,12 @@ public class ShadowDocument {
     }
 
     /**
-     * Calculates the documents node based on the current version of the shadow document and the new updated
-     * version of the shadow document sent in the update request.
+     * Updates the documents node based on the current version of the shadow document and the requested update.
      *
      * @param updateDocumentRequest The JSON containing the shadow document update request.
-     * @return the new updated shadow document.
+     * @return the metadata of the updated state
      */
-    public Pair<JsonNode, JsonNode> update(JsonNode updateDocumentRequest) {
+    public JsonNode update(JsonNode updateDocumentRequest) {
         JsonNode updatedStateNode = updateDocumentRequest.get(SHADOW_DOCUMENT_STATE);
 
         this.state.update(updatedStateNode);
@@ -157,7 +156,7 @@ public class ShadowDocument {
         // Incrementing the version here since we are creating a new version of the shadow document.
         this.version = this.version == null ? 1 : this.version + 1;
 
-        return new Pair<>(updatedStateNode, patchMetadata);
+        return patchMetadata;
     }
 
     /**

@@ -11,6 +11,7 @@ import com.aws.greengrass.shadowmanager.model.ErrorMessage;
 import com.aws.greengrass.shadowmanager.model.ShadowRequest;
 import com.aws.greengrass.util.Utils;
 import lombok.Getter;
+import lombok.Setter;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -24,6 +25,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_PATTERN;
 public final class Validator {
     private static final Pattern PATTERN = Pattern.compile(SHADOW_PATTERN);
     @Getter
+    @Setter
     private static int maxShadowDocumentSize = DEFAULT_DOCUMENT_SIZE;
 
     private Validator() {
@@ -104,10 +106,6 @@ public final class Validator {
         }
     }
 
-    public static void setMaxShadowDocumentSize(int newMaxShadowSize) {
-        maxShadowDocumentSize = newMaxShadowSize;
-    }
-
     /**
      * Validates the maximum outbound sync updates per second is within the appropriate limits.
      *
@@ -147,6 +145,17 @@ public final class Validator {
             throw new InvalidConfigurationException(String.format(
                     "Maximum local shadow requests per thing per second provided %d is invalid. It should be "
                             + "greater than 0.", maxLocalShadowRequestsPerThingPerSecond));
+        }
+    }
+
+    /**
+     * Validate that a shadow size does not exceed the maximum.
+     * @param size size of shadow
+     * @throws InvalidRequestParametersException if the shadow is too large
+     */
+    public static void validateShadowSize(int size) throws InvalidRequestParametersException {
+        if (size > maxShadowDocumentSize) {
+            throw new InvalidRequestParametersException(ErrorMessage.PAYLOAD_TOO_LARGE_MESSAGE);
         }
     }
 
