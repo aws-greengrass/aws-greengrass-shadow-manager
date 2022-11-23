@@ -249,15 +249,15 @@ public class ShadowManager extends PluginService {
             }
             if (installConfig.configureRateLimitsConfig
                     && (newv == null || newv.childOf(CONFIGURATION_RATE_LIMITS_TOPIC))) {
-                rateLimits();
+                configureRateLimits();
             }
             if (installConfig.configureMaxDocSizeLimitConfig
                     && (newv == null || newv.childOf(CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC))) {
-                maxSizeDocLimitConfig();
+                configureMaxSizeDocLimitConfig();
             }
             if (installConfig.configureSyncDirectionConfig
                     && (newv == null || newv.childOf(CONFIGURATION_SYNC_DIRECTION_TOPIC))) {
-                syncDirection();
+                configureSyncDirection();
             }
             if (installConfig.configureStrategyConfig
                     && (newv == null || newv.childOf(CONFIGURATION_STRATEGY_TOPIC))) {
@@ -310,7 +310,7 @@ public class ShadowManager extends PluginService {
         }
     }
 
-    private void rateLimits() {
+    private void configureRateLimits() {
         Topics rateLimitTopics = config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_RATE_LIMITS_TOPIC);
         Map<String, Object> rateLimitsPojo = rateLimitTopics.toPOJO();
         try {
@@ -339,7 +339,7 @@ public class ShadowManager extends PluginService {
         }
     }
 
-    private void maxSizeDocLimitConfig() {
+    private void configureMaxSizeDocLimitConfig() {
         int newMaxShadowSize = Coerce.toInt(config.lookup(CONFIGURATION_CONFIG_KEY,
                 CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC)
                 .dflt(DEFAULT_DOCUMENT_SIZE));
@@ -355,7 +355,7 @@ public class ShadowManager extends PluginService {
         }
     }
 
-    private void syncDirection() {
+    private void configureSyncDirection() {
         String newSyncDirectionStr = Coerce.toString(config.lookup(CONFIGURATION_CONFIG_KEY,
                 CONFIGURATION_SYNCHRONIZATION_TOPIC,
                 CONFIGURATION_SYNC_DIRECTION_TOPIC).dflt(Direction.BETWEEN_DEVICE_AND_CLOUD.getCode()));
