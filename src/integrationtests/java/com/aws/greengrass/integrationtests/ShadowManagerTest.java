@@ -194,7 +194,10 @@ class ShadowManagerTest extends NucleusLaunchUtils {
                 .mqttConnected(false)
                 .build());
         SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
-        assertThat(syncHandler.getSyncDirection(), is(Direction.BETWEEN_DEVICE_AND_CLOUD));
+        shadowManager.getConfig().lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC)
+                .lookup(CONFIGURATION_SYNC_DIRECTION_TOPIC).withValue(Direction.DEVICE_TO_CLOUD.getCode());
+        kernel.getContext().waitForPublishQueueToClear();
+        assertThat(syncHandler.getSyncDirection(), is(Direction.DEVICE_TO_CLOUD));
 
         shadowManager.getConfig().lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC)
                 .lookup(CONFIGURATION_SYNC_DIRECTION_TOPIC).remove();

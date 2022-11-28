@@ -243,25 +243,20 @@ public class ShadowManager extends PluginService {
             if (what.equals(WhatHappened.timestampUpdated)) {
                 return;
             }
-            if (installConfig.configureSynchronizeConfig
-                    && (newv == null || newv.childOf(CONFIGURATION_SYNCHRONIZATION_TOPIC))) {
-                configureSynchronization();
+            if (installConfig.configureSynchronizeConfig) {
+                configureSynchronization(newv);
             }
-            if (installConfig.configureRateLimitsConfig
-                    && (newv == null || newv.childOf(CONFIGURATION_RATE_LIMITS_TOPIC))) {
-                configureRateLimits();
+            if (installConfig.configureRateLimitsConfig) {
+                configureRateLimits(newv);
             }
-            if (installConfig.configureMaxDocSizeLimitConfig
-                    && (newv == null || newv.childOf(CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC))) {
-                configureMaxSizeDocLimitConfig();
+            if (installConfig.configureMaxDocSizeLimitConfig) {
+                configureMaxSizeDocLimitConfig(newv);
             }
-            if (installConfig.configureSyncDirectionConfig
-                    && (newv == null || newv.childOf(CONFIGURATION_SYNC_DIRECTION_TOPIC))) {
-                configureSyncDirection();
+            if (installConfig.configureSyncDirectionConfig) {
+                configureSyncDirection(newv);
             }
-            if (installConfig.configureStrategyConfig
-                    && (newv == null || newv.childOf(CONFIGURATION_STRATEGY_TOPIC))) {
-                configureStrategy();
+            if (installConfig.configureStrategyConfig) {
+                configureStrategy(newv);
             }
         });
     }
@@ -276,7 +271,10 @@ public class ShadowManager extends PluginService {
         return currentStrategy;
     }
 
-    private void configureSynchronization() {
+    private void configureSynchronization(Node newv) {
+        if (newv != null && !newv.childOf(CONFIGURATION_SYNCHRONIZATION_TOPIC)) {
+            return;
+        }
         Topics configTopics = config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC);
         Map<String, Object> configTopicsPojo = configTopics.toPOJO();
         try {
@@ -310,7 +308,10 @@ public class ShadowManager extends PluginService {
         }
     }
 
-    private void configureRateLimits() {
+    private void configureRateLimits(Node newv) {
+        if (newv != null && !newv.childOf(CONFIGURATION_RATE_LIMITS_TOPIC)) {
+            return;
+        }
         Topics rateLimitTopics = config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_RATE_LIMITS_TOPIC);
         Map<String, Object> rateLimitsPojo = rateLimitTopics.toPOJO();
         try {
@@ -339,7 +340,10 @@ public class ShadowManager extends PluginService {
         }
     }
 
-    private void configureMaxSizeDocLimitConfig() {
+    private void configureMaxSizeDocLimitConfig(Node newv) {
+        if (newv != null && !newv.childOf(CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC)) {
+            return;
+        }
         int newMaxShadowSize = Coerce.toInt(config.lookup(CONFIGURATION_CONFIG_KEY,
                 CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC)
                 .dflt(DEFAULT_DOCUMENT_SIZE));
@@ -355,7 +359,10 @@ public class ShadowManager extends PluginService {
         }
     }
 
-    private void configureSyncDirection() {
+    private void configureSyncDirection(Node newv) {
+        if (newv != null && !newv.childOf(CONFIGURATION_SYNC_DIRECTION_TOPIC)) {
+            return;
+        }
         String newSyncDirectionStr = Coerce.toString(config.lookup(CONFIGURATION_CONFIG_KEY,
                 CONFIGURATION_SYNCHRONIZATION_TOPIC,
                 CONFIGURATION_SYNC_DIRECTION_TOPIC).dflt(Direction.BETWEEN_DEVICE_AND_CLOUD.getCode()));
@@ -380,7 +387,10 @@ public class ShadowManager extends PluginService {
         syncHandler.setSyncDirection(newSyncDirection);
     }
 
-    private void configureStrategy() {
+    private void configureStrategy(Node newv) {
+        if (newv != null && !newv.childOf(CONFIGURATION_STRATEGY_TOPIC)) {
+            return;
+        }
         Topics strategyTopics = config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_STRATEGY_TOPIC);
         Strategy strategy;
         Map<String, Object> strategyPojo = strategyTopics.toPOJO();
