@@ -355,7 +355,7 @@ public class ShadowManager extends PluginService {
                     .kv("maxShadowSize", newMaxShadowSize)
                     .log();
         } catch (InvalidConfigurationException e) {
-            serviceErrored(new InvalidConfigurationException(e));
+            serviceErrored(e);
         }
     }
 
