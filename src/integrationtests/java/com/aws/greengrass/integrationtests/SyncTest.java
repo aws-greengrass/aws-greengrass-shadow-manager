@@ -360,7 +360,7 @@ class SyncTest extends NucleusLaunchUtils {
                 .mockCloud(true)
                 .mockDao(true)
                 .build());
-        cdl.await(2,TimeUnit.SECONDS);
+        assertThat("cloud shadow updated", cdl.await(2, TimeUnit.SECONDS), is(true));
         assertThat(() -> cloudUpdateThingShadowRequestCaptor.getValue(), eventuallyEval(is(notNullValue())));
         assertThat(() -> syncInformationCaptor.getValue(), eventuallyEval(is(notNullValue())));
 
@@ -704,7 +704,7 @@ class SyncTest extends NucleusLaunchUtils {
 
         // Fire the initial request
         handler.get().handleRequest(request1, "DoAll");
-        cdl.await(2, TimeUnit.SECONDS);
+        assertThat("thing shadow updated", cdl.await(2, TimeUnit.SECONDS), is(true));
         assertThat("update thing shadow called", updateThingShadowCalled::get, eventuallyEval(is(1)));
         assertThat("dao cloud version updated", () -> syncInfo.get()
                 .map(SyncInformation::getCloudVersion).orElse(0L), eventuallyEval(is(11L)));
