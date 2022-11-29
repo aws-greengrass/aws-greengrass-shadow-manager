@@ -139,7 +139,7 @@ public class NucleusLaunchUtils extends GGServiceTestUtil {
             }
             syncHandler.setOverallSyncStrategy(syncStrategy);
             isSyncMocked.set(true);
-            shadowManager.startSyncingShadows(ShadowManager.StartSyncInfo.builder().build());
+            shadowManager.startSyncingShadows(ShadowManager.StartSyncInfo.builder().startSyncStrategy(true).build());
         }
 
     }

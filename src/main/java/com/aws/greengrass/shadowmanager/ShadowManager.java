@@ -239,156 +239,26 @@ public class ShadowManager extends PluginService {
         }
 
         inboundRateLimiter.clear();
-
-        if (installConfig.configureSynchronizeConfig) {
-            Topics configTopics = config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC);
-            configTopics.subscribe((what, newv) -> {
-                Map<String, Object> configTopicsPojo = configTopics.toPOJO();
-                try {
-                    Topic thingNameTopic = this.deviceConfiguration.getThingName();
-                    String thingName = Coerce.toString(thingNameTopic);
-                    ShadowSyncConfiguration newSyncConfiguration =
-                            ShadowSyncConfiguration.processConfiguration(configTopicsPojo, thingName);
-                    if (this.syncConfiguration != null && this.syncConfiguration.equals(newSyncConfiguration)) {
-                        return;
-                    }
-                    this.syncConfiguration = newSyncConfiguration;
-                    this.syncHandler.setSyncConfigurations(this.syncConfiguration.getSyncConfigurations());
-
-                    // Subscribe to the thing name topic if the Nucleus thing shadows have been synced.
-                    Optional<ThingShadowSyncConfiguration> coreThingConfig =
-                            getCoreThingShadowSyncConfiguration(thingName);
-                    if (coreThingConfig.isPresent()) {
-                        thingNameTopic.subscribeGeneric(this.deviceThingNameWatcher);
-                    } else {
-                        thingNameTopic.remove(this.deviceThingNameWatcher);
-                    }
-
-                    // only stop / start syncing if we are not in install - it will otherwise be started by lifecycle
-                    if (inState(State.RUNNING)) {
-                        stopSyncingShadows(true);
-                        startSyncingShadows(StartSyncInfo.builder().reInitializeSyncInfo(true).startSyncStrategy(true)
-                                .updateCloudSubscriptions(true).build());
-                    }
-                } catch (InvalidConfigurationException e) {
-                    serviceErrored(e);
-                }
-            });
-        }
-
-        if (installConfig.configureRateLimitsConfig) {
-            Topics rateLimitTopics = config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_RATE_LIMITS_TOPIC);
-            rateLimitTopics.subscribe((what, newv) -> {
-                Map<String, Object> rateLimitsPojo = rateLimitTopics.toPOJO();
-                try {
-                    if (rateLimitsPojo.containsKey(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC)) {
-                        int maxOutboundSyncUpdatesPerSecond = Coerce.toInt(rateLimitsPojo
-                                .get(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC));
-                        Validator.validateOutboundSyncUpdatesPerSecond(maxOutboundSyncUpdatesPerSecond);
-                        iotDataPlaneClientWrapper.setRate(maxOutboundSyncUpdatesPerSecond);
-                    }
-
-                    if (rateLimitsPojo.containsKey(CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE)) {
-                        int maxTotalLocalRequestRate = Coerce.toInt(rateLimitsPojo
-                                .get(CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE));
-                        Validator.validateTotalLocalRequestRate(maxTotalLocalRequestRate);
-                        inboundRateLimiter.setTotalRate(maxTotalLocalRequestRate);
-                    }
-
-                    if (rateLimitsPojo.containsKey(CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC)) {
-                        int maxLocalShadowUpdatesPerThingPerSecond = Coerce.toInt(rateLimitsPojo
-                                .get(CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC));
-                        Validator.validateLocalShadowRequestsPerThingPerSecond(maxLocalShadowUpdatesPerThingPerSecond);
-                        inboundRateLimiter.setRate(maxLocalShadowUpdatesPerThingPerSecond);
-                    }
-                } catch (InvalidConfigurationException e) {
-                    serviceErrored(e);
-                }
-            });
-        }
-
-
-        if (installConfig.configureMaxDocSizeLimitConfig) {
-            config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC)
-                    .dflt(DEFAULT_DOCUMENT_SIZE)
-                    .subscribe((why, newv) -> {
-                        int newMaxShadowSize;
-                        if (WhatHappened.removed.equals(why)) {
-                            newMaxShadowSize = DEFAULT_DOCUMENT_SIZE;
-                        } else {
-                            newMaxShadowSize = Coerce.toInt(newv);
-                        }
-                        try {
-                            Validator.validateMaxShadowSize(newMaxShadowSize);
-                            Validator.setMaxShadowDocumentSize(newMaxShadowSize);
-                            logger.atDebug()
-                                    .setEventType("config")
-                                    .kv("maxShadowSize", newMaxShadowSize)
-                                    .log();
-                        } catch (InvalidConfigurationException e) {
-                            serviceErrored(new InvalidConfigurationException(e));
-                        }
-                    });
-        }
-
-        if (installConfig.configureSyncDirectionConfig) {
-            config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC,
-                            CONFIGURATION_SYNC_DIRECTION_TOPIC)
-                    .dflt(Direction.BETWEEN_DEVICE_AND_CLOUD.getCode())
-                    .subscribe((why, newv) -> {
-                        Direction newSyncDirection;
-                        if (WhatHappened.removed.equals(why)) {
-                            newSyncDirection = Direction.BETWEEN_DEVICE_AND_CLOUD;
-                        } else {
-                            try {
-                                newSyncDirection = Direction.getDirection(Coerce.toString(newv));
-                            } catch (IllegalArgumentException e) {
-                                serviceErrored(e);
-                                return;
-                            }
-                        }
-
-                        logger.atDebug()
-                                .setEventType("config")
-                                .kv("syncDirection", newSyncDirection.toString())
-                                .log();
-                        Direction currentDirection = syncHandler.getSyncDirection();
-                        // if the sync direction is the same, then just return and do nothing.
-                        if (newSyncDirection.equals(currentDirection)) {
-                            return;
-                        }
-
-                        setupSync(newSyncDirection, Optional.of(currentDirection));
-                        syncHandler.setSyncDirection(newSyncDirection);
-                    });
-        }
-
-        if (installConfig.configureStrategyConfig) {
-            Topics strategyTopics = config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_STRATEGY_TOPIC);
-            final AtomicReference<Strategy> currentStrategy = new AtomicReference<>(DEFAULT_STRATEGY);
-
-            strategyTopics.subscribe((why, newv) -> {
-                Strategy strategy;
-                Map<String, Object> strategyPojo = strategyTopics.toPOJO();
-
-                if (WhatHappened.removed.equals(why) || strategyPojo == null || strategyPojo.isEmpty()) {
-                    strategy = DEFAULT_STRATEGY;
-                } else {
-                    // Get the correct sync strategy configuration from the POJO.
-                    try {
-                        strategy = Strategy.fromPojo(strategyPojo);
-                    } catch (InvalidConfigurationException e) {
-                        serviceErrored(e);
-                        return;
-                    }
-                }
-                logger.atDebug()
-                        .setEventType("config")
-                        .kv("syncStrategy", strategy.getType().getCode())
-                        .log();
-                currentStrategy.set(replaceStrategyIfNecessary(currentStrategy.get(), strategy));
-            });
-        }
+        config.lookupTopics(CONFIGURATION_CONFIG_KEY).subscribe((what, newv) -> {
+            if (what.equals(WhatHappened.timestampUpdated)) {
+                return;
+            }
+            if (installConfig.configureSynchronizeConfig) {
+                configureSynchronization(newv);
+            }
+            if (installConfig.configureRateLimitsConfig) {
+                configureRateLimits(newv);
+            }
+            if (installConfig.configureMaxDocSizeLimitConfig) {
+                configureMaxSizeDocLimitConfig(newv);
+            }
+            if (installConfig.configureSyncDirectionConfig) {
+                configureSyncDirection(newv);
+            }
+            if (installConfig.configureStrategyConfig) {
+                configureStrategy(newv);
+            }
+        });
     }
 
     Strategy replaceStrategyIfNecessary(Strategy currentStrategy, Strategy strategy) {
@@ -399,6 +269,148 @@ public class ShadowManager extends PluginService {
             startSyncingShadows(StartSyncInfo.builder().startSyncStrategy(true).build());
         }
         return currentStrategy;
+    }
+
+    private void configureSynchronization(Node newv) {
+        if (newv != null && !newv.childOf(CONFIGURATION_SYNCHRONIZATION_TOPIC)) {
+            return;
+        }
+        Topics configTopics = config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC);
+        Map<String, Object> configTopicsPojo = configTopics.toPOJO();
+        try {
+            Topic thingNameTopic = this.deviceConfiguration.getThingName();
+            String thingName = Coerce.toString(thingNameTopic);
+            ShadowSyncConfiguration newSyncConfiguration =
+                    ShadowSyncConfiguration.processConfiguration(configTopicsPojo, thingName);
+            if (this.syncConfiguration != null && this.syncConfiguration.equals(newSyncConfiguration)) {
+                return;
+            }
+            this.syncConfiguration = newSyncConfiguration;
+            this.syncHandler.setSyncConfigurations(this.syncConfiguration.getSyncConfigurations());
+
+            // Subscribe to the thing name topic if the Nucleus thing shadows have been synced.
+            Optional<ThingShadowSyncConfiguration> coreThingConfig =
+                    getCoreThingShadowSyncConfiguration(thingName);
+            if (coreThingConfig.isPresent()) {
+                thingNameTopic.subscribeGeneric(this.deviceThingNameWatcher);
+            } else {
+                thingNameTopic.remove(this.deviceThingNameWatcher);
+            }
+
+            // only stop / start syncing if we are not in install - it will otherwise be started by lifecycle
+            if (inState(State.RUNNING)) {
+                stopSyncingShadows(true);
+                startSyncingShadows(StartSyncInfo.builder().reInitializeSyncInfo(true).startSyncStrategy(true)
+                        .updateCloudSubscriptions(true).build());
+            }
+        } catch (InvalidConfigurationException e) {
+            serviceErrored(e);
+        }
+    }
+
+    private void configureRateLimits(Node newv) {
+        if (newv != null && !newv.childOf(CONFIGURATION_RATE_LIMITS_TOPIC)) {
+            return;
+        }
+        Topics rateLimitTopics = config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_RATE_LIMITS_TOPIC);
+        Map<String, Object> rateLimitsPojo = rateLimitTopics.toPOJO();
+        try {
+            if (rateLimitsPojo.containsKey(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC)) {
+                int maxOutboundSyncUpdatesPerSecond = Coerce.toInt(rateLimitsPojo
+                        .get(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC));
+                Validator.validateOutboundSyncUpdatesPerSecond(maxOutboundSyncUpdatesPerSecond);
+                iotDataPlaneClientWrapper.setRate(maxOutboundSyncUpdatesPerSecond);
+            }
+
+            if (rateLimitsPojo.containsKey(CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE)) {
+                int maxTotalLocalRequestRate = Coerce.toInt(rateLimitsPojo
+                        .get(CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE));
+                Validator.validateTotalLocalRequestRate(maxTotalLocalRequestRate);
+                inboundRateLimiter.setTotalRate(maxTotalLocalRequestRate);
+            }
+
+            if (rateLimitsPojo.containsKey(CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC)) {
+                int maxLocalShadowUpdatesPerThingPerSecond = Coerce.toInt(rateLimitsPojo
+                        .get(CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC));
+                Validator.validateLocalShadowRequestsPerThingPerSecond(maxLocalShadowUpdatesPerThingPerSecond);
+                inboundRateLimiter.setRate(maxLocalShadowUpdatesPerThingPerSecond);
+            }
+        } catch (InvalidConfigurationException e) {
+            serviceErrored(e);
+        }
+    }
+
+    private void configureMaxSizeDocLimitConfig(Node newv) {
+        if (newv != null && !newv.childOf(CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC)) {
+            return;
+        }
+        int newMaxShadowSize = Coerce.toInt(config.lookup(CONFIGURATION_CONFIG_KEY,
+                CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC)
+                .dflt(DEFAULT_DOCUMENT_SIZE));
+        try {
+            Validator.validateMaxShadowSize(newMaxShadowSize);
+            Validator.setMaxShadowDocumentSize(newMaxShadowSize);
+            logger.atDebug()
+                    .setEventType("config")
+                    .kv("maxShadowSize", newMaxShadowSize)
+                    .log();
+        } catch (InvalidConfigurationException e) {
+            serviceErrored(e);
+        }
+    }
+
+    private void configureSyncDirection(Node newv) {
+        if (newv != null && !newv.childOf(CONFIGURATION_SYNC_DIRECTION_TOPIC)) {
+            return;
+        }
+        String newSyncDirectionStr = Coerce.toString(config.lookup(CONFIGURATION_CONFIG_KEY,
+                CONFIGURATION_SYNCHRONIZATION_TOPIC,
+                CONFIGURATION_SYNC_DIRECTION_TOPIC).dflt(Direction.BETWEEN_DEVICE_AND_CLOUD.getCode()));
+
+        Direction newSyncDirection;
+        try {
+            newSyncDirection = Direction.getDirection(Coerce.toString(newSyncDirectionStr));
+        } catch (IllegalArgumentException e) {
+            serviceErrored(e);
+            return;
+        }
+        logger.atDebug()
+                .setEventType("config")
+                .kv("syncDirection", newSyncDirection.toString())
+                .log();
+        Direction currentDirection = syncHandler.getSyncDirection();
+        // if the sync direction is the same, then just return and do nothing.
+        if (newSyncDirection.equals(currentDirection)) {
+            return;
+        }
+        setupSync(newSyncDirection, Optional.of(currentDirection));
+        syncHandler.setSyncDirection(newSyncDirection);
+    }
+
+    private void configureStrategy(Node newv) {
+        if (newv != null && !newv.childOf(CONFIGURATION_STRATEGY_TOPIC)) {
+            return;
+        }
+        Topics strategyTopics = config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_STRATEGY_TOPIC);
+        Strategy strategy;
+        Map<String, Object> strategyPojo = strategyTopics.toPOJO();
+        if (strategyPojo == null || strategyPojo.isEmpty()) {
+            strategy = DEFAULT_STRATEGY;
+        } else {
+            // Get the correct sync strategy configuration from the POJO.
+            try {
+                strategy = Strategy.fromPojo(strategyPojo);
+            } catch (InvalidConfigurationException e) {
+                serviceErrored(e);
+                return;
+            }
+        }
+        logger.atInfo()
+                .setEventType("config")
+                .kv("syncStrategy", strategy.getType().getCode())
+                .log();
+        final AtomicReference<Strategy> currentStrategy = new AtomicReference<>(DEFAULT_STRATEGY);
+        currentStrategy.set(replaceStrategyIfNecessary(currentStrategy.get(), strategy));
     }
 
     private void setupSync(Direction newSyncDirection, Optional<Direction> currentDirection) {

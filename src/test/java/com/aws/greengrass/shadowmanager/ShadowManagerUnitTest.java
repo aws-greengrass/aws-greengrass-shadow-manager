@@ -168,6 +168,8 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper,
                 mockPubSubClientWrapper, mockInboundRateLimiter, mockDeviceConfiguration, mockSynchronizeHelper,
                 mockIotDataPlaneClientWrapper, mockSyncHandler, mockCloudDataClient, mockMqttClient);
+        lenient().when(config.lookupTopics(CONFIGURATION_CONFIG_KEY))
+                .thenReturn(Topics.of(context, CONFIGURATION_CONFIG_KEY, null));
     }
 
     @AfterEach
@@ -809,6 +811,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
             configTopics.createLeafChild(CONFIGURATION_SHADOW_DOCUMENTS_TOPIC).withValueChecked(shadowDocumentsList);
 
             when(thingNameTopic.getOnce()).thenReturn(KERNEL_THING);
+            when(config.lookupTopics(CONFIGURATION_CONFIG_KEY)).thenReturn(configTopics);
             when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC)).thenReturn(configTopics);
             when(mockDeviceConfiguration.getThingName()).thenReturn(thingNameTopic);
             s.install(ShadowManager.InstallConfig.builder().configureSynchronizeConfig(true).build());
