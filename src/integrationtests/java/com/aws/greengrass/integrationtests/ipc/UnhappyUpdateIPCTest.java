@@ -133,7 +133,7 @@ class UnhappyUpdateIPCTest extends NucleusLaunchUtils {
                 StringUtils.repeat('*', repeatLength)).getBytes(UTF_8));
         assertDoesNotThrow(() -> updateHandler.handleRequest(request, "DoAll"));
 
-        shadowManager.getConfig().remove();
+        shadowManager.getConfig().lookupTopics(CONFIGURATION_CONFIG_KEY).remove();
         eventually(() -> {
             assertThat(Coerce.toInt(Validator.getMaxShadowDocumentSize()), is(DEFAULT_DOCUMENT_SIZE));
             return null;
