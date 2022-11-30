@@ -102,6 +102,7 @@ public class ShadowManager extends PluginService {
     private final CloudDataClient cloudDataClient;
     private final MqttClient mqttClient;
     private final PubSubIntegrator pubSubIntegrator;
+    private final AtomicReference<Strategy> currentStrategy = new AtomicReference<>(DEFAULT_STRATEGY);
     public final MqttClientConnectionEvents callbacks = new MqttClientConnectionEvents() {
         @Override
         public void onConnectionInterrupted(int errorCode) {
@@ -111,7 +112,7 @@ public class ShadowManager extends PluginService {
         @Override
         public void onConnectionResumed(boolean sessionPresent) {
             if (inState(State.RUNNING)) {
-                startSyncingShadows(StartSyncInfo.builder().startSyncStrategy(true).startSyncStrategy(true)
+                startSyncingShadows(StartSyncInfo.builder().startSyncStrategy(true)
                         .updateCloudSubscriptions(true).build());
 
             }
@@ -240,7 +241,7 @@ public class ShadowManager extends PluginService {
 
         inboundRateLimiter.clear();
         config.lookupTopics(CONFIGURATION_CONFIG_KEY).subscribe((what, newv) -> {
-            if (what.equals(WhatHappened.timestampUpdated)) {
+            if (what.equals(WhatHappened.timestampUpdated) || what.equals(WhatHappened.interiorAdded)) {
                 return;
             }
             if (installConfig.configureSynchronizeConfig) {
@@ -409,7 +410,6 @@ public class ShadowManager extends PluginService {
                 .setEventType("config")
                 .kv("syncStrategy", strategy.getType().getCode())
                 .log();
-        final AtomicReference<Strategy> currentStrategy = new AtomicReference<>(DEFAULT_STRATEGY);
         currentStrategy.set(replaceStrategyIfNecessary(currentStrategy.get(), strategy));
     }
 
