@@ -71,6 +71,8 @@ class RateLimiterTest extends NucleusLaunchUtils {
 
     @BeforeEach
     void setup() {
+        // Set this property for kernel to scan its own classpath to find plugins
+        System.setProperty("aws.greengrass.scanSelfClasspath", "true");
         kernel = new Kernel();
     }
 

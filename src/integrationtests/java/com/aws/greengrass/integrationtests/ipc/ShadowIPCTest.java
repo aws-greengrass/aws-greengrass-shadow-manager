@@ -156,7 +156,8 @@ class ShadowIPCTest {
         ignoreExceptionWithMessage(context, "Connection reset by peer");
         // Ignore if IPC can't send us more lifecycle updates because the test is already done.
         ignoreExceptionUltimateCauseWithMessage(context, "Channel not found for given connection context");
-
+        // Set this property for kernel to scan its own classpath to find plugins
+        System.setProperty("aws.greengrass.scanSelfClasspath", "true");
         kernel = new Kernel();
         CountDownLatch shadowManagerRunning = new CountDownLatch(1);
         AtomicBoolean isSyncMocked = new AtomicBoolean(false);
