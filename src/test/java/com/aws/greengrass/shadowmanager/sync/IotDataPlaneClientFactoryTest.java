@@ -5,29 +5,28 @@
 
 package com.aws.greengrass.shadowmanager.sync;
 
-import com.aws.greengrass.config.ChildChanged;
 import com.aws.greengrass.config.Topic;
-import com.aws.greengrass.config.WhatHappened;
 import com.aws.greengrass.dependency.Context;
 import com.aws.greengrass.deployment.DeviceConfiguration;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
+import com.aws.greengrass.util.exceptions.TLSAuthException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
+import org.junit.jupiter.api.extension.ExtensionContext;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 
+import javax.net.ssl.KeyManager;
+
 import static com.aws.greengrass.deployment.DeviceConfiguration.DEVICE_PARAM_AWS_REGION;
 import static com.aws.greengrass.deployment.DeviceConfiguration.DEVICE_PARAM_IOT_DATA_ENDPOINT;
+import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -39,8 +38,6 @@ class IotDataPlaneClientFactoryTest {
     private DeviceConfiguration mockDeviceConfiguration;
     @Mock
     private Context mockContext;
-    @Captor
-    private ArgumentCaptor<ChildChanged> ccCaptor;
 
     private IotDataPlaneClientFactory clientFactory;
 
@@ -50,38 +47,31 @@ class IotDataPlaneClientFactoryTest {
         when(mockDeviceConfiguration.getIotDataEndpoint()).thenReturn(dataEndpointTopic);
         Topic regionTopic = Topic.of(mockContext, DEVICE_PARAM_AWS_REGION, "us-west-2");
         when(mockDeviceConfiguration.getAWSRegion()).thenReturn(regionTopic);
-
-        doNothing().when(mockDeviceConfiguration).onAnyChange(ccCaptor.capture());
     }
 
     @Test
-    void GIVEN_bad_config_WHEN_configure_client_THEN_does_not_reconfigure_iot_data_client() {
+    void GIVEN_device_configuration_WHEN_crypto_service_available_THEN_configure_iot_data_client() throws TLSAuthException {
         clientFactory = new IotDataPlaneClientFactory(mockDeviceConfiguration);
+        assertThat(clientFactory.getIotDataPlaneClient(), is(notNullValue()));
+        lenient().when(mockDeviceConfiguration.getDeviceIdentityKeyManagers()).thenReturn(new KeyManager[0]);
+        verify(mockDeviceConfiguration, times(1)).getIotDataEndpoint();
+        verify(mockDeviceConfiguration, times(1)).getAWSRegion();
+        //Invoked only once
+        verify(mockDeviceConfiguration, times(1)).getDeviceIdentityKeyManagers();
+    }
+
+
+    @Test
+    void GIVEN_device_configuration_WHEN_service_not_available_THEN_configure_iot_data_client_(ExtensionContext context)
+            throws TLSAuthException {
+        ignoreExceptionOfType(context, TLSAuthException.class);
+        clientFactory = new IotDataPlaneClientFactory(mockDeviceConfiguration);
+        lenient().when(mockDeviceConfiguration.getDeviceIdentityKeyManagers()).thenThrow(TLSAuthException.class);
         assertThat(clientFactory.getIotDataPlaneClient(), is(notNullValue()));
 
         verify(mockDeviceConfiguration, times(1)).getIotDataEndpoint();
         verify(mockDeviceConfiguration, times(1)).getAWSRegion();
-
-        reset(mockDeviceConfiguration);
-        Topic regionTopic = Topic.of(mockContext, DEVICE_PARAM_AWS_REGION, "");
-        ccCaptor.getValue().childChanged(WhatHappened.childChanged, regionTopic);
-
-        assertThat(clientFactory.getIotDataPlaneClient(), is(notNullValue()));
-
-        verify(mockDeviceConfiguration, never()).getIotDataEndpoint();
-        verify(mockDeviceConfiguration, never()).getAWSRegion();
-        verify(mockDeviceConfiguration, never()).getPrivateKeyFilePath();
-        verify(mockDeviceConfiguration, never()).getCertificateFilePath();
-
-        reset(mockDeviceConfiguration);
-        Topic endpointTopic = Topic.of(mockContext, DEVICE_PARAM_IOT_DATA_ENDPOINT, "");
-        ccCaptor.getValue().childChanged(WhatHappened.childChanged, endpointTopic);
-
-        assertThat(clientFactory.getIotDataPlaneClient(), is(notNullValue()));
-
-        verify(mockDeviceConfiguration, never()).getIotDataEndpoint();
-        verify(mockDeviceConfiguration, never()).getAWSRegion();
-        verify(mockDeviceConfiguration, never()).getPrivateKeyFilePath();
-        verify(mockDeviceConfiguration, never()).getCertificateFilePath();
+        //Retried 3 times
+        verify(mockDeviceConfiguration, times(3)).getDeviceIdentityKeyManagers();
     }
 }
