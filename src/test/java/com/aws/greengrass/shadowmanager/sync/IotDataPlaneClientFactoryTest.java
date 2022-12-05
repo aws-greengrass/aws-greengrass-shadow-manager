@@ -26,7 +26,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
@@ -35,10 +34,6 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 class IotDataPlaneClientFactoryTest {
-    private static final String mockKeyPath = "/test/keypath";
-    private static final String mockCertPath = "/test/certpath";
-    private static final String mockKeyPath2 = "/test/keypath2";
-    private static final String mockCertPath2 = "/test/certpath2";
 
     @Mock
     private DeviceConfiguration mockDeviceConfiguration;
@@ -55,14 +50,7 @@ class IotDataPlaneClientFactoryTest {
         when(mockDeviceConfiguration.getIotDataEndpoint()).thenReturn(dataEndpointTopic);
         Topic regionTopic = Topic.of(mockContext, DEVICE_PARAM_AWS_REGION, "us-west-2");
         when(mockDeviceConfiguration.getAWSRegion()).thenReturn(regionTopic);
-        Topic privKeyTopicMock = mock(Topic.class);
-        Topic pubKeyTopicMock = mock(Topic.class);
 
-        when(privKeyTopicMock.getOnce()).thenReturn(mockKeyPath, mockKeyPath2);
-        when(pubKeyTopicMock.getOnce()).thenReturn(mockCertPath, mockCertPath2);
-
-        when(mockDeviceConfiguration.getPrivateKeyFilePath()).thenReturn(privKeyTopicMock);
-        when(mockDeviceConfiguration.getCertificateFilePath()).thenReturn(pubKeyTopicMock);
         doNothing().when(mockDeviceConfiguration).onAnyChange(ccCaptor.capture());
     }
 
@@ -73,8 +61,6 @@ class IotDataPlaneClientFactoryTest {
 
         verify(mockDeviceConfiguration, times(1)).getIotDataEndpoint();
         verify(mockDeviceConfiguration, times(1)).getAWSRegion();
-        verify(mockDeviceConfiguration, times(1)).getPrivateKeyFilePath();
-        verify(mockDeviceConfiguration, times(1)).getCertificateFilePath();
 
         reset(mockDeviceConfiguration);
         Topic regionTopic = Topic.of(mockContext, DEVICE_PARAM_AWS_REGION, "");

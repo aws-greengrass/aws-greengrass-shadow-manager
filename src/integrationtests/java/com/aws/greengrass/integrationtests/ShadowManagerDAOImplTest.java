@@ -71,6 +71,8 @@ class ShadowManagerDAOImplTest {
     @BeforeEach
     public void before() throws IOException {
         JsonUtil.loadSchema();
+        // Set this property for kernel to scan its own classpath to find plugins
+        System.setProperty("aws.greengrass.scanSelfClasspath", "true");
         kernel = new Kernel();
         // Might need to start the Nucleus here
         kernel.parseArgs("-r", rootDir.toAbsolutePath().toString());

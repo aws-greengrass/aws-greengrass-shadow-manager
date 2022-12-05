@@ -72,6 +72,8 @@ class SyncDirectionalityTest extends NucleusLaunchUtils {
     @BeforeEach
     void setup() {
         LogConfig.getRootLogConfig().setLevel(Level.DEBUG);
+        // Set this property for kernel to scan its own classpath to find plugins
+        System.setProperty("aws.greengrass.scanSelfClasspath", "true");
         kernel = new Kernel();
         syncInfo = () -> kernel.getContext().get(ShadowManagerDAOImpl.class).getShadowSyncInformation(MOCK_THING_NAME_1,
                 CLASSIC_SHADOW);
