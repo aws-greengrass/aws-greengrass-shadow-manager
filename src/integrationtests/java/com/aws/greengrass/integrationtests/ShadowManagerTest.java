@@ -68,11 +68,10 @@ class ShadowManagerTest extends NucleusLaunchUtils {
     public static final String THING_NAME2 = "testThingName2";
 
     @BeforeEach
-    void setup() throws Exception {
+    void setup() {
         // Set this property for kernel to scan its own classpath to find plugins
         System.setProperty("aws.greengrass.scanSelfClasspath", "true");
         kernel = new Kernel();
-        lenient().doNothing().when(iotDataPlaneClientFactory).waitForCryptoKeyServiceProvider();
     }
 
     @AfterEach
