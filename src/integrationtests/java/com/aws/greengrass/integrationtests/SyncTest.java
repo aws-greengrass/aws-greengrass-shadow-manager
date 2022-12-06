@@ -401,7 +401,7 @@ class SyncTest extends NucleusLaunchUtils {
                 .syncClazz(clazz)
                 .mockCloud(true)
                 .build());
-
+        assertEmptySyncQueue(clazz);
         UpdateThingShadowRequestHandler updateHandler = shadowManager.getUpdateThingShadowRequestHandler();
 
         // update local shadow

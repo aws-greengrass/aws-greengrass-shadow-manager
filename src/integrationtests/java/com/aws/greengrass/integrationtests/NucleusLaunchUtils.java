@@ -188,16 +188,4 @@ public class NucleusLaunchUtils extends GGServiceTestUtil {
         assertThat("sync queue is eventually empty", () -> q.isEmpty() && !s.isExecuting(),
                 eventuallyEval(is(true), Duration.ofSeconds(10)));
     }
-
-    protected void assertNotEmptySyncQueue(Class<? extends BaseSyncStrategy> clazz) {
-        BaseSyncStrategy s = kernel.getContext().get(clazz);
-
-        assertThat("syncing has started", s::isSyncing, eventuallyEval(is(true)));
-
-        RequestBlockingQueue q = s.getSyncQueue();
-
-        // queue is eventually empty (full syncs are added and then eventually removed)
-        assertThat("sync queue is eventually not empty", () -> !q.isEmpty(),
-                eventuallyEval(is(true), Duration.ofSeconds(10)));
-    }
 }
