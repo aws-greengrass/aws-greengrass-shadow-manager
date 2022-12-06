@@ -10,6 +10,7 @@ import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.ShadowManager;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
+import com.aws.greengrass.shadowmanager.exception.IoTDataPlaneClientCreationException;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
@@ -171,7 +172,8 @@ public abstract class BaseSyncRequest extends ShadowRequest implements SyncReque
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
                     .log("Deleting cloud shadow document");
             context.getIotDataPlaneClientWrapper().deleteThingShadow(getThingName(), getShadowName());
-        } catch (ThrottlingException | ServiceUnavailableException | InternalFailureException e) {
+        } catch (ThrottlingException | ServiceUnavailableException | InternalFailureException
+                | IoTDataPlaneClientCreationException e) {
             logger.atWarn()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
@@ -263,7 +265,8 @@ public abstract class BaseSyncRequest extends ShadowRequest implements SyncReque
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
                     .log("Conflict exception occurred while updating cloud document.");
             throw e;
-        } catch (ThrottlingException | ServiceUnavailableException | InternalFailureException e) {
+        } catch (ThrottlingException | ServiceUnavailableException | InternalFailureException
+                | IoTDataPlaneClientCreationException e) {
             logger.atWarn()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
@@ -365,7 +368,8 @@ public abstract class BaseSyncRequest extends ShadowRequest implements SyncReque
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
                     .cause(e)
                     .log("Unable to find cloud shadow");
-        } catch (ThrottlingException | ServiceUnavailableException | InternalFailureException e) {
+        } catch (ThrottlingException | ServiceUnavailableException | InternalFailureException
+                | IoTDataPlaneClientCreationException e) {
             logger.atWarn()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())

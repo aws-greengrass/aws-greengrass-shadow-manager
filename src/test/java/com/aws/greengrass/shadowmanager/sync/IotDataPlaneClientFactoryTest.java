@@ -8,6 +8,7 @@ package com.aws.greengrass.shadowmanager.sync;
 import com.aws.greengrass.config.Topic;
 import com.aws.greengrass.dependency.Context;
 import com.aws.greengrass.deployment.DeviceConfiguration;
+import com.aws.greengrass.shadowmanager.exception.IoTDataPlaneClientCreationException;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.util.exceptions.TLSAuthException;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,12 +25,13 @@ import static com.aws.greengrass.deployment.DeviceConfiguration.DEVICE_PARAM_AWS
 import static com.aws.greengrass.deployment.DeviceConfiguration.DEVICE_PARAM_IOT_DATA_ENDPOINT;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 class IotDataPlaneClientFactoryTest {
@@ -44,13 +46,13 @@ class IotDataPlaneClientFactoryTest {
     @BeforeEach
     void setup() {
         Topic dataEndpointTopic = Topic.of(mockContext, DEVICE_PARAM_IOT_DATA_ENDPOINT, "xxxxxx-ats.iot.us-west-2.amazonaws.com");
-        when(mockDeviceConfiguration.getIotDataEndpoint()).thenReturn(dataEndpointTopic);
+        lenient().when(mockDeviceConfiguration.getIotDataEndpoint()).thenReturn(dataEndpointTopic);
         Topic regionTopic = Topic.of(mockContext, DEVICE_PARAM_AWS_REGION, "us-west-2");
-        when(mockDeviceConfiguration.getAWSRegion()).thenReturn(regionTopic);
+        lenient().when(mockDeviceConfiguration.getAWSRegion()).thenReturn(regionTopic);
     }
 
     @Test
-    void GIVEN_device_configuration_WHEN_crypto_service_available_THEN_configure_iot_data_client() throws TLSAuthException {
+    void GIVEN_device_configuration_WHEN_crypto_service_available_THEN_configure_iot_data_client() throws TLSAuthException, IoTDataPlaneClientCreationException {
         clientFactory = new IotDataPlaneClientFactory(mockDeviceConfiguration);
         assertThat(clientFactory.getIotDataPlaneClient(), is(notNullValue()));
         lenient().when(mockDeviceConfiguration.getDeviceIdentityKeyManagers()).thenReturn(new KeyManager[0]);
@@ -63,14 +65,16 @@ class IotDataPlaneClientFactoryTest {
 
     @Test
     void GIVEN_device_configuration_WHEN_service_not_available_THEN_configure_iot_data_client_(ExtensionContext context)
-            throws TLSAuthException {
+            throws TLSAuthException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, TLSAuthException.class);
+
         clientFactory = new IotDataPlaneClientFactory(mockDeviceConfiguration);
         lenient().when(mockDeviceConfiguration.getDeviceIdentityKeyManagers()).thenThrow(TLSAuthException.class);
-        assertThat(clientFactory.getIotDataPlaneClient(), is(notNullValue()));
+        IoTDataPlaneClientCreationException thrown = assertThrows(IoTDataPlaneClientCreationException.class, () -> clientFactory.getIotDataPlaneClient());
+        assertThat(thrown.getCause(), instanceOf(TLSAuthException.class));
 
-        verify(mockDeviceConfiguration, times(1)).getIotDataEndpoint();
-        verify(mockDeviceConfiguration, times(1)).getAWSRegion();
+        verify(mockDeviceConfiguration, times(0)).getIotDataEndpoint();
+        verify(mockDeviceConfiguration, times(0)).getAWSRegion();
         //Retried 3 times
         verify(mockDeviceConfiguration, times(3)).getDeviceIdentityKeyManagers();
     }

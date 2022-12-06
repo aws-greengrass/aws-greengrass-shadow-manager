@@ -9,6 +9,7 @@ import com.aws.greengrass.componentmanager.ClientConfigurationUtils;
 import com.aws.greengrass.deployment.DeviceConfiguration;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
+import com.aws.greengrass.shadowmanager.exception.IoTDataPlaneClientCreationException;
 import com.aws.greengrass.util.Coerce;
 import com.aws.greengrass.util.RetryUtils;
 import com.aws.greengrass.util.Utils;
@@ -72,20 +73,12 @@ public class IotDataPlaneClientFactory {
         return String.format(IOT_CORE_DATA_PLANE_ENDPOINT_FORMAT, iotDataEndpoint);
     }
 
-    @SuppressWarnings({"PMD.AvoidCatchingGenericException"})
-    private void configureClient() {
-        // If the crypto key provider service (such as pkcs11 provider component) is not available when the http client
-        // is created, there's a possibility that the client is not configured with mTLS.
-
+    @SuppressWarnings({"PMD.SignatureDeclareThrowsException"})
+    private void configureClient() throws Exception {
         // To ensure that the http client is configured with mutual auth, wait for the crypto key provider service
         // to load. If the service is not loaded even after retrying, we continue with the client creation as shadow
         // manager can still work locally.
-        try {
-            waitForCryptoKeyServiceProvider();
-        } catch (Exception e) {
-            logger.atError().log("Failed to get the key managers from crypto key provider service. Data plane"
-                    + " client will not be configured with mTLS.", e);
-        }
+        waitForCryptoKeyServiceProvider();
         Set<Class<? extends Exception>> allExceptionsToRetryOn = new HashSet<>(retryableIoTExceptions);
         RetryCondition retryCondition = OrRetryCondition.create(RetryCondition.defaultRetryCondition(),
                 RetryOnExceptionsCondition.create(allExceptionsToRetryOn));
@@ -123,9 +116,15 @@ public class IotDataPlaneClientFactory {
      * Getter for IoT data plane client. This configures the client everytime the getter is used.
      *
      * @return iotDataPlaneClient
+     * @throws IoTDataPlaneClientCreationException exception during client configuration
      */
-    public IotDataPlaneClient getIotDataPlaneClient() {
-        configureClient();
+    @SuppressWarnings({"PMD.AvoidCatchingGenericException"})
+    public IotDataPlaneClient getIotDataPlaneClient() throws IoTDataPlaneClientCreationException {
+        try {
+            configureClient();
+        } catch (Exception e) {
+            throw new IoTDataPlaneClientCreationException(e);
+        }
         return this.iotDataPlaneClient;
     }
 
