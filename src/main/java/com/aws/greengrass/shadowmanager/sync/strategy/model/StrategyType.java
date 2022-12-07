@@ -6,6 +6,7 @@
 package com.aws.greengrass.shadowmanager.sync.strategy.model;
 
 import com.aws.greengrass.shadowmanager.exception.InvalidConfigurationException;
+import lombok.Getter;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.STRATEGY_TYPE_PERIODIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.STRATEGY_TYPE_REAL_TIME;
@@ -17,6 +18,7 @@ public enum StrategyType {
     /**
      * Code for the sync strategy type which will be used in the configuration.
      */
+    @Getter
     String code;
 
     StrategyType(String code) {

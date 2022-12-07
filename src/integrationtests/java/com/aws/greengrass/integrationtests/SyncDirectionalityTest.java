@@ -35,6 +35,7 @@ import software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowRespo
 
 import java.io.IOException;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
@@ -137,11 +138,13 @@ class SyncDirectionalityTest extends NucleusLaunchUtils {
         ignoreExceptionOfType(context, InterruptedException.class);
         ignoreExceptionOfType(context, ResourceNotFoundException.class);
         ignoreExceptionOfType(context, ResourceNotFoundError.class);
-
+        CountDownLatch cdl = new CountDownLatch(4); // 4 shadows in the config file
         // no shadow exists in cloud
-        when(iotDataPlaneClientFactory.getIotDataPlaneClient().getThingShadow(any(GetThingShadowRequest.class)))
-                .thenThrow(ResourceNotFoundException.class);
-
+        when(iotDataPlaneClientFactory.getIotDataPlaneClient()
+                .getThingShadow(any(GetThingShadowRequest.class))).thenAnswer(invocation -> {
+            cdl.countDown();
+            throw ResourceNotFoundException.builder().build();
+        });
         startNucleusWithConfig(NucleusLaunchUtilsConfig.builder()
                 .configFile("sync_directionality_fromcloudonly.yaml")
                 .mockCloud(true)
@@ -150,9 +153,8 @@ class SyncDirectionalityTest extends NucleusLaunchUtils {
         shadowManager.startSyncingShadows(ShadowManager.StartSyncInfo.builder().build());
         // There is a race condition which can cause us to check queue is empty before having inserted any full sync
         // requests in it. This check avoids that.
-        assertNotEmptySyncQueue(RealTimeSyncStrategy.class);
+        assertThat("all the sync requests are processed", cdl.await(10, TimeUnit.SECONDS), is(true));
         assertEmptySyncQueue(RealTimeSyncStrategy.class);
-
         UpdateThingShadowRequestHandler updateHandler = shadowManager.getUpdateThingShadowRequestHandler();
 
         // update local shadow

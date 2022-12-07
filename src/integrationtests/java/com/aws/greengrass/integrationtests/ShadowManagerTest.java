@@ -13,6 +13,10 @@ import com.aws.greengrass.shadowmanager.ShadowManagerDAOImpl;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
+import com.aws.greengrass.shadowmanager.sync.SyncHandler;
+import com.aws.greengrass.shadowmanager.sync.model.Direction;
+import com.aws.greengrass.shadowmanager.sync.strategy.PeriodicSyncStrategy;
+import com.aws.greengrass.shadowmanager.sync.strategy.RealTimeSyncStrategy;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.util.Pair;
 import org.flywaydb.core.api.FlywayException;
@@ -37,11 +41,16 @@ import static com.aws.greengrass.shadowmanager.TestUtils.THING_NAME;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_CLASSIC_SHADOW_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_NAMED_SHADOWS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SHADOW_DOCUMENTS_TOPIC;
+import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_STRATEGY_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SYNCHRONIZATION_TOPIC;
+import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SYNC_DIRECTION_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_THING_NAME_TOPIC;
+
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.instanceOf;
+import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -126,6 +135,7 @@ class ShadowManagerTest extends NucleusLaunchUtils {
         MqttClient mqttClient = mock(MqttClient.class);
         lenient().when(mqttClient.connected()).thenReturn(false);
 
+
         kernel.getContext().put(MqttClient.class, mqttClient);
         startNucleusWithConfig(NucleusLaunchUtilsConfig.builder()
                 .configFile(DEFAULT_CONFIG)
@@ -170,5 +180,69 @@ class ShadowManagerTest extends NucleusLaunchUtils {
                 new Pair<>(THING_NAME2, ""),
                 new Pair<>(THING_NAME2, "Shadow-0"),
                 new Pair<>(THING_NAME2, "Shadow-5")));
+    }
+
+
+    @Test
+    @SuppressWarnings("PMD.CloseResource")
+    void GIVEN_shadow_manager_WHEN_individual_config_resets_THEN_respond_to_config_updates(ExtensionContext context)
+            throws Exception {
+        ignoreExceptionOfType(context, SkipSyncRequestException.class);
+        MqttClient mqttClient = mock(MqttClient.class);
+        lenient().when(mqttClient.connected()).thenReturn(false);
+
+
+        kernel.getContext().put(MqttClient.class, mqttClient);
+        startNucleusWithConfig(NucleusLaunchUtilsConfig.builder()
+                .configFile(DEFAULT_CONFIG)
+                .mqttConnected(false)
+                .build());
+        SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
+        shadowManager.getConfig().lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC)
+                .lookup(CONFIGURATION_SYNC_DIRECTION_TOPIC).withValue(Direction.DEVICE_TO_CLOUD.getCode());
+        kernel.getContext().waitForPublishQueueToClear();
+        assertThat(syncHandler.getSyncDirection(), is(Direction.DEVICE_TO_CLOUD));
+
+        shadowManager.getConfig().lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC)
+                .lookup(CONFIGURATION_SYNC_DIRECTION_TOPIC).remove();
+        kernel.getContext().waitForPublishQueueToClear();
+        assertThat(syncHandler.getSyncDirection(), is(Direction.BETWEEN_DEVICE_AND_CLOUD));
+
+        shadowManager.getConfig().lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC)
+                .lookup(CONFIGURATION_SYNC_DIRECTION_TOPIC).withValue(Direction.DEVICE_TO_CLOUD.getCode());
+        kernel.getContext().waitForPublishQueueToClear();
+
+        assertThat(syncHandler.getSyncDirection(), is(Direction.DEVICE_TO_CLOUD));
+    }
+
+    @Test
+    @SuppressWarnings("PMD.CloseResource")
+    void GIVEN_shadow_manager_WHEN_strategy_config_resets_THEN_respond_to_config_updates(ExtensionContext context)
+            throws Exception {
+        ignoreExceptionOfType(context, SkipSyncRequestException.class);
+        MqttClient mqttClient = mock(MqttClient.class);
+        lenient().when(mqttClient.connected()).thenReturn(false);
+
+
+        kernel.getContext().put(MqttClient.class, mqttClient);
+        startNucleusWithConfig(NucleusLaunchUtilsConfig.builder()
+                .configFile("periodic_sync.yaml")
+                .mqttConnected(false)
+                .syncClazz(PeriodicSyncStrategy.class)
+                .build());
+
+        SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
+        assertThat(syncHandler.getOverallSyncStrategy(), instanceOf(PeriodicSyncStrategy.class));
+
+        shadowManager.getConfig().lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_STRATEGY_TOPIC).remove();
+        kernel.getContext().waitForPublishQueueToClear();
+        assertThat(syncHandler.getOverallSyncStrategy(), instanceOf(RealTimeSyncStrategy.class));
+
+        Map<String, Object> periodicStrategy = new HashMap<>();
+        periodicStrategy.put("delay", "30");
+        periodicStrategy.put("type","periodic");
+        shadowManager.getConfig().lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_STRATEGY_TOPIC).replaceAndWait(periodicStrategy);
+        kernel.getContext().waitForPublishQueueToClear();
+        assertThat(syncHandler.getOverallSyncStrategy(), instanceOf(PeriodicSyncStrategy.class));
     }
 }
