@@ -32,6 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 class IotDataPlaneClientFactoryTest {
@@ -69,7 +70,7 @@ class IotDataPlaneClientFactoryTest {
         ignoreExceptionOfType(context, TLSAuthException.class);
 
         clientFactory = new IotDataPlaneClientFactory(mockDeviceConfiguration);
-        lenient().when(mockDeviceConfiguration.getDeviceIdentityKeyManagers()).thenThrow(TLSAuthException.class);
+        when(mockDeviceConfiguration.getDeviceIdentityKeyManagers()).thenThrow(TLSAuthException.class);
         IoTDataPlaneClientCreationException thrown = assertThrows(IoTDataPlaneClientCreationException.class, () -> clientFactory.getIotDataPlaneClient());
         assertThat(thrown.getCause(), instanceOf(TLSAuthException.class));
 
