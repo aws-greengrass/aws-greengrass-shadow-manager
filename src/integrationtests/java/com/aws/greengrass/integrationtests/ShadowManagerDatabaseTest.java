@@ -110,6 +110,7 @@ class ShadowManagerDatabaseTest extends NucleusLaunchUtils {
             kernel.shutdown();
 
             kernel = new Kernel();
+            kernel.getContext().put(SecurityService.class, securityService);
             startNucleusWithConfig("config.yaml", State.RUNNING, false);
 
             shadowManagerDatabase = kernel.getContext().get(ShadowManagerDatabase.class);
