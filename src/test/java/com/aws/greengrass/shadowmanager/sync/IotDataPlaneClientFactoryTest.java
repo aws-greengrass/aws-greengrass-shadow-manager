@@ -68,9 +68,8 @@ class IotDataPlaneClientFactoryTest {
     void GIVEN_device_configuration_WHEN_service_not_available_THEN_do_not_configure_iot_data_client(ExtensionContext context)
             throws TLSAuthException {
         ignoreExceptionOfType(context, TLSAuthException.class);
-
-        clientFactory = new IotDataPlaneClientFactory(mockDeviceConfiguration);
         when(mockDeviceConfiguration.getDeviceIdentityKeyManagers()).thenThrow(TLSAuthException.class);
+        clientFactory = new IotDataPlaneClientFactory(mockDeviceConfiguration);
         IoTDataPlaneClientCreationException thrown = assertThrows(IoTDataPlaneClientCreationException.class, () -> clientFactory.getIotDataPlaneClient());
         assertThat(thrown.getCause(), instanceOf(TLSAuthException.class));
 

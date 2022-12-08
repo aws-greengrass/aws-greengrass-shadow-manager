@@ -7,12 +7,14 @@ package com.aws.greengrass.integrationtests.ipc;
 
 import com.aws.greengrass.integrationtests.NucleusLaunchUtils;
 import com.aws.greengrass.lifecyclemanager.Kernel;
+import com.aws.greengrass.security.SecurityService;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.model.ErrorMessage;
 import com.aws.greengrass.shadowmanager.util.Validator;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.util.Coerce;
+import com.aws.greengrass.util.exceptions.TLSAuthException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import org.apache.commons.lang3.StringUtils;
 import org.junit.jupiter.api.AfterEach;
@@ -20,10 +22,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionContext;
+import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import software.amazon.awssdk.aws.greengrass.model.InvalidArgumentsError;
 import software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest;
 
+import javax.net.ssl.KeyManager;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -38,11 +42,14 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.when;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 class UnhappyUpdateIPCTest extends NucleusLaunchUtils {
     public static final String MOCK_THING_NAME = "Thing1";
     public static final String CLASSIC_SHADOW = "";
+    @Mock
+    SecurityService securityService;
     private static final String SHADOW_TEMPLATE = "{\"state\":{\"desired\":{\"SomeKey\":\"%s\"}},\"metadata\":{}}";
 
     /**
@@ -52,10 +59,12 @@ class UnhappyUpdateIPCTest extends NucleusLaunchUtils {
     private static final int SOMEKEY_SERIALIZATION_OVERHEAD = "SomeKey".length() + 2 + 2 + 2 + 1;
 
     @BeforeEach
-    void setup() {
+    void setup() throws TLSAuthException {
         // Set this property for kernel to scan its own classpath to find plugins
         System.setProperty("aws.greengrass.scanSelfClasspath", "true");
+        when(securityService.getDeviceIdentityKeyManagers()).thenReturn(new KeyManager[0]);
         kernel = new Kernel();
+        kernel.getContext().put(SecurityService.class, securityService);
     }
 
     @AfterEach

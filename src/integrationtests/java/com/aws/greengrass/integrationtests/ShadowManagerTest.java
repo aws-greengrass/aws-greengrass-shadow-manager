@@ -9,6 +9,7 @@ import com.aws.greengrass.authorization.exceptions.AuthorizationException;
 import com.aws.greengrass.dependency.State;
 import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.mqttclient.MqttClient;
+import com.aws.greengrass.security.SecurityService;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAOImpl;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.model.LogEvents;
@@ -19,14 +20,17 @@ import com.aws.greengrass.shadowmanager.sync.strategy.PeriodicSyncStrategy;
 import com.aws.greengrass.shadowmanager.sync.strategy.RealTimeSyncStrategy;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.util.Pair;
+import com.aws.greengrass.util.exceptions.TLSAuthException;
 import org.flywaydb.core.api.FlywayException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionContext;
+import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import javax.net.ssl.KeyManager;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -55,23 +59,23 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.atLeastOnce;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.*;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 class ShadowManagerTest extends NucleusLaunchUtils {
     private static final String DEFAULT_CONFIG = "config.yaml";
     private static final byte[] BASE_DOCUMENT = "{\"version\": 1, \"state\": {\"reported\": {\"name\": \"The Beatles\"}}}".getBytes();
     public static final String THING_NAME2 = "testThingName2";
+    @Mock
+    private SecurityService securityService;
 
     @BeforeEach
-    void setup() {
+    void setup() throws TLSAuthException {
         // Set this property for kernel to scan its own classpath to find plugins
         System.setProperty("aws.greengrass.scanSelfClasspath", "true");
+        lenient().when(securityService.getDeviceIdentityKeyManagers()).thenReturn(new KeyManager[0]);
         kernel = new Kernel();
+        kernel.getContext().put(SecurityService.class, securityService);
     }
 
     @AfterEach
