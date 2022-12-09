@@ -112,11 +112,11 @@ public class IotDataPlaneClientFactory {
         // to load. If the service is not loaded even after retrying, we throw an exception.
         try {
             waitForCryptoKeyServiceProvider();
+            clientCreationException.set(Optional.empty());
         } catch (Exception e) {
             clientCreationException.set(Optional.of(e));
             return;
         }
-        clientCreationException.set(Optional.empty());
         Set<Class<? extends Exception>> allExceptionsToRetryOn = new HashSet<>(retryableIoTExceptions);
         RetryCondition retryCondition = OrRetryCondition.create(RetryCondition.defaultRetryCondition(),
                 RetryOnExceptionsCondition.create(allExceptionsToRetryOn));
