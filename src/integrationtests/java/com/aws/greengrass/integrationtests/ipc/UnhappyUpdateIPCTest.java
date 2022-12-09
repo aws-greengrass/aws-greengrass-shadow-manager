@@ -7,7 +7,7 @@ package com.aws.greengrass.integrationtests.ipc;
 
 import com.aws.greengrass.integrationtests.NucleusLaunchUtils;
 import com.aws.greengrass.lifecyclemanager.Kernel;
- import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
+import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.model.ErrorMessage;
 import com.aws.greengrass.shadowmanager.util.Validator;
