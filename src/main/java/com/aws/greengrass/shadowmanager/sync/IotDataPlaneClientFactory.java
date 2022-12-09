@@ -41,6 +41,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.inject.Inject;
 
 import static com.aws.greengrass.deployment.DeviceConfiguration.DEVICE_PARAM_AWS_REGION;
@@ -62,7 +63,8 @@ public class IotDataPlaneClientFactory {
             Arrays.asList(ThrottlingException.class, InternalException.class, InternalFailureException.class,
                     LimitExceededException.class));
     private final DeviceConfiguration deviceConfiguration;
-    private Optional<Exception> clientCreationException = Optional.empty();
+    private final AtomicReference<Optional<Exception>> clientCreationException =
+            new AtomicReference<>(Optional.empty());
 
     /**
      * Constructor for IotDataPlaneClientFactory to maintain IoT Data plane client.
@@ -72,12 +74,12 @@ public class IotDataPlaneClientFactory {
     @Inject
     public IotDataPlaneClientFactory(DeviceConfiguration deviceConfiguration) {
         this.deviceConfiguration = deviceConfiguration;
-        configureClient();
+        configureClient(true);
         deviceConfiguration.onAnyChange((what, node) -> {
             if (validString(node, DEVICE_PARAM_AWS_REGION) || validPath(node, DEVICE_PARAM_ROOT_CA_PATH) || validPath(
                     node, DEVICE_PARAM_CERTIFICATE_FILE_PATH) || validPath(node, DEVICE_PARAM_PRIVATE_KEY_PATH)
                     || validString(node, DEVICE_PARAM_IOT_DATA_ENDPOINT)) {
-                configureClient();
+                configureClient(true);
             }
         });
     }
@@ -102,16 +104,19 @@ public class IotDataPlaneClientFactory {
     }
 
     @SuppressWarnings({"PMD.AvoidCatchingGenericException"})
-    private void configureClient() {
+    private void configureClient(boolean reconfigure) {
+        if (!reconfigure) {
+            return;
+        }
         // To ensure that the http client is configured with mTLS, wait for the crypto key provider service (pkcs11)
         // to load. If the service is not loaded even after retrying, we throw an exception.
         try {
-            clientCreationException = Optional.empty();
             waitForCryptoKeyServiceProvider();
         } catch (Exception e) {
-            clientCreationException = Optional.of(e);
+            clientCreationException.set(Optional.of(e));
             return;
         }
+        clientCreationException.set(Optional.empty());
         Set<Class<? extends Exception>> allExceptionsToRetryOn = new HashSet<>(retryableIoTExceptions);
         RetryCondition retryCondition = OrRetryCondition.create(RetryCondition.defaultRetryCondition(),
                 RetryOnExceptionsCondition.create(allExceptionsToRetryOn));
@@ -152,8 +157,10 @@ public class IotDataPlaneClientFactory {
      * @throws IoTDataPlaneClientCreationException exception during client configuration
      */
     public IotDataPlaneClient getIotDataPlaneClient() throws IoTDataPlaneClientCreationException {
-        if (clientCreationException.isPresent()) {
-            throw new IoTDataPlaneClientCreationException(clientCreationException.get());
+        configureClient(clientCreationException.get().isPresent());
+        Optional<Exception> exception = clientCreationException.get();
+        if (exception.isPresent()) {
+            throw new IoTDataPlaneClientCreationException(exception.get());
         }
         return iotDataPlaneClient;
     }
