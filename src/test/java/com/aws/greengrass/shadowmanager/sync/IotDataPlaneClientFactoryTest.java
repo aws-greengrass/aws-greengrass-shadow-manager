@@ -75,17 +75,17 @@ class IotDataPlaneClientFactoryTest {
 
 
     @Test
-    void GIVEN_device_configuration_WHEN_service_not_available_THEN_do_not_configure_iot_data_client(ExtensionContext context)
+    void GIVEN_service_not_available_WHEN_get_client_THEN_do_not_configure_iot_data_client(ExtensionContext context)
             throws TLSAuthException {
         ignoreExceptionOfType(context, TLSAuthException.class);
         when(mockDeviceConfiguration.getDeviceIdentityKeyManagers()).thenThrow(TLSAuthException.class);
         clientFactory = new IotDataPlaneClientFactory(mockDeviceConfiguration);
-        // Wait for the crypto key provider service from the constructor - retry 3 times
-        verify(mockDeviceConfiguration, times(3)).getDeviceIdentityKeyManagers();
         IoTDataPlaneClientCreationException thrown = assertThrows(IoTDataPlaneClientCreationException.class,
                 () -> clientFactory.getIotDataPlaneClient());
         assertThat(thrown.getCause(), instanceOf(TLSAuthException.class));
-
+        IoTDataPlaneClientCreationException thrown2 = assertThrows(IoTDataPlaneClientCreationException.class,
+                () -> clientFactory.getIotDataPlaneClient());
+        assertThat(thrown2.getCause(), instanceOf(TLSAuthException.class));
         verify(mockDeviceConfiguration, times(0)).getIotDataEndpoint();
         verify(mockDeviceConfiguration, times(0)).getAWSRegion();
         // Wait for the crypto key provider service again when using getter - retry 3 more times
@@ -93,20 +93,22 @@ class IotDataPlaneClientFactoryTest {
     }
 
     @Test
-    void GIVEN_device_config_WHEN_service_not_available_in_constructor_THEN_wait_for_service_again_And_if_available_then_configure_client(ExtensionContext context)
+    void GIVEN_service_not_avail_WHEN_get_client_THEN_throw_exc_And_when_service_avail_THEN_get_client(ExtensionContext context)
             throws TLSAuthException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, TLSAuthException.class);
         when(mockDeviceConfiguration.getDeviceIdentityKeyManagers()).thenThrow(TLSAuthException.class);
         clientFactory = new IotDataPlaneClientFactory(mockDeviceConfiguration);
-        // Wait for the crypto key provider service from the constructor - retry 3 times
-        verify(mockDeviceConfiguration, times(3)).getDeviceIdentityKeyManagers();
+        IoTDataPlaneClientCreationException thrown = assertThrows(IoTDataPlaneClientCreationException.class,
+                () -> clientFactory.getIotDataPlaneClient());
+        assertThat(thrown.getCause(), instanceOf(TLSAuthException.class));
+
         reset(mockDeviceConfiguration);
         when(mockDeviceConfiguration.getDeviceIdentityKeyManagers()).thenReturn(new KeyManager[0]);
         assertThat(clientFactory.getIotDataPlaneClient(), is(notNullValue()));
 
         verify(mockDeviceConfiguration, times(1)).getIotDataEndpoint();
         verify(mockDeviceConfiguration, times(1)).getAWSRegion();
-        // Wait for the crypto key provider service again when using getter - retry only 1 more time as it is available
+        // Wait for the crypto key provider service when using getter - retry only 1 time as it is available
         verify(mockDeviceConfiguration, times(1)).getDeviceIdentityKeyManagers();
     }
 

@@ -72,14 +72,14 @@ public class IotDataPlaneClientFactory {
      * @param deviceConfiguration Device configuration class.
      */
     @Inject
+    @SuppressWarnings({"PMD.NullAssignment"})
     public IotDataPlaneClientFactory(DeviceConfiguration deviceConfiguration) {
         this.deviceConfiguration = deviceConfiguration;
-        configureClient(true);
         deviceConfiguration.onAnyChange((what, node) -> {
             if (validString(node, DEVICE_PARAM_AWS_REGION) || validPath(node, DEVICE_PARAM_ROOT_CA_PATH) || validPath(
                     node, DEVICE_PARAM_CERTIFICATE_FILE_PATH) || validPath(node, DEVICE_PARAM_PRIVATE_KEY_PATH)
                     || validString(node, DEVICE_PARAM_IOT_DATA_ENDPOINT)) {
-                configureClient(true);
+                iotDataPlaneClient = null;
             }
         });
     }
@@ -104,8 +104,8 @@ public class IotDataPlaneClientFactory {
     }
 
     @SuppressWarnings({"PMD.AvoidCatchingGenericException"})
-    private void configureClient(boolean reconfigure) {
-        if (!reconfigure) {
+    private void configureClient() {
+        if (!clientCreationException.get().isPresent() && iotDataPlaneClient != null) {
             return;
         }
         // To ensure that the http client is configured with mTLS, wait for the crypto key provider service (pkcs11)
@@ -157,7 +157,7 @@ public class IotDataPlaneClientFactory {
      * @throws IoTDataPlaneClientCreationException exception during client configuration
      */
     public IotDataPlaneClient getIotDataPlaneClient() throws IoTDataPlaneClientCreationException {
-        configureClient(clientCreationException.get().isPresent());
+        configureClient();
         Optional<Exception> exception = clientCreationException.get();
         if (exception.isPresent()) {
             throw new IoTDataPlaneClientCreationException(exception.get());
