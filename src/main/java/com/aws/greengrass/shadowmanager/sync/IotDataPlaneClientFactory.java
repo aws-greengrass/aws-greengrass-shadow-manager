@@ -40,6 +40,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.inject.Inject;
 
 import static com.aws.greengrass.deployment.DeviceConfiguration.DEVICE_PARAM_AWS_REGION;
@@ -56,7 +57,7 @@ import static com.aws.greengrass.deployment.DeviceConfiguration.DEVICE_PARAM_ROO
 public class IotDataPlaneClientFactory {
     private static final String IOT_CORE_DATA_PLANE_ENDPOINT_FORMAT = "https://%s";
     private static final Logger logger = LogManager.getLogger(IotDataPlaneClientFactory.class);
-    private IotDataPlaneClient iotDataPlaneClient;
+    private final AtomicReference<IotDataPlaneClient> iotDataPlaneClient = new AtomicReference<>();
     private static final Set<Class<? extends Exception>> retryableIoTExceptions = new HashSet<>(
             Arrays.asList(ThrottlingException.class, InternalException.class, InternalFailureException.class,
                     LimitExceededException.class));
@@ -75,7 +76,7 @@ public class IotDataPlaneClientFactory {
             if (validString(node, DEVICE_PARAM_AWS_REGION) || validPath(node, DEVICE_PARAM_ROOT_CA_PATH) || validPath(
                     node, DEVICE_PARAM_CERTIFICATE_FILE_PATH) || validPath(node, DEVICE_PARAM_PRIVATE_KEY_PATH)
                     || validString(node, DEVICE_PARAM_IOT_DATA_ENDPOINT)) {
-                iotDataPlaneClient = null;
+                iotDataPlaneClient.set(null);
             }
         });
     }
@@ -101,7 +102,7 @@ public class IotDataPlaneClientFactory {
 
     @SuppressWarnings({"PMD.AvoidCatchingGenericException"})
     private void configureClient() throws IoTDataPlaneClientCreationException {
-        if (iotDataPlaneClient != null) {
+        if (iotDataPlaneClient.get() != null) {
             return;
         }
         // To ensure that the http client is configured with mTLS, wait for the crypto key provider service (pkcs11)
@@ -138,10 +139,10 @@ public class IotDataPlaneClientFactory {
         if (!Utils.isEmpty(iotDataEndpoint)) {
             iotDataPlaneClientBuilder.endpointOverride(URI.create(getIotCoreDataPlaneEndpoint(iotDataEndpoint)));
         }
-        if (this.iotDataPlaneClient != null) {
-            this.iotDataPlaneClient.close();
+        if (this.iotDataPlaneClient.get() != null) {
+            this.iotDataPlaneClient.get().close();
         }
-        this.iotDataPlaneClient = iotDataPlaneClientBuilder.build();
+        this.iotDataPlaneClient.set(iotDataPlaneClientBuilder.build());
     }
 
     /**
@@ -152,7 +153,7 @@ public class IotDataPlaneClientFactory {
      */
     public IotDataPlaneClient getIotDataPlaneClient() throws IoTDataPlaneClientCreationException {
         configureClient();
-        return iotDataPlaneClient;
+        return iotDataPlaneClient.get();
     }
 
 
