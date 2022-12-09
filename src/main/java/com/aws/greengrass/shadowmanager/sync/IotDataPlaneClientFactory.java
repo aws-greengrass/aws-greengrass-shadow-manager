@@ -101,9 +101,9 @@ public class IotDataPlaneClientFactory {
     }
 
     @SuppressWarnings({"PMD.AvoidCatchingGenericException"})
-    private void configureClient() throws IoTDataPlaneClientCreationException {
+    private IotDataPlaneClient configureAndGetClient() throws IoTDataPlaneClientCreationException {
         if (iotDataPlaneClient.get() != null) {
-            return;
+            return iotDataPlaneClient.get();
         }
         // To ensure that the http client is configured with mTLS, wait for the crypto key provider service (pkcs11)
         // to load. If the service is not loaded even after retrying, we throw an exception.
@@ -143,6 +143,8 @@ public class IotDataPlaneClientFactory {
             this.iotDataPlaneClient.get().close();
         }
         this.iotDataPlaneClient.set(iotDataPlaneClientBuilder.build());
+        return iotDataPlaneClient.get();
+
     }
 
     /**
@@ -152,8 +154,7 @@ public class IotDataPlaneClientFactory {
      * @throws IoTDataPlaneClientCreationException exception during client configuration
      */
     public IotDataPlaneClient getIotDataPlaneClient() throws IoTDataPlaneClientCreationException {
-        configureClient();
-        return iotDataPlaneClient.get();
+        return configureAndGetClient();
     }
 
 
