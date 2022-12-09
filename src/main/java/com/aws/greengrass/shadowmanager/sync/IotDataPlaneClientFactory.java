@@ -39,9 +39,7 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 import javax.inject.Inject;
 
 import static com.aws.greengrass.deployment.DeviceConfiguration.DEVICE_PARAM_AWS_REGION;
@@ -63,8 +61,6 @@ public class IotDataPlaneClientFactory {
             Arrays.asList(ThrottlingException.class, InternalException.class, InternalFailureException.class,
                     LimitExceededException.class));
     private final DeviceConfiguration deviceConfiguration;
-    private final AtomicReference<Optional<Exception>> clientCreationException =
-            new AtomicReference<>(Optional.empty());
 
     /**
      * Constructor for IotDataPlaneClientFactory to maintain IoT Data plane client.
@@ -104,18 +100,16 @@ public class IotDataPlaneClientFactory {
     }
 
     @SuppressWarnings({"PMD.AvoidCatchingGenericException"})
-    private void configureClient() {
-        if (!clientCreationException.get().isPresent() && iotDataPlaneClient != null) {
+    private void configureClient() throws IoTDataPlaneClientCreationException {
+        if (iotDataPlaneClient != null) {
             return;
         }
         // To ensure that the http client is configured with mTLS, wait for the crypto key provider service (pkcs11)
         // to load. If the service is not loaded even after retrying, we throw an exception.
         try {
             waitForCryptoKeyServiceProvider();
-            clientCreationException.set(Optional.empty());
         } catch (Exception e) {
-            clientCreationException.set(Optional.of(e));
-            return;
+            throw new IoTDataPlaneClientCreationException(e);
         }
         Set<Class<? extends Exception>> allExceptionsToRetryOn = new HashSet<>(retryableIoTExceptions);
         RetryCondition retryCondition = OrRetryCondition.create(RetryCondition.defaultRetryCondition(),
@@ -158,10 +152,6 @@ public class IotDataPlaneClientFactory {
      */
     public IotDataPlaneClient getIotDataPlaneClient() throws IoTDataPlaneClientCreationException {
         configureClient();
-        Optional<Exception> exception = clientCreationException.get();
-        if (exception.isPresent()) {
-            throw new IoTDataPlaneClientCreationException(exception.get());
-        }
         return iotDataPlaneClient;
     }
 
