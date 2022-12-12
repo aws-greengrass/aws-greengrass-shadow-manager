@@ -8,7 +8,6 @@ package com.aws.greengrass.integrationtests;
 import com.aws.greengrass.dependency.State;
 import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.logging.impl.LogManager;
-import com.aws.greengrass.security.SecurityService;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAOImpl;
 import com.aws.greengrass.shadowmanager.ShadowManagerDatabase;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
@@ -20,11 +19,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import vendored.com.google.common.util.concurrent.RateLimiter;
 
-import javax.net.ssl.KeyManager;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
@@ -65,15 +62,11 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
-import static org.mockito.Mockito.lenient;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 @SuppressWarnings("PMD.CloseResource")
 class ShadowManagerDatabaseTest extends NucleusLaunchUtils {
     ShadowManagerDatabase db;
-    @Mock
-    SecurityService securityService;
-
 
     @BeforeEach
     void initializeShadowManagerDatabase() {
@@ -90,9 +83,7 @@ class ShadowManagerDatabaseTest extends NucleusLaunchUtils {
 
     @Test
     void GIVEN_data_WHEN_restart_THEN_data_still_exists() throws Exception {
-        lenient().when(securityService.getDeviceIdentityKeyManagers()).thenReturn(new KeyManager[0]);
         kernel = new Kernel();
-        kernel.getContext().put(SecurityService.class, securityService);
         try {
             startNucleusWithConfig("config.yaml", State.RUNNING, false);
             ShadowManagerDatabase shadowManagerDatabase = kernel.getContext().get(ShadowManagerDatabase.class);
@@ -110,7 +101,6 @@ class ShadowManagerDatabaseTest extends NucleusLaunchUtils {
             kernel.shutdown();
 
             kernel = new Kernel();
-            kernel.getContext().put(SecurityService.class, securityService);
             startNucleusWithConfig("config.yaml", State.RUNNING, false);
 
             shadowManagerDatabase = kernel.getContext().get(ShadowManagerDatabase.class);
