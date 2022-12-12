@@ -142,8 +142,9 @@ public class IotDataPlaneClientFactory {
         if (this.iotDataPlaneClient.get() != null) {
             this.iotDataPlaneClient.get().close();
         }
-        this.iotDataPlaneClient.set(iotDataPlaneClientBuilder.build());
-        return iotDataPlaneClient.get();
+        IotDataPlaneClient client = iotDataPlaneClientBuilder.build();
+        this.iotDataPlaneClient.set(client);
+        return client;
 
     }
 
