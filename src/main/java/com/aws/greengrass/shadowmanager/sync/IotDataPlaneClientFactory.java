@@ -76,11 +76,7 @@ public class IotDataPlaneClientFactory {
             if (validString(node, DEVICE_PARAM_AWS_REGION) || validPath(node, DEVICE_PARAM_ROOT_CA_PATH) || validPath(
                     node, DEVICE_PARAM_CERTIFICATE_FILE_PATH) || validPath(node, DEVICE_PARAM_PRIVATE_KEY_PATH)
                     || validString(node, DEVICE_PARAM_IOT_DATA_ENDPOINT)) {
-                IotDataPlaneClient client = this.iotDataPlaneClient.get();
-                if (client != null) {
-                    client.close();
-                    iotDataPlaneClient.set(null);
-                }
+                setIotDataPlaneClient(null);
             }
         });
     }
@@ -145,9 +141,8 @@ public class IotDataPlaneClientFactory {
             iotDataPlaneClientBuilder.endpointOverride(URI.create(getIotCoreDataPlaneEndpoint(iotDataEndpoint)));
         }
         client = iotDataPlaneClientBuilder.build();
-        this.iotDataPlaneClient.set(client);
+        setIotDataPlaneClient(client);
         return client;
-
     }
 
     /**
@@ -158,6 +153,20 @@ public class IotDataPlaneClientFactory {
      */
     public IotDataPlaneClient getIotDataPlaneClient() throws IoTDataPlaneClientCreationException {
         return configureAndGetClient();
+    }
+
+    /**
+     * Setter for IoT data plane client.
+     *
+     * @param newClient client to set as iot data plane client
+     */
+    @SuppressWarnings("PMD.CloseResource")
+    private void setIotDataPlaneClient(IotDataPlaneClient newClient) {
+        IotDataPlaneClient client = iotDataPlaneClient.get();
+        if (client != null) {
+            client.close();
+        }
+        iotDataPlaneClient.set(newClient);
     }
 
 
