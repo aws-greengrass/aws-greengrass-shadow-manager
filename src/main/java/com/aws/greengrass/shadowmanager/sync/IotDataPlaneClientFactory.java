@@ -76,7 +76,11 @@ public class IotDataPlaneClientFactory {
             if (validString(node, DEVICE_PARAM_AWS_REGION) || validPath(node, DEVICE_PARAM_ROOT_CA_PATH) || validPath(
                     node, DEVICE_PARAM_CERTIFICATE_FILE_PATH) || validPath(node, DEVICE_PARAM_PRIVATE_KEY_PATH)
                     || validString(node, DEVICE_PARAM_IOT_DATA_ENDPOINT)) {
-                iotDataPlaneClient.set(null);
+                IotDataPlaneClient client = this.iotDataPlaneClient.get();
+                if (client != null) {
+                    client.close();
+                    iotDataPlaneClient.set(null);
+                }
             }
         });
     }
@@ -139,9 +143,6 @@ public class IotDataPlaneClientFactory {
 
         if (!Utils.isEmpty(iotDataEndpoint)) {
             iotDataPlaneClientBuilder.endpointOverride(URI.create(getIotCoreDataPlaneEndpoint(iotDataEndpoint)));
-        }
-        if (this.iotDataPlaneClient.get() != null) {
-            this.iotDataPlaneClient.get().close();
         }
         client = iotDataPlaneClientBuilder.build();
         this.iotDataPlaneClient.set(client);
