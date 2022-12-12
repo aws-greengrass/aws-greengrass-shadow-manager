@@ -162,11 +162,10 @@ public class IotDataPlaneClientFactory {
      */
     @SuppressWarnings("PMD.CloseResource")
     private void setIotDataPlaneClient(IotDataPlaneClient newClient) {
-        IotDataPlaneClient client = iotDataPlaneClient.get();
+        IotDataPlaneClient client = iotDataPlaneClient.getAndSet(newClient);
         if (client != null) {
             client.close();
         }
-        iotDataPlaneClient.set(newClient);
     }
 
 
