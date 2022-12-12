@@ -24,6 +24,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import vendored.com.google.common.util.concurrent.RateLimiter;
 
+import javax.net.ssl.KeyManager;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
@@ -64,6 +65,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
+import static org.mockito.Mockito.lenient;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 @SuppressWarnings("PMD.CloseResource")
@@ -88,7 +90,9 @@ class ShadowManagerDatabaseTest extends NucleusLaunchUtils {
 
     @Test
     void GIVEN_data_WHEN_restart_THEN_data_still_exists() throws Exception {
+        lenient().when(securityService.getDeviceIdentityKeyManagers()).thenReturn(new KeyManager[0]);
         kernel = new Kernel();
+        kernel.getContext().put(SecurityService.class, securityService);
         try {
             startNucleusWithConfig("config.yaml", State.RUNNING, false);
             ShadowManagerDatabase shadowManagerDatabase = kernel.getContext().get(ShadowManagerDatabase.class);
