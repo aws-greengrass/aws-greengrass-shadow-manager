@@ -9,6 +9,7 @@ import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.logging.impl.config.LogConfig;
 import com.aws.greengrass.shadowmanager.ShadowManager;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAOImpl;
+import com.aws.greengrass.shadowmanager.exception.IoTDataPlaneClientCreationException;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
@@ -89,7 +90,7 @@ class SyncDirectionalityTest extends NucleusLaunchUtils {
 
     @ParameterizedTest
     @ValueSource(strings = {"sync_directionality_bidirectional.yaml", "sync_directionality_fromdeviceonly.yaml"})
-    void GIVEN_cloud_sync_enabled_WHEN_local_update_THEN_syncs_shadow_to_cloud(String configFileName, ExtensionContext context) throws InterruptedException, IOException {
+    void GIVEN_cloud_sync_enabled_WHEN_local_update_THEN_syncs_shadow_to_cloud(String configFileName, ExtensionContext context) throws InterruptedException, IOException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, InterruptedException.class);
         ignoreExceptionOfType(context, ResourceNotFoundException.class);
 
@@ -136,7 +137,7 @@ class SyncDirectionalityTest extends NucleusLaunchUtils {
     }
 
     @Test
-    void GIVEN_cloud_sync_not_enabled_WHEN_local_update_THEN_does_not_sync_shadow_to_cloud(ExtensionContext context) throws InterruptedException, IOException {
+    void GIVEN_cloud_sync_not_enabled_WHEN_local_update_THEN_does_not_sync_shadow_to_cloud(ExtensionContext context) throws InterruptedException, IOException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, InterruptedException.class);
         ignoreExceptionOfType(context, ResourceNotFoundException.class);
         ignoreExceptionOfType(context, ResourceNotFoundError.class);
@@ -181,7 +182,7 @@ class SyncDirectionalityTest extends NucleusLaunchUtils {
 
     @ParameterizedTest
     @ValueSource(strings = {"sync_directionality_bidirectional.yaml", "sync_directionality_fromcloudonly.yaml"})
-    void GIVEN_device_sync_enabled_WHEN_local_update_THEN_syncs_shadow_to_cloud(String configFileName, ExtensionContext context) throws InterruptedException, IOException {
+    void GIVEN_device_sync_enabled_WHEN_local_update_THEN_syncs_shadow_to_cloud(String configFileName, ExtensionContext context) throws InterruptedException, IOException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, InterruptedException.class);
         ignoreExceptionOfType(context, ResourceNotFoundError.class);
         ignoreExceptionOfType(context, ResourceNotFoundException.class);
@@ -221,7 +222,7 @@ class SyncDirectionalityTest extends NucleusLaunchUtils {
     }
 
     @Test
-    void GIVEN_device_sync_not_enabled_WHEN_local_update_THEN_does_not_sync_shadow_to_cloud() throws InterruptedException, IOException {
+    void GIVEN_device_sync_not_enabled_WHEN_local_update_THEN_does_not_sync_shadow_to_cloud() throws InterruptedException, IOException, IoTDataPlaneClientCreationException {
         JsonNode cloudDocument = JsonUtil.getPayloadJson(cloudShadowContentV1.getBytes(UTF_8)).get();
 
         startNucleusWithConfig(NucleusLaunchUtilsConfig.builder()

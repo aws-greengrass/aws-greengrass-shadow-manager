@@ -70,6 +70,7 @@ class ShadowManagerDatabaseTest extends NucleusLaunchUtils {
 
     @BeforeEach
     void initializeShadowManagerDatabase() {
+        System.setProperty("aws.greengrass.scanSelfClasspath", "true");
         db = new ShadowManagerDatabase(rootDir);
         db.install();
         db.open();

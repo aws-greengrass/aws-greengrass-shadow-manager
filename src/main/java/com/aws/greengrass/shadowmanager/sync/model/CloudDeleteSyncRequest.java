@@ -8,6 +8,7 @@ package com.aws.greengrass.shadowmanager.sync.model;
 import com.aws.greengrass.logging.api.LogEventBuilder;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
+import com.aws.greengrass.shadowmanager.exception.IoTDataPlaneClientCreationException;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
@@ -81,7 +82,8 @@ public class CloudDeleteSyncRequest extends BaseSyncRequest {
                     .log("Deleting cloud shadow document");
 
             context.getIotDataPlaneClientWrapper().deleteThingShadow(getThingName(), getShadowName());
-        } catch (ThrottlingException | ServiceUnavailableException | InternalFailureException e) {
+        } catch (ThrottlingException | ServiceUnavailableException | InternalFailureException
+                | IoTDataPlaneClientCreationException e) {
             throw new RetryableException(e);
         } catch (AbortedException e) {
             LogEventBuilder l = logger.atDebug()

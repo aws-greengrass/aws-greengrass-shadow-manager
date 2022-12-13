@@ -6,6 +6,7 @@
 package com.aws.greengrass.shadowmanager.sync.model;
 
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
+import com.aws.greengrass.shadowmanager.exception.IoTDataPlaneClientCreationException;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowRequestHandler;
@@ -82,7 +83,7 @@ class OverwriteCloudShadowRequestTest {
     }
 
     @Test
-    void GIVEN_updated_local_shadow_WHEN_execute_THEN_updates_cloud_shadow() throws RetryableException, SkipSyncRequestException, IOException, InterruptedException {
+    void GIVEN_updated_local_shadow_WHEN_execute_THEN_updates_cloud_shadow() throws RetryableException, SkipSyncRequestException, IOException, InterruptedException, IoTDataPlaneClientCreationException {
         long epochSeconds = Instant.now().getEpochSecond();
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
         ShadowDocument shadowDocument = new ShadowDocument(LOCAL_DOCUMENT);
@@ -127,7 +128,7 @@ class OverwriteCloudShadowRequestTest {
     }
 
     @Test
-    void GIVEN_deleted_local_shadow_WHEN_execute_THEN_deletes_cloud_shadow() throws RetryableException, SkipSyncRequestException, IOException, InterruptedException {
+    void GIVEN_deleted_local_shadow_WHEN_execute_THEN_deletes_cloud_shadow() throws RetryableException, SkipSyncRequestException, IOException, InterruptedException, IoTDataPlaneClientCreationException {
         long epochSeconds = Instant.now().getEpochSecond();
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
         when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.empty());
@@ -171,7 +172,7 @@ class OverwriteCloudShadowRequestTest {
     }
 
     @Test
-    void GIVEN_same_local_shadow_WHEN_execute_THEN_does_not_update_cloud_shadow() throws RetryableException, SkipSyncRequestException, IOException, InterruptedException {
+    void GIVEN_same_local_shadow_WHEN_execute_THEN_does_not_update_cloud_shadow() throws RetryableException, SkipSyncRequestException, IOException, InterruptedException, IoTDataPlaneClientCreationException {
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
         ShadowDocument shadowDocument = new ShadowDocument(LOCAL_DOCUMENT);
         when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.of(shadowDocument));
