@@ -10,15 +10,18 @@ import com.aws.greengrass.dependency.State;
 import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.mqttclient.MqttClient;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAOImpl;
+import com.aws.greengrass.shadowmanager.exception.IoTDataPlaneClientCreationException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
+import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientFactory;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
 import com.aws.greengrass.shadowmanager.sync.model.Direction;
 import com.aws.greengrass.shadowmanager.sync.strategy.PeriodicSyncStrategy;
 import com.aws.greengrass.shadowmanager.sync.strategy.RealTimeSyncStrategy;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.util.Pair;
+import com.aws.greengrass.util.exceptions.TLSAuthException;
 import org.flywaydb.core.api.FlywayException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -53,6 +56,7 @@ import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
@@ -246,5 +250,17 @@ class ShadowManagerTest extends NucleusLaunchUtils {
         shadowManager.getConfig().lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_STRATEGY_TOPIC).replaceAndWait(periodicStrategy);
         kernel.getContext().waitForPublishQueueToClear();
         assertThat(syncHandler.getOverallSyncStrategy(), instanceOf(PeriodicSyncStrategy.class));
+    }
+
+    @Test
+    void GIVEN_cryptoKeyProviderService_is_not_loaded_WHEN_get_client_THEN_throw_Exception(ExtensionContext context) throws InterruptedException {
+        ignoreExceptionOfType(context, TLSAuthException.class);
+        startNucleusWithConfig(NucleusLaunchUtilsConfig.builder()
+                .configFile(DEFAULT_CONFIG)
+                .mqttConnected(false)
+                .mockCloud(false)
+                .build());
+        IotDataPlaneClientFactory clientFactory = kernel.getContext().get(IotDataPlaneClientFactory.class);
+        assertThrows(IoTDataPlaneClientCreationException.class, ()-> clientFactory.getIotDataPlaneClient());
     }
 }

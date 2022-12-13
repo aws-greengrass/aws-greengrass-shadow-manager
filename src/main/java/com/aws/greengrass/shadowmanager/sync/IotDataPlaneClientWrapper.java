@@ -7,6 +7,7 @@ package com.aws.greengrass.shadowmanager.sync;
 
 import com.aws.greengrass.shadowmanager.exception.IoTDataPlaneClientCreationException;
 import software.amazon.awssdk.core.SdkBytes;
+import software.amazon.awssdk.services.iotdataplane.IotDataPlaneClient;
 import software.amazon.awssdk.services.iotdataplane.model.DeleteThingShadowRequest;
 import software.amazon.awssdk.services.iotdataplane.model.DeleteThingShadowResponse;
 import software.amazon.awssdk.services.iotdataplane.model.GetThingShadowRequest;
@@ -57,10 +58,12 @@ public class IotDataPlaneClientWrapper {
      * @param shadowName The shadow name associated with the sync shadow update
      * @throws IoTDataPlaneClientCreationException when the iot data plane client is not created
      */
+    @SuppressWarnings("PMD.CloseResource")
     public DeleteThingShadowResponse deleteThingShadow(String thingName, String shadowName)
             throws IoTDataPlaneClientCreationException {
+        IotDataPlaneClient client = iotDataPlaneClientFactory.getIotDataPlaneClient();
         rateLimiter.acquire();
-        return iotDataPlaneClientFactory.getIotDataPlaneClient().deleteThingShadow(DeleteThingShadowRequest.builder()
+        return client.deleteThingShadow(DeleteThingShadowRequest.builder()
                 .thingName(thingName)
                 .shadowName(shadowName)
                 .build());
@@ -74,10 +77,12 @@ public class IotDataPlaneClientWrapper {
      * @param payload    The update payload
      * @throws IoTDataPlaneClientCreationException when the iot data plane client is not created
      */
+    @SuppressWarnings("PMD.CloseResource")
     public UpdateThingShadowResponse updateThingShadow(String thingName, String shadowName, byte[] payload)
             throws IoTDataPlaneClientCreationException {
+        IotDataPlaneClient client = iotDataPlaneClientFactory.getIotDataPlaneClient();
         rateLimiter.acquire();
-        return iotDataPlaneClientFactory.getIotDataPlaneClient().updateThingShadow(UpdateThingShadowRequest.builder()
+        return client.updateThingShadow(UpdateThingShadowRequest.builder()
                 .thingName(thingName)
                 .shadowName(shadowName)
                 .payload(SdkBytes.fromByteArray(payload)).build());
@@ -90,10 +95,12 @@ public class IotDataPlaneClientWrapper {
      * @param shadowName The shadow name associated with the sync shadow update
      * @throws IoTDataPlaneClientCreationException when the iot data plane client is not created
      */
+    @SuppressWarnings("PMD.CloseResource")
     public GetThingShadowResponse getThingShadow(String thingName, String shadowName)
             throws IoTDataPlaneClientCreationException {
+        IotDataPlaneClient client = iotDataPlaneClientFactory.getIotDataPlaneClient();
         rateLimiter.acquire();
-        return iotDataPlaneClientFactory.getIotDataPlaneClient().getThingShadow(GetThingShadowRequest.builder()
+        return client.getThingShadow(GetThingShadowRequest.builder()
                 .thingName(thingName)
                 .shadowName(shadowName).build());
     }
