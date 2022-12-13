@@ -6,6 +6,7 @@
 package com.aws.greengrass.shadowmanager.sync.model;
 
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
+import com.aws.greengrass.shadowmanager.exception.IoTDataPlaneClientCreationException;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
@@ -86,7 +87,7 @@ class CloudDeleteSyncRequestTest {
     }
 
     @Test
-    void GIVEN_good_cloud_delete_request_WHEN_execute_THEN_successfully_updates_cloud_shadow_and_sync_information() throws RetryableException, SkipSyncRequestException, UnknownShadowException, InterruptedException {
+    void GIVEN_good_cloud_delete_request_WHEN_execute_THEN_successfully_updates_cloud_shadow_and_sync_information() throws RetryableException, SkipSyncRequestException, UnknownShadowException, InterruptedException, IoTDataPlaneClientCreationException {
         long epochSeconds = Instant.now().getEpochSecond();
         CloudDeleteSyncRequest request = new CloudDeleteSyncRequest(THING_NAME, SHADOW_NAME);
 
@@ -108,7 +109,7 @@ class CloudDeleteSyncRequestTest {
     }
 
     @Test
-    void GIVEN_cloud_delete_request_for_non_existent_shadow_WHEN_execute_THEN_does_not_update_cloud_shadow_and_sync_information(ExtensionContext context) {
+    void GIVEN_cloud_delete_request_for_non_existent_shadow_WHEN_execute_THEN_does_not_update_cloud_shadow_and_sync_information(ExtensionContext context) throws IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, UnknownShadowException.class);
         when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.empty());
         CloudDeleteSyncRequest request = new CloudDeleteSyncRequest(THING_NAME, SHADOW_NAME);
@@ -122,7 +123,7 @@ class CloudDeleteSyncRequestTest {
 
     @ParameterizedTest
     @ValueSource(classes = {ThrottlingException.class, ServiceUnavailableException.class, InternalFailureException.class})
-    void GIVEN_bad_cloud_delete_request_WHEN_execute_and_updateShadow_throws_retryable_error_THEN_does_not_update_cloud_shadow_and_sync_information(Class clazz, ExtensionContext context) {
+    void GIVEN_bad_cloud_delete_request_WHEN_execute_and_updateShadow_throws_retryable_error_THEN_does_not_update_cloud_shadow_and_sync_information(Class clazz, ExtensionContext context) throws IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, clazz);
         doThrow(clazz).when(mockIotDataPlaneClientWrapper).deleteThingShadow(anyString(), anyString());
         CloudDeleteSyncRequest request = new CloudDeleteSyncRequest(THING_NAME, SHADOW_NAME);
@@ -139,7 +140,7 @@ class CloudDeleteSyncRequestTest {
     @ValueSource(classes = {RequestEntityTooLargeException.class, InvalidRequestException.class, UnauthorizedException.class,
             MethodNotAllowedException.class, UnsupportedDocumentEncodingException.class, AwsServiceException.class, SdkClientException.class,
             AbortedException.class})
-    void GIVEN_bad_cloud_delete_request_WHEN_execute_and_updateShadow_throws_skipable_error_THEN_does_not_update_cloud_shadow_and_sync_information(Class clazz, ExtensionContext context) {
+    void GIVEN_bad_cloud_delete_request_WHEN_execute_and_updateShadow_throws_skipable_error_THEN_does_not_update_cloud_shadow_and_sync_information(Class clazz, ExtensionContext context) throws IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, clazz);
         doThrow(clazz).when(mockIotDataPlaneClientWrapper).deleteThingShadow(anyString(), anyString());
         CloudDeleteSyncRequest request = new CloudDeleteSyncRequest(THING_NAME, SHADOW_NAME);
@@ -154,7 +155,7 @@ class CloudDeleteSyncRequestTest {
     }
 
     @Test
-    void GIVEN_bad_cloud_delete_request_WHEN_execute_and_updateShadow_throws_interrupted_error_THEN_does_not_update_cloud_shadow_and_sync_information(ExtensionContext context) {
+    void GIVEN_bad_cloud_delete_request_WHEN_execute_and_updateShadow_throws_interrupted_error_THEN_does_not_update_cloud_shadow_and_sync_information(ExtensionContext context) throws IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, InterruptedException.class);
         doThrow(AbortedException.create("", new InterruptedException("")))
                 .when(mockIotDataPlaneClientWrapper).deleteThingShadow(anyString(), anyString());

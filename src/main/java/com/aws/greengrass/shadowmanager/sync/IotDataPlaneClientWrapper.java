@@ -5,6 +5,7 @@
 
 package com.aws.greengrass.shadowmanager.sync;
 
+import com.aws.greengrass.shadowmanager.exception.IoTDataPlaneClientCreationException;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.services.iotdataplane.model.DeleteThingShadowRequest;
 import software.amazon.awssdk.services.iotdataplane.model.DeleteThingShadowResponse;
@@ -54,8 +55,10 @@ public class IotDataPlaneClientWrapper {
      *
      * @param thingName  The thing name associated with the sync shadow update
      * @param shadowName The shadow name associated with the sync shadow update
+     * @throws IoTDataPlaneClientCreationException when the iot data plane client is not created
      */
-    public DeleteThingShadowResponse deleteThingShadow(String thingName, String shadowName) {
+    public DeleteThingShadowResponse deleteThingShadow(String thingName, String shadowName)
+            throws IoTDataPlaneClientCreationException {
         rateLimiter.acquire();
         return iotDataPlaneClientFactory.getIotDataPlaneClient().deleteThingShadow(DeleteThingShadowRequest.builder()
                 .thingName(thingName)
@@ -69,8 +72,10 @@ public class IotDataPlaneClientWrapper {
      * @param thingName  The thing name associated with the sync shadow update
      * @param shadowName The shadow name associated with the sync shadow update
      * @param payload    The update payload
+     * @throws IoTDataPlaneClientCreationException when the iot data plane client is not created
      */
-    public UpdateThingShadowResponse updateThingShadow(String thingName, String shadowName, byte[] payload) {
+    public UpdateThingShadowResponse updateThingShadow(String thingName, String shadowName, byte[] payload)
+            throws IoTDataPlaneClientCreationException {
         rateLimiter.acquire();
         return iotDataPlaneClientFactory.getIotDataPlaneClient().updateThingShadow(UpdateThingShadowRequest.builder()
                 .thingName(thingName)
@@ -83,8 +88,10 @@ public class IotDataPlaneClientWrapper {
      *
      * @param thingName  The thing name associated with the sync shadow update
      * @param shadowName The shadow name associated with the sync shadow update
+     * @throws IoTDataPlaneClientCreationException when the iot data plane client is not created
      */
-    public GetThingShadowResponse getThingShadow(String thingName, String shadowName) {
+    public GetThingShadowResponse getThingShadow(String thingName, String shadowName)
+            throws IoTDataPlaneClientCreationException {
         rateLimiter.acquire();
         return iotDataPlaneClientFactory.getIotDataPlaneClient().getThingShadow(GetThingShadowRequest.builder()
                 .thingName(thingName)

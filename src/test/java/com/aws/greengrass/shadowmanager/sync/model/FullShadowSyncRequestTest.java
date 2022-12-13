@@ -7,6 +7,7 @@ package com.aws.greengrass.shadowmanager.sync.model;
 
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
+import com.aws.greengrass.shadowmanager.exception.IoTDataPlaneClientCreationException;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
@@ -127,7 +128,7 @@ class FullShadowSyncRequestTest {
     }
 
     @Test
-    void GIVEN_updated_local_and_cloud_document_WHEN_execute_THEN_updates_local_and_cloud_document() throws RetryableException, SkipSyncRequestException, IOException, InterruptedException {
+    void GIVEN_updated_local_and_cloud_document_WHEN_execute_THEN_updates_local_and_cloud_document() throws RetryableException, SkipSyncRequestException, IOException, InterruptedException, IoTDataPlaneClientCreationException {
         long epochSeconds = Instant.now().getEpochSecond();
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
         JsonNode expectedMergedDocument = JsonUtil.getPayloadJson(MERGED_DOCUMENT).get();
@@ -188,7 +189,7 @@ class FullShadowSyncRequestTest {
     }
 
     @Test
-    void GIVEN_updated_cloud_document_and_no_local_document_WHEN_execute_THEN_deletes_cloud_document() throws RetryableException, SkipSyncRequestException, InterruptedException {
+    void GIVEN_updated_cloud_document_and_no_local_document_WHEN_execute_THEN_deletes_cloud_document() throws RetryableException, SkipSyncRequestException, InterruptedException, IoTDataPlaneClientCreationException {
         long epochSeconds = Instant.now().getEpochSecond();
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
         GetThingShadowResponse response = GetThingShadowResponse.builder()
@@ -234,7 +235,7 @@ class FullShadowSyncRequestTest {
     }
 
     @Test
-    void GIVEN_same_cloud_document_and_local_document_WHEN_execute_THEN_does_not_update_local_and_cloud_document() throws RetryableException, SkipSyncRequestException, IOException, InterruptedException {
+    void GIVEN_same_cloud_document_and_local_document_WHEN_execute_THEN_does_not_update_local_and_cloud_document() throws RetryableException, SkipSyncRequestException, IOException, InterruptedException, IoTDataPlaneClientCreationException {
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
         GetThingShadowResponse response = GetThingShadowResponse.builder()
                 .payload(SdkBytes.fromByteArray(CLOUD_DOCUMENT))
@@ -264,7 +265,7 @@ class FullShadowSyncRequestTest {
     }
 
     @Test
-    void GIVEN_nonexistent_cloud_document_and_existent_local_document_WHEN_execute_THEN_deletes_local_document(ExtensionContext context) throws RetryableException, SkipSyncRequestException, IOException, InterruptedException {
+    void GIVEN_nonexistent_cloud_document_and_existent_local_document_WHEN_execute_THEN_deletes_local_document(ExtensionContext context) throws RetryableException, SkipSyncRequestException, IOException, InterruptedException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, ResourceNotFoundException.class);
         long epochSeconds = Instant.now().getEpochSecond();
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
@@ -311,7 +312,7 @@ class FullShadowSyncRequestTest {
     }
 
     @Test
-    void GIVEN_local_document_first_sync_and_existent_cloud_document_WHEN_execute_THEN_updates_local_document() throws RetryableException, SkipSyncRequestException, IOException, InterruptedException {
+    void GIVEN_local_document_first_sync_and_existent_cloud_document_WHEN_execute_THEN_updates_local_document() throws RetryableException, SkipSyncRequestException, IOException, InterruptedException, IoTDataPlaneClientCreationException {
         long epochSeconds = Instant.now().getEpochSecond();
         JsonNode expectedMergedDocument = JsonUtil.getPayloadJson(CLOUD_DOCUMENT).get();
         ((ObjectNode) expectedMergedDocument).remove(SHADOW_DOCUMENT_VERSION);
@@ -365,7 +366,7 @@ class FullShadowSyncRequestTest {
     }
 
     @Test
-    void GIVEN_cloud_document_first_sync_and_existent_local_document_WHEN_execute_THEN_updates_cloud_document(ExtensionContext context) throws RetryableException, SkipSyncRequestException, IOException, InterruptedException {
+    void GIVEN_cloud_document_first_sync_and_existent_local_document_WHEN_execute_THEN_updates_cloud_document(ExtensionContext context) throws RetryableException, SkipSyncRequestException, IOException, InterruptedException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, ResourceNotFoundException.class);
         long epochSeconds = Instant.now().getEpochSecond();
         JsonNode expectedMergedDocument = JsonUtil.getPayloadJson(LOCAL_DOCUMENT).get();
@@ -419,7 +420,7 @@ class FullShadowSyncRequestTest {
     }
 
     @Test
-    void GIVEN_non_existent_cloud_document_and_non_existent_local_document_WHEN_execute_THEN_updates_sync_info_only(ExtensionContext context) throws RetryableException, SkipSyncRequestException, InterruptedException {
+    void GIVEN_non_existent_cloud_document_and_non_existent_local_document_WHEN_execute_THEN_updates_sync_info_only(ExtensionContext context) throws RetryableException, SkipSyncRequestException, InterruptedException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, ResourceNotFoundException.class);
 
         when(mockIotDataPlaneClientWrapper.getThingShadow(anyString(), anyString())).thenThrow(ResourceNotFoundException.class);
@@ -458,7 +459,7 @@ class FullShadowSyncRequestTest {
     }
 
     @Test
-    void GIVEN_nonexistent_sync_info_WHEN_execute_THEN_throws_skip_exception(ExtensionContext context) {
+    void GIVEN_nonexistent_sync_info_WHEN_execute_THEN_throws_skip_exception(ExtensionContext context) throws IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, SkipSyncRequestException.class);
         when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.empty());
 
@@ -477,7 +478,7 @@ class FullShadowSyncRequestTest {
 
     @ParameterizedTest
     @ValueSource(classes = {ThrottlingException.class, ServiceUnavailableException.class, InternalFailureException.class})
-    void GIVEN_updated_cloud_document_and_no_local_document_WHEN_execute_and_deleteThingShadow_throws_retryable_error_THEN_does_not_update_cloud_shadow_and_sync_information(Class clazz, ExtensionContext context) throws RetryableException, SkipSyncRequestException {
+    void GIVEN_updated_cloud_document_and_no_local_document_WHEN_execute_and_deleteThingShadow_throws_retryable_error_THEN_does_not_update_cloud_shadow_and_sync_information(Class clazz, ExtensionContext context) throws RetryableException, SkipSyncRequestException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, clazz);
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
         GetThingShadowResponse response = GetThingShadowResponse.builder()
@@ -516,7 +517,7 @@ class FullShadowSyncRequestTest {
     @ValueSource(classes = {RequestEntityTooLargeException.class, InvalidRequestException.class, UnauthorizedException.class,
             MethodNotAllowedException.class, UnsupportedDocumentEncodingException.class, AwsServiceException.class, SdkClientException.class,
             AbortedException.class})
-    void GIVEN_updated_cloud_document_and_no_local_document_WHEN_execute_and_deleteThingShadow_throws_skipable_error_THEN_does_not_update_cloud_shadow_and_sync_information(Class clazz, ExtensionContext context) throws IOException {
+    void GIVEN_updated_cloud_document_and_no_local_document_WHEN_execute_and_deleteThingShadow_throws_skipable_error_THEN_does_not_update_cloud_shadow_and_sync_information(Class clazz, ExtensionContext context) throws IOException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, clazz);
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
         GetThingShadowResponse response = GetThingShadowResponse.builder()
@@ -552,7 +553,7 @@ class FullShadowSyncRequestTest {
     }
 
     @Test
-    void GIVEN_updated_cloud_document_and_no_local_document_WHEN_execute_and_deleteThingShadow_throws_interrupted_error_THEN_does_not_update_cloud_shadow_and_sync_information(ExtensionContext context) throws IOException {
+    void GIVEN_updated_cloud_document_and_no_local_document_WHEN_execute_and_deleteThingShadow_throws_interrupted_error_THEN_does_not_update_cloud_shadow_and_sync_information(ExtensionContext context) throws IOException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, InterruptedException.class);
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
         GetThingShadowResponse response = GetThingShadowResponse.builder()
@@ -588,7 +589,7 @@ class FullShadowSyncRequestTest {
 
     @ParameterizedTest
     @ValueSource(classes = {ShadowManagerDataException.class, UnauthorizedError.class, InvalidArgumentsError.class, ServiceError.class})
-    void GIVEN_updated_local_document_and_no_cloud_document_WHEN_execute_and_deleteThingShadow_throws_skipable_error_THEN_does_not_local_cloud_shadow_and_sync_information(Class<Throwable> clazz, ExtensionContext context) throws IOException {
+    void GIVEN_updated_local_document_and_no_cloud_document_WHEN_execute_and_deleteThingShadow_throws_skipable_error_THEN_does_not_local_cloud_shadow_and_sync_information(Class<Throwable> clazz, ExtensionContext context) throws IOException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, ResourceNotFoundException.class);
         ignoreExceptionOfType(context, clazz);
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
@@ -626,7 +627,7 @@ class FullShadowSyncRequestTest {
 
     @ParameterizedTest
     @ValueSource(classes = {ThrottlingException.class, ServiceUnavailableException.class, InternalFailureException.class})
-    void GIVEN_updated_cloud_document_and_no_local_document_WHEN_execute_and_getThingShadow_throws_retryable_error_THEN_does_not_update_cloud_shadow_and_sync_information(Class clazz, ExtensionContext context) throws RetryableException, SkipSyncRequestException {
+    void GIVEN_updated_cloud_document_and_no_local_document_WHEN_execute_and_getThingShadow_throws_retryable_error_THEN_does_not_update_cloud_shadow_and_sync_information(Class clazz, ExtensionContext context) throws RetryableException, SkipSyncRequestException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, clazz);
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
         when(mockIotDataPlaneClientWrapper.getThingShadow(anyString(), anyString())).thenThrow(clazz);
@@ -657,7 +658,7 @@ class FullShadowSyncRequestTest {
     @ValueSource(classes = {RequestEntityTooLargeException.class, InvalidRequestException.class, UnauthorizedException.class,
             MethodNotAllowedException.class, UnsupportedDocumentEncodingException.class, AwsServiceException.class, SdkClientException.class,
             AbortedException.class})
-    void GIVEN_updated_cloud_document_and_no_local_document_WHEN_execute_and_getThingShadow_throws_skipable_error_THEN_does_not_update_cloud_shadow_and_sync_information(Class clazz, ExtensionContext context) throws IOException {
+    void GIVEN_updated_cloud_document_and_no_local_document_WHEN_execute_and_getThingShadow_throws_skipable_error_THEN_does_not_update_cloud_shadow_and_sync_information(Class clazz, ExtensionContext context) throws IOException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, clazz);
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
         when(mockIotDataPlaneClientWrapper.getThingShadow(anyString(), anyString())).thenThrow(clazz);
@@ -685,7 +686,7 @@ class FullShadowSyncRequestTest {
     }
 
     @Test
-    void GIVEN_updated_cloud_document_and_no_local_document_WHEN_execute_and_getThingShadow_throws_interrupted_error_THEN_does_not_update_cloud_shadow_and_sync_information(ExtensionContext context) throws IOException {
+    void GIVEN_updated_cloud_document_and_no_local_document_WHEN_execute_and_getThingShadow_throws_interrupted_error_THEN_does_not_update_cloud_shadow_and_sync_information(ExtensionContext context) throws IOException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, InterruptedException.class);
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
         when(mockIotDataPlaneClientWrapper.getThingShadow(anyString(), anyString()))
@@ -714,7 +715,7 @@ class FullShadowSyncRequestTest {
 
     @ParameterizedTest
     @ValueSource(classes = {ThrottlingException.class, ServiceUnavailableException.class, InternalFailureException.class})
-    void GIVEN_updated_cloud_document_and_no_local_document_WHEN_execute_and_updateThingShadow_throws_retryable_error_THEN_does_not_update_cloud_shadow_and_sync_information(Class clazz, ExtensionContext context) throws RetryableException, SkipSyncRequestException, IOException {
+    void GIVEN_updated_cloud_document_and_no_local_document_WHEN_execute_and_updateThingShadow_throws_retryable_error_THEN_does_not_update_cloud_shadow_and_sync_information(Class clazz, ExtensionContext context) throws RetryableException, SkipSyncRequestException, IOException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, clazz);
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
         JsonNode expectedMergedDocument = JsonUtil.getPayloadJson(MERGED_DOCUMENT).get();
@@ -765,7 +766,7 @@ class FullShadowSyncRequestTest {
     }
 
     @Test
-    void GIVEN_updated_cloud_document_and_local_document_WHEN_execute_and_updateThingShadow_throws_ConflictException_THEN_does_not_update_cloud_shadow_and_sync_information(ExtensionContext context) throws IOException {
+    void GIVEN_updated_cloud_document_and_local_document_WHEN_execute_and_updateThingShadow_throws_ConflictException_THEN_does_not_update_cloud_shadow_and_sync_information(ExtensionContext context) throws IOException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, ConflictException.class);
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
         JsonNode expectedMergedDocument = JsonUtil.getPayloadJson(MERGED_DOCUMENT).get();
@@ -816,7 +817,7 @@ class FullShadowSyncRequestTest {
     }
 
     @Test
-    void GIVEN_updated_local_document_and_cloud_document_WHEN_execute_and_updateThingShadow_throws_ConflictError_THEN_does_not_update_local_shadow_and_sync_information(ExtensionContext context) throws IOException {
+    void GIVEN_updated_local_document_and_cloud_document_WHEN_execute_and_updateThingShadow_throws_ConflictError_THEN_does_not_update_local_shadow_and_sync_information(ExtensionContext context) throws IOException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, ConflictError.class);
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
         JsonNode expectedMergedDocument = JsonUtil.getPayloadJson(MERGED_DOCUMENT).get();
@@ -860,7 +861,7 @@ class FullShadowSyncRequestTest {
     @ValueSource(classes = {RequestEntityTooLargeException.class, InvalidRequestException.class, UnauthorizedException.class,
             MethodNotAllowedException.class, UnsupportedDocumentEncodingException.class, AwsServiceException.class, SdkClientException.class,
             AbortedException.class})
-    void GIVEN_updated_cloud_document_and_local_document_WHEN_execute_and_updateThingShadow_throws_skipable_error_THEN_does_not_update_cloud_shadow_and_sync_information(Class clazz, ExtensionContext context) throws IOException {
+    void GIVEN_updated_cloud_document_and_local_document_WHEN_execute_and_updateThingShadow_throws_skipable_error_THEN_does_not_update_cloud_shadow_and_sync_information(Class clazz, ExtensionContext context) throws IOException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, clazz);
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
         JsonNode expectedMergedDocument = JsonUtil.getPayloadJson(MERGED_DOCUMENT).get();
@@ -912,7 +913,7 @@ class FullShadowSyncRequestTest {
     }
 
     @Test
-    void GIVEN_updated_cloud_document_and_local_document_WHEN_execute_and_updateThingShadow_throws_skipable_error_THEN_does_not_update_cloud_shadow_and_sync_information(ExtensionContext context) throws IOException {
+    void GIVEN_updated_cloud_document_and_local_document_WHEN_execute_and_updateThingShadow_throws_skipable_error_THEN_does_not_update_cloud_shadow_and_sync_information(ExtensionContext context) throws IOException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, InterruptedException.class);
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
         JsonNode expectedMergedDocument = JsonUtil.getPayloadJson(MERGED_DOCUMENT).get();
@@ -965,7 +966,7 @@ class FullShadowSyncRequestTest {
 
     @ParameterizedTest
     @ValueSource(classes = {ShadowManagerDataException.class, UnauthorizedError.class, InvalidArgumentsError.class, ServiceError.class})
-    void GIVEN_updated_local_document_and_cloud_document_WHEN_execute_and_updateThingShadow_throws_skipable_error_THEN_does_not_update_cloud_shadow_and_sync_information(Class<Throwable> clazz, ExtensionContext context) throws IOException, NoSuchMethodException, IllegalAccessException, InvocationTargetException, InstantiationException {
+    void GIVEN_updated_local_document_and_cloud_document_WHEN_execute_and_updateThingShadow_throws_skipable_error_THEN_does_not_update_cloud_shadow_and_sync_information(Class<Throwable> clazz, ExtensionContext context) throws IOException, NoSuchMethodException, IllegalAccessException, InvocationTargetException, InstantiationException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, clazz);
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
         JsonNode expectedMergedDocument = JsonUtil.getPayloadJson(MERGED_DOCUMENT).get();
@@ -1006,7 +1007,7 @@ class FullShadowSyncRequestTest {
     }
 
     @Test
-    void GIVEN_bad_last_synced_document_WHEN_execute_THEN_throws_skip_exception(ExtensionContext context) throws RetryableException, SkipSyncRequestException, IOException {
+    void GIVEN_bad_last_synced_document_WHEN_execute_THEN_throws_skip_exception(ExtensionContext context) throws RetryableException, SkipSyncRequestException, IOException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, IOException.class);
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
         ShadowDocument shadowDocument = new ShadowDocument(LOCAL_DOCUMENT);
@@ -1038,7 +1039,7 @@ class FullShadowSyncRequestTest {
 
 
     @Test
-    void GIVEN_updated_local_and_cloud_with_delta_document_WHEN_execute_THEN_updates_local_and_cloud_document() throws RetryableException, SkipSyncRequestException, IOException, InterruptedException {
+    void GIVEN_updated_local_and_cloud_with_delta_document_WHEN_execute_THEN_updates_local_and_cloud_document() throws RetryableException, SkipSyncRequestException, IOException, InterruptedException, IoTDataPlaneClientCreationException {
         long epochSeconds = Instant.now().getEpochSecond();
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
         JsonNode expectedMergedDocument = JsonUtil.getPayloadJson(MERGED_DOCUMENT).get();
@@ -1099,7 +1100,7 @@ class FullShadowSyncRequestTest {
     }
 
     @Test
-    void GIVEN_updated_local_after_delete_WHEN_execute_THEN_updates_cloud_document(ExtensionContext context) throws RetryableException, SkipSyncRequestException, IOException, InterruptedException {
+    void GIVEN_updated_local_after_delete_WHEN_execute_THEN_updates_cloud_document(ExtensionContext context) throws RetryableException, SkipSyncRequestException, IOException, InterruptedException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, ResourceNotFoundException.class);
 
         long epochSeconds = Instant.now().getEpochSecond();
@@ -1160,7 +1161,7 @@ class FullShadowSyncRequestTest {
     }
 
     @Test
-    void GIVEN_updated_cloud_document_after_delete_WHEN_execute_THEN_updates_local_document() throws RetryableException, SkipSyncRequestException, IOException, InterruptedException {
+    void GIVEN_updated_cloud_document_after_delete_WHEN_execute_THEN_updates_local_document() throws RetryableException, SkipSyncRequestException, IOException, InterruptedException, IoTDataPlaneClientCreationException {
         long epochSeconds = Instant.now().getEpochSecond();
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
         final byte[] CLOUD_DOCUMENT = ("{\"version\": 5, \"state\": {\"reported\": {\"name\": \"The Beach Boys\", \"NewField\": 100}, \"desired\": {\"name\": \"Pink Floyd\", \"SomethingNew\": true}}, "

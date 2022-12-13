@@ -10,6 +10,7 @@ import com.aws.greengrass.logging.impl.config.LogConfig;
 import com.aws.greengrass.shadowmanager.ShadowManager;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAOImpl;
+import com.aws.greengrass.shadowmanager.exception.IoTDataPlaneClientCreationException;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowRequestHandler;
@@ -155,7 +156,7 @@ class SyncTest extends NucleusLaunchUtils {
     @ParameterizedTest
     @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
     void GIVEN_sync_config_and_no_local_WHEN_startup_THEN_local_version_updated_via_full_sync(Class<?extends BaseSyncStrategy> clazz, ExtensionContext context)
-            throws IOException, InterruptedException {
+            throws IOException, InterruptedException, IoTDataPlaneClientCreationException {
         LogConfig.getRootLogConfig().setLevel(Level.DEBUG);
         ignoreExceptionOfType(context, InterruptedException.class);
 
@@ -193,7 +194,7 @@ class SyncTest extends NucleusLaunchUtils {
     @ParameterizedTest
     @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
     void GIVEN_sync_config_WHEN_repeat_turn_sync_on_and_off_THEN_no_exceptions_thrown(Class<?
-            extends BaseSyncStrategy> clazz, ExtensionContext context) throws InterruptedException {
+            extends BaseSyncStrategy> clazz, ExtensionContext context) throws InterruptedException, IoTDataPlaneClientCreationException {
         Level l = LogConfig.getRootLogConfig().getLevel();
         LogConfig.getRootLogConfig().setLevel(Level.ERROR); // set to ERROR level to avoid spamming logs
         // this test is more of a sanity check to ensure that cancelling threads doesn't cause any errors
@@ -277,7 +278,7 @@ class SyncTest extends NucleusLaunchUtils {
 
     @Test
     void GIVEN_sync_config_map_and_no_local_WHEN_startup_THEN_local_version_updated_via_full_sync(ExtensionContext context)
-            throws IOException, InterruptedException {
+            throws IOException, InterruptedException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, InterruptedException.class);
         ignoreExceptionOfType(context, ResourceNotFoundException.class);
 
@@ -325,7 +326,7 @@ class SyncTest extends NucleusLaunchUtils {
     @ParameterizedTest
     @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
     void GIVEN_sync_config_and_no_cloud_WHEN_startup_THEN_cloud_version_updated_via_full_sync(Class<?extends BaseSyncStrategy> clazz, ExtensionContext context)
-            throws IOException, InterruptedException {
+            throws IOException, InterruptedException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, ResourceNotFoundException.class);
         CountDownLatch cdl = new CountDownLatch(2);
         when(mockUpdateThingShadowResponse.payload()).thenReturn(SdkBytes.fromString("{\"version\": 1}", UTF_8));
@@ -385,7 +386,7 @@ class SyncTest extends NucleusLaunchUtils {
     @ParameterizedTest
     @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
     void GIVEN_synced_shadow_WHEN_local_update_THEN_cloud_updates(Class<?extends BaseSyncStrategy> clazz, ExtensionContext context) throws IOException,
-            InterruptedException {
+            InterruptedException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, ResourceNotFoundException.class);
         ignoreExceptionOfType(context, InterruptedException.class);
 
@@ -433,7 +434,7 @@ class SyncTest extends NucleusLaunchUtils {
 
     @ParameterizedTest
     @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
-    void GIVEN_synced_shadow_WHEN_cloud_update_THEN_local_updates(Class<?extends BaseSyncStrategy> clazz, ExtensionContext context) throws IOException, InterruptedException {
+    void GIVEN_synced_shadow_WHEN_cloud_update_THEN_local_updates(Class<?extends BaseSyncStrategy> clazz, ExtensionContext context) throws IOException, InterruptedException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, InterruptedException.class);
         ignoreExceptionOfType(context, ResourceNotFoundException.class);
 
@@ -478,7 +479,7 @@ class SyncTest extends NucleusLaunchUtils {
 
     @ParameterizedTest
     @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
-    void GIVEN_synced_shadow_WHEN_local_delete_THEN_cloud_deletes(Class<?extends BaseSyncStrategy> clazz, ExtensionContext context) throws InterruptedException {
+    void GIVEN_synced_shadow_WHEN_local_delete_THEN_cloud_deletes(Class<?extends BaseSyncStrategy> clazz, ExtensionContext context) throws InterruptedException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, ResourceNotFoundException.class);
         ignoreExceptionOfType(context, InterruptedException.class);
 
@@ -522,7 +523,7 @@ class SyncTest extends NucleusLaunchUtils {
 
     @ParameterizedTest
     @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
-    void GIVEN_synced_shadow_WHEN_cloud_delete_THEN_local_deletes(Class<?extends BaseSyncStrategy> clazz, ExtensionContext context) throws InterruptedException {
+    void GIVEN_synced_shadow_WHEN_cloud_delete_THEN_local_deletes(Class<?extends BaseSyncStrategy> clazz, ExtensionContext context) throws InterruptedException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, InterruptedException.class);
         ignoreExceptionOfType(context, ResourceNotFoundException.class);
 
@@ -571,7 +572,7 @@ class SyncTest extends NucleusLaunchUtils {
 
     @ParameterizedTest
     @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
-    void GIVEN_unsynced_shadow_WHEN_local_deletes_THEN_no_cloud_delete(Class<?extends BaseSyncStrategy> clazz, ExtensionContext context) throws InterruptedException {
+    void GIVEN_unsynced_shadow_WHEN_local_deletes_THEN_no_cloud_delete(Class<?extends BaseSyncStrategy> clazz, ExtensionContext context) throws InterruptedException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, ResourceNotFoundException.class);
         ignoreExceptionOfType(context, InterruptedException.class);
 
@@ -615,7 +616,7 @@ class SyncTest extends NucleusLaunchUtils {
 
     @ParameterizedTest
     @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
-    void GIVEN_unsynced_shadow_WHEN_local_updates_THEN_no_cloud_update(Class<?extends BaseSyncStrategy> clazz, ExtensionContext context) throws InterruptedException {
+    void GIVEN_unsynced_shadow_WHEN_local_updates_THEN_no_cloud_update(Class<?extends BaseSyncStrategy> clazz, ExtensionContext context) throws InterruptedException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, ResourceNotFoundException.class);
         ignoreExceptionOfType(context, InterruptedException.class);
 
@@ -650,7 +651,7 @@ class SyncTest extends NucleusLaunchUtils {
     @ParameterizedTest
     @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
     void GIVEN_cloud_update_request_WHEN_retryable_thrown_AND_new_cloud_update_request_THEN_retries_with_merged_request(Class<?extends BaseSyncStrategy> clazz, ExtensionContext context)
-            throws InterruptedException, IOException {
+            throws InterruptedException, IOException, IoTDataPlaneClientCreationException {
         LogConfig.getRootLogConfig().setLevel(Level.DEBUG);
         ignoreExceptionOfType(context, ResourceNotFoundException.class);
         ignoreExceptionOfType(context, RetryableException.class);
