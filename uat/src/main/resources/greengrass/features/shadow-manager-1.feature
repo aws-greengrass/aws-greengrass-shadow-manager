@@ -1,7 +1,7 @@
 @ShadowManager
 Feature: Greengrass V2 ShadowManager
 
-    This is a dummy test
+    As a device owner I can install the aws.greengrass.ShadowManager component
 
     Background:
         Given my device is registered as a Thing
