@@ -6,6 +6,7 @@
 package com.aws.greengrass.shadowmanager.sync.model;
 
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
+import com.aws.greengrass.shadowmanager.exception.IoTDataPlaneClientCreationException;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowRequestHandler;
@@ -87,7 +88,7 @@ class OverwriteLocalShadowRequestTest {
     }
 
     @Test
-    void GIVEN_updated_cloud_shadow_WHEN_execute_THEN_updates_local_shadow() throws RetryableException, SkipSyncRequestException, IOException, InterruptedException {
+    void GIVEN_updated_cloud_shadow_WHEN_execute_THEN_updates_local_shadow() throws RetryableException, SkipSyncRequestException, IOException, InterruptedException, IoTDataPlaneClientCreationException {
         long epochSeconds = Instant.now().getEpochSecond();
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
         GetThingShadowResponse response = GetThingShadowResponse.builder()
@@ -146,7 +147,7 @@ class OverwriteLocalShadowRequestTest {
     }
 
     @Test
-    void GIVEN_deleted_cloud_shadow_WHEN_execute_THEN_deletes_local_shadow(ExtensionContext context) throws RetryableException, SkipSyncRequestException, IOException, InterruptedException {
+    void GIVEN_deleted_cloud_shadow_WHEN_execute_THEN_deletes_local_shadow(ExtensionContext context) throws RetryableException, SkipSyncRequestException, IOException, InterruptedException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, ResourceNotFoundException.class);
         long epochSeconds = Instant.now().getEpochSecond();
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
@@ -191,7 +192,7 @@ class OverwriteLocalShadowRequestTest {
     }
 
     @Test
-    void GIVEN_same_cloud_shadow_WHEN_execute_THEN_does_not_update_local_shadow() throws RetryableException, SkipSyncRequestException, IOException, InterruptedException {
+    void GIVEN_same_cloud_shadow_WHEN_execute_THEN_does_not_update_local_shadow() throws RetryableException, SkipSyncRequestException, IOException, InterruptedException, IoTDataPlaneClientCreationException {
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
         GetThingShadowResponse response = GetThingShadowResponse.builder()
                 .payload(SdkBytes.fromByteArray(CLOUD_DOCUMENT_WITH_METADATA))
