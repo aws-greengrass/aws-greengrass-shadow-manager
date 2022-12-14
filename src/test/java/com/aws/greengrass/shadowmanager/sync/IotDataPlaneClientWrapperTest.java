@@ -5,6 +5,7 @@
 
 package com.aws.greengrass.shadowmanager.sync;
 
+import com.aws.greengrass.shadowmanager.exception.IoTDataPlaneClientCreationException;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -78,12 +79,12 @@ class IotDataPlaneClientWrapperTest {
 
 
     @BeforeEach
-    void setup() {
+    void setup() throws IoTDataPlaneClientCreationException {
         lenient().when(iotDataPlaneClientFactory.getIotDataPlaneClient()).thenReturn(mockIotDataPlaneClient);
     }
 
     @Test
-    void GIVEN_valid_request_WHEN_update_thing_shadow_THEN_returns_update_thing_shadow_response() {
+    void GIVEN_valid_request_WHEN_update_thing_shadow_THEN_returns_update_thing_shadow_response() throws IoTDataPlaneClientCreationException {
         // GIVEN
         when(mockIotDataPlaneClient.updateThingShadow(updateThingShadowRequestArgumentCaptor.capture())).thenReturn(UpdateThingShadowResponse.builder().build());
         IotDataPlaneClientWrapper iotDataPlaneClientWrapper = new IotDataPlaneClientWrapper(iotDataPlaneClientFactory);
@@ -100,7 +101,7 @@ class IotDataPlaneClientWrapperTest {
     }
 
     @Test
-    void GIVEN_valid_request_WHEN_get_thing_shadow_THEN_returns_get_thing_shadow_response() {
+    void GIVEN_valid_request_WHEN_get_thing_shadow_THEN_returns_get_thing_shadow_response() throws IoTDataPlaneClientCreationException {
         // GIVEN
         when(mockIotDataPlaneClient.getThingShadow(getThingShadowRequestArgumentCaptor.capture())).thenReturn(GetThingShadowResponse.builder().build());
         IotDataPlaneClientWrapper iotDataPlaneClientWrapper = new IotDataPlaneClientWrapper(iotDataPlaneClientFactory);
@@ -117,7 +118,7 @@ class IotDataPlaneClientWrapperTest {
     }
 
     @Test
-    void GIVEN_valid_request_WHEN_delete_thing_shadow_THEN_returns_delete_thing_shadow_response() {
+    void GIVEN_valid_request_WHEN_delete_thing_shadow_THEN_returns_delete_thing_shadow_response() throws IoTDataPlaneClientCreationException {
         // GIVEN
         when(mockIotDataPlaneClient.deleteThingShadow(deleteThingShadowRequestArgumentCaptor.capture())).thenReturn(DeleteThingShadowResponse.builder().build());
         IotDataPlaneClientWrapper iotDataPlaneClientWrapper = new IotDataPlaneClientWrapper(iotDataPlaneClientFactory);
@@ -134,7 +135,7 @@ class IotDataPlaneClientWrapperTest {
     }
 
     @Test
-    void GIVEN_valid_request_throttled_WHEN_get_thing_shadow_THEN_request_executed_when_lock_acquired() {
+    void GIVEN_valid_request_throttled_WHEN_get_thing_shadow_THEN_request_executed_when_lock_acquired() throws IoTDataPlaneClientCreationException {
         // GIVEN
         RateLimiter mockRateLimiter = mock(RateLimiter.class);
         when(mockIotDataPlaneClient.getThingShadow(getThingShadowRequestArgumentCaptor.capture())).thenReturn(GetThingShadowResponse.builder().build());
