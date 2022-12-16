@@ -9,14 +9,18 @@ import com.aws.greengrass.authorization.exceptions.AuthorizationException;
 import com.aws.greengrass.dependency.State;
 import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.mqttclient.MqttClient;
+import com.aws.greengrass.security.SecurityService;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAOImpl;
 import com.aws.greengrass.shadowmanager.exception.IoTDataPlaneClientCreationException;
+import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientFactory;
+import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientWrapper;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
 import com.aws.greengrass.shadowmanager.sync.model.Direction;
+import com.aws.greengrass.shadowmanager.sync.strategy.BaseSyncStrategy;
 import com.aws.greengrass.shadowmanager.sync.strategy.PeriodicSyncStrategy;
 import com.aws.greengrass.shadowmanager.sync.strategy.RealTimeSyncStrategy;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
@@ -29,6 +33,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.mockito.junit.jupiter.MockitoExtension;
+import software.amazon.awssdk.services.iotdataplane.model.GetThingShadowResponse;
+import software.amazon.awssdk.services.iotdataplane.model.ResourceNotFoundException;
+
+import javax.net.ssl.KeyManager;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -37,6 +45,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static com.aws.greengrass.componentmanager.KernelConfigResolver.CONFIGURATION_CONFIG_KEY;
 import static com.aws.greengrass.shadowmanager.TestUtils.SAMPLE_EXCEPTION_MESSAGE;
@@ -50,20 +60,23 @@ import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SYN
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_THING_NAME_TOPIC;
 
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
+import static com.github.grantwest.eventually.EventuallyLambdaMatcher.eventuallyEval;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 class ShadowManagerTest extends NucleusLaunchUtils {
@@ -253,14 +266,49 @@ class ShadowManagerTest extends NucleusLaunchUtils {
     }
 
     @Test
-    void GIVEN_cryptoKeyProviderService_is_not_loaded_WHEN_get_client_THEN_throw_Exception(ExtensionContext context) throws InterruptedException {
+    void GIVEN_cryptoKeyProviderService_WHEN_get_client_THEN_wait_for_cryptoservice(ExtensionContext context) throws InterruptedException, TLSAuthException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, TLSAuthException.class);
+        ignoreExceptionOfType(context, RetryableException.class);
+        ignoreExceptionOfType(context, ResourceNotFoundException.class);
+
+        IotDataPlaneClientFactory factory = spy(kernel.getContext().get(IotDataPlaneClientFactory.class));
+        kernel.getContext().put(IotDataPlaneClientFactory.class, factory);
+        IotDataPlaneClientWrapper wrapper = spy(new FakeIotDataPlaneClientWrapper(factory));
+        kernel.getContext().put(IotDataPlaneClientWrapper.class, wrapper);
+
         startNucleusWithConfig(NucleusLaunchUtilsConfig.builder()
-                .configFile(DEFAULT_CONFIG)
-                .mqttConnected(false)
+                .configFile("sync.yaml")
+                .mqttConnected(true)
                 .mockCloud(false)
                 .build());
-        IotDataPlaneClientFactory clientFactory = kernel.getContext().get(IotDataPlaneClientFactory.class);
-        assertThrows(IoTDataPlaneClientCreationException.class, ()-> clientFactory.getIotDataPlaneClient());
+        BaseSyncStrategy s = kernel.getContext().get(RealTimeSyncStrategy.class);
+        assertThat("syncing has started", s::isSyncing, eventuallyEval(is(true)));
+        verify(wrapper, timeout(5000).atLeast(1)).getThingShadow("Thing1", "");
+
+        CountDownLatch cdl=new CountDownLatch(1);
+        SecurityService ss= mock(SecurityService.class);
+        when(ss.getDeviceIdentityKeyManagers()).thenAnswer((invocation)->{
+            cdl.countDown();
+            return new KeyManager[0];
+        });
+        kernel.getContext().put(SecurityService.class, ss);
+        assertThat("request is retried with a new client",cdl.await(10, TimeUnit.SECONDS), is(true));
+        verify(wrapper, timeout(5000).atLeast(2)).getThingShadow("Thing1", "");
     }
+
+    static class FakeIotDataPlaneClientWrapper extends  IotDataPlaneClientWrapper{
+        IotDataPlaneClientFactory factory;
+
+        public FakeIotDataPlaneClientWrapper(IotDataPlaneClientFactory iotDataPlaneClientFactory) {
+            super(iotDataPlaneClientFactory);
+            factory = iotDataPlaneClientFactory;
+        }
+
+        @Override
+        public GetThingShadowResponse getThingShadow(String thingName, String shadowName) throws IoTDataPlaneClientCreationException {
+            factory.getIotDataPlaneClient();
+            throw ResourceNotFoundException.builder().build();
+        }
+    }
+
 }
