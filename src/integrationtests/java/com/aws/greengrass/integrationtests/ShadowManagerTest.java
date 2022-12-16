@@ -281,7 +281,7 @@ class ShadowManagerTest extends NucleusLaunchUtils {
                 .mqttConnected(true)
                 .mockCloud(false)
                 .build());
-        BaseSyncStrategy s = kernel.getContext().get(RealTimeSyncStrategy.class);
+        BaseSyncStrategy syncStragy = kernel.getContext().get(RealTimeSyncStrategy.class);
         assertThat("syncing has started", s::isSyncing, eventuallyEval(is(true)));
         verify(wrapper, timeout(5000).atLeast(1)).getThingShadow("Thing1", "");
 
