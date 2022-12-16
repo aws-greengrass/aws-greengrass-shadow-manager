@@ -285,7 +285,7 @@ class ShadowManagerTest extends NucleusLaunchUtils {
         assertThat("syncing has started", s::isSyncing, eventuallyEval(is(true)));
         verify(wrapper, timeout(5000).atLeast(1)).getThingShadow("Thing1", "");
 
-        CountDownLatch cdl=new CountDownLatch(1);
+        CountDownLatch cdl = new CountDownLatch(1);
         SecurityService ss= mock(SecurityService.class);
         when(ss.getDeviceIdentityKeyManagers()).thenAnswer((invocation)->{
             cdl.countDown();
