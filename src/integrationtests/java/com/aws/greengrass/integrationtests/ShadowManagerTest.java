@@ -271,8 +271,7 @@ class ShadowManagerTest extends NucleusLaunchUtils {
         ignoreExceptionOfType(context, RetryableException.class);
         ignoreExceptionOfType(context, ResourceNotFoundException.class);
 
-        IotDataPlaneClientFactory factory = spy(kernel.getContext().get(IotDataPlaneClientFactory.class));
-        kernel.getContext().put(IotDataPlaneClientFactory.class, factory);
+        IotDataPlaneClientFactory factory = kernel.getContext().get(IotDataPlaneClientFactory.class);
         IotDataPlaneClientWrapper wrapper = spy(new FakeIotDataPlaneClientWrapper(factory));
         kernel.getContext().put(IotDataPlaneClientWrapper.class, wrapper);
 
@@ -281,8 +280,8 @@ class ShadowManagerTest extends NucleusLaunchUtils {
                 .mqttConnected(true)
                 .mockCloud(false)
                 .build());
-        BaseSyncStrategy syncStragy = kernel.getContext().get(RealTimeSyncStrategy.class);
-        assertThat("syncing has started", s::isSyncing, eventuallyEval(is(true)));
+        BaseSyncStrategy syncStrategy = kernel.getContext().get(RealTimeSyncStrategy.class);
+        assertThat("syncing has started", syncStrategy::isSyncing, eventuallyEval(is(true)));
         verify(wrapper, timeout(5000).atLeast(1)).getThingShadow("Thing1", "");
 
         CountDownLatch cdl = new CountDownLatch(1);
@@ -294,6 +293,7 @@ class ShadowManagerTest extends NucleusLaunchUtils {
         kernel.getContext().put(SecurityService.class, ss);
         assertThat("request is retried with a new client",cdl.await(10, TimeUnit.SECONDS), is(true));
         verify(wrapper, timeout(5000).atLeast(2)).getThingShadow("Thing1", "");
+        assertEmptySyncQueue(RealTimeSyncStrategy.class);
     }
 
     static class FakeIotDataPlaneClientWrapper extends  IotDataPlaneClientWrapper{
