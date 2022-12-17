@@ -34,7 +34,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.mockito.junit.jupiter.MockitoExtension;
 import software.amazon.awssdk.services.iotdataplane.model.GetThingShadowResponse;
-import software.amazon.awssdk.services.iotdataplane.model.ResourceNotFoundException;
 
 import javax.net.ssl.KeyManager;
 
@@ -266,15 +265,17 @@ class ShadowManagerTest extends NucleusLaunchUtils {
     }
 
     @Test
-    void GIVEN_cryptoKeyProviderService_WHEN_get_client_THEN_wait_for_cryptoservice(ExtensionContext context) throws InterruptedException, TLSAuthException, IoTDataPlaneClientCreationException {
+    void GIVEN_shadow_manager_running_AND_crypto_service_loading_WHEN_sync_requests_with_dataplane_client_THEN_retry_requests_with_good_client_after_crypto_service_loads(ExtensionContext context)
+            throws InterruptedException, TLSAuthException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, TLSAuthException.class);
         ignoreExceptionOfType(context, RetryableException.class);
-        ignoreExceptionOfType(context, ResourceNotFoundException.class);
 
         IotDataPlaneClientFactory factory = kernel.getContext().get(IotDataPlaneClientFactory.class);
         IotDataPlaneClientWrapper wrapper = spy(new FakeIotDataPlaneClientWrapper(factory));
         kernel.getContext().put(IotDataPlaneClientWrapper.class, wrapper);
 
+        // Shadow manager starts syncing 1 shadow in the realtime as per the recipe and getThingShadow
+        // cloud api is called as part of syncing.
         startNucleusWithConfig(NucleusLaunchUtilsConfig.builder()
                 .configFile("sync.yaml")
                 .mqttConnected(true)
@@ -284,19 +285,22 @@ class ShadowManagerTest extends NucleusLaunchUtils {
         assertThat("syncing has started", syncStrategy::isSyncing, eventuallyEval(is(true)));
         verify(wrapper, timeout(5000).atLeast(1)).getThingShadow("Thing1", "");
 
+        // This test ensures that the request is retried again as the we're not mocking cloud and data plane client
+        // creation fails. If the data plane client creation succeeds, the request is processed once again.
         CountDownLatch cdl = new CountDownLatch(1);
-        SecurityService ss= mock(SecurityService.class);
-        when(ss.getDeviceIdentityKeyManagers()).thenAnswer((invocation)->{
+        SecurityService securityService = mock(SecurityService.class);
+        when(securityService.getDeviceIdentityKeyManagers()).thenAnswer((invocation) -> {
             cdl.countDown();
             return new KeyManager[0];
         });
-        kernel.getContext().put(SecurityService.class, ss);
-        assertThat("request is retried with a new client",cdl.await(10, TimeUnit.SECONDS), is(true));
+        kernel.getContext().put(SecurityService.class, securityService);
+        assertThat("request is retried with a new client", cdl.await(10, TimeUnit.SECONDS), is(true));
         verify(wrapper, timeout(5000).atLeast(2)).getThingShadow("Thing1", "");
+        // Once the request is processed, the sync queue should be empty.
         assertEmptySyncQueue(RealTimeSyncStrategy.class);
     }
 
-    static class FakeIotDataPlaneClientWrapper extends  IotDataPlaneClientWrapper{
+    class FakeIotDataPlaneClientWrapper extends IotDataPlaneClientWrapper {
         IotDataPlaneClientFactory factory;
 
         public FakeIotDataPlaneClientWrapper(IotDataPlaneClientFactory iotDataPlaneClientFactory) {
@@ -305,9 +309,11 @@ class ShadowManagerTest extends NucleusLaunchUtils {
         }
 
         @Override
-        public GetThingShadowResponse getThingShadow(String thingName, String shadowName) throws IoTDataPlaneClientCreationException {
-            factory.getIotDataPlaneClient();
-            throw ResourceNotFoundException.builder().build();
+        public GetThingShadowResponse getThingShadow(String thingName, String shadowName)
+                throws IoTDataPlaneClientCreationException {
+
+            factory.getIotDataPlaneClient(); // we're only interested in getting a good client in this fake wrapper.
+            return GetThingShadowResponse.builder().build();
         }
     }
 
