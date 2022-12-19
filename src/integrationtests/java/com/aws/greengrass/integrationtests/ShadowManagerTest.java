@@ -293,7 +293,6 @@ class ShadowManagerTest extends NucleusLaunchUtils {
         BaseSyncStrategy syncStrategy = kernel.getContext().get(RealTimeSyncStrategy.class);
         assertThat("syncing has started", syncStrategy::isSyncing, eventuallyEval(is(true)));
         verify(wrapper, timeout(5000).atLeast(1)).getThingShadow("Thing1", "");
-        verify(securityService, timeout(5000).atLeast(3)).getDeviceIdentityKeyManagers();
 
         // This test ensures that the request is retried again as the we're not mocking cloud and data plane client
         // creation fails. If the data plane client creation succeeds, the request is processed once again.
