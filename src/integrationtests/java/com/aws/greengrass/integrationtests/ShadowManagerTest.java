@@ -9,16 +9,23 @@ import com.aws.greengrass.authorization.exceptions.AuthorizationException;
 import com.aws.greengrass.dependency.State;
 import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.mqttclient.MqttClient;
+import com.aws.greengrass.security.SecurityService;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAOImpl;
+import com.aws.greengrass.shadowmanager.exception.IoTDataPlaneClientCreationException;
+import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
+import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientFactory;
+import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientWrapper;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
 import com.aws.greengrass.shadowmanager.sync.model.Direction;
+import com.aws.greengrass.shadowmanager.sync.strategy.BaseSyncStrategy;
 import com.aws.greengrass.shadowmanager.sync.strategy.PeriodicSyncStrategy;
 import com.aws.greengrass.shadowmanager.sync.strategy.RealTimeSyncStrategy;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.util.Pair;
+import com.aws.greengrass.util.exceptions.TLSAuthException;
 import org.flywaydb.core.api.FlywayException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,7 +33,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.mockito.junit.jupiter.MockitoExtension;
+import software.amazon.awssdk.services.iotdataplane.model.GetThingShadowResponse;
 
+import javax.net.ssl.KeyManager;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -34,6 +43,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static com.aws.greengrass.componentmanager.KernelConfigResolver.CONFIGURATION_CONFIG_KEY;
 import static com.aws.greengrass.shadowmanager.TestUtils.SAMPLE_EXCEPTION_MESSAGE;
@@ -47,6 +58,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SYN
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_THING_NAME_TOPIC;
 
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
+import static com.github.grantwest.eventually.EventuallyLambdaMatcher.eventuallyEval;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.instanceOf;
@@ -59,7 +71,11 @@ import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 class ShadowManagerTest extends NucleusLaunchUtils {
@@ -246,5 +262,49 @@ class ShadowManagerTest extends NucleusLaunchUtils {
         shadowManager.getConfig().lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_STRATEGY_TOPIC).replaceAndWait(periodicStrategy);
         kernel.getContext().waitForPublishQueueToClear();
         assertThat(syncHandler.getOverallSyncStrategy(), instanceOf(PeriodicSyncStrategy.class));
+    }
+
+    @Test
+    void GIVEN_shadow_manager_running_AND_crypto_service_loading_WHEN_sync_requests_with_dataplane_client_THEN_retry_requests_with_good_client_after_crypto_service_loads(ExtensionContext context)
+            throws InterruptedException, TLSAuthException, IoTDataPlaneClientCreationException {
+        ignoreExceptionOfType(context, TLSAuthException.class);
+        ignoreExceptionOfType(context, RetryableException.class);
+
+        SecurityService securityService = mock(SecurityService.class);
+        when(securityService.getDeviceIdentityKeyManagers()).thenThrow(TLSAuthException.class);
+        kernel.getContext().put(SecurityService.class, securityService);
+
+        IotDataPlaneClientFactory factory = kernel.getContext().get(IotDataPlaneClientFactory.class);
+        IotDataPlaneClientWrapper wrapper = spy(new IotDataPlaneClientWrapper(factory) {
+            @Override
+            public GetThingShadowResponse getThingShadow(String thingName, String shadowName) throws IoTDataPlaneClientCreationException {
+                factory.getIotDataPlaneClient(); // throws an IoTDataPlaneClientCreationException if security service is not ready
+                return GetThingShadowResponse.builder().build();
+            }
+        });
+        kernel.getContext().put(IotDataPlaneClientWrapper.class, wrapper);
+        // Shadow manager starts syncing 1 shadow in the realtime as per the recipe and getThingShadow
+        // cloud api is called as part of syncing.
+        startNucleusWithConfig(NucleusLaunchUtilsConfig.builder()
+                .configFile("sync.yaml")
+                .mqttConnected(true)
+                .mockCloud(false)
+                .build());
+        BaseSyncStrategy syncStrategy = kernel.getContext().get(RealTimeSyncStrategy.class);
+        assertThat("syncing has started", syncStrategy::isSyncing, eventuallyEval(is(true)));
+        verify(wrapper, timeout(5000).atLeast(1)).getThingShadow("Thing1", "");
+
+        // This test ensures that the request is retried again as the we're not mocking cloud and data plane client
+        // creation fails. If the data plane client creation succeeds, the request is processed once again.
+        CountDownLatch cdl = new CountDownLatch(1);
+        reset(securityService);
+        when(securityService.getDeviceIdentityKeyManagers()).thenAnswer((invocation) -> {
+            cdl.countDown();
+            return new KeyManager[0];
+        });
+        assertThat("request is retried with a new client", cdl.await(10, TimeUnit.SECONDS), is(true));
+        verify(wrapper, timeout(5000).atLeast(2)).getThingShadow("Thing1", "");
+        // Once the request is processed, the sync queue should be empty.
+        assertEmptySyncQueue(RealTimeSyncStrategy.class);
     }
 }
