@@ -7,7 +7,7 @@ Feature: Greengrass V2 ShadowManager
         Given my device is registered as a Thing
         And my device is running Greengrass
 
-    Scenario: I can install the shadow manage
+    Scenario: I can install the shadow manager component
         Given I create a Greengrass deployment with components
             | aws.greengrass.Cli        | LATEST |
             | aws.greengrass.ShadowManager | LATEST |

@@ -11,9 +11,8 @@ phases:
   build:
     commands:
       - mvn -U -ntp clean verify -f uat/pom.xml
-      - mvn -U -ntp verify -DskipTests=true
       - java -Dggc.archive=./target/aws.greengrass.nucleus.zip
-        -Dtags=HelloWorldTst -Dggc.install.root=$CODEBUILD_SRC_DIR -Dggc.log.level=INFO -Daws.region=us-east-1
+        -Dtags=ShadowManager -Dggc.install.root=$CODEBUILD_SRC_DIR -Dggc.log.level=INFO -Daws.region=us-east-1
         -jar uat/target/greengrass-shadow-manager-uat-artifact
 
 artifacts:
