@@ -28,24 +28,21 @@ public final class RateLimitsConfiguration {
 
     private static int getMaxTotalLocalRequestRateFromTopics(Topics rateLimitsTopics) {
         int maxTotalLocalRequestRate = Coerce.toInt(rateLimitsTopics
-                .lookup(CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE)
-                .dflt(DEFAULT_TOTAL_LOCAL_REQUESTS_RATE));
+                .findOrDefault(DEFAULT_TOTAL_LOCAL_REQUESTS_RATE, CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE));
         Validator.validateTotalLocalRequestRate(maxTotalLocalRequestRate);
         return maxTotalLocalRequestRate;
     }
 
     private static int getMaxLocalRequestRatePerThingFromTopics(Topics rateLimitsTopics) {
         int maxLocalRequestRatePerThing = Coerce.toInt(rateLimitsTopics
-                .lookup(CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC)
-                .dflt(DEFAULT_LOCAL_REQUESTS_RATE));
+                .findOrDefault(DEFAULT_LOCAL_REQUESTS_RATE, CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC));
         Validator.validateLocalShadowRequestsPerThingPerSecond(maxLocalRequestRatePerThing);
         return maxLocalRequestRatePerThing;
     }
 
     private static int getMaxOutboundUpdatesPerSecondFromTopics(Topics rateLimitsTopics) {
         int maxOutboundUpdatesPerSecond = Coerce.toInt(rateLimitsTopics
-                .lookup(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC)
-                .dflt(DEFAULT_MAX_OUTBOUND_SYNC_UPDATES_PS));
+                .findOrDefault(DEFAULT_MAX_OUTBOUND_SYNC_UPDATES_PS, CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC));
         Validator.validateOutboundSyncUpdatesPerSecond(maxOutboundUpdatesPerSecond);
         return maxOutboundUpdatesPerSecond;
     }
