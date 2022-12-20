@@ -219,7 +219,6 @@ public class ShadowManager extends PluginService {
     protected void install() {
         install(InstallConfig.builder()
                 .configureMaxDocSizeLimitConfig(true)
-                .configureRateLimitsConfig(true)
                 .configureStrategyConfig(true)
                 .configureSyncDirectionConfig(true)
                 .configureSynchronizeConfig(true)
@@ -268,9 +267,10 @@ public class ShadowManager extends PluginService {
         }
     }
 
-    private void configureRateLimits(RateLimitsConfiguration rateLimitsConfiguration) {
-        inboundRateLimiter.updateRateLimits(rateLimitsConfiguration);
-        iotDataPlaneClientWrapper.updateRateLimits(rateLimitsConfiguration);
+    private void configureRateLimits(RateLimitsConfiguration rateLimitsConfig) {
+        inboundRateLimiter.updateRateLimits(rateLimitsConfig.getMaxTotalLocalRequestRate(),
+                rateLimitsConfig.getMaxTotalLocalRequestRate());
+        iotDataPlaneClientWrapper.updateRateLimits(rateLimitsConfig.getMaxOutboundUpdatesPerSecond());
     }
 
     Strategy replaceStrategyIfNecessary(Strategy currentStrategy, Strategy strategy) {

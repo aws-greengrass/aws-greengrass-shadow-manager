@@ -5,7 +5,6 @@
 
 package com.aws.greengrass.shadowmanager.sync;
 
-import com.aws.greengrass.shadowmanager.configuration.RateLimitsConfiguration;
 import com.aws.greengrass.shadowmanager.exception.IoTDataPlaneClientCreationException;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.services.iotdataplane.model.DeleteThingShadowRequest;
@@ -44,10 +43,10 @@ public class IotDataPlaneClientWrapper {
 
     /**
      * Set max outbound updates per second from configuration.
-     * @param rateLimitsConfiguration rate limits configuration object
+     * @param maxOutboundUpdatesPerSecond maxOutboundUpdatesPerSecond
      */
-    public void updateRateLimits(RateLimitsConfiguration rateLimitsConfiguration) {
-        rateLimiter.setRate(rateLimitsConfiguration.getMaxOutboundUpdatesPerSecond());
+    public void updateRateLimits(int maxOutboundUpdatesPerSecond) {
+        rateLimiter.setRate(maxOutboundUpdatesPerSecond);
     }
 
     /**
