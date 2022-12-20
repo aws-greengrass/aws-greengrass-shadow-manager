@@ -40,6 +40,7 @@ import software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowReque
 import software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowResponse;
 import vendored.com.google.common.util.concurrent.RateLimiter;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.concurrent.TimeUnit;
 
@@ -54,6 +55,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -216,5 +218,29 @@ class IotDataPlaneClientWrapperTest {
         GetThingShadowRequest getThingShadowRequest = getThingShadowRequestArgumentCaptor.getValue();
         assertThat(getThingShadowRequest.thingName(), is(THING_NAME));
         assertThat(getThingShadowRequest.shadowName(), is(SHADOW_NAME));
+    }
+
+    @Test
+    void GIVEN_invalid_client_creation_WHEN_get_thing_shadow_THEN_throw_IoTDataPlaneClientCreationException() throws IoTDataPlaneClientCreationException {
+        reset(iotDataPlaneClientFactory);
+        when(iotDataPlaneClientFactory.getIotDataPlaneClient()).thenThrow(IoTDataPlaneClientCreationException.class);
+        IotDataPlaneClientWrapper iotDataPlaneClientWrapper = new IotDataPlaneClientWrapper(iotDataPlaneClientFactory);
+        assertThrows(IoTDataPlaneClientCreationException.class, () -> iotDataPlaneClientWrapper.getThingShadow(THING_NAME, SHADOW_NAME));
+    }
+
+    @Test
+    void GIVEN_invalid_client_creation_WHEN_update_thing_shadow_THEN_throw_IoTDataPlaneClientCreationException() throws IoTDataPlaneClientCreationException {
+        reset(iotDataPlaneClientFactory);
+        when(iotDataPlaneClientFactory.getIotDataPlaneClient()).thenThrow(IoTDataPlaneClientCreationException.class);
+        IotDataPlaneClientWrapper iotDataPlaneClientWrapper = new IotDataPlaneClientWrapper(iotDataPlaneClientFactory);
+        assertThrows(IoTDataPlaneClientCreationException.class, () -> iotDataPlaneClientWrapper.updateThingShadow(THING_NAME, SHADOW_NAME,"".getBytes(StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    void GIVEN_invalid_client_creation_WHEN_delete_thing_shadow_THEN_throw_IoTDataPlaneClientCreationException() throws IoTDataPlaneClientCreationException {
+        reset(iotDataPlaneClientFactory);
+        when(iotDataPlaneClientFactory.getIotDataPlaneClient()).thenThrow(IoTDataPlaneClientCreationException.class);
+        IotDataPlaneClientWrapper iotDataPlaneClientWrapper = new IotDataPlaneClientWrapper(iotDataPlaneClientFactory);
+        assertThrows(IoTDataPlaneClientCreationException.class, () -> iotDataPlaneClientWrapper.deleteThingShadow(THING_NAME, SHADOW_NAME));
     }
 }
