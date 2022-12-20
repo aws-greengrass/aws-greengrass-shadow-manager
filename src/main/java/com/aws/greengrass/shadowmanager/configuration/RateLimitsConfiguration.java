@@ -6,8 +6,6 @@
 package com.aws.greengrass.shadowmanager.configuration;
 
 import com.aws.greengrass.config.Topics;
-import com.aws.greengrass.shadowmanager.ipc.InboundRateLimiter;
-import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientWrapper;
 import com.aws.greengrass.shadowmanager.util.Validator;
 import com.aws.greengrass.util.Coerce;
 import lombok.Getter;
@@ -27,8 +25,6 @@ public final class RateLimitsConfiguration {
     private final int maxLocalRequestRatePerThing;
     @Getter
     private final int maxOutboundUpdatesPerSecond;
-    private final InboundRateLimiter inboundRateLimiter;
-    private final IotDataPlaneClientWrapper iotDataPlaneClientWrapper;
 
     private static int getMaxTotalLocalRequestRateFromTopics(Topics rateLimitsTopics) {
         int maxTotalLocalRequestRate = Coerce.toInt(rateLimitsTopics
@@ -56,14 +52,10 @@ public final class RateLimitsConfiguration {
 
     private RateLimitsConfiguration(int maxLocalRequestRatePerThing,
                                     int maxTotalLocalRequestRate,
-                                    int maxOutboundUpdatesPerSecond,
-                                    InboundRateLimiter inboundRateLimiter,
-                                    IotDataPlaneClientWrapper iotDataPlaneClientWrapper) {
+                                    int maxOutboundUpdatesPerSecond) {
         this.maxLocalRequestRatePerThing = maxLocalRequestRatePerThing;
         this.maxTotalLocalRequestRate = maxTotalLocalRequestRate;
         this.maxOutboundUpdatesPerSecond = maxOutboundUpdatesPerSecond;
-        this.inboundRateLimiter = inboundRateLimiter;
-        this.iotDataPlaneClientWrapper = iotDataPlaneClientWrapper;
     }
 
     private static RateLimitsConfiguration getRateLimitsConfigurationFromTopics(Topics topics) {
@@ -71,51 +63,19 @@ public final class RateLimitsConfiguration {
         int maxTotalLocalRequestRate = getMaxTotalLocalRequestRateFromTopics(rateLimitsTopics);
         int maxLocalRequestRatePerThing = getMaxLocalRequestRatePerThingFromTopics(rateLimitsTopics);
         int maxOutboundUpdatesPerSecond = getMaxOutboundUpdatesPerSecondFromTopics(rateLimitsTopics);
-        InboundRateLimiter inboundRateLimiter = topics.getContext().get(InboundRateLimiter.class);
-        IotDataPlaneClientWrapper iotDataPlaneClientWrapper = topics.getContext().get(IotDataPlaneClientWrapper.class);
 
         return new RateLimitsConfiguration(maxLocalRequestRatePerThing, maxTotalLocalRequestRate,
-                maxOutboundUpdatesPerSecond, inboundRateLimiter, iotDataPlaneClientWrapper);
+                maxOutboundUpdatesPerSecond);
     }
 
     /**
      * Creates a new rate limits configuration object and triggers updates based on previous configuration.
      *
-     * @param oldRateLimitsConfig previous rate limits configuration of the component
      * @param serviceTopics    current configuration topics
      * @return rate limits configuration objects
      */
-    public static RateLimitsConfiguration from(RateLimitsConfiguration oldRateLimitsConfig, Topics serviceTopics) {
-        RateLimitsConfiguration rateLimitsConfiguration = getRateLimitsConfigurationFromTopics(serviceTopics);
-        rateLimitsConfiguration.triggerUpdates(oldRateLimitsConfig);
-        return rateLimitsConfiguration;
-    }
-
-    private void triggerUpdates(RateLimitsConfiguration oldRateLimitsConfiguration) {
-        if (hasMaxLocalRequestPerThingChanged(oldRateLimitsConfiguration)) {
-            inboundRateLimiter.setRate(maxLocalRequestRatePerThing);
-        }
-        if (hasMaxTotalLocalRequestRateChanged(oldRateLimitsConfiguration)) {
-            inboundRateLimiter.setTotalRate(maxTotalLocalRequestRate);
-        }
-        if (hasMaxOutboundUpdatesPerSecondChanged(oldRateLimitsConfiguration)) {
-            iotDataPlaneClientWrapper.setRate(maxOutboundUpdatesPerSecond);
-        }
-    }
-
-    private boolean hasMaxLocalRequestPerThingChanged(RateLimitsConfiguration oldRateLimitsConfiguration) {
-        return oldRateLimitsConfiguration == null
-                || maxLocalRequestRatePerThing != oldRateLimitsConfiguration.getMaxLocalRequestRatePerThing();
-    }
-
-    private boolean hasMaxTotalLocalRequestRateChanged(RateLimitsConfiguration oldRateLimitsConfiguration) {
-        return oldRateLimitsConfiguration == null
-                || maxTotalLocalRequestRate != oldRateLimitsConfiguration.getMaxTotalLocalRequestRate();
-    }
-
-    private boolean hasMaxOutboundUpdatesPerSecondChanged(RateLimitsConfiguration oldRateLimitsConfiguration) {
-        return oldRateLimitsConfiguration == null
-                || maxOutboundUpdatesPerSecond != oldRateLimitsConfiguration.getMaxOutboundUpdatesPerSecond();
+    public static RateLimitsConfiguration from(Topics serviceTopics) {
+        return getRateLimitsConfigurationFromTopics(serviceTopics);
     }
 
 }

@@ -6,6 +6,7 @@
 package com.aws.greengrass.shadowmanager.ipc;
 
 
+import com.aws.greengrass.shadowmanager.configuration.RateLimitsConfiguration;
 import com.aws.greengrass.shadowmanager.exception.ThrottledRequestException;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -88,5 +89,10 @@ public class InboundRateLimiter {
     public void setRate(int rate) {
         ratePerThing.set(rate);
         rateLimitersPerThing.forEach((k, v) -> v.setRate(ratePerThing.get()));
+    }
+
+    public void updateRateLimits(RateLimitsConfiguration rateLimitsConfiguration) {
+        setTotalRate(rateLimitsConfiguration.getMaxTotalLocalRequestRate());
+        setRate(rateLimitsConfiguration.getMaxLocalRequestRatePerThing());
     }
 }

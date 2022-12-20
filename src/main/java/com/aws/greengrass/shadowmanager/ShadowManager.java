@@ -18,6 +18,7 @@ import com.aws.greengrass.lifecyclemanager.PluginService;
 import com.aws.greengrass.mqttclient.CallbackEventManager;
 import com.aws.greengrass.mqttclient.MqttClient;
 import com.aws.greengrass.shadowmanager.configuration.ComponentConfiguration;
+import com.aws.greengrass.shadowmanager.configuration.RateLimitsConfiguration;
 import com.aws.greengrass.shadowmanager.exception.InvalidConfigurationException;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowIPCHandler;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowRequestHandler;
@@ -261,9 +262,15 @@ public class ShadowManager extends PluginService {
     private void onConfigurationUpdate() {
         try {
             componentConfiguration = ComponentConfiguration.from(componentConfiguration, getConfig());
+            configureRateLimits(componentConfiguration.getRateLimitsConfiguration());
         } catch (InvalidConfigurationException e) {
             serviceErrored(e);
         }
+    }
+
+    private void configureRateLimits(RateLimitsConfiguration rateLimitsConfiguration) {
+        inboundRateLimiter.updateRateLimits(rateLimitsConfiguration);
+        iotDataPlaneClientWrapper.updateRateLimits(rateLimitsConfiguration);
     }
 
     Strategy replaceStrategyIfNecessary(Strategy currentStrategy, Strategy strategy) {
