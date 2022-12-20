@@ -9,10 +9,10 @@ import com.aws.greengrass.config.Topics;
 
 import static com.aws.greengrass.componentmanager.KernelConfigResolver.CONFIGURATION_CONFIG_KEY;
 
-public class ComponentConfiguration {
+public final class ComponentConfiguration {
     RateLimitsConfiguration rateLimitsConfiguration;
 
-    public ComponentConfiguration(RateLimitsConfiguration rateLimitsConfiguration) {
+    private ComponentConfiguration(RateLimitsConfiguration rateLimitsConfiguration) {
         this.rateLimitsConfiguration = rateLimitsConfiguration;
     }
 
@@ -23,26 +23,9 @@ public class ComponentConfiguration {
      * @return shadow manager component configuration object
      */
     public static ComponentConfiguration from(ComponentConfiguration oldConfiguration, Topics updatedTopics) {
-        Topics serviceConfiguration = updatedTopics.lookupTopics(CONFIGURATION_CONFIG_KEY);
-        RateLimitsConfiguration rateLimitsConfiguration = RateLimitsConfiguration.from(serviceConfiguration);
-        ComponentConfiguration newConfiguration = new ComponentConfiguration(rateLimitsConfiguration);
-        newConfiguration.triggerUpdates(oldConfiguration);
-        return newConfiguration;
+        Topics serviceTopics = updatedTopics.lookupTopics(CONFIGURATION_CONFIG_KEY);
+        RateLimitsConfiguration rateLimitsConfiguration = RateLimitsConfiguration.from(oldConfiguration, serviceTopics);
+        return new ComponentConfiguration(rateLimitsConfiguration);
     }
 
-    private void triggerUpdates(ComponentConfiguration oldConfiguration) {
-        if (this.equals(oldConfiguration)) {
-            return;
-        }
-        if (hasRateLimitsChanged(oldConfiguration)) {
-            rateLimitsConfiguration.triggerUpdates();
-        }
-    }
-
-    private boolean hasRateLimitsChanged(ComponentConfiguration oldConfiguration) {
-        if (oldConfiguration == null) {
-            return true;
-        }
-        return rateLimitsConfiguration.hasChanged(oldConfiguration.rateLimitsConfiguration);
-    }
 }

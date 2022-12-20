@@ -54,35 +54,73 @@ public final class RateLimitsConfiguration {
         return maxOutboundUpdatesPerSecond;
     }
 
-    private RateLimitsConfiguration(Topics topics) {
+    private RateLimitsConfiguration(int maxLocalRequestRatePerThing,
+                                    int maxTotalLocalRequestRate,
+                                    int maxOutboundUpdatesPerSecond,
+                                    InboundRateLimiter inboundRateLimiter,
+                                    IotDataPlaneClientWrapper iotDataPlaneClientWrapper) {
+
+        this.maxLocalRequestRatePerThing = maxLocalRequestRatePerThing;
+        this.maxTotalLocalRequestRate = maxTotalLocalRequestRate;
+        this.maxOutboundUpdatesPerSecond = maxOutboundUpdatesPerSecond;
+        this.inboundRateLimiter = inboundRateLimiter;
+        this.iotDataPlaneClientWrapper = iotDataPlaneClientWrapper;
+    }
+
+    private static RateLimitsConfiguration getRateLimitsConfigurationFromTopics(Topics topics) {
         Topics rateLimitsTopics = topics.lookupTopics(CONFIGURATION_RATE_LIMITS_TOPIC);
-        maxTotalLocalRequestRate = getMaxTotalLocalRequestRateFromTopics(rateLimitsTopics);
-        maxLocalRequestRatePerThing = getMaxLocalRequestRatePerThingFromTopics(rateLimitsTopics);
-        maxOutboundUpdatesPerSecond = getMaxOutboundUpdatesPerSecondFromTopics(rateLimitsTopics);
-        inboundRateLimiter = topics.getContext().get(InboundRateLimiter.class);
-        iotDataPlaneClientWrapper = topics.getContext().get(IotDataPlaneClientWrapper.class);
-    }
+        int maxTotalLocalRequestRate = getMaxTotalLocalRequestRateFromTopics(rateLimitsTopics);
+        int maxLocalRequestRatePerThing = getMaxLocalRequestRatePerThingFromTopics(rateLimitsTopics);
+        int maxOutboundUpdatesPerSecond = getMaxOutboundUpdatesPerSecondFromTopics(rateLimitsTopics);
+        InboundRateLimiter inboundRateLimiter = topics.getContext().get(InboundRateLimiter.class);
+        IotDataPlaneClientWrapper iotDataPlaneClientWrapper = topics.getContext().get(IotDataPlaneClientWrapper.class);
 
-    public static RateLimitsConfiguration from(Topics serviceTopics) {
-        return new RateLimitsConfiguration(serviceTopics);
-    }
-
-    /**
-     * Updates request rate limits with the latest configuration of the component.
-     */
-    public void triggerUpdates() {
-        inboundRateLimiter.setRate(maxLocalRequestRatePerThing);
-        inboundRateLimiter.setTotalRate(maxTotalLocalRequestRate);
-        iotDataPlaneClientWrapper.setRate(maxOutboundUpdatesPerSecond);
+        return new RateLimitsConfiguration(maxLocalRequestRatePerThing, maxTotalLocalRequestRate,
+                maxOutboundUpdatesPerSecond, inboundRateLimiter, iotDataPlaneClientWrapper);
     }
 
     /**
-     * Compares current configuration with the previous configuration.
+     * Creates a new rate limits configuration object and triggers updates based on previous configuration.
      *
-     * @param oldRateLimitsConfiguration previous rate limits configuration
-     * @return True if the configurations are different
+     * @param oldConfiguration previous configuration of the component
+     * @param serviceTopics    current configuration topics
+     * @return rate limits configuration objects
      */
-    public boolean hasChanged(RateLimitsConfiguration oldRateLimitsConfiguration) {
-        return !this.equals(oldRateLimitsConfiguration);
+    public static RateLimitsConfiguration from(ComponentConfiguration oldConfiguration, Topics serviceTopics) {
+        RateLimitsConfiguration rateLimitsConfiguration = getRateLimitsConfigurationFromTopics(serviceTopics);
+        rateLimitsConfiguration.triggerUpdates(oldConfiguration);
+        return rateLimitsConfiguration;
     }
+
+    private void triggerUpdates(ComponentConfiguration oldComponentConfiguration) {
+        RateLimitsConfiguration oldRateLimitsConfiguration = null;
+        if (oldComponentConfiguration != null) {
+            oldRateLimitsConfiguration = oldComponentConfiguration.rateLimitsConfiguration;
+        }
+        if (hasMaxLocalRequestPerThingChanged(oldRateLimitsConfiguration)) {
+            inboundRateLimiter.setRate(maxLocalRequestRatePerThing);
+        }
+        if (hasMaxTotalLocalRequestRateChanged(oldRateLimitsConfiguration)) {
+            inboundRateLimiter.setTotalRate(maxTotalLocalRequestRate);
+        }
+        if (hasMaxOutboundUpdatesPerSecondChanged(oldRateLimitsConfiguration)) {
+            iotDataPlaneClientWrapper.setRate(maxOutboundUpdatesPerSecond);
+        }
+    }
+
+    private boolean hasMaxLocalRequestPerThingChanged(RateLimitsConfiguration oldRateLimitsConfiguration) {
+        return oldRateLimitsConfiguration == null
+                || maxLocalRequestRatePerThing != oldRateLimitsConfiguration.getMaxLocalRequestRatePerThing();
+    }
+
+    private boolean hasMaxTotalLocalRequestRateChanged(RateLimitsConfiguration oldRateLimitsConfiguration) {
+        return oldRateLimitsConfiguration == null
+                || maxTotalLocalRequestRate != oldRateLimitsConfiguration.getMaxTotalLocalRequestRate();
+    }
+
+    private boolean hasMaxOutboundUpdatesPerSecondChanged(RateLimitsConfiguration oldRateLimitsConfiguration) {
+        return oldRateLimitsConfiguration == null
+                || maxOutboundUpdatesPerSecond != oldRateLimitsConfiguration.getMaxOutboundUpdatesPerSecond();
+    }
+
 }
