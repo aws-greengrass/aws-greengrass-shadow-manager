@@ -72,11 +72,7 @@ import static com.aws.greengrass.shadowmanager.ShadowManager.SERVICE_NAME;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_CLASSIC_SHADOW_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_CORE_THING_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC;
-import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC;
-import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC;
-import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_NAMED_SHADOWS_TOPIC;
-import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_RATE_LIMITS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SHADOW_DOCUMENTS_MAP_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SHADOW_DOCUMENTS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_STRATEGY_TOPIC;
@@ -124,7 +120,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
     private final static String THING_NAME_B = "thingNameB";
     private final static String THING_NAME_C = "thingNameC";
     private final static String KERNEL_THING = "kernelThing";
-    private final static int RATE_LIMIT = 500;
+
     @Mock
     private ShadowManagerDatabase mockDatabase;
     @Mock
@@ -151,8 +147,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
     private GreengrassCoreIPCService mockGreengrassCoreIPCService;
 
     @Captor
-    private ArgumentCaptor<Integer> intObjectCaptor;
-    @Captor
     private ArgumentCaptor<MqttClientConnectionEvents> mqttCallbacksCaptor;
     @Captor
     private ArgumentCaptor<CallbackEventManager.OnConnectCallback> mqtOnConnectCallbackCaptor;
@@ -170,6 +164,9 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
                 mockIotDataPlaneClientWrapper, mockSyncHandler, mockCloudDataClient, mockMqttClient);
         lenient().when(config.lookupTopics(CONFIGURATION_CONFIG_KEY))
                 .thenReturn(Topics.of(context, CONFIGURATION_CONFIG_KEY, null));
+        // These are added to not break the existing unit tests. Will be removed later.
+        lenient().when(config.getContext().get(InboundRateLimiter.class)).thenReturn(mockInboundRateLimiter);
+        lenient().when(config.getContext().get(IotDataPlaneClientWrapper.class)).thenReturn(mockIotDataPlaneClientWrapper);
     }
 
     @AfterEach
@@ -339,105 +336,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
 
         s.install(ShadowManager.InstallConfig.builder().configureSyncDirectionConfig(true).build());
         assertTrue(s.isErrored());
-    }
-
-    @Test
-    void GIVEN_good_max_outbound_rate_WHEN_initialize_THEN_outbound_rate_updated() throws UnsupportedInputTypeException {
-        Topics rateLimitsTopics = Topics.of(context, CONFIGURATION_RATE_LIMITS_TOPIC, null);
-        rateLimitsTopics.createLeafChild(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC).withValueChecked(RATE_LIMIT);
-        when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_RATE_LIMITS_TOPIC))
-                .thenReturn(rateLimitsTopics);
-
-        shadowManager.install(ShadowManager.InstallConfig.builder().configureRateLimitsConfig(true).build());
-
-        assertFalse(shadowManager.isErrored());
-        verify(mockInboundRateLimiter, times(0)).setRate(anyInt());
-        verify(mockInboundRateLimiter, times(0)).setTotalRate(anyInt());
-        verify(mockIotDataPlaneClientWrapper, times(1)).setRate(intObjectCaptor.capture());
-        assertThat(intObjectCaptor.getValue(), is(notNullValue()));
-        assertThat(intObjectCaptor.getValue(), is(RATE_LIMIT));
-    }
-
-    @Test
-    void GIVEN_bad_max_outbound_rate_WHEN_initialize_THEN_throws_exception(ExtensionContext extensionContext) throws UnsupportedInputTypeException {
-        ignoreExceptionOfType(extensionContext, InvalidConfigurationException.class);
-        Topics rateLimitsTopics = Topics.of(context, CONFIGURATION_RATE_LIMITS_TOPIC, null);
-        rateLimitsTopics.createLeafChild(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC).withValueChecked(-1);
-        when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_RATE_LIMITS_TOPIC))
-                .thenReturn(rateLimitsTopics);
-
-        shadowManager.install(ShadowManager.InstallConfig.builder().configureRateLimitsConfig(true).build());
-
-        assertTrue(shadowManager.isErrored());
-        verify(mockInboundRateLimiter, times(0)).setRate(anyInt());
-        verify(mockInboundRateLimiter, times(0)).setTotalRate(anyInt());
-        verify(mockIotDataPlaneClientWrapper, times(0)).setRate(anyInt());
-    }
-
-    @Test
-    void GIVEN_good_overall_inbound_rate_WHEN_initialize_THEN_updates_overall_inbound_rate_correctly() throws UnsupportedInputTypeException {
-        Topics rateLimitsTopics = Topics.of(context, CONFIGURATION_RATE_LIMITS_TOPIC, null);
-        rateLimitsTopics.createLeafChild(CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE).withValueChecked(RATE_LIMIT);
-        when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_RATE_LIMITS_TOPIC))
-                .thenReturn(rateLimitsTopics);
-
-        shadowManager.install(ShadowManager.InstallConfig.builder().configureRateLimitsConfig(true).build());
-
-        assertFalse(shadowManager.isErrored());
-        verify(mockIotDataPlaneClientWrapper, times(0)).setRate(anyInt());
-        verify(mockInboundRateLimiter, times(0)).setRate(anyInt());
-        verify(mockInboundRateLimiter, times(1)).setTotalRate(intObjectCaptor.capture());
-        assertThat(intObjectCaptor.getValue(), is(notNullValue()));
-        assertThat(intObjectCaptor.getValue(), is(RATE_LIMIT));
-    }
-
-    @Test
-    void GIVEN_bad_overall_inbound_rate_WHEN_initialize_THEN_throws_exception(ExtensionContext extensionContext) throws UnsupportedInputTypeException {
-        ignoreExceptionOfType(extensionContext, InvalidConfigurationException.class);
-        Topics rateLimitsTopics = Topics.of(context, CONFIGURATION_RATE_LIMITS_TOPIC, null);
-        rateLimitsTopics.createLeafChild(CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE).withValueChecked(-1);
-        when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_RATE_LIMITS_TOPIC))
-                .thenReturn(rateLimitsTopics);
-
-        shadowManager.install(ShadowManager.InstallConfig.builder().configureRateLimitsConfig(true).build());
-
-        assertTrue(shadowManager.isErrored());
-        verify(mockInboundRateLimiter, times(0)).setRate(anyInt());
-        verify(mockInboundRateLimiter, times(0)).setTotalRate(anyInt());
-        verify(mockIotDataPlaneClientWrapper, times(0)).setRate(anyInt());
-    }
-
-    @Test
-    void GIVEN_good_inbound_rate_per_thing_WHEN_initialize_THEN_updates_inbound_rate_per_thing_correctly() throws UnsupportedInputTypeException {
-        Topics rateLimitsTopics = Topics.of(context, CONFIGURATION_RATE_LIMITS_TOPIC, null);
-        rateLimitsTopics.createLeafChild(CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC).withValueChecked(RATE_LIMIT);
-        when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_RATE_LIMITS_TOPIC))
-                .thenReturn(rateLimitsTopics);
-
-        shadowManager.install(ShadowManager.InstallConfig.builder().configureRateLimitsConfig(true).build());
-
-        assertFalse(shadowManager.isErrored());
-        verify(mockInboundRateLimiter, times(0)).setTotalRate(anyInt());
-        verify(mockIotDataPlaneClientWrapper, times(0)).setRate(anyInt());
-        verify(mockInboundRateLimiter, times(1)).setRate(intObjectCaptor.capture());
-        assertThat(intObjectCaptor.getValue(), is(notNullValue()));
-        assertThat(intObjectCaptor.getValue(), is(RATE_LIMIT));
-    }
-
-    @Test
-    void GIVEN_bad_inbound_rate_per_thing_WHEN_initialize_THEN_throws_exception(ExtensionContext extensionContext) throws UnsupportedInputTypeException {
-        ignoreExceptionOfType(extensionContext, InvalidConfigurationException.class);
-        Topics rateLimitsTopics = Topics.of(context, CONFIGURATION_RATE_LIMITS_TOPIC, null);
-        rateLimitsTopics.createLeafChild(CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC).withValueChecked(-1);
-        when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_RATE_LIMITS_TOPIC))
-                .thenReturn(rateLimitsTopics);
-
-        shadowManager.install(ShadowManager.InstallConfig.builder().configureRateLimitsConfig(true).build());
-
-        assertTrue(shadowManager.isErrored());
-        verify(mockInboundRateLimiter, times(0)).setRate(anyInt());
-        verify(mockInboundRateLimiter, times(0)).setTotalRate(anyInt());
-        verify(mockIotDataPlaneClientWrapper, times(0)).setRate(anyInt());
     }
 
     @Test
