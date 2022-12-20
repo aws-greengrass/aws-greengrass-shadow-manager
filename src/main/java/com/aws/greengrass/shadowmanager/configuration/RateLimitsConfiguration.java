@@ -59,7 +59,6 @@ public final class RateLimitsConfiguration {
                                     int maxOutboundUpdatesPerSecond,
                                     InboundRateLimiter inboundRateLimiter,
                                     IotDataPlaneClientWrapper iotDataPlaneClientWrapper) {
-
         this.maxLocalRequestRatePerThing = maxLocalRequestRatePerThing;
         this.maxTotalLocalRequestRate = maxTotalLocalRequestRate;
         this.maxOutboundUpdatesPerSecond = maxOutboundUpdatesPerSecond;
@@ -82,21 +81,17 @@ public final class RateLimitsConfiguration {
     /**
      * Creates a new rate limits configuration object and triggers updates based on previous configuration.
      *
-     * @param oldConfiguration previous configuration of the component
+     * @param oldRateLimitsConfig previous rate limits configuration of the component
      * @param serviceTopics    current configuration topics
      * @return rate limits configuration objects
      */
-    public static RateLimitsConfiguration from(ComponentConfiguration oldConfiguration, Topics serviceTopics) {
+    public static RateLimitsConfiguration from(RateLimitsConfiguration oldRateLimitsConfig, Topics serviceTopics) {
         RateLimitsConfiguration rateLimitsConfiguration = getRateLimitsConfigurationFromTopics(serviceTopics);
-        rateLimitsConfiguration.triggerUpdates(oldConfiguration);
+        rateLimitsConfiguration.triggerUpdates(oldRateLimitsConfig);
         return rateLimitsConfiguration;
     }
 
-    private void triggerUpdates(ComponentConfiguration oldComponentConfiguration) {
-        RateLimitsConfiguration oldRateLimitsConfiguration = null;
-        if (oldComponentConfiguration != null) {
-            oldRateLimitsConfiguration = oldComponentConfiguration.rateLimitsConfiguration;
-        }
+    private void triggerUpdates(RateLimitsConfiguration oldRateLimitsConfiguration) {
         if (hasMaxLocalRequestPerThingChanged(oldRateLimitsConfiguration)) {
             inboundRateLimiter.setRate(maxLocalRequestRatePerThing);
         }

@@ -24,8 +24,15 @@ public final class ComponentConfiguration {
      */
     public static ComponentConfiguration from(ComponentConfiguration oldConfiguration, Topics updatedTopics) {
         Topics serviceTopics = updatedTopics.lookupTopics(CONFIGURATION_CONFIG_KEY);
-        RateLimitsConfiguration rateLimitsConfiguration = RateLimitsConfiguration.from(oldConfiguration, serviceTopics);
+        RateLimitsConfiguration rateLimitsConfiguration = RateLimitsConfiguration.from(
+                getOldRateLimitsConfiguration(oldConfiguration), serviceTopics);
         return new ComponentConfiguration(rateLimitsConfiguration);
     }
 
+    private static RateLimitsConfiguration getOldRateLimitsConfiguration(ComponentConfiguration oldComponentConfig) {
+        if (oldComponentConfig != null) {
+            return oldComponentConfig.rateLimitsConfiguration;
+        }
+        return null;
+    }
 }

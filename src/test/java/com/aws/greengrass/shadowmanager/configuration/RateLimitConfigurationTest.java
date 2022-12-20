@@ -40,7 +40,7 @@ import static org.mockito.Mockito.verify;
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 class RateLimitConfigurationTest extends GGServiceTestUtil {
     private Topics configurationTopics;
-    private final static ComponentConfiguration oldConfiguration = null;
+    private final static RateLimitsConfiguration oldConfiguration = null;
     private final static int RATE_LIMIT = 500;
     @Mock
     private InboundRateLimiter mockInboundRateLimiter;
