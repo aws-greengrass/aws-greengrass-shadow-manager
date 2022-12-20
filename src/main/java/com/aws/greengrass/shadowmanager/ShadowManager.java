@@ -269,7 +269,7 @@ public class ShadowManager extends PluginService {
 
     private void configureRateLimits(RateLimitsConfiguration rateLimitsConfig) {
         inboundRateLimiter.updateRateLimits(rateLimitsConfig.getMaxTotalLocalRequestRate(),
-                rateLimitsConfig.getMaxTotalLocalRequestRate());
+                rateLimitsConfig.getMaxLocalRequestRatePerThing());
         iotDataPlaneClientWrapper.updateRateLimits(rateLimitsConfig.getMaxOutboundUpdatesPerSecond());
     }
 
