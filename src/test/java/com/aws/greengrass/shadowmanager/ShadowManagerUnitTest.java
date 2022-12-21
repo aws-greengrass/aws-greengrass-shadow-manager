@@ -30,7 +30,6 @@ import com.aws.greengrass.shadowmanager.sync.strategy.SyncStrategy;
 import com.aws.greengrass.shadowmanager.sync.strategy.model.Strategy;
 import com.aws.greengrass.shadowmanager.sync.strategy.model.StrategyType;
 import com.aws.greengrass.shadowmanager.util.ShadowWriteSynchronizeHelper;
-import com.aws.greengrass.shadowmanager.util.Validator;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.testcommons.testutilities.GGServiceTestUtil;
 import com.aws.greengrass.util.Pair;
@@ -45,7 +44,6 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
@@ -71,7 +69,6 @@ import static com.aws.greengrass.deployment.DeviceConfiguration.DEVICE_PARAM_THI
 import static com.aws.greengrass.shadowmanager.ShadowManager.SERVICE_NAME;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_CLASSIC_SHADOW_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_CORE_THING_TOPIC;
-import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_NAMED_SHADOWS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SHADOW_DOCUMENTS_MAP_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SHADOW_DOCUMENTS_TOPIC;
@@ -79,8 +76,6 @@ import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_STR
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SYNCHRONIZATION_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SYNC_DIRECTION_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_THING_NAME_TOPIC;
-import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_DOCUMENT_SIZE;
-import static com.aws.greengrass.shadowmanager.model.Constants.MAX_SHADOW_DOCUMENT_SIZE;
 import static com.aws.greengrass.shadowmanager.model.Constants.STRATEGY_TYPE_REAL_TIME;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -170,32 +165,8 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
     }
 
     @AfterEach
-    void tearDown() {
-        // reset static value so it doesn't interfere with other tests
-        Validator.setMaxShadowDocumentSize(DEFAULT_DOCUMENT_SIZE);
-    }
-
-    @ParameterizedTest
-    @ValueSource(ints = {DEFAULT_DOCUMENT_SIZE, MAX_SHADOW_DOCUMENT_SIZE})
-    void GIVEN_good_max_doc_size_WHEN_initialize_THEN_updates_max_doc_size_correctly(int maxDocSize) {
-        Topic maxDocSizeTopic = Topic.of(context, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC, maxDocSize);
-        when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC))
-                .thenReturn(maxDocSizeTopic);
-        shadowManager.install(ShadowManager.InstallConfig.builder().configureMaxDocSizeLimitConfig(true).build());
-
-        assertFalse(shadowManager.isErrored());
-        assertThat(Validator.getMaxShadowDocumentSize(), is(maxDocSize));
-    }
-
-    @ParameterizedTest
-    @ValueSource(ints = {MAX_SHADOW_DOCUMENT_SIZE + 1, -1})
-    void GIVEN_bad_max_doc_size_WHEN_initialize_THEN_throws_exception(int maxDocSize, ExtensionContext extensionContext) {
-        ignoreExceptionOfType(extensionContext, InvalidConfigurationException.class);
-        Topic maxDocSizeTopic = Topic.of(context, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC, maxDocSize);
-        when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC))
-                .thenReturn(maxDocSizeTopic);
-        shadowManager.install(ShadowManager.InstallConfig.builder().configureMaxDocSizeLimitConfig(true).build());
-        assertTrue(shadowManager.isErrored());
+    void tearDown() throws IOException {
+       context.close();
     }
 
     @ParameterizedTest
