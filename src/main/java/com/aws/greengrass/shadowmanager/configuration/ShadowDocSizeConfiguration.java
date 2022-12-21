@@ -6,12 +6,13 @@
 package com.aws.greengrass.shadowmanager.configuration;
 
 import com.aws.greengrass.config.Topics;
-import com.aws.greengrass.shadowmanager.util.Validator;
+import com.aws.greengrass.shadowmanager.exception.InvalidConfigurationException;
 import com.aws.greengrass.util.Coerce;
 import lombok.Getter;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_DOCUMENT_SIZE;
+import static com.aws.greengrass.shadowmanager.model.Constants.MAX_SHADOW_DOCUMENT_SIZE;
 
 public final class ShadowDocSizeConfiguration {
     @Getter
@@ -34,7 +35,13 @@ public final class ShadowDocSizeConfiguration {
     private static int getMaxShadowDocSizeFromConfig(Topics topics) {
         int newMaxShadowSize = Coerce.toInt(
                 topics.findOrDefault(DEFAULT_DOCUMENT_SIZE, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC));
-        Validator.validateMaxShadowSize(newMaxShadowSize);
+        if (MAX_SHADOW_DOCUMENT_SIZE < newMaxShadowSize || newMaxShadowSize <= 0) {
+            throw new InvalidConfigurationException(String.format(
+                    "Maximum shadow size provided %d is either less than 0 "
+                            + "or exceeds default maximum shadow size of %d",
+                    newMaxShadowSize,
+                    MAX_SHADOW_DOCUMENT_SIZE));
+        }
         return newMaxShadowSize;
     }
 }
