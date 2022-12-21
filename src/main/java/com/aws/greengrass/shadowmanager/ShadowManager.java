@@ -17,6 +17,8 @@ import com.aws.greengrass.deployment.DeviceConfiguration;
 import com.aws.greengrass.lifecyclemanager.PluginService;
 import com.aws.greengrass.mqttclient.CallbackEventManager;
 import com.aws.greengrass.mqttclient.MqttClient;
+import com.aws.greengrass.shadowmanager.configuration.ComponentConfiguration;
+import com.aws.greengrass.shadowmanager.configuration.RateLimitsConfiguration;
 import com.aws.greengrass.shadowmanager.exception.InvalidConfigurationException;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowIPCHandler;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowRequestHandler;
@@ -65,10 +67,6 @@ import javax.inject.Inject;
 
 import static com.aws.greengrass.componentmanager.KernelConfigResolver.CONFIGURATION_CONFIG_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC;
-import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC;
-import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC;
-import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE;
-import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_RATE_LIMITS_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_STRATEGY_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SYNCHRONIZATION_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SYNC_DIRECTION_TOPIC;
@@ -91,6 +89,7 @@ public class ShadowManager extends PluginService {
     private final AuthorizationHandlerWrapper authorizationHandlerWrapper;
     private final InboundRateLimiter inboundRateLimiter;
     private final DeviceConfiguration deviceConfiguration;
+    private ComponentConfiguration componentConfiguration;
     @Getter
     private final DeleteThingShadowRequestHandler deleteThingShadowRequestHandler;
     @Getter
@@ -220,7 +219,6 @@ public class ShadowManager extends PluginService {
     protected void install() {
         install(InstallConfig.builder()
                 .configureMaxDocSizeLimitConfig(true)
-                .configureRateLimitsConfig(true)
                 .configureStrategyConfig(true)
                 .configureSyncDirectionConfig(true)
                 .configureSynchronizeConfig(true)
@@ -244,11 +242,9 @@ public class ShadowManager extends PluginService {
             if (what.equals(WhatHappened.timestampUpdated) || what.equals(WhatHappened.interiorAdded)) {
                 return;
             }
+            onConfigurationUpdate();
             if (installConfig.configureSynchronizeConfig) {
                 configureSynchronization(newv);
-            }
-            if (installConfig.configureRateLimitsConfig) {
-                configureRateLimits(newv);
             }
             if (installConfig.configureMaxDocSizeLimitConfig) {
                 configureMaxSizeDocLimitConfig(newv);
@@ -260,6 +256,21 @@ public class ShadowManager extends PluginService {
                 configureStrategy(newv);
             }
         });
+    }
+
+    private void onConfigurationUpdate() {
+        try {
+            componentConfiguration = ComponentConfiguration.from(componentConfiguration, getConfig());
+            configureRateLimits(componentConfiguration.getRateLimitsConfiguration());
+        } catch (InvalidConfigurationException e) {
+            serviceErrored(e);
+        }
+    }
+
+    private void configureRateLimits(RateLimitsConfiguration rateLimitsConfig) {
+        inboundRateLimiter.updateRateLimits(rateLimitsConfig.getMaxTotalLocalRequestRate(),
+                rateLimitsConfig.getMaxLocalRequestRatePerThing());
+        iotDataPlaneClientWrapper.updateRateLimits(rateLimitsConfig.getMaxOutboundUpdatesPerSecond());
     }
 
     Strategy replaceStrategyIfNecessary(Strategy currentStrategy, Strategy strategy) {
@@ -303,38 +314,6 @@ public class ShadowManager extends PluginService {
                 stopSyncingShadows(true);
                 startSyncingShadows(StartSyncInfo.builder().reInitializeSyncInfo(true).startSyncStrategy(true)
                         .updateCloudSubscriptions(true).build());
-            }
-        } catch (InvalidConfigurationException e) {
-            serviceErrored(e);
-        }
-    }
-
-    private void configureRateLimits(Node newv) {
-        if (newv != null && !newv.childOf(CONFIGURATION_RATE_LIMITS_TOPIC)) {
-            return;
-        }
-        Topics rateLimitTopics = config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_RATE_LIMITS_TOPIC);
-        Map<String, Object> rateLimitsPojo = rateLimitTopics.toPOJO();
-        try {
-            if (rateLimitsPojo.containsKey(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC)) {
-                int maxOutboundSyncUpdatesPerSecond = Coerce.toInt(rateLimitsPojo
-                        .get(CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC));
-                Validator.validateOutboundSyncUpdatesPerSecond(maxOutboundSyncUpdatesPerSecond);
-                iotDataPlaneClientWrapper.setRate(maxOutboundSyncUpdatesPerSecond);
-            }
-
-            if (rateLimitsPojo.containsKey(CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE)) {
-                int maxTotalLocalRequestRate = Coerce.toInt(rateLimitsPojo
-                        .get(CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE));
-                Validator.validateTotalLocalRequestRate(maxTotalLocalRequestRate);
-                inboundRateLimiter.setTotalRate(maxTotalLocalRequestRate);
-            }
-
-            if (rateLimitsPojo.containsKey(CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC)) {
-                int maxLocalShadowUpdatesPerThingPerSecond = Coerce.toInt(rateLimitsPojo
-                        .get(CONFIGURATION_MAX_LOCAL_REQUESTS_RATE_PER_THING_TOPIC));
-                Validator.validateLocalShadowRequestsPerThingPerSecond(maxLocalShadowUpdatesPerThingPerSecond);
-                inboundRateLimiter.setRate(maxLocalShadowUpdatesPerThingPerSecond);
             }
         } catch (InvalidConfigurationException e) {
             serviceErrored(e);

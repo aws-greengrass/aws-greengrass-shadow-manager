@@ -89,4 +89,9 @@ public class InboundRateLimiter {
         ratePerThing.set(rate);
         rateLimitersPerThing.forEach((k, v) -> v.setRate(ratePerThing.get()));
     }
+
+    public void updateRateLimits(int totalRequestRate, int totalRequestRatePerThing) {
+        setTotalRate(totalRequestRate);
+        setRate(totalRequestRatePerThing);
+    }
 }
