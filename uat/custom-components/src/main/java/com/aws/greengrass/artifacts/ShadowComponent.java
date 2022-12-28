@@ -125,7 +125,7 @@ public class ShadowComponent implements Consumer<String[]> {
     }
 
     // Basic Operation handlers. Execute operation and verify results with expected payload/update document
-    void handleGetThingShadowOperation(String thingName, String shadowName)
+    private void handleGetThingShadowOperation(String thingName, String shadowName)
             throws ExecutionException, InterruptedException, IOException {
 
         GetThingShadowRequest getThingShadowRequest = new GetThingShadowRequest();
@@ -142,7 +142,7 @@ public class ShadowComponent implements Consumer<String[]> {
         LOGGER.error(MAPPER.writeValueAsString(receivedShadowDocumentJson));
     }
 
-    void handleUpdateThingShadowOperation(String thingName, String shadowName, byte[] updateDocument
+    private void handleUpdateThingShadowOperation(String thingName, String shadowName, byte[] updateDocument
     )
             throws ExecutionException, InterruptedException, IOException {
         UpdateThingShadowRequest updateThingShadowRequest = new UpdateThingShadowRequest();
@@ -158,7 +158,7 @@ public class ShadowComponent implements Consumer<String[]> {
         removeMetadata(receivedShadowDocumentJson);
     }
 
-    void handleDeleteThingShadowOperation(String thingName, String shadowName)
+    private void handleDeleteThingShadowOperation(String thingName, String shadowName)
             throws ExecutionException, InterruptedException, IOException {
         DeleteThingShadowRequest deleteThingShadowRequest = new DeleteThingShadowRequest();
         deleteThingShadowRequest.setThingName(thingName);
@@ -168,7 +168,7 @@ public class ShadowComponent implements Consumer<String[]> {
                 greengrassCoreIPCClient.deleteThingShadow(deleteThingShadowRequest, Optional.empty()).getResponse().get();
     }
 
-    void handleListNamedShadowsForThingOperation(String thingName, Integer pageSize, String nextToken)
+    private void handleListNamedShadowsForThingOperation(String thingName, Integer pageSize, String nextToken)
             throws ExecutionException, InterruptedException, IOException {
         ListNamedShadowsForThingRequest listNamedShadowsForThingRequest = new ListNamedShadowsForThingRequest();
         listNamedShadowsForThingRequest.setThingName(thingName);
@@ -198,7 +198,7 @@ public class ShadowComponent implements Consumer<String[]> {
     }
 
     // Setup helper function which creates four named shadows for a particular thing
-    void handleSetupForListNamedShadows(String thingName, byte[] updateDocument)
+    private void handleSetupForListNamedShadows(String thingName, byte[] updateDocument)
             throws ExecutionException, InterruptedException, IOException {
         for (String namedShadow : NAMED_SHADOWS_LIST) {
             handleUpdateThingShadowOperation(thingName, namedShadow, updateDocument);
