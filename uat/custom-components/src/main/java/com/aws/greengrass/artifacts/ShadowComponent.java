@@ -17,12 +17,8 @@ import software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowRequest;
 import software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowResponse;
 import software.amazon.awssdk.aws.greengrass.model.GetThingShadowRequest;
 import software.amazon.awssdk.aws.greengrass.model.GetThingShadowResponse;
-import software.amazon.awssdk.aws.greengrass.model.InvalidArgumentsError;
 import software.amazon.awssdk.aws.greengrass.model.ListNamedShadowsForThingRequest;
 import software.amazon.awssdk.aws.greengrass.model.ListNamedShadowsForThingResponse;
-import software.amazon.awssdk.aws.greengrass.model.ResourceNotFoundError;
-import software.amazon.awssdk.aws.greengrass.model.ServiceError;
-import software.amazon.awssdk.aws.greengrass.model.UnauthorizedError;
 import software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest;
 import software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowResponse;
 
@@ -36,104 +32,95 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 public class ShadowComponent implements Consumer<String[]> {
+    private String thingName;
+    private String operation;
+    private String shadowName;
+    private String shadowDocument;
+    private byte[] shadowDocumentPayload;
+    private Integer pageSize;
+    private String nextToken;
+    private int timeoutSeconds;
     private static final Logger LOGGER = LoggerFactory.getLogger(ShadowComponent.class);
     private static final List<String> NAMED_SHADOWS_LIST = Arrays.asList("alpha", "bravo", "charlie", "delta");
     private static final ObjectMapper MAPPER = new ObjectMapper();
-    private GreengrassCoreIPCClientV2 eventStreamRpcConnection = null;
     private GreengrassCoreIPC greengrassCoreIPCClient = null;
 
     @Override
     public void accept(String[] args) {
-        try {
-            eventStreamRpcConnection = IPCTestUtils.getGreengrassClient();
-            greengrassCoreIPCClient = eventStreamRpcConnection.getClient();
-            if (args.length != 7) {
-                LOGGER.error(
-                        "Wrong number of arguments. Expected arguments: <Operation> <ThingName> <ShadowName> <ShadowDocument> <PageSize> <NextToken> <Expected Document> <timeout>");
-                for (String arg : args) {
-                    LOGGER.error(arg);
-                }
-                return;
+        if (args.length != 7) {
+            LOGGER.error(
+                    "Wrong number of arguments. Expected arguments: <Operation> <ThingName> <ShadowName> <ShadowDocument> <PageSize> <NextToken> <Expected Document> <timeout>");
+            for (String arg : args) {
+                LOGGER.error(arg);
             }
-
-            String operation = args[0];
-            String thingName = args[1];
-            String shadowName = "CLASSIC".equals(args[2]) ? "" : args[2];
-            String shadowDocument = args[3];
-            byte[] shadowDocumentPayload = shadowDocument.getBytes();
-            Integer pageSize = (!args[4].isEmpty()) ? Integer.parseInt(args[4]) : null;
-            String nextToken = args[5];
-            int timeoutSeconds = (!args[6].isEmpty()) ? Integer.parseInt(args[6]) : 0;
-            boolean isSuccessful = false;
-
-            Instant finalTime = Instant.now().plusSeconds(timeoutSeconds);
-
-            do {
-                try {
-                    switch (operation) {
-                        case "GetThingShadow":
-                            handleGetThingShadowOperation(thingName, shadowName);
-                            break;
-                        case "UpdateThingShadow":
-                            handleUpdateThingShadowOperation(thingName, shadowName, shadowDocumentPayload);
-                            break;
-                        case "DeleteThingShadow":
-                            handleDeleteThingShadowOperation(thingName, shadowName);
-                            break;
-                        case "SetupListNamedShadowTest":
-                            handleSetupForListNamedShadows(thingName, shadowDocumentPayload);
-                            break;
-                        case "ListNamedShadowsForThing":
-                            handleListNamedShadowsForThingOperation(thingName, pageSize, nextToken);
-                            break;
-                        case "NoOp":
-                            // Do nothing
-                            break;
-                        default:
-                            LOGGER.error("No matching operation found for: {}", operation);
-                            throw new ExecutionException(new UnsupportedOperationException("No matching operation found for: " + operation));
-                    }
-                    isSuccessful = true;
-                } catch (ExecutionException e) {
-                    if (e.getCause() instanceof InvalidArgumentsError) {
-                        String errorMessage = String.format("InvalidArgumentsError error in the %s operation", operation);
-                        LOGGER.error(errorMessage, e);
-                    } else if (e.getCause() instanceof ResourceNotFoundError) {
-                        String errorMessage = String.format("ResourceNotFoundError error in the %s operation", operation);
-                        LOGGER.error(errorMessage, e);
-                    } else if (e.getCause() instanceof ServiceError) {
-                        String errorMessage = String.format("ServiceError error in the %s operation", operation);
-                        LOGGER.error(errorMessage, e);
-                    } else if (e.getCause() instanceof UnauthorizedError) {
-                        String errorMessage = String.format("UnauthorizedError error in the %s operation", operation);
-                        UnauthorizedError unauthorizedError = (UnauthorizedError) e.getCause();
-                        LOGGER.error(errorMessage, e);
-                    } else {
-                        String errorMessage = String.format("Execution error in the %s operation", operation);
-                        LOGGER.error(errorMessage, e);
-                    }
-                    TimeUnit.SECONDS.sleep(1);
-                }
-            } while (!isSuccessful && finalTime.isAfter(Instant.now()));
-        } catch (InterruptedException | IOException e) {
-            LOGGER.error("Error", e);
-        } finally {
-            if (eventStreamRpcConnection != null) {
-                try {
-                    eventStreamRpcConnection.close();
-                } catch (Exception ex) {
-                    LOGGER.error("Unexpected error occurred while closing IPC connection", ex);
-                }
-            }
+            return;
         }
+        parseArgs(args);
+        try (GreengrassCoreIPCClientV2 eventStreamRpcConnection = IPCTestUtils.getGreengrassClient()) {
+            greengrassCoreIPCClient = eventStreamRpcConnection.getClient();
+            handleIPCOperation();
+        } catch (IOException | InterruptedException e) {
+            LOGGER.error("Exception while handling the IPC operation", e);
+        } catch (Exception e) {
+            LOGGER.error("Exception occurred while getting the ipc client", e);
+        }
+    }
+
+    private void parseArgs(String[] args) {
+        operation = args[0];
+        thingName = args[1];
+        shadowName = "CLASSIC".equals(args[2]) ? "" : args[2];
+        shadowDocument = args[3];
+        shadowDocumentPayload = shadowDocument.getBytes();
+        pageSize = (!args[4].isEmpty()) ? Integer.parseInt(args[4]) : null;
+        nextToken = args[5];
+        timeoutSeconds = (!args[6].isEmpty()) ? Integer.parseInt(args[6]) : 0;
 
     }
 
-    void removeTimeStamp(JsonNode node) {
+    private void handleIPCOperation() throws InterruptedException {
+        boolean isSuccessful = false;
+        Instant finalTime = Instant.now().plusSeconds(timeoutSeconds);
+        do {
+            try {
+                switch (operation) {
+                    case "GetThingShadow":
+                        handleGetThingShadowOperation(thingName, shadowName);
+                        break;
+                    case "UpdateThingShadow":
+                        handleUpdateThingShadowOperation(thingName, shadowName, shadowDocumentPayload);
+                        break;
+                    case "DeleteThingShadow":
+                        handleDeleteThingShadowOperation(thingName, shadowName);
+                        break;
+                    case "SetupListNamedShadowTest":
+                        handleSetupForListNamedShadows(thingName, shadowDocumentPayload);
+                        break;
+                    case "ListNamedShadowsForThing":
+                        handleListNamedShadowsForThingOperation(thingName, pageSize, nextToken);
+                        break;
+                    case "NoOp":
+                        // Do nothing
+                        break;
+                    default:
+                        LOGGER.error("No matching operation found for: {}", operation);
+                        throw new ExecutionException(new UnsupportedOperationException("No matching operation found for: " + operation));
+                }
+                isSuccessful = true;
+            } catch (ExecutionException | IOException | InterruptedException e) {
+                String errorClassName = e.getCause().getClass().getSimpleName();
+                String errorMessage = String.format("%s error in the %s operation", errorClassName, operation);
+                LOGGER.error(errorMessage, e);
+                TimeUnit.SECONDS.sleep(1);
+            }
+        } while (!isSuccessful && finalTime.isAfter(Instant.now()));
+    }
+
+    private void removeTimeStamp(JsonNode node) {
         ((ObjectNode) node).remove("timestamp");
     }
 
-    void removeMetadata(JsonNode node) {
+    private void removeMetadata(JsonNode node) {
         ((ObjectNode) node).remove("metadata");
     }
 
@@ -194,19 +181,19 @@ public class ShadowComponent implements Consumer<String[]> {
         List<String> resultList = listNamedShadowsForThingResponse.getResults();
 
         Integer namedShadowCount = resultList.size();
-        LOGGER.info(String.format("Returned %s from list named shadow for thingName: %s", namedShadowCount, thingName));
+        LOGGER.info("Returned {} from list named shadow for thingName: {}", namedShadowCount, thingName);
         // expected to get token if returned list is equal to pageSize
         if (namedShadowCount.equals(pageSize)) {
             String returnToken = listNamedShadowsForThingResponse.getNextToken();
             if (returnToken != null && !returnToken.isEmpty()) {
-                LOGGER.info(String.format("Retrieved token %s from list named shadow for thingName: %s", returnToken, thingName));
+                LOGGER.info("Retrieved token {} from list named shadow for thingName: {}", returnToken, thingName);
             } else {
                 LOGGER.info("Expected token not returned in response");
             }
         }
 
         for (String namedShadowResult : resultList) {
-            LOGGER.info(String.format("Retrieved named shadow %s from list named shadow for thingName: %s", namedShadowResult, thingName));
+            LOGGER.info("Retrieved named shadow {} from list named shadow for thingName:{}", namedShadowResult, thingName);
         }
     }
 
