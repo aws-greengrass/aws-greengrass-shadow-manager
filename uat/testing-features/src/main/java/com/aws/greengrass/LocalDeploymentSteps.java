@@ -7,6 +7,7 @@ package com.aws.greengrass;
 
 import com.aws.greengrass.testing.api.ComponentPreparationService;
 import com.aws.greengrass.testing.api.device.Device;
+import com.aws.greengrass.testing.api.device.exception.CommandExecutionException;
 import com.aws.greengrass.testing.api.device.model.CommandInput;
 import com.aws.greengrass.testing.api.model.ComponentOverrideNameVersion;
 import com.aws.greengrass.testing.api.model.ComponentOverrideVersion;
@@ -14,12 +15,8 @@ import com.aws.greengrass.testing.api.model.ComponentOverrides;
 import com.aws.greengrass.testing.features.WaitSteps;
 import com.aws.greengrass.testing.model.ScenarioContext;
 import com.aws.greengrass.testing.model.TestContext;
-import com.aws.greengrass.testing.platform.Platform;
-import com.aws.greengrass.testing.resources.AWSResources;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.escape.Escaper;
-import com.google.common.escape.Escapers;
 import io.cucumber.datatable.DataTable;
 import io.cucumber.guice.ScenarioScoped;
 import io.cucumber.java.en.When;
@@ -28,7 +25,6 @@ import org.apache.logging.log4j.Logger;
 import software.amazon.awssdk.services.greengrassv2.model.ComponentDeploymentSpecification;
 import software.amazon.awssdk.utils.ImmutableMap;
 
-import javax.inject.Inject;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -40,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.StringJoiner;
+import javax.inject.Inject;
 
 import static com.aws.greengrass.testing.component.LocalComponentPreparationService.ARTIFACTS_DIR;
 import static com.aws.greengrass.testing.component.LocalComponentPreparationService.LOCAL_STORE;
@@ -52,52 +49,68 @@ public class LocalDeploymentSteps {
     private static final String MERGE_CONFIG = "MERGE";
     private static final Path LOCAL_STORE_RECIPES = Paths.get("local:", "local-store", "recipes");
     private static final int MAX_DEPLOYMENT_RETRY_COUNT = 3;
-    private final AWSResources resources;
     private final ComponentPreparationService componentPreparation;
     private final ComponentOverrides overrides;
     private final TestContext testContext;
     private final WaitSteps waits;
     private final ObjectMapper mapper;
     private final ScenarioContext scenarioContext;
-    private final Platform platform;
     private final Path artifactPath;
     private final Path recipePath;
     private final Device device;
 
-
     @Inject
     @SuppressWarnings("MissingJavadocMethod")
     public LocalDeploymentSteps(
-            final AWSResources resources,
             final ComponentOverrides overrides,
             final TestContext testContext,
             final ComponentPreparationService componentPreparation,
             final ScenarioContext scenarioContext,
             final WaitSteps waits,
             final ObjectMapper mapper,
-            final Platform platform,
             final Device device) {
-        this.resources = resources;
         this.overrides = overrides;
         this.testContext = testContext;
         this.componentPreparation = componentPreparation;
         this.scenarioContext = scenarioContext;
         this.waits = waits;
         this.mapper = mapper;
-        this.platform = platform;
         this.artifactPath = testContext.installRoot().resolve(LOCAL_STORE).resolve(ARTIFACTS_DIR);
         this.recipePath = testContext.installRoot().resolve(LOCAL_STORE).resolve(RECIPE_DIR);
         this.device = device;
     }
 
+    /**
+     * implemented the step of installing a custom component with configuration.
+     *
+     * @param componentName         the name of the custom component
+     * @param configurationTable    the table which describes the configurations
+     * @throws InterruptedException InterruptedException could be throw out during the component deployment
+     * @throws IOException          IOException could be throw out during preparation of the CLI command
+     */
     @When("I install the component {word} from local store with configuration")
     public void installComponentWithConfiguration(final String componentName, final DataTable configurationTable)
             throws InterruptedException, IOException {
         List<Map<String, String>> configuration = configurationTable.asMaps(String.class, String.class);
-        List<String> componentSpecs = new ArrayList<>(Arrays.asList(
+        List<String> componentSpecs = Arrays.asList(
                 componentName, LOCAL_STORE_RECIPES.resolve(String.format("%s.yaml", componentName)).toString()
-        ));
+        );
         installComponent(componentSpecs, configuration);
+    }
+
+    /**
+     *  implemented the step of updating a custom component's configuration.
+     *
+     * @param componentName         the name of the custom component
+     * @param configurationTable    the table which describes the configurations
+     * @throws InterruptedException InterruptedException could be throw out during the component deployment
+     * @throws IOException          IOException could be throw out during preparation of the CLI command
+     */
+    @When("I update the component {word} with configuration")
+    public void updateComponentWithConfiguration(final String componentName, final DataTable configurationTable)
+            throws InterruptedException, IOException {
+        List<Map<String, String>> configuration = configurationTable.asMaps(String.class, String.class);
+        updateComponent(componentName, configuration);
     }
 
     private CommandInput prepareCliDeploymentCommand(String componentName, String componentVersion,
@@ -119,6 +132,23 @@ public class LocalDeploymentSteps {
                 .build();
     }
 
+    private CommandInput prepareCliUpdateCommand(String componentName,
+                                                     List<Map<String, String>> configuration) throws IOException {
+        List<String> commandArgs = new ArrayList<>(Arrays.asList(
+                "deployment",
+                "create",
+                "--merge " + componentName));
+        String updateConfigArgs = getCliUpdateConfigArgs(componentName, configuration);
+        if (!updateConfigArgs.isEmpty()) {
+            commandArgs.add("--update-config '" + updateConfigArgs + "'");
+        }
+
+        return CommandInput.builder()
+                .line(testContext.installRoot().resolve("bin").resolve("greengrass-cli").toString())
+                .addAllArgs(commandArgs)
+                .build();
+    }
+
     private void createLocalDeploymentWithRetry(CommandInput commandInput, int retryCount) throws InterruptedException {
         try {
             String response = executeCommand(commandInput);
@@ -128,7 +158,7 @@ public class LocalDeploymentSteps {
             String deploymentId = responseArray[responseArray.length - 1];
             LOGGER.info("The local deployment response is " + deploymentId);
             scenarioContext.put(LOCAL_DEPLOYMENT_ID, deploymentId);
-        } catch (Exception e) {
+        } catch (CommandExecutionException e) {
             if (retryCount > MAX_DEPLOYMENT_RETRY_COUNT) {
                 throw e;
             }
@@ -139,10 +169,10 @@ public class LocalDeploymentSteps {
         }
     }
 
-    private String executeCommand(CommandInput input) {
+    private String executeCommand(CommandInput input) throws CommandExecutionException {
         final StringJoiner joiner = new StringJoiner(" ").add(input.line());
         Optional.ofNullable(input.args()).ifPresent(args -> args.forEach(joiner::add));
-        byte[] op=  device.execute(CommandInput.builder()
+        byte[] op = device.execute(CommandInput.builder()
                 .workingDirectory(input.workingDirectory())
                 .line("sh")
                 .addArgs("-c", joiner.toString())
@@ -152,7 +182,8 @@ public class LocalDeploymentSteps {
         return new String(op, StandardCharsets.UTF_8);
     }
 
-    private void installComponent(List<String> component, List<Map<String, String>> configuration) throws InterruptedException, IOException {
+    private void installComponent(List<String> component, List<Map<String, String>> configuration)
+            throws InterruptedException, IOException {
         final Map<String, ComponentDeploymentSpecification> localComponentSpec = prepareLocalComponent(component);
         for (Map.Entry<String, ComponentDeploymentSpecification> localComponent : localComponentSpec.entrySet()) {
             String componentName = localComponent.getKey();
@@ -162,24 +193,27 @@ public class LocalDeploymentSteps {
         }
     }
 
-    private String getCliUpdateConfigArgs(String componentName, List<Map<String, String>> configuration) throws IOException {
+    private void updateComponent(String component, List<Map<String, String>> configuration)
+            throws InterruptedException, IOException {
+            String componentName = component;
+            CommandInput command = prepareCliUpdateCommand(componentName, configuration);
+            createLocalDeploymentWithRetry(command, 0);
+    }
+
+    private String getCliUpdateConfigArgs(String componentName, List<Map<String, String>> configuration)
+            throws IOException {
         Map<String, Map<String, Object>> configurationUpdate = new HashMap<>();
         // config update for each component, in the format of <componentName, <MERGE/RESET, map>>
         updateConfigObject(componentName, configuration, configurationUpdate);
         if (configurationUpdate.isEmpty()) {
             return "";
         }
-        Escaper shellEscaper = Escapers.builder()
-                .addEscape('\\', "\\\\")
-                .addEscape('$', "\\$")
-                .addEscape('"', "\\\"").build();
         return mapper.writeValueAsString(configurationUpdate);
     }
 
     @VisibleForTesting
     Map<String, ComponentDeploymentSpecification> prepareLocalComponent(
             List<String> component) {
-        Map<String, ComponentDeploymentSpecification> components = new HashMap<>();
         String name = component.get(0);
         String value = component.get(1);
         ComponentOverrideNameVersion.Builder overrideNameVersion = ComponentOverrideNameVersion.builder()
@@ -195,6 +229,7 @@ public class LocalDeploymentSteps {
         componentPreparation.prepare(overrideNameVersion.build()).ifPresent(nameVersion -> {
             builder.componentVersion(nameVersion.version().value());
         });
+        Map<String, ComponentDeploymentSpecification> components = new HashMap<>();
         components.put(name, builder.build());
         return components;
     }
@@ -204,7 +239,7 @@ public class LocalDeploymentSteps {
      *
      * @param component           component name
      * @param configuration       list of configs given by cucumber step
-     * @param configurationUpdate format: <componentName, <MERGE/RESET, <KV map>>>
+     * @param configurationUpdate format: (componentName, (MERGE or RESET, (KV map)))
      */
     private void updateConfigObject(String component, List<Map<String, String>> configuration,
                                     Map<String, Map<String, Object>> configurationUpdate) throws IOException {
