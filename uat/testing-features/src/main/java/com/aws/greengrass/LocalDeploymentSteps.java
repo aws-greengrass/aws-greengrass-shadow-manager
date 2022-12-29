@@ -24,6 +24,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import software.amazon.awssdk.services.greengrassv2.model.ComponentDeploymentSpecification;
 import software.amazon.awssdk.utils.ImmutableMap;
+import software.amazon.awssdk.utils.StringUtils;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -107,37 +108,23 @@ public class LocalDeploymentSteps {
      * @throws IOException          IOException could be throw out during preparation of the CLI command
      */
     @When("I update the component {word} with configuration")
-    public void updateComponentWithConfiguration(final String componentName, final DataTable configurationTable)
+    public void updateComponentConfiguration(final String componentName, final DataTable configurationTable)
             throws InterruptedException, IOException {
         List<Map<String, String>> configuration = configurationTable.asMaps(String.class, String.class);
-        updateComponent(componentName, configuration);
+        CommandInput command = getCliDeploymentCommand(componentName, null, configuration);
+        createLocalDeploymentWithRetry(command, 0);
     }
 
-    private CommandInput prepareCliDeploymentCommand(String componentName, String componentVersion,
-                                                     List<Map<String, String>> configuration) throws IOException {
+    private CommandInput getCliDeploymentCommand(String componentName, String componentVersion,
+                                                 List<Map<String, String>> configuration) throws IOException {
         List<String> commandArgs = new ArrayList<>(Arrays.asList(
                 "deployment",
                 "create",
                 "--artifactDir " + artifactPath.toString(),
-                "--recipeDir " + recipePath.toString(),
-                "--merge " + componentName + "=" + componentVersion));
-        String updateConfigArgs = getCliUpdateConfigArgs(componentName, configuration);
-        if (!updateConfigArgs.isEmpty()) {
-            commandArgs.add("--update-config '" + updateConfigArgs + "'");
+                "--recipeDir " + recipePath.toString()));
+        if (StringUtils.isNotBlank(componentVersion)) {
+            commandArgs.add("--merge " + componentName + "=" + componentVersion);
         }
-
-        return CommandInput.builder()
-                .line(testContext.installRoot().resolve("bin").resolve("greengrass-cli").toString())
-                .addAllArgs(commandArgs)
-                .build();
-    }
-
-    private CommandInput getCliUpdateConfigurationCommand(String componentName,
-                                                     List<Map<String, String>> configuration) throws IOException {
-        List<String> commandArgs = Arrays.asList(
-                "deployment",
-                "create",
-                "--merge " + componentName));
         String updateConfigArgs = getCliUpdateConfigArgs(componentName, configuration);
         if (!updateConfigArgs.isEmpty()) {
             commandArgs.add("--update-config '" + updateConfigArgs + "'");
@@ -188,16 +175,9 @@ public class LocalDeploymentSteps {
         for (Map.Entry<String, ComponentDeploymentSpecification> localComponent : localComponentSpec.entrySet()) {
             String componentName = localComponent.getKey();
             String componentVersion = localComponent.getValue().componentVersion();
-            CommandInput command = prepareCliDeploymentCommand(componentName, componentVersion, configuration);
+            CommandInput command = getCliDeploymentCommand(componentName, componentVersion, configuration);
             createLocalDeploymentWithRetry(command, 0);
         }
-    }
-
-    private void updateComponent(String component, List<Map<String, String>> configuration)
-            throws InterruptedException, IOException {
-            String componentName = component;
-            CommandInput command = prepareCliUpdateCommand(componentName, configuration);
-            createLocalDeploymentWithRetry(command, 0);
     }
 
     private String getCliUpdateConfigArgs(String componentName, List<Map<String, String>> configuration)
