@@ -134,7 +134,7 @@ public class LocalDeploymentSteps {
 
     private CommandInput prepareCliUpdateCommand(String componentName,
                                                      List<Map<String, String>> configuration) throws IOException {
-        List<String> commandArgs = new ArrayList<>(Arrays.asList(
+        List<String> commandArgs = Arrays.asList(
                 "deployment",
                 "create",
                 "--merge " + componentName));
