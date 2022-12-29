@@ -132,7 +132,7 @@ public class LocalDeploymentSteps {
                 .build();
     }
 
-    private CommandInput prepareCliUpdateCommand(String componentName,
+    private CommandInput getCliUpdateConfigurationCommand(String componentName,
                                                      List<Map<String, String>> configuration) throws IOException {
         List<String> commandArgs = Arrays.asList(
                 "deployment",
