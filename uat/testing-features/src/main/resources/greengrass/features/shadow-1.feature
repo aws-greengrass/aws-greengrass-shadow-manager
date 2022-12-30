@@ -108,3 +108,16 @@ Feature: Greengrass V2 ShadowManager
             | ThingName | testThing                |
             | nextToken | 1uTRLnjIlNrqirv+CtW3bg== |
         Then the local Greengrass deployment is SUCCEEDED on the device after 120 seconds
+
+    @Shadow1_T6
+    Scenario: Shadow-1-T6: As a customer, I can react to named shadow updates based on the delta payload received over PubSub
+        When I install the component ShadowReactiveComponentPing from local store with configuration
+            | key                     | value
+            | SubscribeTopic          | $aws/things/testThingName/shadow/name/testShadowName/update/delta                                             |
+            | UpdateDocumentRequest1  | {\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}}}               |
+        Then the local Greengrass deployment is SUCCEEDED on the device after 120 seconds
+        When I install the component ShadowReactiveComponentPong from local store with configuration
+            | key                     | value                                                                                                     |
+            | UpdateDocumentRequest1  | {\"version\":1,\"state\":{\"desired\":{\"color\":{\"r\":255,\"g\":0,\"b\":0},\"SomeKey\":\"SomeValue\"}}} |
+            | SubscribeTopic          |                                                                                                           |
+        Then the local Greengrass deployment is SUCCEEDED on the device after 120 seconds
