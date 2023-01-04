@@ -1,0 +1,50 @@
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+---
+RecipeFormatVersion: '2020-01-25'
+ComponentName: ShadowReactiveComponentPing
+ComponentVersion: '0.0.0'
+ComponentDescription: Component to test Shadow functionality. Retrieves a Shadow for the given ThingName / ShadowName and compares the document against the specified ShadowDocument.
+ComponentPublisher: Amazon
+ComponentConfiguration:
+  DefaultConfiguration:
+    ThingName: "testThingName"
+    ShadowName: "testShadowName"
+    UpdateDocumentRequest1: ""
+    ExpectedShadowDocument1: ""
+    SubscribeTopic: ""
+    ExpectedShadowDocument2: ""
+    accessControl:
+      aws.greengrass.ShadowManager:
+        ShadowReactiveComponentPingPolicyId1:
+          policyDescription: access to particular shadow operations
+          operations:
+            - 'aws.greengrass#GetThingShadow'
+            - 'aws.greengrass#UpdateThingShadow'
+            - 'aws.greengrass#DeleteThingShadow'
+          resources:
+            - '*'
+        ShadowReactiveComponentPingPolicyId2:
+          policyDescription: access to shadow list operation
+          operations:
+            - 'aws.greengrass#ListNamedShadowsForThing'
+          resources:
+            - '*'
+      aws.greengrass.ipc.pubsub:
+        ShadowReactiveComponentPingPolicyId3:
+          policyDescription: access to pubsub topics
+          operations:
+            - 'aws.greengrass#SubscribeToTopic'
+          resources:
+            - '*'
+Manifests:
+  - Artifacts:
+      - URI: classpath:/local-store/artifacts/custom-components.jar
+    Lifecycle:
+      Setenv:
+        SubscribeTopic: "{configuration:/SubscribeTopic}"
+      Startup:
+        java -Dlog.level=INFO -DcomponentName="ShadowReactiveComponent" -jar {artifacts:path}/custom-components.jar "{configuration:/ThingName}" "{configuration:/ShadowName}" "{configuration:/UpdateDocumentRequest1}"
