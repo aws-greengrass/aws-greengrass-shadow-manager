@@ -40,4 +40,4 @@ Manifests:
       - URI: classpath:/local-store/artifacts/custom-components.jar
     Lifecycle:
       Run: >-
-        java -Dlog.level=INFO -DcomponentName="ShadowComponent" -jar {artifacts:path}/custom-components.jar "{configuration:/Operation}" "{configuration:/ThingName}" "{configuration:/ShadowName}" "{configuration:/ShadowDocument}" "{configuration:/PageSize}" "{configuration:/NextToken}" "{configuration:/OperationTimeout}"
+        java -Dlog.level=INFO -DserverPort={configuration:/assertionServerPort} -DcomponentName="ShadowComponent" -jar {artifacts:path}/custom-components.jar "{configuration:/Operation}" "{configuration:/ThingName}" "{configuration:/ShadowName}" "{configuration:/ShadowDocument}" "{configuration:/PageSize}" "{configuration:/NextToken}" "{configuration:/OperationTimeout}"
