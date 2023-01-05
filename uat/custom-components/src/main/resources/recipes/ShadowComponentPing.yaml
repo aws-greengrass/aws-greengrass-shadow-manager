@@ -26,11 +26,6 @@ ComponentConfiguration:
             - 'aws.greengrass#GetThingShadow'
             - 'aws.greengrass#UpdateThingShadow'
             - 'aws.greengrass#DeleteThingShadow'
-          resources:
-            - '*'
-        ShadowComponentPingPolicyId2:
-          policyDescription: access to shadow list operation
-          operations:
             - 'aws.greengrass#ListNamedShadowsForThing'
           resources:
             - '*'
