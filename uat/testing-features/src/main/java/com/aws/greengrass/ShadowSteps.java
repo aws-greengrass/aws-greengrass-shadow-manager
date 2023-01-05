@@ -11,6 +11,7 @@ import io.cucumber.guice.ScenarioScoped;
 import io.cucumber.java.After;
 import io.cucumber.java.en.When;
 import lombok.extern.log4j.Log4j2;
+
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -34,6 +35,12 @@ public class ShadowSteps {
         EXECUTOR.shutdownNow();
     }
 
+    /**
+     * step for adding a random shadow
+     *
+     * @param thingName name of thing
+     * @param shadowName name of shadow
+     */
     @When("I add random shadow for {word} with name {word} in context")
     public void addShadow(final String thingName, final String shadowName) {
         String actualThingName = thingName + randomName();

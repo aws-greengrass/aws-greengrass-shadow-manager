@@ -16,19 +16,6 @@ public final class TestUtils {
     private TestUtils() {
     }
 
-    public static boolean eventuallyTrue(Predicate<Void> condition, long... optional) throws InterruptedException {
-        long timeoutInMillis = optional.length >= 1 ? optional[0] : Constants.DEFAULT_GENERIC_POLLING_TIMEOUT_MILLIS;
-        long pollingIntervalInMillis = optional.length >= 2 ? optional[1] : 500;
-        final long startTime = System.currentTimeMillis();
-        while ((System.currentTimeMillis() - startTime) < timeoutInMillis) {
-            if (condition.test(null)) {
-                return true;
-            }
-            Thread.sleep(pollingIntervalInMillis);
-        }
-        return false;
-    }
-
     /**
      * Different devices are slower than others. It's good to multiply
      * hard-coded timeout values by a rough factor to accommodate these

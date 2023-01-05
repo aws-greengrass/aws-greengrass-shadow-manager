@@ -34,7 +34,7 @@ public class IotShadowResourceSpec {
 
     @Builder.Default
     @NonNull
-    List<IotRoleAliasSpec> iotRoleAliasSpecs= new ArrayList<>();
+    List<IotRoleAliasSpec> iotRoleAliasSpecs = new ArrayList<>();
 
     @Builder.Default
     @NonNull

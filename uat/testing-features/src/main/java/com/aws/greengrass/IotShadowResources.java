@@ -37,6 +37,12 @@ public class IotShadowResources implements Closeable {
     private final IotClient iotClient;
     private final IamClient iamClient;
 
+    /**
+     * constructor for IotShadowResources.
+     *
+     * @param iotClient iotClient instance
+     * @param iamClient iamClient instance
+     */
     @Inject
     public IotShadowResources(IotClient iotClient, IamClient iamClient) {
         this.specs = IotShadowResourceSpec.builder().build();
