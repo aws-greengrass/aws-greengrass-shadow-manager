@@ -31,7 +31,8 @@ public class IoTShadow implements AWSResource<IotDataPlaneClient> {
         }
         log.debug("Removing shadow for thing {} with name {}", thingName, shadowName);
         try {
-            client.deleteThingShadow(DeleteThingShadowRequest.builder().thingName(thingName).shadowName(shadowName).build());
+            client.deleteThingShadow(DeleteThingShadowRequest.builder().thingName(thingName).shadowName(shadowName)
+                    .build());
             log.debug("Removed shadow for thing {} with name {}", thingName, shadowName);
         } catch (ResourceNotFoundException e) {
             log.error(e);

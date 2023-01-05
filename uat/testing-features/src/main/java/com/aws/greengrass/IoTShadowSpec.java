@@ -12,8 +12,7 @@ import lombok.EqualsAndHashCode;
 @Builder
 @Data
 @EqualsAndHashCode(callSuper = false)
-public class IoTShadowSpec
- {
+public class IoTShadowSpec {
     String thingName;
     String shadowName;
     @Builder.Default
