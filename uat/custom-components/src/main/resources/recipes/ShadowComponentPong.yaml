@@ -21,12 +21,17 @@ ComponentConfiguration:
     OperationTimeout: 0
     accessControl:
       aws.greengrass.ShadowManager:
-        ShadowComponentPongPolicyId1:
+        ShadowComponentPongPolicyId3:
           policyDescription: access to particular shadow operations
           operations:
             - 'aws.greengrass#GetThingShadow'
             - 'aws.greengrass#UpdateThingShadow'
             - 'aws.greengrass#DeleteThingShadow'
+          resources:
+            - '*'
+        ShadowComponentPongPolicyId4:
+          policyDescription: access to shadow list operation
+          operations:
             - 'aws.greengrass#ListNamedShadowsForThing'
           resources:
             - '*'
