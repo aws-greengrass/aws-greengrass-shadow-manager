@@ -24,7 +24,6 @@ import lombok.extern.log4j.Log4j2;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import javax.inject.Inject;
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -35,6 +34,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
+import javax.inject.Inject;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -57,6 +57,7 @@ public class AssertionSteps implements Closeable {
 
 
     @Inject
+    @SuppressWarnings("MissingJavadocMethod")
     public AssertionSteps(TestContext testContext,
                           final ScenarioContext scenarioContext,
                           WaitSteps waits) {
@@ -81,66 +82,71 @@ public class AssertionSteps implements Closeable {
     }
 
     @Given("I start an assertion server")
+    @SuppressWarnings("MissingJavadocMethod")
     public void start() throws IOException {
         if (server != null) {
             throw new IllegalStateException("Server already exists");
         }
 
-        server = HttpServerProvider.provider().createHttpServer(new InetSocketAddress("localhost", 0), 0);
+        server = HttpServerProvider.provider().createHttpServer(new InetSocketAddress("localhost", 0),
+                0);
         server.createContext("/assert", this::assertionHandler);
         LOGGER.debug("Starting HTTP assertion server");
         server.setExecutor(Executors.newCachedThreadPool(runnable -> {
             // Daemon-ize to allow main thread to end
             final Thread thread = Executors.defaultThreadFactory().newThread(runnable);
-            thread.setName(String.format("AssertionServer-%d-%s", server.getAddress().getPort(), testContext.testId().id()));
+            thread.setName(String.format("AssertionServer-%d-%s", server.getAddress().getPort(),
+                    testContext.testId().id()));
             thread.setDaemon(true);
             return thread;
         }));
         server.start();
         port = server.getAddress().getPort();
         LOGGER.info("Started HTTP assertion server at port {}", port);
-        scenarioContext.put("assertionServerPort", port + "");
+        scenarioContext.put("assertionServerPort", Integer.toString(port));
     }
 
 
     @Then("I get {int} assertion(s) with context {string}")
-    public void iGetAssertionsWithContext(int assertionCount, String context) throws Throwable {
-        iGetAssertionsWithContextTimeout(assertionCount, context, null,
+    public void assertionsWithContext(int assertionCount, String context) throws Throwable {
+        assertionsWithContextTimeout(assertionCount, context, null,
                 100, true);
     }
 
 
     @Then("I get at least {int} assertion(s) with context {string}")
-    public void iGetAtLeastAssertionsWithContext(int assertionCount, String context) throws Throwable {
-        iGetAssertionsWithContextTimeout(assertionCount, context, null,
+    public void atLeastNAssertionsWithContext(int assertionCount, String context) throws Throwable {
+        assertionsWithContextTimeout(assertionCount, context, null,
                 100, false);
     }
 
 
     @Then("I get at least {int} assertion(s) with context {string} within {long} seconds")
-    public void iGetAtLeastAssertionsWithContext(int assertionCount, String context, long timeoutSeconds)
+    public void atLeastNAssertionsWithContext(int assertionCount, String context, long timeoutSeconds)
             throws Throwable {
-        iGetAssertionsWithContextTimeout(assertionCount, context, null, timeoutSeconds,
+        assertionsWithContextTimeout(assertionCount, context, null, timeoutSeconds,
                 false);
     }
 
     @Then("I get {int} assertion(s) with context {string} within {long} seconds")
-    public void iGetAssertionsWithContextTimeout(int assertionCount, String context, long timeoutSeconds)
+    public void assertionsWithContextTimeout(int assertionCount, String context, long timeoutSeconds)
             throws Throwable {
-        iGetAssertionsWithContextTimeout(assertionCount, context, null, timeoutSeconds, true);
+        assertionsWithContextTimeout(assertionCount, context, null, timeoutSeconds, true);
     }
 
 
     @Then("I get {int} assertion(s) with context {string} and message {string} within {long} seconds")
-    public void iGetAssertionsWithContextTimeout(int assertionCount, String context, String message,
+    public void assertionsWithContextTimeout(int assertionCount, String context, String message,
                                                  long timeoutSeconds) throws Throwable {
-        iGetAssertionsWithContextTimeout(assertionCount, context, message, timeoutSeconds, true);
+        assertionsWithContextTimeout(assertionCount, context, message, timeoutSeconds, true);
     }
 
-    public void iGetAssertionsWithContextTimeout(int assertionCount, String context, String message,
-                                                 long timeoutSeconds, boolean failOnTooManyAssertions) throws Throwable {
-        String exceptionMessage = (message == null) ?
-                String.format("did not receive %d assertions for '%s' in time (%ds)", assertionCount,
+    @SuppressWarnings("PMD.AvoidCatchingGenericException")
+    private void assertionsWithContextTimeout(int assertionCount, String context, String message,
+                                                 long timeoutSeconds, boolean failOnTooManyAssertions)
+            throws Throwable {
+        String exceptionMessage = (message == null)
+                ? String.format("did not receive %d assertions for '%s' in time (%ds)", assertionCount,
                         context, timeoutSeconds)
                 : String.format("did not receive %d assertions for '%s' with message '%s' in time (%ds)",
                 assertionCount, context, message, timeoutSeconds);
@@ -157,7 +163,8 @@ public class AssertionSteps implements Closeable {
         wrapper.setWrapped(ex);
         boolean finished = waits.untilTrue(() -> {
             try {
-                return hasReceivedAssertions(assertionCount, context, message, failOnTooManyAssertions, exceptionMessage);
+                return hasReceivedAssertions(assertionCount, context, message, failOnTooManyAssertions,
+                        exceptionMessage);
             } catch (Exception e) {
                 wrapper.setWrapped(e);
             }
@@ -169,7 +176,8 @@ public class AssertionSteps implements Closeable {
         }
     }
 
-    private boolean hasReceivedAssertions(int assertionCount, String context, String message, boolean failOnTooManyAssertions, String exceptionMessage) throws Exception {
+    private boolean hasReceivedAssertions(int assertionCount, String context, String message,
+                                          boolean failOnTooManyAssertions, String exceptionMessage) {
 
         List<Assertion> assertionsWithContext = assertionList.stream()
                 .filter(a -> a.getContext() != null && context.equalsIgnoreCase(a.getContext())
@@ -202,7 +210,7 @@ public class AssertionSteps implements Closeable {
     }
 
     @When("I clear the assertions")
-    public void iClearTheAssertions() {
+    public void clearTheAssertions() {
         assertionList.clear();
     }
 }

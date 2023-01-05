@@ -5,6 +5,7 @@
 
 package com.aws.greengrass.artifacts;
 
+import com.aws.greengrass.utils.Client;
 import com.aws.greengrass.utils.IPCTestUtils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -43,7 +44,10 @@ public class ShadowComponent implements Consumer<String[]> {
     private static final Logger LOGGER = LoggerFactory.getLogger(ShadowComponent.class);
     private static final List<String> NAMED_SHADOWS_LIST = Arrays.asList("alpha", "bravo", "charlie", "delta");
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    private Client client;
+
     private GreengrassCoreIPC greengrassCoreIPCClient = null;
+
 
     @Override
     public void accept(String[] args) {
@@ -56,6 +60,7 @@ public class ShadowComponent implements Consumer<String[]> {
             return;
         }
         parseArgs(args);
+        client = new Client();
         try (GreengrassCoreIPCClientV2 eventStreamRpcConnection = IPCTestUtils.getGreengrassClient()) {
             greengrassCoreIPCClient = eventStreamRpcConnection.getClient();
             handleIPCOperation();
@@ -85,7 +90,7 @@ public class ShadowComponent implements Consumer<String[]> {
             try {
                 switch (operation) {
                     case "GetThingShadow":
-                        handleGetThingShadowOperation(thingName, shadowName);
+                        handleGetThingShadowOperation(thingName, shadowName,shadowDocumentPayload);
                         break;
                     case "UpdateThingShadow":
                         handleUpdateThingShadowOperation(thingName, shadowName, shadowDocumentPayload);
@@ -125,9 +130,9 @@ public class ShadowComponent implements Consumer<String[]> {
     }
 
     // Basic Operation handlers. Execute operation and verify results with expected payload/update document
-    private void handleGetThingShadowOperation(String thingName, String shadowName)
+    private void handleGetThingShadowOperation(String thingName, String shadowName, byte[] shadowDocumentPayload)
             throws ExecutionException, InterruptedException, IOException {
-
+        JsonNode expectedShadowDocumentJson = MAPPER.readTree(shadowDocumentPayload);
         GetThingShadowRequest getThingShadowRequest = new GetThingShadowRequest();
         getThingShadowRequest.setThingName(thingName);
         getThingShadowRequest.setShadowName(shadowName);
@@ -138,8 +143,11 @@ public class ShadowComponent implements Consumer<String[]> {
         JsonNode receivedShadowDocumentJson = MAPPER.readTree(getThingShadowResponse.getPayload());
         removeTimeStamp(receivedShadowDocumentJson);
         removeMetadata(receivedShadowDocumentJson);
-        LOGGER.info(MAPPER.writeValueAsString(receivedShadowDocumentJson));
-        LOGGER.error(MAPPER.writeValueAsString(receivedShadowDocumentJson));
+        if (receivedShadowDocumentJson.equals(expectedShadowDocumentJson)) {
+            client.sendAssertion(true, "Retrieved matching shadow document", String.format("Retrieved matching shadow document for thingName: %s, shadowName:%s ", thingName, shadowName));
+        } else {
+            client.sendAssertion(false, "Retrieved matching shadow document", String.format("Retrieved bad shadow document for thingName: %s, shadowName:%s ", thingName, shadowName));
+        }
     }
 
     private void handleUpdateThingShadowOperation(String thingName, String shadowName, byte[] updateDocument
