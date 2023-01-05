@@ -1,7 +1,10 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package com.aws.greengrass;
 
-import com.aws.greengrass.IoTShadow;
-import com.aws.greengrass.testing.resources.ResourceSpec;
 import lombok.Builder;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -9,7 +12,7 @@ import lombok.EqualsAndHashCode;
 @Builder
 @Data
 @EqualsAndHashCode(callSuper = false)
-public class IoTShadowSpec// extends IotShadowResourceSpec
+public class IoTShadowSpec
  {
     String thingName;
     String shadowName;
