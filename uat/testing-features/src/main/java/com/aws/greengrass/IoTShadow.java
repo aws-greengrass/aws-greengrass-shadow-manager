@@ -1,13 +1,16 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package com.aws.greengrass;
 
 import com.aws.greengrass.testing.resources.AWSResource;
 import lombok.Data;
 import lombok.extern.log4j.Log4j2;
-import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.services.iotdataplane.IotDataPlaneClient;
 import software.amazon.awssdk.services.iotdataplane.model.DeleteThingShadowRequest;
 import software.amazon.awssdk.services.iotdataplane.model.ResourceNotFoundException;
-import software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowRequest;
 
 @Data
 @Log4j2
@@ -21,12 +24,6 @@ public class IoTShadow implements AWSResource<IotDataPlaneClient> {
         this.shadowName = shadowName;
     }
 
-//    public static IoTShadow create(IotDataPlaneClient iotDataPlaneClient, IoTShadowSpec spec) {
-//        log.atDebug().log("Creating IoT Shadow for thing {} with name {}", spec.getThingName(), spec.getShadowName());
-//        iotDataPlaneClient.updateThingShadow(UpdateThingShadowRequest.builder().thingName(spec.getThingName())
-//                .shadowName(spec.getShadowName()).payload(SdkBytes.fromByteArray(spec.getInitialPayload())).build());
-//        return new IoTShadow(spec.getThingName(), spec.getShadowName());
-//    }
     @Override
     public void remove(IotDataPlaneClient client) {
         if (deleted) {
