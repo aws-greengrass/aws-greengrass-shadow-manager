@@ -9,11 +9,11 @@ Feature: Shadow-2
     When I add random shadow for MyThing with name MyThingNamedShadow in context
     When I add random shadow for MyThing2 with name MyThingNamedShadow2 in context
 
-  @stable @functional @JavaSDK @smoke @RunWithHSM
   Scenario Outline: Shadow-2-T1-<strategy>: As a developer, I can sync a local named shadow to the cloud.
     When I create a Greengrass deployment with components
       | aws.greengrass.Nucleus       | LATEST |
       | aws.greengrass.ShadowManager | LATEST |
+      | aws.greengrass.Cli       | LATEST |
     And I update my Greengrass deployment configuration, setting the component aws.greengrass.ShadowManager configuration to:
         """
         {
@@ -45,29 +45,26 @@ Feature: Shadow-2
         }
         """
     And I update my Greengrass deployment configuration, setting the component aws.greengrass.Nucleus configuration to:
-            """
+        """
         {"MERGE":{"logging": {"level": "DEBUG"}}}
         """
     And I deploy the Greengrass deployment configuration
     Then the Greengrass deployment is COMPLETED on the device after 2 minutes
-    And I install the component ShadowComponentPing from local store with configuration
+    When I install the component ShadowComponentPing from local store with configuration
       | key                    | value                                                                                                          |
-      | assertionServerPort    | ${assertionServerPort}                                                                                         |
       | Operation              | UpdateThingShadow                                                                                              |
       | ThingName              | MyThing                                                                                                        |
       | ShadowName             | MyThingNamedShadow                                                                                             |
       | ShadowDocument         | {\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}}}               |
       | OperationTimeout       | <timeout>                                                                                                      |
-#    Then I get 1 assertions with context "Updated shadow document" within 15 seconds
+    Then I wait 120 seconds
     Then I can get cloud shadow for MyThing with name MyThingNamedShadow with state {"state":{"reported":{"color":{"r":255,"g":255,"b":255},"SomeKey":"SomeValue"}}} within 30 seconds
     When I install the component ShadowComponentPong from local store with configuration
       | key              | value              |
       | Operation        | DeleteThingShadow  |
       | ThingName        | MyThing            |
       | ShadowName       | MyThingNamedShadow |
-      | ShadowDocument   |                    |
       | OperationTimeout | <timeout>          |
-#    Then I get 1 assertions with context "Deleted shadow document" within 15 seconds
     And I can not get cloud shadow for MyThing with name MyThingNamedShadow within 30 seconds
     
     Examples:

@@ -9,11 +9,34 @@ import lombok.extern.log4j.Log4j2;
 
 import java.util.function.Predicate;
 
+import static com.aws.greengrass.Constants.DEFAULT_GENERIC_POLLING_TIMEOUT_MILLIS;
+
 
 @Log4j2
 public final class TestUtils {
 
     private TestUtils() {
+    }
+
+    /**
+     * check if it will fullfill the condition in given time
+     *
+     * @param condition the condition used to test the reslt
+     * @param optional for specify the time.
+     * @return
+     * @throws InterruptedException
+     */
+    public static boolean eventuallyTrue(Predicate<Void> condition, long... optional) throws InterruptedException {
+        long timeoutInMillis = optional.length >= 1 ? optional[0] : DEFAULT_GENERIC_POLLING_TIMEOUT_MILLIS;
+        long pollingIntervalInMillis = optional.length >= 2 ? optional[1] : 500;
+        final long startTime = System.currentTimeMillis();
+        while ((System.currentTimeMillis() - startTime) < timeoutInMillis) {
+            if (condition.test(null)) {
+                return true;
+            }
+            Thread.sleep(pollingIntervalInMillis);
+        }
+        return false;
     }
 
     /**
