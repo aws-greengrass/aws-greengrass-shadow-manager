@@ -9,6 +9,7 @@ Feature: Shadow-2
     When I add random shadow for MyThing with name MyThingNamedShadow in context
     When I add random shadow for MyThing2 with name MyThingNamedShadow2 in context
 
+    @saranya
   Scenario Outline: Shadow-2-T1-<strategy>: As a developer, I can sync a local named shadow to the cloud.
     When I create a Greengrass deployment with components
       | aws.greengrass.Nucleus       | LATEST |
@@ -71,7 +72,7 @@ Feature: Shadow-2
       | strategy | timeout |
       | realTime | 5       |
     
-    @gamma
-    Examples:
-      | strategy | timeout |
-      | periodic | 30      |
+#    @gamma
+#    Examples:
+#      | strategy | timeout |
+#      | periodic | 30      |

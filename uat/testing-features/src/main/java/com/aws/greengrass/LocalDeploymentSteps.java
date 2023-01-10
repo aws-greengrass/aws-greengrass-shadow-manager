@@ -48,6 +48,7 @@ import static com.aws.greengrass.testing.features.GreengrassCliSteps.LOCAL_DEPLO
 public class LocalDeploymentSteps {
     private static final Logger LOGGER = LogManager.getLogger(LocalDeploymentSteps.class);
     private static final String MERGE_CONFIG = "MERGE";
+    private static final String RESET_CONFIG = "RESET";
     private static final Path LOCAL_STORE_RECIPES = Paths.get("local:", "local-store", "recipes");
     private static final int MAX_DEPLOYMENT_RETRY_COUNT = 3;
     private final ComponentPreparationService componentPreparation;
@@ -227,29 +228,35 @@ public class LocalDeploymentSteps {
             Map<String, Map<String, Object>> componentToConfig = new HashMap<>();
             for (Map<String, String> configKeyValue : configuration) {
                 String value = configKeyValue.get("value");
-                value = scenarioContext.applyInline(value);
-                String[] parts = configKeyValue.get("key").split(":");
-                String componentName;
-                String path;
-                if (parts.length == 1) {
-                    componentName = component;
-                    path = parts[0];
+                value = scenarioContext.get(value);
+                if (value == null){
+                    value = scenarioContext.applyInline(configKeyValue.get("value"));
+                }
+                if (value != null && (value.contains(MERGE_CONFIG) || value.contains(RESET_CONFIG))) {
+                    configurationUpdate.put(component, mapper.readValue(value, Map.class));
                 } else {
-                    componentName = parts[0];
-                    path = parts[1];
-                }
+                    String[] parts = configKeyValue.get("key").split(":");
+                    String componentName;
+                    String path;
+                    if (parts.length == 1) {
+                        componentName = component;
+                        path = parts[0];
+                    } else {
+                        componentName = parts[0];
+                        path = parts[1];
+                    }
 
-                Map<String, Object> config = componentToConfig.get(componentName);
-                if (config == null) {
-                    config = new HashMap<>();
-                    componentToConfig.put(componentName, config);
+                    Map<String, Object> config = componentToConfig.get(componentName);
+                    if (config == null) {
+                        config = new HashMap<>();
+                        componentToConfig.put(componentName, config);
+                    }
+                    Object objVal = value;
+                    try {
+                        objVal = mapper.readValue(value, Map.class);
+                    } catch (IllegalArgumentException | IOException ignored) {}
+                    config.put(path, objVal);
                 }
-                Object objVal = value;
-                try {
-                    objVal = mapper.readValue(value, Map.class);
-                } catch (IllegalArgumentException | IOException ignored) {
-                }
-                config.put(path, objVal);
             }
             for (Map.Entry<String, Map<String, Object>> entry : componentToConfig.entrySet()) {
                 configurationUpdate.put(entry.getKey(), ImmutableMap.of(MERGE_CONFIG, entry.getValue()));
