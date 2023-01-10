@@ -26,6 +26,17 @@
             <url>https://d2jrmugq4soldf.cloudfront.net/snapshots</url>
         </repository>
     </repositories>
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>software.amazon.awssdk</groupId>
+                <artifactId>bom</artifactId>
+                <version>2.15.17</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
     <dependencies>
         <dependency>
             <groupId>com.aws.greengrass</groupId>
@@ -40,11 +51,29 @@
             <scope>compile</scope>
         </dependency>
         <dependency>
+            <groupId>com.google.auto.service</groupId>
+            <artifactId>auto-service</artifactId>
+            <version>1.0.1</version>
+        </dependency>
+        <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-api</artifactId>
             <version>5.8.1</version>
             <scope>compile</scope>
         </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>iotdataplane</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/org.immutables/value -->
+        <dependency>
+            <groupId>org.immutables</groupId>
+            <artifactId>value</artifactId>
+            <version>2.9.3</version>
+            <scope>provided</scope>
+        </dependency>
+
     </dependencies>
     <build>
         <plugins>
