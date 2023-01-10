@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.StringJoiner;
+
 import javax.inject.Inject;
 
 import static com.aws.greengrass.testing.component.LocalComponentPreparationService.ARTIFACTS_DIR;
@@ -85,8 +86,8 @@ public class LocalDeploymentSteps {
     /**
      * implemented the step of installing a custom component with configuration.
      *
-     * @param componentName         the name of the custom component
-     * @param configurationTable    the table which describes the configurations
+     * @param componentName      the name of the custom component
+     * @param configurationTable the table which describes the configurations
      * @throws InterruptedException InterruptedException could be throw out during the component deployment
      * @throws IOException          IOException could be throw out during preparation of the CLI command
      */
@@ -101,10 +102,10 @@ public class LocalDeploymentSteps {
     }
 
     /**
-     *  implemented the step of updating a custom component's configuration.
+     * implemented the step of updating a custom component's configuration.
      *
-     * @param componentName         the name of the custom component
-     * @param configurationTable    the table which describes the configurations
+     * @param componentName      the name of the custom component
+     * @param configurationTable the table which describes the configurations
      * @throws InterruptedException InterruptedException could be throw out during the component deployment
      * @throws IOException          IOException could be throw out during preparation of the CLI command
      */
@@ -229,7 +230,7 @@ public class LocalDeploymentSteps {
             for (Map<String, String> configKeyValue : configuration) {
                 String value = configKeyValue.get("value");
                 value = scenarioContext.get(value);
-                if (value == null){
+                if (value == null) {
                     value = scenarioContext.applyInline(configKeyValue.get("value"));
                 }
                 if (value != null && (value.contains(MERGE_CONFIG) || value.contains(RESET_CONFIG))) {
@@ -254,7 +255,8 @@ public class LocalDeploymentSteps {
                     Object objVal = value;
                     try {
                         objVal = mapper.readValue(value, Map.class);
-                    } catch (IllegalArgumentException | IOException ignored) {}
+                    } catch (IllegalArgumentException | IOException ignored) {
+                    }
                     config.put(path, objVal);
                 }
             }
