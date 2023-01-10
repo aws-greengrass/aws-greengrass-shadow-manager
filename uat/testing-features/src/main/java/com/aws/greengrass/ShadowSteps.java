@@ -30,9 +30,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.notNullValue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.fail;
 
 @Log4j2
@@ -89,9 +88,9 @@ public class ShadowSteps {
      * @throws InterruptedException InterruptedException
      */
     @Then("I can get cloud shadow for {word} with name {word} with state {word} within {int} seconds")
-    public void canGetShadow(final String thingName, final String shadowName, final String stateString,
-                             final int timeoutSeconds) throws IOException, InterruptedException {
-        getShadow(thingName, shadowName, stateString, timeoutSeconds, false, 1L);
+    public void canGetCloudShadow(final String thingName, final String shadowName, final String stateString,
+                                  final int timeoutSeconds) throws IOException, InterruptedException {
+        canGetShadow(thingName, shadowName, stateString, timeoutSeconds, false, 2L);
     }
 
     /**
@@ -106,41 +105,41 @@ public class ShadowSteps {
     @Then("I can not get cloud shadow for {word} with name {word} within {int} seconds")
     public void cannotGetShadow(final String thingName, final String shadowName,
                                 final int timeoutSeconds) throws IOException, InterruptedException {
-        getShadow(thingName, shadowName, null, timeoutSeconds, true, 0L);
+        canGetShadow(thingName, shadowName, null, timeoutSeconds, true, 0L);
     }
 
     private String randomName() {
         return String.format("e2e-%d-%s", System.currentTimeMillis(), UUID.randomUUID().toString());
     }
 
-    private void getShadow(final String thingName, final String shadowName, final String stateString,
-                           final int timeoutSeconds, final boolean shouldNotExist, final long version)
+    private void canGetShadow(final String thingName, final String shadowName, final String stateString,
+                              final int timeoutSeconds, final boolean shouldNotExist, final long version)
             throws IOException, InterruptedException {
         AtomicReference<GetThingShadowResponse> receivedResponse = new AtomicReference<>();
-        boolean successful = waits.untilTrue(() -> compute(thingName, shadowName, shouldNotExist, receivedResponse),
+        boolean successful = waits.untilTrue(() ->
+                        shadowExists(thingName, shadowName, shouldNotExist, receivedResponse),
                 timeoutSeconds, TimeUnit.SECONDS);
         if (!successful) {
-            if (shouldNotExist) {
-                fail("Received shadow that should not exist");
-            } else {
-                fail("Unable to get shadow");
-            }
+            String error = shouldNotExist ? "Received shadow that should not exist" : "Unable to get shadow";
+            fail(error);
             return;
-        } else if (shouldNotExist && (receivedResponse.get() == null || receivedResponse.get().payload() == null)) {
+        }
+        if (shouldNotExist && (receivedResponse.get() == null || receivedResponse.get().payload() == null)) {
             // If we do not want to get the shadow, then this should not be successful.
             return;
         }
-        assertThat(receivedResponse.get().payload(), is(notNullValue()));
+        assertNotNull(receivedResponse.get().payload());
         JsonNode actualStateNode = mapper.readTree(receivedResponse.get().payload().asByteArray());
         removeTimeStamp(actualStateNode);
         removeMetadata(actualStateNode);
+        assertEquals(actualStateNode.get(VERSION_KEY).asLong(), version);
         removeVersion(actualStateNode);
         JsonNode expectedStateNode = mapper.readTree(stateString);
-        assertThat(actualStateNode, is(expectedStateNode));
+        assertEquals(actualStateNode, expectedStateNode);
     }
 
-    private boolean compute(String thingName, String shadowName, boolean shouldNotExist,
-                            AtomicReference<GetThingShadowResponse> receivedResponse) {
+    private boolean shadowExists(String thingName, String shadowName, boolean shouldNotExist,
+                                 AtomicReference<GetThingShadowResponse> receivedResponse) {
         String actualThingName = this.scenarioContext.get(thingName);
         AtomicReference<String> actualShadowName = new AtomicReference<>(CLASSIC_SHADOW);
         if (!CLASSIC_SHADOW.equals(shadowName)) {
@@ -149,7 +148,7 @@ public class ShadowSteps {
         try {
             GetThingShadowResponse response = iotDataPlaneClientProvider.get()
                     .getThingShadow(GetThingShadowRequest.builder()
-                    .thingName(actualThingName).shadowName(actualShadowName.get()).build());
+                            .thingName(actualThingName).shadowName(actualShadowName.get()).build());
             if (response.payload() == null && shouldNotExist) {
                 return true;
             }

@@ -37,7 +37,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.StringJoiner;
-
 import javax.inject.Inject;
 
 import static com.aws.greengrass.testing.component.LocalComponentPreparationService.ARTIFACTS_DIR;

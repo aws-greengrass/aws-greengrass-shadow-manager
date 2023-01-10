@@ -26,6 +26,7 @@ public class IoTShadowModule extends AbstractAWSResourceModule<IotDataPlaneClien
     @Singleton
     @Provides
     @Override
+    @SuppressWarnings("PMD.CloseResource")
     protected IotDataPlaneClient providesClient(
             AwsCredentialsProvider provider,
             AWSResourcesContext context,
@@ -37,6 +38,7 @@ public class IoTShadowModule extends AbstractAWSResourceModule<IotDataPlaneClien
         String dataEndpoint = iotClient
                 .describeEndpoint(DescribeEndpointRequest.builder().endpointType("iot:Data-ATS").build())
                 .endpointAddress();
+        iotClient.close();
         IotDataPlaneClientBuilder builder = IotDataPlaneClient.builder()
                 .credentialsProvider(provider)
                 .httpClientBuilder(httpClientBuilder)
