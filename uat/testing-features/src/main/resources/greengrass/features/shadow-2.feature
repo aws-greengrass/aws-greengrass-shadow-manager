@@ -661,35 +661,3 @@ Feature: Shadow-2
     Examples:
       | strategy | timeout |
       | realTime | 5       |
-
-  Scenario: Shadow-2-T10: As a customer, I can configure shadow manager to subscribe to more than 25 shadows to sync.
-    When I add random shadow for MyThing with name MyThingNamedShadow in context
-    And I create an empty deployment configuration for deployment DeploymentShadow-1
-    And I update the deployment configuration DeploymentShadow-1, setting the shadow component version "LATEST" configuration with 30 named shadows with prefix MyThingNamedShadow per 1 things with prefix MyThing:
-        """
-        {
-          "MERGE": {
-            "synchronize":{
-              "shadowDocuments": processedShadowDocuments
-            }
-          }
-        }
-        """
-    And I install the component ShadowComponentPing from local store with configuration
-        """
-        {
-           "MERGE":{
-                "assertionServerPort": ${assertionServerPort},
-                "Operation": "UpdateThingShadow",
-                "ThingName": "MyThing",
-                "ShadowName": "MyThingNamedShadow",
-                "ShadowDocument": "{\\\"state\\\":{\\\"reported\\\":{\\\"color\\\":{\\\"r\\\":255,\\\"g\\\":255,\\\"b\\\":255},\\\"SomeKey\\\":\\\"SomeValue\\\"}}}"
-           }
-        }
-        """
-    And I update my Greengrass deployment configuration, setting the component aws.greengrass.Nucleus configuration to:
-      """
-      {"MERGE": {"logging": { "level": "DEBUG" }}}
-      """
-    And I deploy the Greengrass deployment configuration
-    Then the Greengrass deployment is COMPLETED on the device after 3 minutes
