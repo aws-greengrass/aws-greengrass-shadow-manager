@@ -51,19 +51,29 @@ Feature: Shadow-2
     And I deploy the Greengrass deployment configuration
     Then the Greengrass deployment is COMPLETED on the device after 4 minutes
     When I install the component ShadowComponentPing from local store with configuration
-      | key                    | value                                                                                                          |
-      | Operation              | UpdateThingShadow                                                                                              |
-      | ThingName              | MyThing                                                                                                        |
-      | ShadowName             | MyThingNamedShadow                                                                                             |
-      | ShadowDocument         | {\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}}}               |
-      | OperationTimeout       | <timeout>                                                                                                      |
+        """
+        {
+           "MERGE":{
+                "assertionServerPort": ${assertionServerPort},
+                "Operation": "UpdateThingShadow",
+                "ThingName": "MyThing",
+                "ShadowName": "MyThingNamedShadow",
+                "ShadowDocument": "{\\\"state\\\":{\\\"reported\\\":{\\\"color\\\":{\\\"r\\\":255,\\\"g\\\":255,\\\"b\\\":255},\\\"SomeKey\\\":\\\"SomeValue\\\"}}}"
+           }
+        }
+        """
     Then I can get cloud shadow for MyThing with name MyThingNamedShadow with state {"state":{"reported":{"color":{"r":255,"g":255,"b":255},"SomeKey":"SomeValue"}}} within 30 seconds
     When I install the component ShadowComponentPong from local store with configuration
-      | key              | value              |
-      | Operation        | DeleteThingShadow  |
-      | ThingName        | MyThing            |
-      | ShadowName       | MyThingNamedShadow |
-      | OperationTimeout | <timeout>          |
+        """
+        {
+           "MERGE":{
+                "assertionServerPort": ${assertionServerPort},
+                "Operation": "DeleteThingShadow",
+                "ThingName": "MyThing",
+                "ShadowName": "MyThingNamedShadow"
+           }
+        }
+        """
     And I can not get cloud shadow for MyThing with name MyThingNamedShadow within 30 seconds
     
     Examples:
@@ -113,25 +123,41 @@ Feature: Shadow-2
     When I can create cloud shadow for MyThing with name MyThingNamedShadow with state {"state":{"reported":{"color":{"r":255,"g":255,"b":255},"SomeKey":"SomeValue"}}}
     Then I can get cloud shadow for MyThing with name MyThingNamedShadow with state {"state":{"reported":{"color":{"r":255,"g":255,"b":255},"SomeKey":"SomeValue"}}} within 30 seconds
     When I install the component ShadowComponentPing from local store with configuration
-      | key              | value                                                                                                          |
-      | Operation        | GetThingShadow                                                                                                 |
-      | ThingName        | MyThing                                                                                                        |
-      | ShadowName       | MyThingNamedShadow                                                                                             |
-      | ShadowDocument   | {\"version\":1,\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}}} |
-      | OperationTimeout | <timeout>                                                                                                      |
+        """
+        {
+           "MERGE":{
+                "assertionServerPort": ${assertionServerPort},
+                "Operation": "GetThingShadow",
+                "ThingName": "MyThing",
+                "ShadowName": "MyThingNamedShadow",
+                "ShadowDocument": "{\\\"version\\\":1,\\\"state\\\":{\\\"reported\\\":{\\\"color\\\":{\\\"r\\\":255,\\\"g\\\":255,\\\"b\\\":255},\\\"SomeKey\\\":\\\"SomeValue\\\"}}}"
+           }
+        }
+        """
     Then I get 1 assertions with context "Retrieved matching shadow document" within 15 seconds
     When I install the component ShadowComponentPing from local store with configuration
-      | key              | value                                                                                                          |
-      | Operation        | DeleteThingShadow                                                                                              |
-      | ThingName        | MyThing                                                                                                        |
-      | ShadowName       | MyThingNamedShadow
+        """
+        {
+           "MERGE":{
+                "assertionServerPort": ${assertionServerPort},
+                "Operation": "DeleteThingShadow",
+                "ThingName": "MyThing",
+                "ShadowName": "MyThingNamedShadow"
+           }
+        }
+        """
     Then I can not get cloud shadow for MyThing with name MyThingNamedShadow within 30 seconds
     Then I install the component ShadowComponentPing from local store with configuration
-      | key              | value              |
-      | Operation        | GetThingShadow     |
-      | ThingName        | MyThing            |
-      | ShadowName       | MyThingNamedShadow |
-      | OperationTimeout | <timeout>          |
+        """
+        {
+           "MERGE":{
+                "assertionServerPort": ${assertionServerPort},
+                "Operation": "GetThingShadow",
+                "ThingName": "MyThing",
+                "ShadowName": "MyThingNamedShadow"
+           }
+        }
+        """
     And I get at least 1 assertions with context "No shadow found" within 15 seconds
 
     Examples:
@@ -179,14 +205,18 @@ Feature: Shadow-2
     And I deploy the Greengrass deployment configuration
     Then the Greengrass deployment is COMPLETED on the device after 4 minutes
     When I install the component ShadowComponentPing from local store with configuration
-      | key                    | value                                                                                                          |
-      | assertionServerPort    | ${assertionServerPort}                                                                                         |
-      | Operation              | UpdateThingShadow                                                                                              |
-      | ThingName              | MyThing                                                                                                        |
-      | ShadowName             | NotSyncedShadow                                                                                                |
-      | ShadowDocument         | {\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}}}               |
-      | ExpectedShadowDocument | {\"version\":1,\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}}} |
-      | OperationTimeout       | <timeout>                                                                                                      |
+        """
+        {
+           "MERGE":{
+                "assertionServerPort": ${assertionServerPort},
+                "Operation": "UpdateThingShadow",
+                "ThingName": "MyThing",
+                "ShadowName": "NotSyncedShadow",
+                "ShadowDocument": "{\\\"state\\\":{\\\"reported\\\":{\\\"color\\\":{\\\"r\\\":255,\\\"g\\\":255,\\\"b\\\":255},\\\"SomeKey\\\":\\\"SomeValue\\\"}}}",
+                "ExpectedShadowDocument": "{\\\"version\\\":1,\\\"state\\\":{\\\"reported\\\":{\\\"color\\\":{\\\"r\\\":255,\\\"g\\\":255,\\\"b\\\":255},\\\"SomeKey\\\":\\\"SomeValue\\\"}}}"
+           }
+        }
+        """
     Then I get 1 assertions with context "Updated shadow document" within 15 seconds
     And I can not get cloud shadow for MyThing with name NotSyncedShadow within 30 seconds
 
@@ -237,13 +267,16 @@ Feature: Shadow-2
     When I can create cloud shadow for MyThing with name NotSyncedShadow with state {"state":{"reported":{"color":{"r":255,"g":255,"b":255},"SomeKey":"SomeValue"}}}
     Then I can get cloud shadow for MyThing with name NotSyncedShadow with state {"state":{"reported":{"color":{"r":255,"g":255,"b":255},"SomeKey":"SomeValue"}}} within 30 seconds
     When I install the component ShadowComponentPing from local store with configuration
-      | key                 | value                  |
-      | assertionServerPort | ${assertionServerPort} |
-      | Operation           | GetThingShadow         |
-      | ThingName           | MyThing                |
-      | ShadowName          | NotSyncedShadow        |
-      | ShadowDocument      |                        |
-      | OperationTimeout    | <timeout>              |
+        """
+        {
+           "MERGE":{
+                "assertionServerPort": ${assertionServerPort},
+                "Operation": "GetThingShadow",
+                "ThingName": "MyThing",
+                "ShadowName": "NotSyncedShadow",
+           }
+        }
+        """
     Then I get at least 1 assertions with context "No shadow found" within 15 seconds
 
     Examples:
@@ -291,23 +324,31 @@ Feature: Shadow-2
     And I deploy the Greengrass deployment configuration
     Then the Greengrass deployment is COMPLETED on the device after 4 minutes
     When I install the component ShadowComponentPing from local store with configuration
-      | key                    | value                                                                                                          |
-      | assertionServerPort    | ${assertionServerPort}                                                                                         |
-      | Operation              | UpdateThingShadow                                                                                              |
-      | ThingName              | MyThing2                                                                                                       |
-      | ShadowName             | CLASSIC                                                                                                        |
-      | ShadowDocument         | {\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}}}               |
-      | ExpectedShadowDocument | {\"version\":1,\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}}} |
-      | OperationTimeout       | <timeout>                                                                                                      |
+        """
+        {
+           "MERGE":{
+                "assertionServerPort": ${assertionServerPort},
+                "Operation": "UpdateThingShadow",
+                "ThingName": "MyThing2",
+                "ShadowName": "CLASSIC",
+                "ShadowDocument": "{\\\"state\\\":{\\\"reported\\\":{\\\"color\\\":{\\\"r\\\":255,\\\"g\\\":255,\\\"b\\\":255},\\\"SomeKey\\\":\\\"SomeValue\\\"}}}",
+                "ExpectedShadowDocument": "{\\\"version\\\":1,\\\"state\\\":{\\\"reported\\\":{\\\"color\\\":{\\\"r\\\":255,\\\"g\\\":255,\\\"b\\\":255},\\\"SomeKey\\\":\\\"SomeValue\\\"}}}"
+           }
+        }
+        """
     Then I get 1 assertions with context "Updated shadow document" within 15 seconds
     Then I can get cloud shadow for MyThing2 with name CLASSIC with state {"state":{"reported":{"color":{"r":255,"g":255,"b":255},"SomeKey":"SomeValue"}}} within 30 seconds
     When I install the component ShadowComponentPong from local store with configuration
-      | key              | value             |
-      | Operation        | DeleteThingShadow |
-      | ThingName        | MyThing2          |
-      | ShadowName       | CLASSIC           |
-      | ShadowDocument   |                   |
-      | OperationTimeout | <timeout>         |
+        """
+        {
+           "MERGE":{
+                "assertionServerPort": ${assertionServerPort},
+                "Operation": "DeleteThingShadow",
+                "ThingName": "MyThing2",
+                "ShadowName": "CLASSIC",
+           }
+        }
+        """
     Then I get 1 assertions with context "Deleted shadow document" within 15 seconds
     And I can not get cloud shadow for MyThing2 with name CLASSIC within 30 seconds
 
@@ -358,26 +399,41 @@ Feature: Shadow-2
     When I can create cloud shadow for MyThing2 with name CLASSIC with state {"state":{"reported":{"color":{"r":255,"g":255,"b":255},"SomeKey":"SomeValue"}}}
     Then I can get cloud shadow for MyThing2 with name CLASSIC with state {"state":{"reported":{"color":{"r":255,"g":255,"b":255},"SomeKey":"SomeValue"}}} within 30 seconds
     When I install the component ShadowComponentPing from local store with configuration
-      | key              | value                                                                                                          |
-      | Operation        | GetThingShadow                                                                                                 |
-      | ThingName        | MyThing2                                                                                                       |
-      | ShadowName       | CLASSIC                                                                                                        |
-      | ShadowDocument   | {\"version\":1,\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}}} |
-      | OperationTimeout | <timeout>                                                                                                      |
+        """
+        {
+           "MERGE":{
+                "assertionServerPort": ${assertionServerPort},
+                "Operation": "GetThingShadow",
+                "ThingName": "MyThing2",
+                "ShadowName": "CLASSIC",
+                "ShadowDocument": "{\\\"version\\\":1,\\\"state\\\":{\\\"reported\\\":{\\\"color\\\":{\\\"r\\\":255,\\\"g\\\":255,\\\"b\\\":255},\\\"SomeKey\\\":\\\"SomeValue\\\"}}}"
+           }
+        }
+        """
     Then I get 1 assertions with context "Retrieved matching shadow document" within 15 seconds
     When I install the component ShadowComponentPong from local store with configuration
-      | key              | value              |
-      | Operation        | DeleteThingShadow  |
-      | ThingName        | MyThing2           |
-      | ShadowName       | CLASSIC            |
-      | OperationTimeout | <timeout>          |
+        """
+        {
+           "MERGE":{
+                "assertionServerPort": ${assertionServerPort},
+                "Operation": "DeleteThingShadow",
+                "ThingName": "MyThing2",
+                "ShadowName": "CLASSIC"
+           }
+        }
+        """
     Then I can not get cloud shadow for MyThing2 with name CLASSIC within 30 seconds
     When I install the component ShadowComponentPing from local store with configuration
-      | key              | value          |
-      | Operation        | DeleteThingShadow |
-      | ThingName        | MyThing2       |
-      | ShadowName       | CLASSIC        |
-      | OperationTimeout | <timeout>      |
+        """
+        {
+           "MERGE":{
+                "assertionServerPort": ${assertionServerPort},
+                "Operation": "DeleteThingShadow",
+                "ThingName": "MyThing2",
+                "ShadowName": "CLASSIC"
+           }
+        }
+        """
     Then I get at least 1 assertions with context "No shadow found" within 15 seconds
 
     Examples:
@@ -425,14 +481,18 @@ Feature: Shadow-2
     And I deploy the Greengrass deployment configuration
     Then the Greengrass deployment is COMPLETED on the device after 4 minutes
     When I install the component ShadowComponentPing from local store with configuration
-      | key                    | value                                                                                                          |
-      | assertionServerPort    | ${assertionServerPort}                                                                                         |
-      | Operation              | UpdateThingShadow                                                                                              |
-      | ThingName              | MyThing                                                                                                        |
-      | ShadowName             | CLASSIC                                                                                                        |
-      | ShadowDocument         | {\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}}}               |
-      | ExpectedShadowDocument | {\"version\":1,\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}}} |
-      | OperationTimeout       | <timeout>                                                                                                      |
+        """
+        {
+           "MERGE":{
+                "assertionServerPort": ${assertionServerPort},
+                "Operation": "UpdateThingShadow",
+                "ThingName": "MyThing",
+                "ShadowName": "CLASSIC",
+                "ShadowDocument": "{\\\"state\\\":{\\\"reported\\\":{\\\"color\\\":{\\\"r\\\":255,\\\"g\\\":255,\\\"b\\\":255},\\\"SomeKey\\\":\\\"SomeValue\\\"}}}",
+                "ExpectedShadowDocument": "{\\\"version\\\":1,\\\"state\\\":{\\\"reported\\\":{\\\"color\\\":{\\\"r\\\":255,\\\"g\\\":255,\\\"b\\\":255},\\\"SomeKey\\\":\\\"SomeValue\\\"}}}"
+           }
+        }
+        """
     Then I get 1 assertions with context "Updated shadow document" within 15 seconds
     And I can not get cloud shadow for MyThing with name CLASSIC within 30 seconds
 
@@ -483,13 +543,16 @@ Feature: Shadow-2
     When I can create cloud shadow for MyThing with name CLASSIC with state {"state":{"reported":{"color":{"r":255,"g":255,"b":255},"SomeKey":"SomeValue"}}}
     Then I can get cloud shadow for MyThing with name CLASSIC with state {"state":{"reported":{"color":{"r":255,"g":255,"b":255},"SomeKey":"SomeValue"}}} within 30 seconds
     When I install the component ShadowComponentPing from local store with configuration
-      | key                 | value                  |
-      | assertionServerPort | ${assertionServerPort} |
-      | Operation           | GetThingShadow         |
-      | ThingName           | MyThing                |
-      | ShadowName          | CLASSIC                |
-      | ShadowDocument      |                        |
-      | OperationTimeout    | <timeout>              |
+        """
+        {
+           "MERGE":{
+                "assertionServerPort": ${assertionServerPort},
+                "Operation": "GetThingShadow",
+                "ThingName": "MyThing",
+                "ShadowName": "CLASSIC",
+           }
+        }
+        """
     Then I get at least 1 assertions with context "No shadow found" within 15 seconds
 
     Examples:
@@ -539,37 +602,58 @@ Feature: Shadow-2
     When I can create cloud shadow for MyThing2 with name CLASSIC with state {"state":{"reported":{"color":{"r":255,"g":255,"b":255},"SomeKey":"SomeValue"}}}
     Then I can get cloud shadow for MyThing2 with name CLASSIC with state {"state":{"reported":{"color":{"r":255,"g":255,"b":255},"SomeKey":"SomeValue"}}} within 30 seconds
     When I install the component ShadowComponentPing from local store with configuration
-      | key              | value                                                                                                          |
-      | Operation        | GetThingShadow                                                                                                 |
-      | ThingName        | MyThing2                                                                                                       |
-      | ShadowName       | CLASSIC                                                                                                        |
-      | ShadowDocument   | {\"version\":1,\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}}} |
-      | OperationTimeout | <timeout>                                                                                                      |
+        """
+        {
+           "MERGE":{
+                "assertionServerPort": ${assertionServerPort},
+                "Operation": "GetThingShadow",
+                "ThingName": "MyThing2",
+                "ShadowName": "CLASSIC",
+                "ShadowDocument": "{\\\"version\\\":1,\\\"state\\\":{\\\"reported\\\":{\\\"color\\\":{\\\"r\\\":255,\\\"g\\\":255,\\\"b\\\":255},\\\"SomeKey\\\":\\\"SomeValue\\\"}}}"
+           }
+        }
+        """
     Then I get 1 assertions with context "Retrieved matching shadow document" within 15 seconds
     When I install the component ShadowComponentPong from local store with configuration
-      | key              | value              |
-      | Operation        | DeleteThingShadow  |
-      | ThingName        | MyThing2           |
-      | ShadowName       | CLASSIC            |
-      | OperationTimeout | <timeout>          |
+        """
+        {
+           "MERGE":{
+                "assertionServerPort": ${assertionServerPort},
+                "Operation": "DeleteThingShadow",
+                "ThingName": "MyThing2",
+                "ShadowName": "CLASSIC"
+           }
+        }
+        """
     And I can not get cloud shadow for MyThing2 with name CLASSIC within 30 seconds
     Then I install the component ShadowComponentPing from local store with configuration
-      | key            | value          |
-      | Operation      | DeleteThingShadow |
-      | ThingName      | MyThing2       |
-      | ShadowName     | CLASSIC        |
+        """
+        {
+           "MERGE":{
+                "assertionServerPort": ${assertionServerPort},
+                "Operation": "DeleteThingShadow",
+                "ThingName": "MyThing2",
+                "ShadowName": "CLASSIC"
+           }
+        }
+        """
     And I get at least 1 assertions with context "No shadow found" within 15 seconds
     And I clear the assertions
     When I can create cloud shadow for MyThing2 with name CLASSIC with state {"state":{"reported":{"color":{"r":255,"g":255,"b":255},"SomeKey":"SomeValue"}}}
     # Make sure that the cloud shadow exists after the create/update shadow operation is completed.
     Then I can get cloud shadow for MyThing2 with version 3 and state {"state":{"reported":{"color":{"r":255,"g":255,"b":255},"SomeKey":"SomeValue"}}} within 30 seconds
     When I install the component ShadowComponentPing from local store with configuration
-      | key              | value                                                                                                          |
-      | Operation        | GetThingShadow                                                                                                 |
-      | ThingName        | MyThing2                                                                                                       |
-      | ShadowName       | CLASSIC                                                                                                        |
-      | ShadowDocument   | {\"version\":1,\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}}} |
-      | OperationTimeout | <timeout>                                                                                                      |
+        """
+        {
+           "MERGE":{
+                "assertionServerPort": ${assertionServerPort},
+                "Operation": "GetThingShadow",
+                "ThingName": "MyThing2",
+                "ShadowName": "CLASSIC",
+                "ShadowDocument": "{\\\"version\\\":1,\\\"state\\\":{\\\"reported\\\":{\\\"color\\\":{\\\"r\\\":255,\\\"g\\\":255,\\\"b\\\":255},\\\"SomeKey\\\":\\\"SomeValue\\\"}}}"
+           }
+        }
+        """
     Then I get 1 assertions with context "Retrieved matching shadow document" within 15 seconds
     # Check to make sure that the cloud shadow exists after the sync as well.
     And I can get cloud shadow for MyThing2 with version 3 and state {"state":{"reported":{"color":{"r":255,"g":255,"b":255},"SomeKey":"SomeValue"}}} within 30 seconds
@@ -592,12 +676,17 @@ Feature: Shadow-2
         }
         """
     And I install the component ShadowComponentPing from local store with configuration
-      | key                    | value                                                                                                          |
-      | Operation              | UpdateThingShadow                                                                                              |
-      | ThingName              | MyThing                                                                                                        |
-      | ShadowName             | MyThingNamedShadow                                                                                             |
-      | ShadowDocument         | {\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}}}               |
-      | OperationTimeout       | <timeout>                                                                                                      |
+        """
+        {
+           "MERGE":{
+                "assertionServerPort": ${assertionServerPort},
+                "Operation": "UpdateThingShadow",
+                "ThingName": "MyThing",
+                "ShadowName": "MyThingNamedShadow",
+                "ShadowDocument": "{\\\"state\\\":{\\\"reported\\\":{\\\"color\\\":{\\\"r\\\":255,\\\"g\\\":255,\\\"b\\\":255},\\\"SomeKey\\\":\\\"SomeValue\\\"}}}"
+           }
+        }
+        """
     And I update my Greengrass deployment configuration, setting the component aws.greengrass.Nucleus configuration to:
       """
       {"MERGE": {"logging": { "level": "DEBUG" }}}
