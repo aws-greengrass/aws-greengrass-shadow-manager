@@ -47,6 +47,7 @@ import static com.aws.greengrass.testing.features.GreengrassCliSteps.LOCAL_DEPLO
 @ScenarioScoped
 public class LocalDeploymentSteps {
     private static final Logger LOGGER = LogManager.getLogger(LocalDeploymentSteps.class);
+    private static final String THING_GROUP_DEPLOYMENT_TARGET_TYPE = "thinggroup";
     private static final String MERGE_CONFIG = "MERGE";
     private static final String RESET_CONFIG = "RESET";
     private static final Path LOCAL_STORE_RECIPES = Paths.get("local:", "local-store", "recipes");
@@ -114,6 +115,85 @@ public class LocalDeploymentSteps {
         List<Map<String, String>> configuration = configurationTable.asMaps(String.class, String.class);
         CommandInput command = getCliDeploymentCommand(componentName, null, configuration);
         createLocalDeploymentWithRetry(command, 0);
+    }
+
+    /**
+     * test for creating an empty deployment configuration.
+     *
+     * @param deploymentName name of deployment
+     */
+    @When("I create an empty deployment configuration for deployment {word}")
+    public void createDeploymentConfigForDeployment(final String deploymentName) {
+        createBaseDeploymentConfiguration(deploymentName,
+                THING_GROUP_DEPLOYMENT_TARGET_TYPE, "gg");
+        //TODO: "gg" was temperal replacement, in evergreen it was kernel.getThingGroups().get(0));
+    }
+
+    /**
+     * update Shadow Component Deployment With Configuration.
+     *
+     * @throws IOException ioexception might be throw out.
+     */
+    @When("I update the deployment configuration {word}, setting the shadow component version {string} configuration"
+            + " with {int} named shadows with prefix {word} per {int} things with prefix {word}:")
+    public void updateShadowComponentDeploymentWithConfiguration() throws IOException {
+        //    String deploymentName, String componentVersion,
+        //                                                                 int noOfNamedShadows, String shadowPrefix,
+        //                                                                 int noOfThings, String thingPrefix,
+        //                                                                 String configuration)
+        //TODO: temperal copied from Evergreen DeploymentSteps.java
+        //        List<ShadowDocument> shadowDocuments = new ArrayList<>();
+        //        for (int i = 0; i < noOfThings; i++) {
+        //            String thingName = scenarioContextManager.getStringFromContext(thingPrefix);
+        //            if (noOfThings > 1) {
+        //                thingName = thingName + i;
+        //            }
+        //            ShadowDocument shadowDocument = new ShadowDocument();
+        //            shadowDocument.setNamedShadows(new ArrayList<>());
+        //            shadowDocument.setThingName(thingName);
+        //            for (int j = 0; j < noOfNamedShadows; j++) {
+        //                String shadowName = scenarioContextManager.getStringFromContext(shadowPrefix) + j;
+        //                shadowDocument.getNamedShadows().add(shadowName);
+        //            }
+        //            shadowDocuments.add(shadowDocument);
+        //        }
+        //        configuration = configuration.replace("processedShadowDocuments",
+        //                mapper.writeValueAsString(shadowDocuments));
+        //
+        //        updateDeploymentComponentWithConfiguration(deploymentName, "aws.greengrass.ShadowManager",
+        //        componentVersion, configuration);
+    }
+
+    void createBaseDeploymentConfiguration(String deploymentName, String targetType, String targetName) {
+        //TDOO: the implements need to be revised.
+        //        String actualTargetName;
+        //        if (THING_GROUP_DEPLOYMENT_TARGET_TYPE.equals(targetType)) {
+        //            IotThingGroup group = awsResources.getResources().getThingGroups().stream()
+        //                    .filter(g -> g.getGroupName().startsWith(targetName + "e2e-")
+        //                            || g.getGroupName().equals(targetName)).findFirst().get();
+        //            actualTargetName = group.getGroupArn();
+        //        } else {
+        //            actualTargetName = awsResources.getSpecs().getThings().stream()
+        //                    .filter(t -> t.getResultingThing().getThingName().startsWith(targetName + "e2e-")
+        //                            || t.getResultingThing().getThingName().equals(targetName)).findFirst().get()
+        //                    .getResultingThing().getThingArn();
+        //        }
+        //
+        //        this.deploymentConfigurations.putIfAbsent(deploymentName,
+        //                new CreateDeploymentRequest()
+        //                        .withDeploymentName(deploymentName)
+        //                        .withTargetArn(actualTargetName).withDeploymentPolicies(
+        //                                new DeploymentPolicies()
+        //                                        .withFailureHandlingPolicy(DeploymentFailureHandlingPolicy.DO_NOTHING)
+        //                                        .withComponentUpdatePolicy(new DeploymentComponentUpdatePolicy()
+        //                                          .withAction(DeploymentComponentUpdatePolicyAction.NOTIFY_COMPONENTS)
+        //                                          .withTimeoutInSeconds(120))
+        //                                        .withConfigurationValidationPolicy(
+        //                                                new DeploymentConfigurationValidationPolicy()
+        //                                                        .withTimeoutInSeconds(120)))
+        //                        // Adding this since the API does not handle packages being null.
+        //                        .withComponents(new HashMap<>()));
+        //        this.deploymentConfigurations.get(deploymentName).withClientToken(UUID.randomUUID().toString());
     }
 
     private CommandInput getCliDeploymentCommand(String componentName, String componentVersion,

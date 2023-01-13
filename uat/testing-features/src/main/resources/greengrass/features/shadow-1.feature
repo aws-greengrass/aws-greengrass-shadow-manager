@@ -108,13 +108,13 @@ Feature: Greengrass V2 ShadowManager
             | ShadowDocument         | {\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}}}               |
         Then the local Greengrass deployment is SUCCEEDED on the device after 120 seconds
         When I install the component ShadowComponentPing from local store with configuration
-            | key       | value
+            | key       | value                                 |
             | assertionServerPort    | ${assertionServerPort}   |
             | Operation | ListNamedShadowsForThing |
             | ThingName | testThing                |
             | PageSize  | 2                        |
         Then the local Greengrass deployment is SUCCEEDED on the device after 120 seconds
-        And I update the component ShadowComponentPing with configuration
+        When I update the component ShadowComponentPing with configuration
             | key       | value                    |
             | assertionServerPort    | ${assertionServerPort}   |
             | Operation | ListNamedShadowsForThing |
