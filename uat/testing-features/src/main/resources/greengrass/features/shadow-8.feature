@@ -56,8 +56,8 @@ Feature: Shadow-8
                 "Operation": "UpdateThingShadow",
                 "ThingName": "MyThing",
                 "ShadowName": "MyThingNamedShadow",
-                "ShadowDocument": "{\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}}}",
-                "ExpectedShadowDocument": "{\"version\":1,\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}}}"
+                "ShadowDocument": "{\\\"state\\\":{\\\"reported\\\":{\\\"color\\\":{\\\"r\\\":255,\\\"g\\\":255,\\\"b\\\":255},\\\"SomeKey\\\":\\\"SomeValue\\\"}}}",
+                "ExpectedShadowDocument": "{\\\"version\\\":1,\\\"state\\\":{\\\"reported\\\":{\\\"color\\\":{\\\"r\\\":255,\\\"g\\\":255,\\\"b\\\":255},\\\"SomeKey\\\":\\\"SomeValue\\\"}}}"
            }
         }
         """
@@ -73,7 +73,7 @@ Feature: Shadow-8
                 "Operation": "GetThingShadow",
                 "ThingName": "MyThing",
                 "ShadowName": "MyThingNamedShadow",
-                "ShadowDocument": "{\"version\":2,\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":0,\"b\":0},\"SomeKey\":\"SomeValue\"}}}"
+                "ShadowDocument": "{\\\"version\\\":2,\\\"state\\\":{\\\"reported\\\":{\\\"color\\\":{\\\"r\\\":255,\\\"g\\\":0,\\\"b\\\":0},\\\"SomeKey\\\":\\\"SomeValue\\\"}}}"
            }
         }
         """
@@ -124,8 +124,8 @@ Feature: Shadow-8
                 "Operation": "UpdateThingShadow",
                 "ThingName": "MyThing",
                 "ShadowName": "MyThingNamedShadow",
-                "ShadowDocument": "{\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}}}",
-                "ExpectedShadowDocument": "{\"version\":1,\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}}}"
+                "ShadowDocument": "{\\\"state\\\":{\\\"reported\\\":{\\\"color\\\":{\\\"r\\\":255,\\\"g\\\":255,\\\"b\\\":255},\\\"SomeKey\\\":\\\"SomeValue\\\"}}}",
+                "ExpectedShadowDocument": "{\\\"version\\\":1,\\\"state\\\":{\\\"reported\\\":{\\\"color\\\":{\\\"r\\\":255,\\\"g\\\":255,\\\"b\\\":255},\\\"SomeKey\\\":\\\"SomeValue\\\"}}}"
            }
         }
         """
@@ -142,7 +142,7 @@ Feature: Shadow-8
                 "Operation": "GetThingShadow",
                 "ThingName": "MyThing",
                 "ShadowName": "MyThingNamedShadow",
-                "ShadowDocument": "{\"version\":1,\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}}}"
+                "ShadowDocument": "{\\\"version\\\":1,\\\"state\\\":{\\\"reported\\\":{\\\"color\\\":{\\\"r\\\":255,\\\"g\\\":255,\\\"b\\\":255},\\\"SomeKey\\\":\\\"SomeValue\\\"}}}"
            }
         }
         """
@@ -196,7 +196,7 @@ Feature: Shadow-8
                 "Operation": "GetThingShadow",
                 "ThingName": "MyThing",
                 "ShadowName": "MyThingNamedShadow",
-                "ShadowDocument": "{\"version\":1,\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":0,\"b\":0},\"SomeKey\":\"SomeValue\"}}}"
+                "ShadowDocument": "{\\\"version\\\":1,\\\"state\\\":{\\\"reported\\\":{\\\"color\\\":{\\\"r\\\":255,\\\"g\\\":0,\\\"b\\\":0},\\\"SomeKey\\\":\\\"SomeValue\\\"}}}"
            }
         }
         """
@@ -209,8 +209,8 @@ Feature: Shadow-8
                 "Operation": "UpdateThingShadow",
                 "ThingName": "MyThing",
                 "ShadowName": "MyThingNamedShadow",
-                "ShadowDocument": "{\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}}}",
-                "ExpectedShadowDocument":"{\"version\":2,\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}}}"
+                "ShadowDocument": "{\\\"state\\\":{\\\"reported\\\":{\\\"color\\\":{\\\"r\\\":255,\\\"g\\\":255,\\\"b\\\":255},\\\"SomeKey\\\":\\\"SomeValue\\\"}}}",
+                "ExpectedShadowDocument":"{\\\"version\\\":2,\\\"state\\\":{\\\"reported\\\":{\\\"color\\\":{\\\"r\\\":255,\\\"g\\\":255,\\\"b\\\":255},\\\"SomeKey\\\":\\\"SomeValue\\\"}}}"
            }
         }
         """
