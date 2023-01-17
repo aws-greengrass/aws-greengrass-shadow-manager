@@ -7,6 +7,7 @@ package com.aws.greengrass.integrationtests;
 
 import com.aws.greengrass.authorization.exceptions.AuthorizationException;
 import com.aws.greengrass.dependency.State;
+import com.aws.greengrass.deployment.DeviceConfiguration;
 import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.mqttclient.MqttClient;
 import com.aws.greengrass.security.SecurityService;
@@ -15,6 +16,7 @@ import com.aws.greengrass.shadowmanager.exception.IoTDataPlaneClientCreationExce
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.model.LogEvents;
+import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientFactory;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientWrapper;
@@ -43,10 +45,13 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import static com.aws.greengrass.componentmanager.KernelConfigResolver.CONFIGURATION_CONFIG_KEY;
+import static com.aws.greengrass.deployment.DeviceConfiguration.DEVICE_PARAM_THING_NAME;
+import static com.aws.greengrass.deployment.DeviceConfiguration.SYSTEM_NAMESPACE_KEY;
 import static com.aws.greengrass.shadowmanager.TestUtils.SAMPLE_EXCEPTION_MESSAGE;
 import static com.aws.greengrass.shadowmanager.TestUtils.THING_NAME;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_CLASSIC_SHADOW_TOPIC;
@@ -231,6 +236,37 @@ class ShadowManagerTest extends NucleusLaunchUtils {
         kernel.getContext().waitForPublishQueueToClear();
 
         assertThat(syncHandler.getSyncDirection(), is(Direction.DEVICE_TO_CLOUD));
+    }
+
+    @Test
+    void GIVEN_shadow_manager_When_coreThingName_changes_Then_update_coreThing_shadow_sync_config() throws Exception {
+        String coreThing = "coreThingName-1";
+        kernel.getConfig().lookupTopics(SYSTEM_NAMESPACE_KEY).lookup(DEVICE_PARAM_THING_NAME).withValue(coreThing);
+        kernel.getContext().waitForPublishQueueToClear();
+        startNucleusWithConfig(NucleusLaunchUtilsConfig.builder()
+                .configFile("coreThing.yaml")
+                .mqttConnected(false)
+                .build());
+        DeviceConfiguration deviceConfiguration = kernel.getContext().get(DeviceConfiguration.class);
+        assertThat(deviceConfiguration.getThingName().getOnce(), is(coreThing));
+        Set<ThingShadowSyncConfiguration> syncConfigurations = shadowManager.getSyncConfiguration().getSyncConfigurations();
+        assertThat(syncConfigurations, containsInAnyOrder(
+                ThingShadowSyncConfiguration.builder().shadowName("").thingName("Thing1").build(),
+                ThingShadowSyncConfiguration.builder().shadowName("").thingName(coreThing).build(),
+                ThingShadowSyncConfiguration.builder().shadowName("coreShadow-0").thingName(coreThing).build(),
+                ThingShadowSyncConfiguration.builder().shadowName("coreShadow-1").thingName(coreThing).build()
+                ));
+        coreThing = "coreThingName-2";
+        kernel.getConfig().lookupTopics(SYSTEM_NAMESPACE_KEY).lookup(DEVICE_PARAM_THING_NAME).withValue(coreThing);
+        kernel.getContext().waitForPublishQueueToClear();
+        assertThat(deviceConfiguration.getThingName().getOnce(), is(coreThing));
+        syncConfigurations = shadowManager.getSyncConfiguration().getSyncConfigurations();
+        assertThat(syncConfigurations, containsInAnyOrder(
+                ThingShadowSyncConfiguration.builder().shadowName("").thingName("Thing1").build(),
+                ThingShadowSyncConfiguration.builder().shadowName("").thingName(coreThing).build(),
+                ThingShadowSyncConfiguration.builder().shadowName("coreShadow-0").thingName(coreThing).build(),
+                ThingShadowSyncConfiguration.builder().shadowName("coreShadow-1").thingName(coreThing).build()
+        ));
     }
 
     @Test
