@@ -51,26 +51,34 @@ Feature: Shadow-2
     And I deploy the Greengrass deployment configuration
     Then the Greengrass deployment is COMPLETED on the device after 2 minutes
     When I install the component ShadowComponentPing from local store with configuration
-      | key                    | value                                                                                                          |
-      | Operation              | UpdateThingShadow                                                                                              |
-      | ThingName              | MyThing                                                                                                        |
-      | ShadowName             | MyThingNamedShadow                                                                                             |
-      | ShadowDocument         | {\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}}}               |
-      | OperationTimeout       | <timeout>                                                                                                      |
-    Then I wait 120 seconds
-    Then I can get cloud shadow for MyThing with name MyThingNamedShadow with state {"state":{"reported":{"color":{"r":255,"g":255,"b":255},"SomeKey":"SomeValue"}}} within 30 seconds
+        """
+        {
+           "MERGE":{
+                "Operation": "UpdateThingShadow",
+                "ThingName": "${MyThing}",
+                "ShadowName": "${MyThingNamedShadow}",
+                "OperationTimeout": "<timeout>",
+                "ShadowDocument": "{\\\"state\\\":{\\\"reported\\\":{\\\"color\\\":{\\\"r\\\":255,\\\"g\\\":255,\\\"b\\\":255},\\\"SomeKey\\\":\\\"SomeValue\\\"}}}"
+           }
+        }
+    """
+    Then the local Greengrass deployment is SUCCEEDED on the device after 120 seconds
+    Then I can get cloud shadow for MyThing with name MyThingNamedShadow with version 2 and state {"state":{"reported":{"color":{"r":255,"g":255,"b":255},"SomeKey":"SomeValue"}}} within 30 seconds
     When I install the component ShadowComponentPong from local store with configuration
-      | key              | value              |
-      | Operation        | DeleteThingShadow  |
-      | ThingName        | MyThing            |
-      | ShadowName       | MyThingNamedShadow |
-      | OperationTimeout | <timeout>          |
-    And I can not get cloud shadow for MyThing with name MyThingNamedShadow within 30 seconds
+    """
+        {
+           "MERGE":{
+                "Operation": "DeleteThingShadow",
+                "ThingName": "${MyThing}",
+                "ShadowName": "${MyThingNamedShadow}",
+                "OperationTimeout": "<timeout>"
+           }
+        }
+    """
+      Then the local Greengrass deployment is SUCCEEDED on the device after 120 seconds
+      And I can not get cloud shadow for MyThing with name MyThingNamedShadow within 30 seconds
     
     Examples:
       | strategy | timeout |
       | realTime | 5       |
 
-    Examples:
-      | strategy | timeout |
-      | periodic | 30      |
