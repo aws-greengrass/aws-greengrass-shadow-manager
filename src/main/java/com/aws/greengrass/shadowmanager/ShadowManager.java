@@ -64,6 +64,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 import javax.inject.Inject;
 
 import static com.aws.greengrass.componentmanager.KernelConfigResolver.CONFIGURATION_CONFIG_KEY;
@@ -210,7 +211,7 @@ public class ShadowManager extends PluginService {
             // First time.
             return;
         }
-        getCoreThingShadowSyncConfiguration(oldThingName).ifPresent(thingShadowSyncConfiguration ->
+        getCoreThingShadowSyncConfiguration(oldThingName).forEach(thingShadowSyncConfiguration ->
                 thingShadowSyncConfiguration.setThingName(thingName));
     }
 
@@ -297,12 +298,12 @@ public class ShadowManager extends PluginService {
             this.syncHandler.setSyncConfigurations(this.syncConfiguration.getSyncConfigurations());
 
             // Subscribe to the thing name topic if the Nucleus thing shadows have been synced.
-            Optional<ThingShadowSyncConfiguration> coreThingConfig =
+            List<ThingShadowSyncConfiguration> coreThingConfig =
                     getCoreThingShadowSyncConfiguration(thingName);
-            if (coreThingConfig.isPresent()) {
-                thingNameTopic.subscribeGeneric(this.deviceThingNameWatcher);
-            } else {
+            if (coreThingConfig.isEmpty()) {
                 thingNameTopic.remove(this.deviceThingNameWatcher);
+            } else {
+                thingNameTopic.subscribeGeneric(this.deviceThingNameWatcher);
             }
 
             // only stop / start syncing if we are not in install - it will otherwise be started by lifecycle
@@ -442,11 +443,11 @@ public class ShadowManager extends PluginService {
                 .build());
     }
 
-    private Optional<ThingShadowSyncConfiguration> getCoreThingShadowSyncConfiguration(String thingName) {
+    private List<ThingShadowSyncConfiguration> getCoreThingShadowSyncConfiguration(String thingName) {
         return syncConfiguration.getSyncConfigurations()
                 .stream()
                 .filter(thingShadowSyncConfiguration -> thingName.equals(thingShadowSyncConfiguration.getThingName()))
-                .findAny();
+                .collect(Collectors.toList());
     }
 
     @Override
