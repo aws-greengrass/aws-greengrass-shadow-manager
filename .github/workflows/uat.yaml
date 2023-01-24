@@ -2,46 +2,35 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
-name: UATs
+name: OTF UATS
+
 on:
-  push:
-    branches:
-      - main
   pull_request:
     branches: '*'
 
-  # Allows you to run this workflow manually from the Actions tab
-  workflow_dispatch:
 env:
   AWS_REGION : "us-west-2"
+  CODE_BUILD_PROJECT_LINUX: "ShadowManagerUatCodeBuildLinux"
+  AWS_ROLE_TO_ASSUME: "arn:aws:iam::686385081908:role/aws-greengrass-shadow-manager-codebuild-uat-role-linux"
+
 jobs:
-  build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest ]
+  uat-linux:
     permissions:
       id-token: write
       contents: read
-    env:
-      AWS_REGION: us-west-2
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ ubuntu-latest ]
     steps:
-      - uses: actions/checkout@v2
-      - name: Set up JDK 1.8
-        uses: actions/setup-java@v1
-        with:
-          java-version: 1.8
-      - run: rm -rf /tmp/*
-        continue-on-error: true
-      - name: Build UATs with Maven
-        run: mvn -U -ntp clean verify -f uat/pom.xml
-      - name: Pull the latest Greengrass Nucleus zip file
-        run: curl -s https://d2s8p88vqu9w66.cloudfront.net/releases/greengrass-nucleus-latest.zip > /tmp/greengrass-nucleus-latest.zip
-      - name: Configure aws credentials
+      - name: configure aws credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
-          role-to-assume: arn:aws:iam::686385081908:role/aws-greengrass-testing-codebuild-uat-role-amazonlinux
-          role-session-name: otfCI
+          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
+          role-session-name: nucleusCI
           aws-region: ${{ env.AWS_REGION }}
-      - name: Run shadow manager UAT features
-        run: java -Dggc.archive=/tmp/aws.greengrass.nucleus.zip -Dtags=ShadowManager -Dtest.log.path=/tmp/testResults -Daws.region=$AWS_REGION -jar uat/testing-features/target/greengrass-shadow-manager-testing-features.jar
+      - name: Run UAT on linux
+        uses: aws-actions/aws-codebuild-run-build@v1
+        with:
+          project-name: ${{ env.CODE_BUILD_PROJECT_LINUX }}
+          buildspec-override: uat/codebuild/uat_linux_buildspec.yaml
