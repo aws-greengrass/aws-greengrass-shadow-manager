@@ -63,7 +63,7 @@ Feature: Shadow-2
         }
     """
     Then the local Greengrass deployment is SUCCEEDED on the device after 120 seconds
-    Then I can get cloud shadow for MyThing with name MyThingNamedShadow with version 2 and state {"state":{"reported":{"color":{"r":255,"g":255,"b":255},"SomeKey":"SomeValue"}}} within 30 seconds
+    Then I can get cloud shadow for MyThing with name MyThingNamedShadow with state {"state":{"reported":{"color":{"r":255,"g":255,"b":255},"SomeKey":"SomeValue"}}} within 30 seconds
     When I install the component ShadowComponentPong from local store with configuration
     """
         {

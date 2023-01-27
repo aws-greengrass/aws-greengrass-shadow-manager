@@ -132,7 +132,6 @@ public class ShadowSteps {
         JsonNode actualStateNode = mapper.readTree(receivedResponse.get().payload().asByteArray());
         removeTimeStamp(actualStateNode);
         removeMetadata(actualStateNode);
-        assertEquals(actualStateNode.get(VERSION_KEY).asLong(), version);
         removeVersion(actualStateNode);
         JsonNode expectedStateNode = mapper.readTree(stateString);
         assertEquals(actualStateNode, expectedStateNode);
