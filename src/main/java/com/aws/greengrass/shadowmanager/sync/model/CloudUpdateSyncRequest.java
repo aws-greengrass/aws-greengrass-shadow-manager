@@ -118,7 +118,7 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
                         .kv(LOG_CLOUD_VERSION_KEY, currentSyncInformation.getCloudVersion())
                         .kv(LOG_UPDATED_CLOUD_VERSION_KEY, cloudUpdatedVersion)
                         .log("Successfully updated cloud shadow document");
-            } catch (ConflictException e) {  // NOPMD - Throw ConflictException instead of treated as SdkServiceException
+            } catch (ConflictException e) {  // NOPMD - Rethrowing to avoid treating as SdkServiceException
                 throw e;
             } catch (ThrottlingException | ServiceUnavailableException | InternalFailureException
                      | IoTDataPlaneClientCreationException e) {
