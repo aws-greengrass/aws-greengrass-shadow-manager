@@ -86,86 +86,88 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
     public void execute(SyncContext context) throws RetryableException, SkipSyncRequestException,
             ConflictException, UnknownShadowException, InterruptedException {
 
-        Optional<ShadowDocument> shadowDocument = context.getDao().getShadowThing(getThingName(), getShadowName());
+        synchronized (context.getSynchronizeHelper().getThingShadowLock(this)) {
+            Optional<ShadowDocument> shadowDocument = context.getDao().getShadowThing(getThingName(), getShadowName());
 
-        //TODO: store this information in a return object to avoid unnecessary calls to DAO.
-        SyncInformation currentSyncInformation = context.getDao()
-                .getShadowSyncInformation(getThingName(), getShadowName())
-                .orElseThrow(() -> new UnknownShadowException("Shadow not found in sync table"));
+            //TODO: store this information in a return object to avoid unnecessary calls to DAO.
+            SyncInformation currentSyncInformation = context.getDao()
+                    .getShadowSyncInformation(getThingName(), getShadowName())
+                    .orElseThrow(() -> new UnknownShadowException("Shadow not found in sync table"));
 
-        if (!isUpdateNecessary(shadowDocument, currentSyncInformation, context)) {
-            return;
-        }
-
-        long cloudVersion = getAndUpdateCloudVersionInRequest(currentSyncInformation);
-        long cloudUpdatedVersion;
-        UpdateThingShadowResponse response;
-        try {
-            logger.atDebug()
-                    .kv(LOG_THING_NAME_KEY, getThingName())
-                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                    .kv(LOG_LOCAL_VERSION_KEY, currentSyncInformation.getLocalVersion())
-                    .kv(LOG_CLOUD_VERSION_KEY, currentSyncInformation.getCloudVersion())
-                    .log("Updating cloud shadow document");
-            response = context.getIotDataPlaneClientWrapper().updateThingShadow(getThingName(), getShadowName(),
-                    JsonUtil.getPayloadBytes(updateDocument));
-            cloudUpdatedVersion = getUpdatedVersion(response.payload().asByteArray()).orElse(cloudVersion + 1);
-            logger.atDebug()
-                    .kv(LOG_THING_NAME_KEY, getThingName())
-                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                    .kv(LOG_LOCAL_VERSION_KEY, currentSyncInformation.getLocalVersion())
-                    .kv(LOG_CLOUD_VERSION_KEY, currentSyncInformation.getCloudVersion())
-                    .kv(LOG_UPDATED_CLOUD_VERSION_KEY, cloudUpdatedVersion)
-                    .log("Successfully updated cloud shadow document");
-        } catch (ConflictException e) {  // NOPMD - Throw ConflictException instead of treated as SdkServiceException
-            throw e;
-        } catch (ThrottlingException | ServiceUnavailableException | InternalFailureException
-                | IoTDataPlaneClientCreationException e) {
-            throw new RetryableException(e);
-        } catch (AbortedException e) {
-            LogEventBuilder l = logger.atDebug()
-                    .kv(LOG_THING_NAME_KEY, getThingName())
-                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                    .kv(LOG_LOCAL_VERSION_KEY, currentSyncInformation.getLocalVersion())
-                    .kv(LOG_CLOUD_VERSION_KEY, currentSyncInformation.getCloudVersion());
-            Throwable cause = e.getCause();
-            if (cause instanceof InterruptedException) {
-                l.log("Interrupted while updating cloud shadow");
-                throw (InterruptedException) cause;
+            if (!isUpdateNecessary(shadowDocument, currentSyncInformation, context)) {
+                return;
             }
-            if (e.retryable()) {
-                l.log("Aborted while updating cloud shadow. Will retry");
+
+            long cloudVersion = getAndUpdateCloudVersionInRequest(currentSyncInformation);
+            long cloudUpdatedVersion;
+            UpdateThingShadowResponse response;
+            try {
+                logger.atDebug()
+                        .kv(LOG_THING_NAME_KEY, getThingName())
+                        .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                        .kv(LOG_LOCAL_VERSION_KEY, currentSyncInformation.getLocalVersion())
+                        .kv(LOG_CLOUD_VERSION_KEY, currentSyncInformation.getCloudVersion())
+                        .log("Updating cloud shadow document");
+                response = context.getIotDataPlaneClientWrapper().updateThingShadow(getThingName(), getShadowName(),
+                        JsonUtil.getPayloadBytes(updateDocument));
+                cloudUpdatedVersion = getUpdatedVersion(response.payload().asByteArray()).orElse(cloudVersion + 1);
+                logger.atDebug()
+                        .kv(LOG_THING_NAME_KEY, getThingName())
+                        .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                        .kv(LOG_LOCAL_VERSION_KEY, currentSyncInformation.getLocalVersion())
+                        .kv(LOG_CLOUD_VERSION_KEY, currentSyncInformation.getCloudVersion())
+                        .kv(LOG_UPDATED_CLOUD_VERSION_KEY, cloudUpdatedVersion)
+                        .log("Successfully updated cloud shadow document");
+            } catch (ConflictException e) {  // NOPMD - Throw ConflictException instead of treated as SdkServiceException
+                throw e;
+            } catch (ThrottlingException | ServiceUnavailableException | InternalFailureException
+                     | IoTDataPlaneClientCreationException e) {
                 throw new RetryableException(e);
+            } catch (AbortedException e) {
+                LogEventBuilder l = logger.atDebug()
+                        .kv(LOG_THING_NAME_KEY, getThingName())
+                        .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                        .kv(LOG_LOCAL_VERSION_KEY, currentSyncInformation.getLocalVersion())
+                        .kv(LOG_CLOUD_VERSION_KEY, currentSyncInformation.getCloudVersion());
+                Throwable cause = e.getCause();
+                if (cause instanceof InterruptedException) {
+                    l.log("Interrupted while updating cloud shadow");
+                    throw (InterruptedException) cause;
+                }
+                if (e.retryable()) {
+                    l.log("Aborted while updating cloud shadow. Will retry");
+                    throw new RetryableException(e);
+                }
+                l.log("Skipping update for cloud shadow");
+                throw new SkipSyncRequestException(e);
+            } catch (SdkServiceException | SdkClientException | IOException e) {
+                logger.atDebug()
+                        .kv(LOG_THING_NAME_KEY, getThingName())
+                        .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                        .kv(LOG_LOCAL_VERSION_KEY, currentSyncInformation.getLocalVersion())
+                        .kv(LOG_CLOUD_VERSION_KEY, currentSyncInformation.getCloudVersion())
+                        .log("Skipping update for cloud shadow document");
+                throw new SkipSyncRequestException(e);
             }
-            l.log("Skipping update for cloud shadow");
-            throw new SkipSyncRequestException(e);
-        } catch (SdkServiceException | SdkClientException | IOException e) {
-            logger.atDebug()
-                    .kv(LOG_THING_NAME_KEY, getThingName())
-                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                    .kv(LOG_LOCAL_VERSION_KEY, currentSyncInformation.getLocalVersion())
-                    .kv(LOG_CLOUD_VERSION_KEY, currentSyncInformation.getCloudVersion())
-                    .log("Skipping update for cloud shadow document");
-            throw new SkipSyncRequestException(e);
-        }
 
-        try {
-            context.getDao().updateSyncInformation(SyncInformation.builder()
-                    .lastSyncedDocument(JsonUtil.getPayloadBytes(shadowDocument.get().toJson(false)))
-                    .cloudVersion(cloudUpdatedVersion)
-                    .cloudDeleted(false)
-                    .shadowName(getShadowName())
-                    .thingName(getThingName())
-                    .cloudUpdateTime(shadowDocument.get().getMetadata().getLatestUpdatedTimestamp())
-                    .localVersion(shadowDocument.get().getVersion())
-                    .build());
-        } catch (JsonProcessingException | ShadowManagerDataException e) {
-            logger.atError()
-                    .kv(LOG_THING_NAME_KEY, getThingName())
-                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                    .kv(LOG_LOCAL_VERSION_KEY, currentSyncInformation.getLocalVersion())
-                    .kv(LOG_CLOUD_VERSION_KEY, currentSyncInformation.getCloudVersion())
-                    .cause(e).log("Failed to update sync table after updating cloud shadow");
+            try {
+                context.getDao().updateSyncInformation(SyncInformation.builder()
+                        .lastSyncedDocument(JsonUtil.getPayloadBytes(shadowDocument.get().toJson(false)))
+                        .cloudVersion(cloudUpdatedVersion)
+                        .cloudDeleted(false)
+                        .shadowName(getShadowName())
+                        .thingName(getThingName())
+                        .cloudUpdateTime(shadowDocument.get().getMetadata().getLatestUpdatedTimestamp())
+                        .localVersion(shadowDocument.get().getVersion())
+                        .build());
+            } catch (JsonProcessingException | ShadowManagerDataException e) {
+                logger.atError()
+                        .kv(LOG_THING_NAME_KEY, getThingName())
+                        .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                        .kv(LOG_LOCAL_VERSION_KEY, currentSyncInformation.getLocalVersion())
+                        .kv(LOG_CLOUD_VERSION_KEY, currentSyncInformation.getCloudVersion())
+                        .cause(e).log("Failed to update sync table after updating cloud shadow");
+            }
         }
     }
 
