@@ -38,6 +38,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.stubbing.Answer;
 import org.slf4j.event.Level;
 import software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowRequest;
 import software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest;
@@ -81,6 +82,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.after;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -105,6 +107,8 @@ class SyncTest extends NucleusLaunchUtils {
     private static final String cloudShadowContentV1 = "{\"version\":1,\"state\":{\"desired\":{\"SomeKey\":\"foo\"}}}";
     private static final String localShadowContentV1 = "{\"state\":{ \"desired\": { \"SomeKey\": \"foo\"}, "
             + "\"reported\":{\"SomeKey\":\"bar\",\"OtherKey\": 1}}}";
+    private static final String localShadowContentV2 = "{\"state\":{ \"desired\": { \"SomeKey\": \"foo\"}, "
+            + "\"reported\":{\"SomeKey\":\"bar\",\"OtherKey\": 2}}}";
 
     private static final String localUpdate1 = "{\"state\":{\"reported\":{\"SomeKey\":\"foo\", \"OtherKey\": 1}}}";
     private static final String localUpdate2 = "{\"state\":{\"reported\":{\"OtherKey\":2, \"AnotherKey\":\"foobar\"}}}";
@@ -429,6 +433,71 @@ class SyncTest extends NucleusLaunchUtils {
         assertThat(shadowDocument.toJson(false), is(v1));
 
         verify(iotDataPlaneClientFactory.getIotDataPlaneClient(), times(1)).updateThingShadow(
+                any(software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowRequest.class));
+    }
+
+    @ParameterizedTest
+    @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
+    void GIVEN_synced_shadow_WHEN_multiple_local_updates_THEN_cloud_updates(Class<?extends BaseSyncStrategy> clazz, ExtensionContext context) throws IOException,
+            InterruptedException, IoTDataPlaneClientCreationException {
+        ignoreExceptionOfType(context, ResourceNotFoundException.class);
+        ignoreExceptionOfType(context, InterruptedException.class);
+
+        // no shadow exists in cloud
+        when(iotDataPlaneClientFactory.getIotDataPlaneClient().getThingShadow(any(GetThingShadowRequest.class)))
+                .thenThrow(ResourceNotFoundException.class);
+
+        // mock response to update cloud
+        when(mockUpdateThingShadowResponse.payload())
+                .thenReturn(SdkBytes.fromString("{\"version\": 1}", UTF_8));
+        when(iotDataPlaneClientFactory.getIotDataPlaneClient().updateThingShadow(cloudUpdateThingShadowRequestCaptor.capture()))
+                .thenReturn(mockUpdateThingShadowResponse)
+                .thenReturn(mockUpdateThingShadowResponse)
+                .thenAnswer((Answer<UpdateThingShadowResponse>) invocationOnMock -> {
+                    Thread.sleep(1000L);
+                    return mockUpdateThingShadowResponse;
+                })
+                .thenReturn(mockUpdateThingShadowResponse);
+
+        startNucleusWithConfig(NucleusLaunchUtilsConfig.builder()
+                .configFile(getSyncConfigFile(clazz))
+                .syncClazz(clazz)
+                .mockCloud(true)
+                .build());
+        assertEmptySyncQueue(clazz);
+        UpdateThingShadowRequestHandler updateHandler = shadowManager.getUpdateThingShadowRequestHandler();
+
+        UpdateThingShadowRequest requestA = new UpdateThingShadowRequest();
+        requestA.setThingName(MOCK_THING_NAME_1);
+        requestA.setShadowName(CLASSIC_SHADOW);
+        requestA.setPayload(localShadowContentV1.getBytes(UTF_8));
+
+        UpdateThingShadowRequest requestB = new UpdateThingShadowRequest();
+        requestB.setThingName(MOCK_THING_NAME_1);
+        requestB.setShadowName(CLASSIC_SHADOW);
+        requestB.setPayload(localShadowContentV2.getBytes(UTF_8));
+
+        updateHandler.handleRequest(requestA, "DoAll");
+        assertEmptySyncQueue(clazz);
+        updateHandler.handleRequest(requestB, "DoAll");
+        assertEmptySyncQueue(clazz);
+        updateHandler.handleRequest(requestA, "DoAll");
+        updateHandler.handleRequest(requestB, "DoAll");
+
+        assertEmptySyncQueue(clazz);
+
+        assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
+        assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(1L)));
+        assertThat("local version", () -> syncInfo.get().get().getLocalVersion(), eventuallyEval(is(4L)));
+        assertThat("local shadow exists", localShadow.get().isPresent(), is(true));
+        ShadowDocument shadowDocument = localShadow.get().get();
+
+        // remove metadata node and version (JsonNode version will fail a comparison of long vs int)
+        shadowDocument = new ShadowDocument(shadowDocument.getState(), null, null);
+        JsonNode v1 = new ShadowDocument(localShadowContentV2.getBytes(UTF_8)).toJson(false);
+        assertThat(shadowDocument.toJson(false), is(v1));
+
+        verify(iotDataPlaneClientFactory.getIotDataPlaneClient(), atLeast(1)).updateThingShadow(
                 any(software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowRequest.class));
     }
 
