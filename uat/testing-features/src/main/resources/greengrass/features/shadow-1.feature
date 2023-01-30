@@ -70,7 +70,7 @@ Feature: Greengrass V2 ShadowManager
         }
         """
         Then the local Greengrass deployment is SUCCEEDED on the device after 120 seconds
-        And I update the component ShadowComponentPing with configuration
+        And I update my local deployment configuration, setting the component ShadowComponentPing configuration to:
         """
         {
            "MERGE":{
@@ -111,7 +111,7 @@ Feature: Greengrass V2 ShadowManager
             }
         """
         Then the local Greengrass deployment is SUCCEEDED on the device after 120 seconds
-        And I update the component ShadowComponentPing with configuration
+        And I update my local deployment configuration, setting the component ShadowComponentPong configuration to:
         """
             {
                "MERGE":{
@@ -177,7 +177,7 @@ Feature: Greengrass V2 ShadowManager
             }
         """
         Then the local Greengrass deployment is SUCCEEDED on the device after 120 seconds
-        And I update the component ShadowComponentPing with configuration
+        And I update my local deployment configuration, setting the component ShadowComponentPing configuration to:
         """
             {
                "MERGE":{
