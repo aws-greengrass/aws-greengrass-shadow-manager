@@ -90,7 +90,7 @@ public class ShadowSteps {
     @Then("I can get cloud shadow for {word} with name {word} with state {word} within {int} seconds")
     public void canGetCloudShadow(final String thingName, final String shadowName, final String stateString,
                                   final int timeoutSeconds) throws IOException, InterruptedException {
-        canGetShadow(thingName, shadowName, stateString, timeoutSeconds, false, 2L);
+        canGetShadow(thingName, shadowName, stateString, timeoutSeconds, false);
     }
 
     /**
@@ -105,7 +105,7 @@ public class ShadowSteps {
     @Then("I can not get cloud shadow for {word} with name {word} within {int} seconds")
     public void cannotGetShadow(final String thingName, final String shadowName,
                                 final int timeoutSeconds) throws IOException, InterruptedException {
-        canGetShadow(thingName, shadowName, null, timeoutSeconds, true, 0L);
+        canGetShadow(thingName, shadowName, null, timeoutSeconds, true);
     }
 
     private String randomName() {
@@ -114,7 +114,7 @@ public class ShadowSteps {
 
     @SuppressWarnings("PMD.UnusedFormalParameter")
     private void canGetShadow(final String thingName, final String shadowName, final String stateString,
-                              final int timeoutSeconds, final boolean shouldNotExist, final long version)
+                              final int timeoutSeconds, final boolean shouldNotExist)
             throws IOException, InterruptedException {
         AtomicReference<GetThingShadowResponse> receivedResponse = new AtomicReference<>();
         boolean successful = waits.untilTrue(() ->
