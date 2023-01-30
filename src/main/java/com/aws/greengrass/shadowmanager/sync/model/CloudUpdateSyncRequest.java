@@ -172,25 +172,21 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
     /**
      * Checks if it is necessary to perform an update to the cloud shadow.
      *
-     * @param context unused
-     * @return true
-     * @throws SkipSyncRequestException never
-     * @throws UnknownShadowException   never
+     * @param context the execution context.
+     * @return true if cloud shadow update is necessary; Else false.
+     * @throws SkipSyncRequestException if the update request on the cloud shadow failed for another 400 exception.
+     * @throws UnknownShadowException   if the shadow sync information is missing
      */
     @Override
     public boolean isUpdateNecessary(SyncContext context) throws SkipSyncRequestException, UnknownShadowException {
-        // This method is called in context of an IPC-handling thread.
-        // We return true here so the decision can be deferred to the sync thread,
-        // which will call one of the overloads of this method.
-        //
-        // The effect is that all shadow updates from IPC will be queued to the sync thread.
-        // This leaves the sync thread completely in charge of determining if an update is necessary,
-        // via the "sync" database table.
-        //
-        // Previously, the "sync" table was read from BOTH the IPC thread and the sync thread, without synchronization.
-        // This lead to bugs where a shadow update from IPC would not get sent to sync, because the IPC thread
-        // may see that the shadow didn't update, when in fact, the update just didn't fully execute on the sync thread.
-        return true;
+        Optional<ShadowDocument> shadowDocument = context.getDao().getShadowThing(getThingName(), getShadowName());
+
+        //TODO: store this information in a return object to avoid unnecessary calls to DAO.
+        SyncInformation currentSyncInformation = context.getDao()
+                .getShadowSyncInformation(getThingName(), getShadowName())
+                .orElseThrow(() -> new UnknownShadowException("Shadow not found in sync table"));
+
+        return isUpdateNecessary(shadowDocument, currentSyncInformation, context);
     }
 
     private boolean isUpdateNecessary(Optional<ShadowDocument> shadowDocument, SyncInformation currentSyncInformation,
