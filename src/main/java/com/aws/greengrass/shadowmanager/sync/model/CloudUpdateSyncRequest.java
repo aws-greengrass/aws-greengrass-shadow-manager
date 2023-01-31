@@ -93,7 +93,7 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
         // `isUpdateNecessary(SyncContext)` does not access shadow sync information.
         //
         // The check for shadow sync information in this class' `isUpdateNecessary(SyncContext)`
-        // is necessary to prevent unnecessary full syncs,
+        // prevents unnecessary full syncs,
         // (see https://github.com/aws-greengrass/aws-greengrass-shadow-manager/pull/106).
         synchronized (context.getSynchronizeHelper().getThingShadowLock(this)) {
             Optional<ShadowDocument> shadowDocument = context.getDao().getShadowThing(getThingName(), getShadowName());
