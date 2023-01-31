@@ -181,14 +181,16 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
      */
     @Override
     public boolean isUpdateNecessary(SyncContext context) throws SkipSyncRequestException, UnknownShadowException {
-        Optional<ShadowDocument> shadowDocument = context.getDao().getShadowThing(getThingName(), getShadowName());
+        synchronized (context.getSynchronizeHelper().getThingShadowLock(this)) {
+            Optional<ShadowDocument> shadowDocument = context.getDao().getShadowThing(getThingName(), getShadowName());
 
-        //TODO: store this information in a return object to avoid unnecessary calls to DAO.
-        SyncInformation currentSyncInformation = context.getDao()
-                .getShadowSyncInformation(getThingName(), getShadowName())
-                .orElseThrow(() -> new UnknownShadowException("Shadow not found in sync table"));
+            //TODO: store this information in a return object to avoid unnecessary calls to DAO.
+            SyncInformation currentSyncInformation = context.getDao()
+                    .getShadowSyncInformation(getThingName(), getShadowName())
+                    .orElseThrow(() -> new UnknownShadowException("Shadow not found in sync table"));
 
-        return isUpdateNecessary(shadowDocument, currentSyncInformation, context);
+            return isUpdateNecessary(shadowDocument, currentSyncInformation, context);
+        }
     }
 
     private boolean isUpdateNecessary(Optional<ShadowDocument> shadowDocument, SyncInformation currentSyncInformation,
