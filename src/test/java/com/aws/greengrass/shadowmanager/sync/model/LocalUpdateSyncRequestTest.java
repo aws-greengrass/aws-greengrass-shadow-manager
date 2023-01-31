@@ -92,7 +92,7 @@ class LocalUpdateSyncRequestTest {
     @BeforeEach
     void setup() throws IOException {
         syncContext = new SyncContext(mockDao, mockUpdateThingShadowRequestHandler,
-                mock(DeleteThingShadowRequestHandler.class), mock(IotDataPlaneClientWrapper.class), mock(ShadowWriteSynchronizeHelper.class));
+                mock(DeleteThingShadowRequestHandler.class), mock(IotDataPlaneClientWrapper.class), new ShadowWriteSynchronizeHelper());
         JsonUtil.loadSchema();
     }
 
