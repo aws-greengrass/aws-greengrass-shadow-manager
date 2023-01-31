@@ -85,7 +85,19 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
     @Override
     public void execute(SyncContext context) throws RetryableException, SkipSyncRequestException,
             ConflictException, UnknownShadowException, InterruptedException {
-
+        // Locking here is necessary to protect access to shadow sync information,
+        // which is read/written here, in sync threads,
+        // and in the UpdateThingShadowRequestHandler IPC thread.
+        //
+        // Other types of requests don't need this lock because shadow sync information is
+        // not read/written before they are added to the queue in another thread
+        // (with the exception of LocalUpdateSyncRequest).
+        //
+        // Another alternative explored was simply removing the read in the IPC thread
+        // and always queue up the sync request.
+        // While this would eliminate the need for this lock, it would cause a regression
+        // where unnecessary full syncs occur,
+        // see https://github.com/aws-greengrass/aws-greengrass-shadow-manager/pull/106.
         synchronized (context.getSynchronizeHelper().getThingShadowLock(this)) {
             Optional<ShadowDocument> shadowDocument = context.getDao().getShadowThing(getThingName(), getShadowName());
 
