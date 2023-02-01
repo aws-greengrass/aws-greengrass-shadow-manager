@@ -506,6 +506,79 @@ class SyncTest extends NucleusLaunchUtils {
 
     @ParameterizedTest
     @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
+    void GIVEN_synced_shadow_WHEN_multiple_cloud_and_local_received_THEN_cloud_updated(Class<?extends BaseSyncStrategy> clazz, ExtensionContext context) throws IOException, InterruptedException, IoTDataPlaneClientCreationException {
+        ignoreExceptionOfType(context, ResourceNotFoundException.class);
+        ignoreExceptionOfType(context, InterruptedException.class);
+
+        // no shadow exists in cloud
+        when(iotDataPlaneClientFactory.getIotDataPlaneClient().getThingShadow(any(GetThingShadowRequest.class)))
+                .thenThrow(ResourceNotFoundException.class);
+
+        // mock response to update cloud
+        when(mockUpdateThingShadowResponse.payload())
+                .thenReturn(SdkBytes.fromString("{\"version\": 1}", UTF_8));
+        when(iotDataPlaneClientFactory.getIotDataPlaneClient().updateThingShadow(cloudUpdateThingShadowRequestCaptor.capture()))
+                .thenReturn(mockUpdateThingShadowResponse)
+                .thenReturn(mockUpdateThingShadowResponse)
+                .thenAnswer((Answer<UpdateThingShadowResponse>) invocationOnMock -> {
+                    Thread.sleep(1000L);
+                    return mockUpdateThingShadowResponse;
+                })
+                .thenReturn(mockUpdateThingShadowResponse);
+
+        startNucleusWithConfig(NucleusLaunchUtilsConfig.builder()
+                .configFile(getSyncConfigFile(clazz))
+                .syncClazz(clazz)
+                .mockCloud(true)
+                .build());
+        assertEmptySyncQueue(clazz);
+
+        UpdateThingShadowRequestHandler updateHandler = shadowManager.getUpdateThingShadowRequestHandler();
+        SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
+
+        UpdateThingShadowRequest requestA = new UpdateThingShadowRequest();
+        requestA.setThingName(MOCK_THING_NAME_1);
+        requestA.setShadowName(CLASSIC_SHADOW);
+        requestA.setPayload(localShadowContentV1.getBytes(UTF_8));
+
+        UpdateThingShadowRequest requestB = new UpdateThingShadowRequest();
+        requestB.setThingName(MOCK_THING_NAME_1);
+        requestB.setShadowName(CLASSIC_SHADOW);
+        requestB.setPayload(localShadowContentV2.getBytes(UTF_8));
+
+        String cloudShadowContent = "{\"version\": 1,\"state\":{ \"desired\": { \"SomeKey\": \"foo\"}, "
+                + "\"reported\":{\"SomeKey\":\"bar\",\"OtherKey\": 2}}}";
+        JsonNode cloudDocument = JsonUtil.getPayloadJson(cloudShadowContent.getBytes(UTF_8)).get();
+
+        updateHandler.handleRequest(requestA, "DoAll");
+        assertEmptySyncQueue(clazz);
+        updateHandler.handleRequest(requestB, "DoAll");
+        assertEmptySyncQueue(clazz);
+
+        syncHandler.pushLocalUpdateSyncRequest(MOCK_THING_NAME_1, CLASSIC_SHADOW, JsonUtil.getPayloadBytes(cloudDocument));
+
+        updateHandler.handleRequest(requestA, "DoAll");
+        updateHandler.handleRequest(requestB, "DoAll");
+
+        assertEmptySyncQueue(clazz);
+
+        assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
+        assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(1L)));
+        assertThat("local version", () -> syncInfo.get().get().getLocalVersion(), eventuallyEval(is(4L)));
+        assertThat("local shadow exists", localShadow.get().isPresent(), is(true));
+        ShadowDocument shadowDocument = localShadow.get().get();
+
+        // remove metadata node and version (JsonNode version will fail a comparison of long vs int)
+        shadowDocument = new ShadowDocument(shadowDocument.getState(), null, null);
+        JsonNode v1 = new ShadowDocument(localShadowContentV2.getBytes(UTF_8)).toJson(false);
+        assertThat(shadowDocument.toJson(false), is(v1));
+
+        verify(iotDataPlaneClientFactory.getIotDataPlaneClient(), atLeast(1)).updateThingShadow(
+                any(software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowRequest.class));
+    }
+
+    @ParameterizedTest
+    @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
     void GIVEN_synced_shadow_WHEN_cloud_update_THEN_local_updates(Class<?extends BaseSyncStrategy> clazz, ExtensionContext context) throws IOException, InterruptedException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, InterruptedException.class);
         ignoreExceptionOfType(context, ResourceNotFoundException.class);
