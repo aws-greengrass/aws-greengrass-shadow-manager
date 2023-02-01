@@ -24,6 +24,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
@@ -283,7 +284,22 @@ public class CloudDataClient {
         String shadowName = shadowRequest.getShadowName();
         logger.atDebug().kv(LOG_THING_NAME_KEY, thingName).kv(LOG_SHADOW_NAME_KEY, shadowName)
                 .log("Received cloud update sync request");
-        syncHandler.pushLocalUpdateSyncRequest(thingName, shadowName, message.getPayload());
+        CompletableFuture
+                // Since this callback runs in context of a CRT thread, we must not block.
+                //
+                // There is a small chance of blocking when a thing/shadow lock is obtained
+                // within this call, because the lock also surrounds an IoT dataplane call
+                // in CloudUpdateSyncRequest.
+                .runAsync(() -> syncHandler.pushLocalUpdateSyncRequest(thingName, shadowName, message.getPayload()),
+                        executorService)
+                .whenComplete((unused, e) -> {
+                    if (e != null) {
+                        logger.atError().cause(e)
+                                .kv("thingName", thingName)
+                                .kv("shadowName", shadowName)
+                                .log("Unable to queue local update sync request");
+                    }
+                });
     }
 
     /**
