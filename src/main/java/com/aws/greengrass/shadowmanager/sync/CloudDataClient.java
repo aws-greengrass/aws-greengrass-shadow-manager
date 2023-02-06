@@ -295,8 +295,8 @@ public class CloudDataClient {
                 .whenComplete((unused, e) -> {
                     if (e != null) {
                         logger.atError().cause(e)
-                                .kv("thingName", thingName)
-                                .kv("shadowName", shadowName)
+                                .kv(LOG_THING_NAME_KEY, thingName)
+                                .kv(LOG_SHADOW_NAME_KEY, shadowName)
                                 .log("Unable to queue local update sync request");
                     }
                 });
