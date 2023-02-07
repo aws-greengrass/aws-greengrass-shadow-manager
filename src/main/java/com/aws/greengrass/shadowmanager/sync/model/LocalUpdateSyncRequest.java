@@ -68,17 +68,30 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
      * @throws IOException if unable to serialize the update document payload bytes.
      */
     public void merge(LocalUpdateSyncRequest other) throws IOException {
-        Optional<JsonNode> oldValueJson = JsonUtil.getPayloadJson(updateDocument);
-        Optional<JsonNode> newValueJson = JsonUtil.getPayloadJson(other.getUpdateDocument());
-        if (!oldValueJson.isPresent() && newValueJson.isPresent()) {
+        Optional<JsonNode> currDocJson = JsonUtil.getPayloadJson(updateDocument);
+        Optional<JsonNode> updateDocJson = JsonUtil.getPayloadJson(other.getUpdateDocument());
+
+        if (!currDocJson.isPresent() && updateDocJson.isPresent()) {
             updateDocument = other.getUpdateDocument();
             return;
         }
-        if (!newValueJson.isPresent()) {
+        if (!updateDocJson.isPresent()) {
             return;
         }
-        JsonMerger.merge(oldValueJson.get(), newValueJson.get());
-        updateDocument = JsonUtil.getPayloadBytes(oldValueJson.get());
+
+        JsonNode oldValueJson = currDocJson.get();
+        JsonNode newValueJson = updateDocJson.get();
+
+        if (JsonUtil.hasVersion(oldValueJson) && JsonUtil.hasVersion(newValueJson) &&
+                JsonUtil.getVersion(oldValueJson) > JsonUtil.getVersion(newValueJson)) {
+            // updates received out of order,
+            // merge newer version into older version
+            oldValueJson = updateDocJson.get();
+            newValueJson = currDocJson.get();
+        }
+
+        JsonMerger.merge(oldValueJson, newValueJson);
+        updateDocument = JsonUtil.getPayloadBytes(oldValueJson);
     }
 
     @Override

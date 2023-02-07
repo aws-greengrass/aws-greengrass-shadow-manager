@@ -795,6 +795,61 @@ class SyncTest extends NucleusLaunchUtils {
 
     @ParameterizedTest
     @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
+    void GIVEN_multiple_cloud_updates_WHEN_updates_received_out_of_order_and_merged_THEN_local_shadow_is_updated(Class<?extends BaseSyncStrategy> clazz, ExtensionContext context)
+            throws InterruptedException, IOException, IoTDataPlaneClientCreationException {
+        ignoreExceptionOfType(context, InterruptedException.class);
+        ignoreExceptionOfType(context, ConflictError.class);
+
+        String initialCloudState = "{\"version\":1,\"state\":{\"desired\":{}}}";
+        String cloudUpdate1 = "{\"version\":2,\"state\":{\"desired\":{\"SomeKey\":\"foo\"}}}";
+        String cloudUpdate2 = "{\"version\":3,\"state\":{\"desired\":{\"OtherKey\":\"foo\"}}}";
+        String finalCloudState = "{\"version\":3,\"state\":{\"desired\":{\"SomeKey\":\"foo\",\"OtherKey\":\"foo\"}}}";
+        String expectedLocalShadowState = "{\"state\":{\"desired\":{\"SomeKey\":\"foo\",\"OtherKey\":\"foo\"}}}";
+
+        when(iotDataPlaneClientFactory.getIotDataPlaneClient().updateThingShadow(cloudUpdateThingShadowRequestCaptor.capture()))
+                .thenReturn(mockUpdateThingShadowResponse);
+
+        // setup initial cloud state
+        GetThingShadowResponse initialCloudStateShadowResponse = mock(GetThingShadowResponse.class, Answers.RETURNS_DEEP_STUBS);
+        lenient().when(initialCloudStateShadowResponse.payload().asByteArray()).thenReturn(initialCloudState.getBytes(UTF_8));
+        when(iotDataPlaneClientFactory.getIotDataPlaneClient().getThingShadow(any(GetThingShadowRequest.class))).thenReturn(initialCloudStateShadowResponse);
+
+        GetThingShadowResponse finalCloudStateShadowResponse = mock(GetThingShadowResponse.class, Answers.RETURNS_DEEP_STUBS);
+        lenient().when(finalCloudStateShadowResponse.payload().asByteArray()).thenReturn(finalCloudState.getBytes(UTF_8));
+
+        JsonNode cloudUpdateDocument = JsonUtil.getPayloadJson(cloudUpdate1.getBytes(UTF_8)).get();
+        JsonNode cloudUpdateDocument2 = JsonUtil.getPayloadJson(cloudUpdate2.getBytes(UTF_8)).get();
+
+        startNucleusWithConfig(NucleusLaunchUtilsConfig.builder()
+                .configFile(getSyncConfigFile(clazz))
+                .syncClazz(clazz)
+                .mockCloud(true)
+                .build());
+
+        // verify sync info is empty
+        assertEmptySyncQueue(clazz);
+        assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
+        assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(1L)));
+        assertThat("local version", syncInfo.get().get().getLocalVersion(), is(1L));
+
+        SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
+
+        when(iotDataPlaneClientFactory.getIotDataPlaneClient().getThingShadow(any(GetThingShadowRequest.class))).thenReturn(finalCloudStateShadowResponse);
+
+        // receive cloud update 2 of 2 (out of order)
+        syncHandler.pushLocalUpdateSyncRequest(MOCK_THING_NAME_1, CLASSIC_SHADOW, JsonUtil.getPayloadBytes(cloudUpdateDocument2));
+        // receive cloud update 1 of 2 (out of order)
+        syncHandler.pushLocalUpdateSyncRequest(MOCK_THING_NAME_1, CLASSIC_SHADOW, JsonUtil.getPayloadBytes(cloudUpdateDocument));
+
+        assertEmptySyncQueue(clazz);
+        assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
+        assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(3L)));
+        assertThat("local version", syncInfo.get().get().getLocalVersion(), is(2L));
+        assertLocalShadowEquals(expectedLocalShadowState);
+    }
+
+    @ParameterizedTest
+    @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
     void GIVEN_multiple_local_updates_WHEN_updates_received_out_of_order_THEN_local_shadow_and_sync_info_are_updated(Class<?extends BaseSyncStrategy> clazz, ExtensionContext context)
             throws InterruptedException, IOException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, InterruptedException.class);
