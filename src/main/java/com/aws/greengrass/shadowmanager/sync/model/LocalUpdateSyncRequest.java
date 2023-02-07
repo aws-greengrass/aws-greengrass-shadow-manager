@@ -82,8 +82,8 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
         JsonNode oldValueJson = currDocJson.get();
         JsonNode newValueJson = updateDocJson.get();
 
-        if (JsonUtil.hasVersion(oldValueJson) && JsonUtil.hasVersion(newValueJson) &&
-                JsonUtil.getVersion(oldValueJson) > JsonUtil.getVersion(newValueJson)) {
+        if (JsonUtil.hasVersion(oldValueJson) && JsonUtil.hasVersion(newValueJson)
+                && JsonUtil.getVersion(oldValueJson) > JsonUtil.getVersion(newValueJson)) {
             // updates received out of order,
             // merge newer version into older version
             oldValueJson = updateDocJson.get();
