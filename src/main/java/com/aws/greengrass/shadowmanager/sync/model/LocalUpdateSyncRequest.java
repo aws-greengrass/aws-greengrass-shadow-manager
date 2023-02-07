@@ -206,7 +206,7 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
 
     private void updateSyncInformationVersion(SyncContext context, ShadowDocument shadowDocument,
                                               SyncInformation currentSyncInformation) {
-        if (currentSyncInformation.getCloudVersion() != shadowDocument.getVersion()) {
+        if (currentSyncInformation.getCloudVersion() < shadowDocument.getVersion()) {
             try {
                 long updateTime = Instant.now().getEpochSecond();
                 context.getDao().updateSyncInformation(SyncInformation.builder()
