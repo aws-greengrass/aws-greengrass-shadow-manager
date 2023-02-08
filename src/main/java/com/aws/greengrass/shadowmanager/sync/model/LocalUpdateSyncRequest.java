@@ -84,10 +84,12 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
 
         if (JsonUtil.hasVersion(oldValueJson) && JsonUtil.hasVersion(newValueJson)
                 && JsonUtil.getVersion(oldValueJson) > JsonUtil.getVersion(newValueJson)) {
-            // updates received out of order,
-            // merge newer version into older version
             oldValueJson = updateDocJson.get();
             newValueJson = currDocJson.get();
+            logger.atDebug()
+                    .log("Version {} received after version {}. Merging version {} into version {}",
+                            JsonUtil.getVersion(oldValueJson), JsonUtil.getVersion(newValueJson),
+                            JsonUtil.getVersion(newValueJson), JsonUtil.getVersion(oldValueJson));
         }
 
         JsonMerger.merge(oldValueJson, newValueJson);
