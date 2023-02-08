@@ -94,6 +94,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@SuppressWarnings("PMD.ExcessiveClassLength")
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 class SyncTest extends NucleusLaunchUtils {
     public static final String MOCK_THING_NAME_1 = "Thing1";
@@ -1155,5 +1156,3 @@ class SyncTest extends NucleusLaunchUtils {
         assertThat(shadowDocument.toJson(false).get(SHADOW_DOCUMENT_STATE), is(JsonUtil.getPayloadJson(state.getBytes(UTF_8)).get().get(SHADOW_DOCUMENT_STATE)));
     }
 }
-
-
