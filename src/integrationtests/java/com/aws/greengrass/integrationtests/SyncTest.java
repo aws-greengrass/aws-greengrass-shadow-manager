@@ -38,6 +38,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.stubbing.Answer;
 import org.slf4j.event.Level;
 import software.amazon.awssdk.aws.greengrass.model.ConflictError;
 import software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowRequest;
@@ -72,6 +73,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
@@ -83,6 +85,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.after;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -105,8 +108,13 @@ class SyncTest extends NucleusLaunchUtils {
             + " \"version\": 10, \"timestamp\": 1624986665 }";
 
     private static final String cloudShadowContentV1 = "{\"version\":1,\"state\":{\"desired\":{\"SomeKey\":\"foo\"}}}";
+    private static final String cloudShadowContentV2 = "{\"version\":2,\"state\":{\"desired\":{\"SomeKey\":\"foo2\"}}}";
+    private static final String cloudShadowContentV3 = "{\"version\":3,\"state\":{\"desired\":{\"SomeKey\":\"foo\"}}}";
+    private static final String cloudShadowContentV4 = "{\"version\":4,\"state\":{\"desired\":{\"SomeKey\":\"foo2\"}}}";
     private static final String localShadowContentV1 = "{\"state\":{ \"desired\": { \"SomeKey\": \"foo\"}, "
             + "\"reported\":{\"SomeKey\":\"bar\",\"OtherKey\": 1}}}";
+    private static final String localShadowContentV2 = "{\"state\":{ \"desired\": { \"SomeKey\": \"foo\"}, "
+            + "\"reported\":{\"SomeKey\":\"bar\",\"OtherKey\": 2}}}";
 
     private static final String localUpdate1 = "{\"state\":{\"reported\":{\"SomeKey\":\"foo\", \"OtherKey\": 1}}}";
     private static final String localUpdate2 = "{\"state\":{\"reported\":{\"OtherKey\":2, \"AnotherKey\":\"foobar\"}}}";
@@ -436,6 +444,144 @@ class SyncTest extends NucleusLaunchUtils {
 
     @ParameterizedTest
     @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
+    void GIVEN_synced_shadow_WHEN_multiple_local_updates_THEN_cloud_updates(Class<?extends BaseSyncStrategy> clazz, ExtensionContext context) throws IOException,
+            InterruptedException, IoTDataPlaneClientCreationException {
+        ignoreExceptionOfType(context, ResourceNotFoundException.class);
+        ignoreExceptionOfType(context, InterruptedException.class);
+
+        // no shadow exists in cloud
+        when(iotDataPlaneClientFactory.getIotDataPlaneClient().getThingShadow(any(GetThingShadowRequest.class)))
+                .thenThrow(ResourceNotFoundException.class);
+
+        // mock response to update cloud
+        when(mockUpdateThingShadowResponse.payload())
+                .thenReturn(SdkBytes.fromString("{\"version\": 1}", UTF_8));
+        when(iotDataPlaneClientFactory.getIotDataPlaneClient().updateThingShadow(cloudUpdateThingShadowRequestCaptor.capture()))
+                .thenReturn(mockUpdateThingShadowResponse)
+                .thenReturn(mockUpdateThingShadowResponse)
+                .thenAnswer((Answer<UpdateThingShadowResponse>) invocationOnMock -> {
+                    Thread.sleep(1000L);
+                    return mockUpdateThingShadowResponse;
+                })
+                .thenReturn(mockUpdateThingShadowResponse);
+
+        startNucleusWithConfig(NucleusLaunchUtilsConfig.builder()
+                .configFile(getSyncConfigFile(clazz))
+                .syncClazz(clazz)
+                .mockCloud(true)
+                .build());
+        assertEmptySyncQueue(clazz);
+        UpdateThingShadowRequestHandler updateHandler = shadowManager.getUpdateThingShadowRequestHandler();
+
+        UpdateThingShadowRequest requestA = new UpdateThingShadowRequest();
+        requestA.setThingName(MOCK_THING_NAME_1);
+        requestA.setShadowName(CLASSIC_SHADOW);
+        requestA.setPayload(localShadowContentV1.getBytes(UTF_8));
+
+        UpdateThingShadowRequest requestB = new UpdateThingShadowRequest();
+        requestB.setThingName(MOCK_THING_NAME_1);
+        requestB.setShadowName(CLASSIC_SHADOW);
+        requestB.setPayload(localShadowContentV2.getBytes(UTF_8));
+
+        updateHandler.handleRequest(requestA, "DoAll");
+        assertEmptySyncQueue(clazz);
+        updateHandler.handleRequest(requestB, "DoAll");
+        assertEmptySyncQueue(clazz);
+        updateHandler.handleRequest(requestA, "DoAll");
+        updateHandler.handleRequest(requestB, "DoAll");
+
+        assertEmptySyncQueue(clazz);
+
+        assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
+        assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(1L)));
+        assertThat("local version", () -> syncInfo.get().get().getLocalVersion(), eventuallyEval(is(4L)));
+        assertThat("local shadow exists", localShadow.get().isPresent(), is(true));
+        ShadowDocument shadowDocument = localShadow.get().get();
+
+        // remove metadata node and version (JsonNode version will fail a comparison of long vs int)
+        shadowDocument = new ShadowDocument(shadowDocument.getState(), null, null);
+        JsonNode v1 = new ShadowDocument(localShadowContentV2.getBytes(UTF_8)).toJson(false);
+        assertThat(shadowDocument.toJson(false), is(v1));
+
+        verify(iotDataPlaneClientFactory.getIotDataPlaneClient(), atLeast(1)).updateThingShadow(
+                any(software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowRequest.class));
+    }
+
+    @ParameterizedTest
+    @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
+    void GIVEN_synced_shadow_WHEN_multiple_cloud_and_local_received_THEN_cloud_updated(Class<?extends BaseSyncStrategy> clazz, ExtensionContext context) throws IOException, InterruptedException, IoTDataPlaneClientCreationException {
+        ignoreExceptionOfType(context, ResourceNotFoundException.class);
+        ignoreExceptionOfType(context, InterruptedException.class);
+
+        // no shadow exists in cloud
+        when(iotDataPlaneClientFactory.getIotDataPlaneClient().getThingShadow(any(GetThingShadowRequest.class)))
+                .thenThrow(ResourceNotFoundException.class);
+
+        // mock response to update cloud
+        when(mockUpdateThingShadowResponse.payload())
+                .thenReturn(SdkBytes.fromString("{\"version\": 1}", UTF_8));
+        when(iotDataPlaneClientFactory.getIotDataPlaneClient().updateThingShadow(cloudUpdateThingShadowRequestCaptor.capture()))
+                .thenReturn(mockUpdateThingShadowResponse)
+                .thenReturn(mockUpdateThingShadowResponse)
+                .thenAnswer((Answer<UpdateThingShadowResponse>) invocationOnMock -> {
+                    Thread.sleep(1000L);
+                    return mockUpdateThingShadowResponse;
+                })
+                .thenReturn(mockUpdateThingShadowResponse);
+
+        startNucleusWithConfig(NucleusLaunchUtilsConfig.builder()
+                .configFile(getSyncConfigFile(clazz))
+                .syncClazz(clazz)
+                .mockCloud(true)
+                .build());
+        assertEmptySyncQueue(clazz);
+
+        UpdateThingShadowRequestHandler updateHandler = shadowManager.getUpdateThingShadowRequestHandler();
+        SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
+
+        UpdateThingShadowRequest requestA = new UpdateThingShadowRequest();
+        requestA.setThingName(MOCK_THING_NAME_1);
+        requestA.setShadowName(CLASSIC_SHADOW);
+        requestA.setPayload(localShadowContentV1.getBytes(UTF_8));
+
+        UpdateThingShadowRequest requestB = new UpdateThingShadowRequest();
+        requestB.setThingName(MOCK_THING_NAME_1);
+        requestB.setShadowName(CLASSIC_SHADOW);
+        requestB.setPayload(localShadowContentV2.getBytes(UTF_8));
+
+        String cloudShadowContent = "{\"version\": 1,\"state\":{ \"desired\": { \"SomeKey\": \"foo\"}, "
+                + "\"reported\":{\"SomeKey\":\"bar\",\"OtherKey\": 2}}}";
+        JsonNode cloudDocument = JsonUtil.getPayloadJson(cloudShadowContent.getBytes(UTF_8)).get();
+
+        updateHandler.handleRequest(requestA, "DoAll");
+        assertEmptySyncQueue(clazz);
+        updateHandler.handleRequest(requestB, "DoAll");
+        assertEmptySyncQueue(clazz);
+
+        syncHandler.pushLocalUpdateSyncRequest(MOCK_THING_NAME_1, CLASSIC_SHADOW, JsonUtil.getPayloadBytes(cloudDocument));
+
+        updateHandler.handleRequest(requestA, "DoAll");
+        updateHandler.handleRequest(requestB, "DoAll");
+
+        assertEmptySyncQueue(clazz);
+
+        assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
+        assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(1L)));
+        assertThat("local version", () -> syncInfo.get().get().getLocalVersion(), eventuallyEval(is(4L)));
+        assertThat("local shadow exists", localShadow.get().isPresent(), is(true));
+        ShadowDocument shadowDocument = localShadow.get().get();
+
+        // remove metadata node and version (JsonNode version will fail a comparison of long vs int)
+        shadowDocument = new ShadowDocument(shadowDocument.getState(), null, null);
+        JsonNode v1 = new ShadowDocument(localShadowContentV2.getBytes(UTF_8)).toJson(false);
+        assertThat(shadowDocument.toJson(false), is(v1));
+
+        verify(iotDataPlaneClientFactory.getIotDataPlaneClient(), atLeast(1)).updateThingShadow(
+                any(software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowRequest.class));
+    }
+
+    @ParameterizedTest
+    @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
     void GIVEN_synced_shadow_WHEN_cloud_update_THEN_local_updates(Class<?extends BaseSyncStrategy> clazz, ExtensionContext context) throws IOException, InterruptedException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, InterruptedException.class);
         ignoreExceptionOfType(context, ResourceNotFoundException.class);
@@ -474,6 +620,75 @@ class SyncTest extends NucleusLaunchUtils {
         // remove metadata node and version (JsonNode version will fail a comparison of long vs int)
         shadowDocument = new ShadowDocument(shadowDocument.getState(), null, null);
         assertThat(shadowDocument.toJson(false).get(SHADOW_DOCUMENT_STATE), is(cloudDocument.get(SHADOW_DOCUMENT_STATE)));
+
+        verify(iotDataPlaneClientFactory.getIotDataPlaneClient(), never()).updateThingShadow(
+                any(software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowRequest.class));
+    }
+
+    @ParameterizedTest
+    @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
+    void GIVEN_synced_shadow_WHEN_multiple_cloud_updates_THEN_local_updates(Class<?extends BaseSyncStrategy> clazz, ExtensionContext context) throws IOException, InterruptedException, IoTDataPlaneClientCreationException {
+        ignoreExceptionOfType(context, InterruptedException.class);
+        ignoreExceptionOfType(context, ResourceNotFoundException.class);
+        ignoreExceptionOfType(context, ConflictError.class);
+
+        when(iotDataPlaneClientFactory.getIotDataPlaneClient().updateThingShadow(cloudUpdateThingShadowRequestCaptor.capture()))
+                .thenReturn(mockUpdateThingShadowResponse);
+        when(iotDataPlaneClientFactory.getIotDataPlaneClient().getThingShadow(any(GetThingShadowRequest.class)))
+                .thenThrow(ResourceNotFoundException.class);
+
+        GetThingShadowResponse shadowResponse = mock(GetThingShadowResponse.class, Answers.RETURNS_DEEP_STUBS);
+        lenient().when(shadowResponse.payload().asByteArray()).thenReturn(cloudShadowContentV1.getBytes(UTF_8));
+        GetThingShadowResponse shadowResponseV2 = mock(GetThingShadowResponse.class, Answers.RETURNS_DEEP_STUBS);
+        lenient().when(shadowResponseV2.payload().asByteArray()).thenReturn(cloudShadowContentV2.getBytes(UTF_8));
+        GetThingShadowResponse shadowResponseV3 = mock(GetThingShadowResponse.class, Answers.RETURNS_DEEP_STUBS);
+        lenient().when(shadowResponseV3.payload().asByteArray()).thenReturn(cloudShadowContentV3.getBytes(UTF_8));
+        GetThingShadowResponse shadowResponseV4 = mock(GetThingShadowResponse.class, Answers.RETURNS_DEEP_STUBS);
+        lenient().when(shadowResponseV4.payload().asByteArray()).thenReturn(cloudShadowContentV4.getBytes(UTF_8));
+
+        JsonNode cloudDocument = JsonUtil.getPayloadJson(cloudShadowContentV1.getBytes(UTF_8)).get();
+        JsonNode cloudDocumentV2 = JsonUtil.getPayloadJson(cloudShadowContentV2.getBytes(UTF_8)).get();
+        JsonNode cloudDocumentV3 = JsonUtil.getPayloadJson(cloudShadowContentV3.getBytes(UTF_8)).get();
+        JsonNode cloudDocumentV4 = JsonUtil.getPayloadJson(cloudShadowContentV4.getBytes(UTF_8)).get();
+
+        startNucleusWithConfig(NucleusLaunchUtilsConfig.builder()
+                .configFile(getSyncConfigFile(clazz))
+                .syncClazz(clazz)
+                .mockCloud(true)
+                .build());
+
+        assertEmptySyncQueue(clazz);
+
+        assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
+
+        assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(0L)));
+        assertThat("local version", syncInfo.get().get().getLocalVersion(), is(0L));
+
+        SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
+        lenient().when(iotDataPlaneClientFactory.getIotDataPlaneClient().getThingShadow(any(GetThingShadowRequest.class)))
+                .thenReturn(shadowResponse);
+        syncHandler.pushLocalUpdateSyncRequest(MOCK_THING_NAME_1, CLASSIC_SHADOW, JsonUtil.getPayloadBytes(cloudDocument));
+        lenient().when(iotDataPlaneClientFactory.getIotDataPlaneClient().getThingShadow(any(GetThingShadowRequest.class)))
+                .thenReturn(shadowResponseV2);
+        syncHandler.pushLocalUpdateSyncRequest(MOCK_THING_NAME_1, CLASSIC_SHADOW, JsonUtil.getPayloadBytes(cloudDocumentV2));
+        lenient().when(iotDataPlaneClientFactory.getIotDataPlaneClient().getThingShadow(any(GetThingShadowRequest.class)))
+                .thenReturn(shadowResponseV3);
+        syncHandler.pushLocalUpdateSyncRequest(MOCK_THING_NAME_1, CLASSIC_SHADOW, JsonUtil.getPayloadBytes(cloudDocumentV3));
+        lenient().when(iotDataPlaneClientFactory.getIotDataPlaneClient().getThingShadow(any(GetThingShadowRequest.class)))
+                .thenReturn(shadowResponseV4);
+        syncHandler.pushLocalUpdateSyncRequest(MOCK_THING_NAME_1, CLASSIC_SHADOW, JsonUtil.getPayloadBytes(cloudDocumentV4));
+
+        assertEmptySyncQueue(clazz);
+
+        assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
+        assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(4L)));
+        assertThat("local version", () -> syncInfo.get().get().getLocalVersion(), eventuallyEval(greaterThanOrEqualTo(1L)));
+
+        assertThat("local shadow exists", localShadow.get().isPresent(), is(true));
+        ShadowDocument shadowDocument = localShadow.get().get();
+        // remove metadata node and version (JsonNode version will fail a comparison of long vs int)
+        shadowDocument = new ShadowDocument(shadowDocument.getState(), null, null);
+        assertThat(shadowDocument.toJson(false).get(SHADOW_DOCUMENT_STATE), is(cloudDocumentV4.get(SHADOW_DOCUMENT_STATE)));
 
         verify(iotDataPlaneClientFactory.getIotDataPlaneClient(), never()).updateThingShadow(
                 any(software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowRequest.class));

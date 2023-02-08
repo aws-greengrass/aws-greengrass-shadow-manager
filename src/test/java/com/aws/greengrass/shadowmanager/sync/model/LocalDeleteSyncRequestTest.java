@@ -13,6 +13,7 @@ import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientWrapper;
+import com.aws.greengrass.shadowmanager.util.ShadowWriteSynchronizeHelper;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.fasterxml.jackson.core.JsonParseException;
 import org.junit.jupiter.api.BeforeEach;
@@ -92,7 +93,7 @@ class LocalDeleteSyncRequestTest {
                 .thenReturn(new DeleteThingShadowResponse());
 
         syncContext = new SyncContext(mockDao, mock(UpdateThingShadowRequestHandler.class),
-                mockDeleteThingShadowRequestHandler, mock(IotDataPlaneClientWrapper.class));
+                mockDeleteThingShadowRequestHandler, mock(IotDataPlaneClientWrapper.class), mock(ShadowWriteSynchronizeHelper.class));
     }
 
 
