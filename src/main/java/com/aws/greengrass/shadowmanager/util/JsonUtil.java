@@ -269,12 +269,4 @@ public final class JsonUtil {
         }
         return result;
     }
-
-    public static boolean hasVersion(JsonNode document) {
-        return document.has(SHADOW_DOCUMENT_VERSION) && document.get(SHADOW_DOCUMENT_VERSION).isIntegralNumber();
-    }
-
-    public static long getVersion(JsonNode document) {
-        return document.get(SHADOW_DOCUMENT_VERSION).asLong();
-    }
 }
