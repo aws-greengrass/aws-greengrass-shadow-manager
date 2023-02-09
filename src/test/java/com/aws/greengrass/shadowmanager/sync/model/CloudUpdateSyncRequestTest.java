@@ -14,7 +14,6 @@ import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientWrapper;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
-import com.aws.greengrass.shadowmanager.util.ShadowWriteSynchronizeHelper;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.BeforeAll;
@@ -96,7 +95,6 @@ class CloudUpdateSyncRequestTest {
         baseDocumentJson = JsonUtil.getPayloadJson(BASE_DOCUMENT).get();
         lenient().when(mockContext.getDao()).thenReturn(mockDao);
         lenient().when(mockContext.getIotDataPlaneClientWrapper()).thenReturn(mockIotDataPlaneClientWrapper);
-        lenient().when(mockContext.getSynchronizeHelper()).thenReturn(new ShadowWriteSynchronizeHelper());
         lenient().when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder().build()));
     }
 
