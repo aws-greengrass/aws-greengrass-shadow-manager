@@ -10,8 +10,11 @@ import com.aws.greengrass.shadowmanager.exception.IoTDataPlaneClientCreationExce
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
+import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowRequestHandler;
+import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientWrapper;
+import com.aws.greengrass.shadowmanager.util.ShadowWriteSynchronizeHelper;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -63,17 +66,18 @@ class CloudDeleteSyncRequestTest {
     @Mock
     private ShadowManagerDAO mockDao;
     @Mock
+    private UpdateThingShadowRequestHandler mockUpdateThingShadowRequestHandler;
+    @Mock
+    private DeleteThingShadowRequestHandler mockDeleteThingShadowRequestHandler;
+    @Mock
     private IotDataPlaneClientWrapper mockIotDataPlaneClientWrapper;
     @Captor
     private ArgumentCaptor<SyncInformation> syncInformationCaptor;
-    @Mock
-    private SyncContext mockContext;
+    private SyncContext syncContext;
 
     @BeforeEach
     void setup() {
         lenient().when(mockDao.updateSyncInformation(syncInformationCaptor.capture())).thenReturn(true);
-        lenient().when(mockContext.getDao()).thenReturn(mockDao);
-        lenient().when(mockContext.getIotDataPlaneClientWrapper()).thenReturn(mockIotDataPlaneClientWrapper);
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
         lenient().when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder()
                 .cloudUpdateTime(epochSecondsMinus60)
@@ -84,6 +88,8 @@ class CloudDeleteSyncRequestTest {
                 .cloudVersion(1L)
                 .lastSyncTime(epochSecondsMinus60)
                 .build()));
+        syncContext = new SyncContext(mockDao, mockUpdateThingShadowRequestHandler, mockDeleteThingShadowRequestHandler,
+                mockIotDataPlaneClientWrapper, new ShadowWriteSynchronizeHelper());
     }
 
     @Test
@@ -91,7 +97,7 @@ class CloudDeleteSyncRequestTest {
         long epochSeconds = Instant.now().getEpochSecond();
         CloudDeleteSyncRequest request = new CloudDeleteSyncRequest(THING_NAME, SHADOW_NAME);
 
-        request.execute(mockContext);
+        request.execute(syncContext);
 
         verify(mockDao, times(1)).getShadowSyncInformation(anyString(), anyString());
         verify(mockDao, times(1)).updateSyncInformation(any());
@@ -114,7 +120,7 @@ class CloudDeleteSyncRequestTest {
         when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.empty());
         CloudDeleteSyncRequest request = new CloudDeleteSyncRequest(THING_NAME, SHADOW_NAME);
 
-        assertThrows(UnknownShadowException.class, () -> request.execute(mockContext));
+        assertThrows(UnknownShadowException.class, () -> request.execute(syncContext));
 
         verify(mockDao, times(1)).getShadowSyncInformation(anyString(), anyString());
         verify(mockDao, times(0)).updateSyncInformation(any());
@@ -128,7 +134,7 @@ class CloudDeleteSyncRequestTest {
         doThrow(clazz).when(mockIotDataPlaneClientWrapper).deleteThingShadow(anyString(), anyString());
         CloudDeleteSyncRequest request = new CloudDeleteSyncRequest(THING_NAME, SHADOW_NAME);
 
-        RetryableException thrown = assertThrows(RetryableException.class, () -> request.execute(mockContext));
+        RetryableException thrown = assertThrows(RetryableException.class, () -> request.execute(syncContext));
         assertThat(thrown.getCause(), is(instanceOf(clazz)));
 
         verify(mockDao, times(1)).getShadowSyncInformation(anyString(), anyString());
@@ -146,7 +152,7 @@ class CloudDeleteSyncRequestTest {
         CloudDeleteSyncRequest request = new CloudDeleteSyncRequest(THING_NAME, SHADOW_NAME);
 
         SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class,
-                () -> request.execute(mockContext));
+                () -> request.execute(syncContext));
         assertThat(thrown.getCause(), is(instanceOf(clazz)));
 
         verify(mockDao, times(1)).getShadowSyncInformation(anyString(), anyString());
@@ -161,7 +167,7 @@ class CloudDeleteSyncRequestTest {
                 .when(mockIotDataPlaneClientWrapper).deleteThingShadow(anyString(), anyString());
         CloudDeleteSyncRequest request = new CloudDeleteSyncRequest(THING_NAME, SHADOW_NAME);
 
-        assertThrows(InterruptedException.class, () -> request.execute(mockContext));
+        assertThrows(InterruptedException.class, () -> request.execute(syncContext));
 
         verify(mockDao, times(1)).getShadowSyncInformation(anyString(), anyString());
         verify(mockDao, times(0)).updateSyncInformation(any());

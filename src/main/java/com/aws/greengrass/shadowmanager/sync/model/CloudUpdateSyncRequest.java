@@ -85,16 +85,13 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
     @Override
     public void execute(SyncContext context) throws RetryableException, SkipSyncRequestException,
             ConflictException, UnknownShadowException, InterruptedException {
-        // synchronizing access to shadow sync information because it is accessed by multiple threads.
-        // In this method, shadow sync information is accessed within context of the sync thread.
-        // The other place is `isUpdateNecessary(SyncContext)`, which runs on the IPC thread.
+        // Synchronizing because shadow sync information is read/written by multiple threads:
+        // * during sync request execution (SyncRequest#execute)
+        // * during IPC request processing (SyncRequest#isUpdateNecessary(SyncContext)
         //
-        // Other types of sync requests don't need this lock because their implementation of
-        // `isUpdateNecessary(SyncContext)` does not access shadow sync information.
-        //
-        // The check for shadow sync information in this class' `isUpdateNecessary(SyncContext)`
-        // prevents unnecessary full syncs,
-        // (see https://github.com/aws-greengrass/aws-greengrass-shadow-manager/pull/106).
+        // NOTE: checking the sync table during IPC request processing when deciding if a sync request should
+        //       be queued is required to prevent excessive full syncs
+        //       https://github.com/aws-greengrass/aws-greengrass-shadow-manager/pull/106.
         synchronized (context.getSynchronizeHelper().getThingShadowLock(this)) {
             Optional<ShadowDocument> shadowDocument = context.getDao().getShadowThing(getThingName(), getShadowName());
 
@@ -190,9 +187,9 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
      */
     @Override
     public boolean isUpdateNecessary(SyncContext context) throws SkipSyncRequestException, UnknownShadowException {
-        // synchronizing access to shadow sync information because it is accessed by multiple threads.
-        // In this method, shadow sync information is accessed within context of an IPC thread.
-        // The other place is the 'execute' method of this class, which runs on the sync thread.
+        // Synchronizing because shadow sync information is read/written by multiple threads:
+        // * during sync request execution (SyncRequest#execute)
+        // * during IPC request processing (SyncRequest#isUpdateNecessary(SyncContext)
         synchronized (context.getSynchronizeHelper().getThingShadowLock(this)) {
             Optional<ShadowDocument> shadowDocument = context.getDao().getShadowThing(getThingName(), getShadowName());
 

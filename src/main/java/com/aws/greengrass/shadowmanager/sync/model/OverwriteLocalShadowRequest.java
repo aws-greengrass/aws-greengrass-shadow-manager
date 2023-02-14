@@ -43,29 +43,40 @@ public class OverwriteLocalShadowRequest extends BaseSyncRequest {
     @Override
     public void execute(SyncContext context) throws RetryableException, SkipSyncRequestException, InterruptedException {
         super.setContext(context);
-        SyncInformation syncInformation = getSyncInformation();
+        // Synchronizing because shadow sync information is read/written by multiple threads:
+        // * during sync request execution (SyncRequest#execute)
+        // * during IPC request processing (SyncRequest#isUpdateNecessary(SyncContext)
+        //
+        // NOTE: checking the sync table during IPC request processing when deciding if a sync request should
+        //       be queued is required to prevent excessive full syncs
+        //       https://github.com/aws-greengrass/aws-greengrass-shadow-manager/pull/106.
+        synchronized (context.getSynchronizeHelper().getThingShadowLock(this)) {
+            SyncInformation syncInformation = getSyncInformation();
 
-        Optional<ShadowDocument> cloudShadowDocument = getCloudShadowDocument();
+            Optional<ShadowDocument> cloudShadowDocument = getCloudShadowDocument();
 
-        if (cloudShadowDocument.isPresent()) {
-            if (syncInformation.getCloudVersion() == cloudShadowDocument.get().getVersion()) {
-                logger.atDebug()
-                        .kv(LOG_THING_NAME_KEY, getThingName())
-                        .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                        .kv(LOG_CLOUD_VERSION_KEY, syncInformation.getCloudVersion())
-                        .log("Not updating local shadow since the cloud shadow has not changed since the last sync");
+            if (cloudShadowDocument.isPresent()) {
+                if (syncInformation.getCloudVersion() == cloudShadowDocument.get().getVersion()) {
+                    logger.atDebug()
+                            .kv(LOG_THING_NAME_KEY, getThingName())
+                            .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                            .kv(LOG_CLOUD_VERSION_KEY, syncInformation.getCloudVersion())
+                            .log("Not updating local shadow "
+                                    + "since the cloud shadow has not changed since the last sync");
+                } else {
+                    // If the cloud shadow version is not the same as the last synced cloud shadow version, go ahead and
+                    // update the local shadow with the entire cloud shadow,
+                    long cloudUpdateTime = getCloudUpdateTime(cloudShadowDocument.get());
+                    ObjectNode updateDocument = (ObjectNode) cloudShadowDocument.get().toJson(false);
+                    long localDocumentVersion = updateLocalDocumentAndGetUpdatedVersion(
+                            updateDocument, Optional.empty());
+                    updateSyncInformation(updateDocument, localDocumentVersion, cloudShadowDocument.get().getVersion(),
+                            cloudUpdateTime);
+                }
             } else {
-                // If the cloud shadow version is not the same as the last synced cloud shadow version, go ahead and
-                // update the local shadow with the entire cloud shadow,
-                long cloudUpdateTime = getCloudUpdateTime(cloudShadowDocument.get());
-                ObjectNode updateDocument = (ObjectNode) cloudShadowDocument.get().toJson(false);
-                long localDocumentVersion = updateLocalDocumentAndGetUpdatedVersion(updateDocument, Optional.empty());
-                updateSyncInformation(updateDocument, localDocumentVersion, cloudShadowDocument.get().getVersion(),
-                        cloudUpdateTime);
+                // If the cloud shadow is not present, then go ahead and delete the local shadow.
+                handleLocalDelete(syncInformation);
             }
-        } else {
-            // If the cloud shadow is not present, then go ahead and delete the local shadow.
-            handleLocalDelete(syncInformation);
         }
     }
 

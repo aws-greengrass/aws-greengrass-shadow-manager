@@ -56,81 +56,89 @@ public class CloudDeleteSyncRequest extends BaseSyncRequest {
     @Override
     public void execute(SyncContext context)
             throws RetryableException, SkipSyncRequestException, UnknownShadowException, InterruptedException {
-
-        Optional<SyncInformation> syncInformation = context.getDao().getShadowSyncInformation(getThingName(),
-                getShadowName());
-        if (!syncInformation.isPresent()) {
-            throw new UnknownShadowException("Shadow not found in sync table");
-        }
-
-        if (syncInformation.get().isCloudDeleted()) {
-            logger.atInfo()
-                    .kv(LOG_THING_NAME_KEY, getThingName())
-                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                    .kv(LOG_LOCAL_VERSION_KEY, syncInformation.get().getLocalVersion())
-                    .kv(LOG_CLOUD_VERSION_KEY, syncInformation.get().getCloudVersion())
-                    .log("Not deleting cloud shadow document since it is already deleted");
-            return;
-        }
-
-        try {
-            logger.atDebug()
-                    .kv(LOG_THING_NAME_KEY, getThingName())
-                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                    .kv(LOG_LOCAL_VERSION_KEY, syncInformation.get().getLocalVersion())
-                    .kv(LOG_CLOUD_VERSION_KEY, syncInformation.get().getCloudVersion())
-                    .log("Deleting cloud shadow document");
-
-            context.getIotDataPlaneClientWrapper().deleteThingShadow(getThingName(), getShadowName());
-        } catch (ThrottlingException | ServiceUnavailableException | InternalFailureException
-                | IoTDataPlaneClientCreationException e) {
-            throw new RetryableException(e);
-        } catch (AbortedException e) {
-            LogEventBuilder l = logger.atDebug()
-                    .kv(LOG_THING_NAME_KEY, getThingName())
-                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                    .kv(LOG_LOCAL_VERSION_KEY, syncInformation.get().getLocalVersion())
-                    .kv(LOG_CLOUD_VERSION_KEY, syncInformation.get().getCloudVersion());
-            Throwable cause = e.getCause();
-            if (cause instanceof InterruptedException) {
-                l.log("Interrupted while deleting cloud shadow");
-                throw (InterruptedException) cause;
+        // Synchronizing because shadow sync information is read/written by multiple threads:
+        // * during sync request execution (SyncRequest#execute)
+        // * during IPC request processing (SyncRequest#isUpdateNecessary(SyncContext)
+        //
+        // NOTE: checking the sync table during IPC request processing when deciding if a sync request should
+        //       be queued is required to prevent excessive full syncs
+        //       https://github.com/aws-greengrass/aws-greengrass-shadow-manager/pull/106.
+        synchronized (context.getSynchronizeHelper().getThingShadowLock(this)) {
+            Optional<SyncInformation> syncInformation = context.getDao().getShadowSyncInformation(getThingName(),
+                    getShadowName());
+            if (!syncInformation.isPresent()) {
+                throw new UnknownShadowException("Shadow not found in sync table");
             }
-            l.log("Skipping delete for cloud shadow");
-            throw new SkipSyncRequestException(e);
-        } catch (SdkServiceException | SdkClientException e) {
-            logger.atDebug()
-                    .kv(LOG_THING_NAME_KEY, getThingName())
-                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                    .kv(LOG_LOCAL_VERSION_KEY, syncInformation.get().getLocalVersion())
-                    .kv(LOG_CLOUD_VERSION_KEY, syncInformation.get().getCloudVersion())
-                    .log("Skipping delete for cloud shadow");
-            throw new SkipSyncRequestException(e);
-        }
 
-        long cloudDeletedVersion = syncInformation.map(SyncInformation::getCloudVersion).orElse(0L) + 1;
-        long localDeletedVersion = context.getDao().getDeletedShadowVersion(getThingName(), getShadowName())
-                .orElse(syncInformation.map(SyncInformation::getLocalVersion).orElse(0L) + 1);
-        try {
-            // Since the local shadow has been deleted, we need get the deleted shadow version from the DAO.
-            context.getDao().updateSyncInformation(SyncInformation.builder()
-                    .lastSyncedDocument(null)
-                    // After the cloud shadow has been deleted, the version on cloud gets incremented. So we have to
-                    // increment the synced cloud shadow version.
-                    .cloudVersion(cloudDeletedVersion)
-                    .localVersion(localDeletedVersion)
-                    .cloudDeleted(true)
-                    .shadowName(getShadowName())
-                    .thingName(getThingName())
-                    .cloudUpdateTime(Instant.now().getEpochSecond())
-                    .build());
-        } catch (ShadowManagerDataException e) {
-            logger.atWarn()
-                    .kv(LOG_THING_NAME_KEY, getThingName())
-                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                    .kv(LOG_LOCAL_VERSION_KEY, localDeletedVersion)
-                    .kv(LOG_CLOUD_VERSION_KEY, cloudDeletedVersion)
-                    .cause(e).log("Failed to update sync table after deleting cloud shadow");
+            if (syncInformation.get().isCloudDeleted()) {
+                logger.atInfo()
+                        .kv(LOG_THING_NAME_KEY, getThingName())
+                        .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                        .kv(LOG_LOCAL_VERSION_KEY, syncInformation.get().getLocalVersion())
+                        .kv(LOG_CLOUD_VERSION_KEY, syncInformation.get().getCloudVersion())
+                        .log("Not deleting cloud shadow document since it is already deleted");
+                return;
+            }
+
+            try {
+                logger.atDebug()
+                        .kv(LOG_THING_NAME_KEY, getThingName())
+                        .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                        .kv(LOG_LOCAL_VERSION_KEY, syncInformation.get().getLocalVersion())
+                        .kv(LOG_CLOUD_VERSION_KEY, syncInformation.get().getCloudVersion())
+                        .log("Deleting cloud shadow document");
+
+                context.getIotDataPlaneClientWrapper().deleteThingShadow(getThingName(), getShadowName());
+            } catch (ThrottlingException | ServiceUnavailableException | InternalFailureException
+                     | IoTDataPlaneClientCreationException e) {
+                throw new RetryableException(e);
+            } catch (AbortedException e) {
+                LogEventBuilder l = logger.atDebug()
+                        .kv(LOG_THING_NAME_KEY, getThingName())
+                        .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                        .kv(LOG_LOCAL_VERSION_KEY, syncInformation.get().getLocalVersion())
+                        .kv(LOG_CLOUD_VERSION_KEY, syncInformation.get().getCloudVersion());
+                Throwable cause = e.getCause();
+                if (cause instanceof InterruptedException) {
+                    l.log("Interrupted while deleting cloud shadow");
+                    throw (InterruptedException) cause;
+                }
+                l.log("Skipping delete for cloud shadow");
+                throw new SkipSyncRequestException(e);
+            } catch (SdkServiceException | SdkClientException e) {
+                logger.atDebug()
+                        .kv(LOG_THING_NAME_KEY, getThingName())
+                        .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                        .kv(LOG_LOCAL_VERSION_KEY, syncInformation.get().getLocalVersion())
+                        .kv(LOG_CLOUD_VERSION_KEY, syncInformation.get().getCloudVersion())
+                        .log("Skipping delete for cloud shadow");
+                throw new SkipSyncRequestException(e);
+            }
+
+            long cloudDeletedVersion = syncInformation.map(SyncInformation::getCloudVersion).orElse(0L) + 1;
+            long localDeletedVersion = context.getDao().getDeletedShadowVersion(getThingName(), getShadowName())
+                    .orElse(syncInformation.map(SyncInformation::getLocalVersion).orElse(0L) + 1);
+            try {
+                // Since the local shadow has been deleted, we need get the deleted shadow version from the DAO.
+                context.getDao().updateSyncInformation(SyncInformation.builder()
+                        .lastSyncedDocument(null)
+                        // After the cloud shadow has been deleted, the version on cloud gets incremented. So we have to
+                        // increment the synced cloud shadow version.
+                        .cloudVersion(cloudDeletedVersion)
+                        .localVersion(localDeletedVersion)
+                        .cloudDeleted(true)
+                        .shadowName(getShadowName())
+                        .thingName(getThingName())
+                        .cloudUpdateTime(Instant.now().getEpochSecond())
+                        .build());
+            } catch (ShadowManagerDataException e) {
+                logger.atWarn()
+                        .kv(LOG_THING_NAME_KEY, getThingName())
+                        .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                        .kv(LOG_LOCAL_VERSION_KEY, localDeletedVersion)
+                        .kv(LOG_CLOUD_VERSION_KEY, cloudDeletedVersion)
+                        .cause(e).log("Failed to update sync table after deleting cloud shadow");
+            }
         }
     }
 

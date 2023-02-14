@@ -93,7 +93,8 @@ class LocalDeleteSyncRequestTest {
                 .thenReturn(new DeleteThingShadowResponse());
 
         syncContext = new SyncContext(mockDao, mock(UpdateThingShadowRequestHandler.class),
-                mockDeleteThingShadowRequestHandler, mock(IotDataPlaneClientWrapper.class), mock(ShadowWriteSynchronizeHelper.class));
+                mockDeleteThingShadowRequestHandler, mock(IotDataPlaneClientWrapper.class),
+                new ShadowWriteSynchronizeHelper());
     }
 
 

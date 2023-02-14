@@ -286,19 +286,16 @@ public class CloudDataClient {
                 .log("Received cloud update sync request");
         CompletableFuture
                 // Since this callback runs in context of a CRT thread, we must not block.
-                //
                 // There is a small chance of blocking when a thing/shadow lock is obtained
-                // within this call, because the lock also surrounds an IoT dataplane call
-                // in CloudUpdateSyncRequest.
+                // within this call, because the lock also surrounds an IoT dataplane calls
                 .runAsync(() -> syncHandler.pushLocalUpdateSyncRequest(thingName, shadowName, message.getPayload()),
                         executorService)
-                .whenComplete((unused, e) -> {
-                    if (e != null) {
-                        logger.atError().cause(e)
-                                .kv(LOG_THING_NAME_KEY, thingName)
-                                .kv(LOG_SHADOW_NAME_KEY, shadowName)
-                                .log("Unable to queue local update sync request");
-                    }
+                .exceptionally(e -> {
+                    logger.atError().cause(e)
+                            .kv(LOG_THING_NAME_KEY, thingName)
+                            .kv(LOG_SHADOW_NAME_KEY, shadowName)
+                            .log("Unable to queue local update sync request");
+                    return null;
                 });
     }
 
@@ -314,7 +311,19 @@ public class CloudDataClient {
         String shadowName = shadowRequest.getShadowName();
         logger.atDebug().kv(LOG_THING_NAME_KEY, thingName).kv(LOG_SHADOW_NAME_KEY, shadowName)
                 .log("Received cloud delete request sync request");
-        syncHandler.pushLocalDeleteSyncRequest(thingName, shadowName, message.getPayload());
+        CompletableFuture
+                // Since this callback runs in context of a CRT thread, we must not block.
+                // There is a small chance of blocking when a thing/shadow lock is obtained
+                // within this call, because the lock also surrounds an IoT dataplane calls
+                .runAsync(() -> syncHandler.pushLocalDeleteSyncRequest(thingName, shadowName, message.getPayload()),
+                        executorService)
+                .exceptionally(e -> {
+                    logger.atError().cause(e)
+                            .kv(LOG_THING_NAME_KEY, thingName)
+                            .kv(LOG_SHADOW_NAME_KEY, shadowName)
+                            .log("Unable to queue local delete sync request");
+                    return null;
+                });
     }
 
     /**

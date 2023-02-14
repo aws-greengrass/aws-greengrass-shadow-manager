@@ -64,8 +64,6 @@ class OverwriteCloudShadowRequestTest {
     private UpdateThingShadowRequestHandler mockUpdateThingShadowRequestHandler;
     @Mock
     private DeleteThingShadowRequestHandler mockDeleteThingShadowRequestHandler;
-    @Mock
-    private ShadowWriteSynchronizeHelper mockSynchronizeHelper;
     @Captor
     private ArgumentCaptor<SyncInformation> syncInformationCaptor;
     @Captor
@@ -81,7 +79,7 @@ class OverwriteCloudShadowRequestTest {
     void setup() throws IOException {
         lenient().when(mockDao.updateSyncInformation(any())).thenReturn(true);
         syncContext = new SyncContext(mockDao, mockUpdateThingShadowRequestHandler, mockDeleteThingShadowRequestHandler,
-                mockIotDataPlaneClientWrapper, mockSynchronizeHelper);
+                mockIotDataPlaneClientWrapper, new ShadowWriteSynchronizeHelper());
         JsonUtil.loadSchema();
     }
 

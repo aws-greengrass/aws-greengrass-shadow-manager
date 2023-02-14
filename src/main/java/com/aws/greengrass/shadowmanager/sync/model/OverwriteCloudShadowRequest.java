@@ -44,28 +44,40 @@ public class OverwriteCloudShadowRequest extends BaseSyncRequest {
     @Override
     public void execute(SyncContext context) throws RetryableException, SkipSyncRequestException, InterruptedException {
         super.setContext(context);
-        SyncInformation syncInformation = getSyncInformation();
+        // Synchronizing because shadow sync information is read/written by multiple threads:
+        // * during sync request execution (SyncRequest#execute)
+        // * during IPC request processing (SyncRequest#isUpdateNecessary(SyncContext)
+        //
+        // NOTE: checking the sync table during IPC request processing when deciding if a sync request should
+        //       be queued is required to prevent excessive full syncs
+        //       https://github.com/aws-greengrass/aws-greengrass-shadow-manager/pull/106.
+        synchronized (context.getSynchronizeHelper().getThingShadowLock(this)) {
+            SyncInformation syncInformation = getSyncInformation();
 
-        Optional<ShadowDocument> localShadowDocument = context.getDao().getShadowThing(getThingName(), getShadowName());
+            Optional<ShadowDocument> localShadowDocument = context.getDao().getShadowThing(
+                    getThingName(), getShadowName());
 
-        if (localShadowDocument.isPresent()) {
-            if (syncInformation.getLocalVersion() == localShadowDocument.get().getVersion()) {
-                logger.atDebug()
-                        .kv(LOG_THING_NAME_KEY, getThingName())
-                        .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                        .kv(LOG_LOCAL_VERSION_KEY, syncInformation.getLocalVersion())
-                        .log("Not updating cloud shadow since the local shadow has not changed since the last sync");
+            if (localShadowDocument.isPresent()) {
+                if (syncInformation.getLocalVersion() == localShadowDocument.get().getVersion()) {
+                    logger.atDebug()
+                            .kv(LOG_THING_NAME_KEY, getThingName())
+                            .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                            .kv(LOG_LOCAL_VERSION_KEY, syncInformation.getLocalVersion())
+                            .log("Not updating cloud shadow "
+                                    + "since the local shadow has not changed since the last sync");
+                } else {
+                    // If the local shadow version is not the same as the last synced local shadow version, go ahead and
+                    // update the cloud shadow with the entire local shadow,
+                    ObjectNode updateDocument = (ObjectNode) localShadowDocument.get().toJson(false);
+                    long cloudDocumentVersion = updateCloudDocumentAndGetUpdatedVersion(
+                            updateDocument, Optional.empty());
+                    updateSyncInformation(updateDocument, localShadowDocument.get().getVersion(), cloudDocumentVersion,
+                            Instant.now().getEpochSecond());
+                }
             } else {
-                // If the local shadow version is not the same as the last synced local shadow version, go ahead and
-                // update the cloud shadow with the entire local shadow,
-                ObjectNode updateDocument = (ObjectNode) localShadowDocument.get().toJson(false);
-                long cloudDocumentVersion = updateCloudDocumentAndGetUpdatedVersion(updateDocument, Optional.empty());
-                updateSyncInformation(updateDocument, localShadowDocument.get().getVersion(), cloudDocumentVersion,
-                        Instant.now().getEpochSecond());
+                // If the local shadow is not present, then go ahead and delete the cloud shadow.
+                handleCloudDelete(syncInformation.getCloudVersion(), syncInformation);
             }
-        } else {
-            // If the local shadow is not present, then go ahead and delete the cloud shadow.
-            handleCloudDelete(syncInformation.getCloudVersion(), syncInformation);
         }
     }
 

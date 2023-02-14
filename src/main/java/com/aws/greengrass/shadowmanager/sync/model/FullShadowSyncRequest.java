@@ -70,127 +70,137 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
     @Override
     public void execute(SyncContext context) throws RetryableException, SkipSyncRequestException, InterruptedException {
         super.setContext(context);
-        SyncInformation syncInformation = getSyncInformation();
+        // Synchronizing because shadow sync information is read/written by multiple threads:
+        // * during sync request execution (SyncRequest#execute)
+        // * during IPC request processing (SyncRequest#isUpdateNecessary(SyncContext)
+        //
+        // NOTE: checking the sync table during IPC request processing when deciding if a sync request should
+        //       be queued is required to prevent excessive full syncs
+        //       https://github.com/aws-greengrass/aws-greengrass-shadow-manager/pull/106.
+        synchronized (context.getSynchronizeHelper().getThingShadowLock(this)) {
+            SyncInformation syncInformation = getSyncInformation();
 
-        Optional<ShadowDocument> localShadowDocument = context.getDao().getShadowThing(getThingName(), getShadowName());
-        Optional<ShadowDocument> cloudShadowDocument = getCloudShadowDocument();
-        // If both the local and cloud document does not exist, then update the sync info and return.
-        if (!cloudShadowDocument.isPresent() && !localShadowDocument.isPresent()) {
-            logger.atInfo()
-                    .kv(LOG_THING_NAME_KEY, getThingName())
-                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                    .kv(LOG_LOCAL_VERSION_KEY, syncInformation.getLocalVersion())
-                    .kv(LOG_CLOUD_VERSION_KEY, syncInformation.getCloudVersion())
-                    .log("Not performing full sync since both local and cloud versions are already in sync since "
-                            + "they don't exist in local and cloud");
-            context.getDao().updateSyncInformation(SyncInformation.builder()
-                    .localVersion(syncInformation.getLocalVersion())
-                    .cloudVersion(syncInformation.getCloudVersion())
-                    .shadowName(getShadowName())
-                    .thingName(getThingName())
-                    .cloudUpdateTime(syncInformation.getCloudUpdateTime())
-                    .lastSyncTime(syncInformation.getLastSyncTime())
-                    .lastSyncedDocument(null)
-                    .build());
-            return;
-        }
-
-        long localUpdateTime = Instant.now().getEpochSecond();
-
-        // If only the cloud document does not exist, check if this is the first time we are syncing this shadow or if
-        // the local shadow was updated after the last sync. If either of those conditions are true, go ahead and
-        // update the cloud with the local document and update the sync information.
-        // If not, go ahead and delete the local shadow and update the sync info. That means that the cloud shadow was
-        // deleted after the last sync.
-        if (!cloudShadowDocument.isPresent()) {
-            if (localShadowDocument.get().getMetadata() != null) {
-                localUpdateTime = localShadowDocument.get().getMetadata().getLatestUpdatedTimestamp();
+            Optional<ShadowDocument> localShadowDocument = context.getDao().getShadowThing(
+                    getThingName(), getShadowName());
+            Optional<ShadowDocument> cloudShadowDocument = getCloudShadowDocument();
+            // If both the local and cloud document does not exist, then update the sync info and return.
+            if (!cloudShadowDocument.isPresent() && !localShadowDocument.isPresent()) {
+                logger.atInfo()
+                        .kv(LOG_THING_NAME_KEY, getThingName())
+                        .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                        .kv(LOG_LOCAL_VERSION_KEY, syncInformation.getLocalVersion())
+                        .kv(LOG_CLOUD_VERSION_KEY, syncInformation.getCloudVersion())
+                        .log("Not performing full sync since both local and cloud versions are already in sync since "
+                                + "they don't exist in local and cloud");
+                context.getDao().updateSyncInformation(SyncInformation.builder()
+                        .localVersion(syncInformation.getLocalVersion())
+                        .cloudVersion(syncInformation.getCloudVersion())
+                        .shadowName(getShadowName())
+                        .thingName(getThingName())
+                        .cloudUpdateTime(syncInformation.getCloudUpdateTime())
+                        .lastSyncTime(syncInformation.getLastSyncTime())
+                        .lastSyncedDocument(null)
+                        .build());
+                return;
             }
-            if (isFirstSyncOrShadowUpdatedAfterSync(syncInformation, localUpdateTime)) {
-                handleFirstCloudSync(localShadowDocument.get());
-            } else {
-                handleLocalDelete(syncInformation);
+
+            long localUpdateTime = Instant.now().getEpochSecond();
+
+            // If only the cloud document does not exist, check if this is the first time we are syncing this shadow
+            // or if the local shadow was updated after the last sync. If either of those conditions are true,
+            // go ahead and update the cloud with the local document and update the sync information.
+            // If not, go ahead and delete the local shadow and update the sync info.
+            // That means that the cloud shadow was deleted after the last sync.
+            if (!cloudShadowDocument.isPresent()) {
+                if (localShadowDocument.get().getMetadata() != null) {
+                    localUpdateTime = localShadowDocument.get().getMetadata().getLatestUpdatedTimestamp();
+                }
+                if (isFirstSyncOrShadowUpdatedAfterSync(syncInformation, localUpdateTime)) {
+                    handleFirstCloudSync(localShadowDocument.get());
+                } else {
+                    handleLocalDelete(syncInformation);
+                }
+                return;
             }
-            return;
-        }
 
-        long cloudUpdateTime = getCloudUpdateTime(cloudShadowDocument.get());
+            long cloudUpdateTime = getCloudUpdateTime(cloudShadowDocument.get());
 
-        // If only the local document does not exist, check if this is the first time we are syncing this shadow or if
-        // the cloud shadow was updated after the last sync. If either of those conditions are true, go ahead and
-        // update the local with the cloud document and update the sync information.
-        // If not, go ahead and delete the cloud shadow and update the sync info. That means that the local shadow was
-        // deleted after the last sync.
-        if (!localShadowDocument.isPresent()) {
-            if (isFirstSyncOrShadowUpdatedAfterSync(syncInformation, cloudUpdateTime)) {
-                handleFirstLocalSync(cloudShadowDocument.get(), cloudUpdateTime);
-            } else {
-                handleCloudDelete(cloudShadowDocument.get().getVersion(), syncInformation);
+            // If only the local document does not exist, check if this is the first time we are syncing this shadow
+            // or if the cloud shadow was updated after the last sync. If either of those conditions are true,
+            // go ahead and update the local with the cloud document and update the sync information.
+            // If not, go ahead and delete the cloud shadow and update the sync info.
+            // That means that the local shadow was deleted after the last sync.
+            if (!localShadowDocument.isPresent()) {
+                if (isFirstSyncOrShadowUpdatedAfterSync(syncInformation, cloudUpdateTime)) {
+                    handleFirstLocalSync(cloudShadowDocument.get(), cloudUpdateTime);
+                } else {
+                    handleCloudDelete(cloudShadowDocument.get().getVersion(), syncInformation);
+                }
+                return;
             }
-            return;
-        }
 
-        // Get the sync information and check if the versions are same. If the local and cloud versions are same, we
-        // don't need to do any sync.
-        if (isDocVersionSame(cloudShadowDocument.get(), syncInformation, DataOwner.CLOUD)
-                && isDocVersionSame(localShadowDocument.get(), syncInformation, DataOwner.LOCAL)) {
-            logger.atDebug()
+            // Get the sync information and check if the versions are same. If the local and cloud versions are same, we
+            // don't need to do any sync.
+            if (isDocVersionSame(cloudShadowDocument.get(), syncInformation, DataOwner.CLOUD)
+                    && isDocVersionSame(localShadowDocument.get(), syncInformation, DataOwner.LOCAL)) {
+                logger.atDebug()
+                        .kv(LOG_THING_NAME_KEY, getThingName())
+                        .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                        .kv(LOG_LOCAL_VERSION_KEY, localShadowDocument.get().getVersion())
+                        .kv(LOG_CLOUD_VERSION_KEY, cloudShadowDocument.get().getVersion())
+                        .log("Not performing full sync since both local and cloud versions are already in sync");
+                return;
+            }
+            logger.atTrace()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
                     .kv(LOG_LOCAL_VERSION_KEY, localShadowDocument.get().getVersion())
                     .kv(LOG_CLOUD_VERSION_KEY, cloudShadowDocument.get().getVersion())
-                    .log("Not performing full sync since both local and cloud versions are already in sync");
-            return;
+                    .log("Performing full sync");
+            ShadowDocument baseShadowDocument = deserializeLastSyncedShadowDocument(syncInformation);
+
+            // Gets the merged reported node from the local, cloud and base documents.
+            // If an existing field has changed in both local and cloud, the local document's value will be selected.
+            JsonNode mergedReportedNode = SyncNodeMerger.getMergedNode(getReported(localShadowDocument.get()),
+                    getReported(cloudShadowDocument.get()), getReported(baseShadowDocument), DataOwner.LOCAL);
+
+            // Gets the merged desired node from the local, cloud and base documents.
+            // If an existing field has changed in both local and cloud, the cloud document's value will be selected.
+            JsonNode mergedDesiredNode = SyncNodeMerger.getMergedNode(getDesired(localShadowDocument.get()),
+                    getDesired(cloudShadowDocument.get()), getDesired(baseShadowDocument), DataOwner.CLOUD);
+            ShadowState updatedState = new ShadowState(mergedDesiredNode, mergedReportedNode);
+
+            JsonNode updatedStateJson = updatedState.toJson();
+            ObjectNode updateDocument = OBJECT_MAPPER.createObjectNode();
+            updateDocument.set(SHADOW_DOCUMENT_STATE, updatedStateJson);
+
+            long localDocumentVersion = localShadowDocument.get().getVersion();
+            long cloudDocumentVersion = cloudShadowDocument.get().getVersion();
+
+            // If the cloud document version is different from the last sync, that means the local document needed
+            // some updates. So we go ahead an update the local shadow document.
+            if (!isDocVersionSame(cloudShadowDocument.get(), syncInformation, DataOwner.CLOUD)) {
+                localDocumentVersion = updateLocalDocumentAndGetUpdatedVersion(updateDocument,
+                        Optional.of(localDocumentVersion));
+            }
+            // If the local document version is different from the last sync, that means the cloud document needed
+            // some updates. So we go ahead an update the cloud shadow document.
+            if (!isDocVersionSame(localShadowDocument.get(), syncInformation, DataOwner.LOCAL)) {
+                cloudDocumentVersion = updateCloudDocumentAndGetUpdatedVersion(updateDocument,
+                        Optional.of(cloudDocumentVersion));
+            }
+
+            if (!isDocVersionSame(localShadowDocument.get(), syncInformation, DataOwner.LOCAL)
+                    || !isDocVersionSame(cloudShadowDocument.get(), syncInformation, DataOwner.CLOUD)) {
+                updateSyncInformation(updateDocument, localDocumentVersion, cloudDocumentVersion, cloudUpdateTime);
+            }
+            logger.atTrace()
+                    .kv(LOG_THING_NAME_KEY, getThingName())
+                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                    .kv(LOG_LOCAL_VERSION_KEY, localShadowDocument.get().getVersion())
+                    .kv(LOG_CLOUD_VERSION_KEY, cloudShadowDocument.get().getVersion())
+                    .log("Successfully performed full sync");
         }
-        logger.atTrace()
-                .kv(LOG_THING_NAME_KEY, getThingName())
-                .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                .kv(LOG_LOCAL_VERSION_KEY, localShadowDocument.get().getVersion())
-                .kv(LOG_CLOUD_VERSION_KEY, cloudShadowDocument.get().getVersion())
-                .log("Performing full sync");
-        ShadowDocument baseShadowDocument = deserializeLastSyncedShadowDocument(syncInformation);
-
-        // Gets the merged reported node from the local, cloud and base documents. If an existing field has changed in
-        // both local and cloud, the local document's value will be selected.
-        JsonNode mergedReportedNode = SyncNodeMerger.getMergedNode(getReported(localShadowDocument.get()),
-                getReported(cloudShadowDocument.get()), getReported(baseShadowDocument), DataOwner.LOCAL);
-
-        // Gets the merged desired node from the local, cloud and base documents. If an existing field has changed in
-        // both local and cloud, the cloud document's value will be selected.
-        JsonNode mergedDesiredNode = SyncNodeMerger.getMergedNode(getDesired(localShadowDocument.get()),
-                getDesired(cloudShadowDocument.get()), getDesired(baseShadowDocument), DataOwner.CLOUD);
-        ShadowState updatedState = new ShadowState(mergedDesiredNode, mergedReportedNode);
-
-        JsonNode updatedStateJson = updatedState.toJson();
-        ObjectNode updateDocument = OBJECT_MAPPER.createObjectNode();
-        updateDocument.set(SHADOW_DOCUMENT_STATE, updatedStateJson);
-
-        long localDocumentVersion = localShadowDocument.get().getVersion();
-        long cloudDocumentVersion = cloudShadowDocument.get().getVersion();
-
-        // If the cloud document version is different from the last sync, that means the local document needed
-        // some updates. So we go ahead an update the local shadow document.
-        if (!isDocVersionSame(cloudShadowDocument.get(), syncInformation, DataOwner.CLOUD)) {
-            localDocumentVersion = updateLocalDocumentAndGetUpdatedVersion(updateDocument,
-                    Optional.of(localDocumentVersion));
-        }
-        // If the local document version is different from the last sync, that means the cloud document needed
-        // some updates. So we go ahead an update the cloud shadow document.
-        if (!isDocVersionSame(localShadowDocument.get(), syncInformation, DataOwner.LOCAL)) {
-            cloudDocumentVersion = updateCloudDocumentAndGetUpdatedVersion(updateDocument,
-                    Optional.of(cloudDocumentVersion));
-        }
-
-        if (!isDocVersionSame(localShadowDocument.get(), syncInformation, DataOwner.LOCAL)
-                || !isDocVersionSame(cloudShadowDocument.get(), syncInformation, DataOwner.CLOUD)) {
-            updateSyncInformation(updateDocument, localDocumentVersion, cloudDocumentVersion, cloudUpdateTime);
-        }
-        logger.atTrace()
-                .kv(LOG_THING_NAME_KEY, getThingName())
-                .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                .kv(LOG_LOCAL_VERSION_KEY, localShadowDocument.get().getVersion())
-                .kv(LOG_CLOUD_VERSION_KEY, cloudShadowDocument.get().getVersion())
-                .log("Successfully performed full sync");
     }
 
     /**
