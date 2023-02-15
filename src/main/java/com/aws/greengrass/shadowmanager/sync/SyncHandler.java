@@ -12,6 +12,7 @@ import com.aws.greengrass.shadowmanager.sync.model.BaseSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.CloudDeleteSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.CloudUpdateSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.Direction;
+import com.aws.greengrass.shadowmanager.sync.model.DirectionWrapper;
 import com.aws.greengrass.shadowmanager.sync.model.FullShadowSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.LocalDeleteSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.LocalUpdateSyncRequest;
@@ -77,17 +78,12 @@ public class SyncHandler {
      * The direction of syncing shadows to/from the cloud.
      */
     @Getter
-    private Direction syncDirection = Direction.BETWEEN_DEVICE_AND_CLOUD;
+    private final DirectionWrapper direction;
 
     /**
      * The sync strategy factory object to generate.
      */
     private final SyncStrategyFactory syncStrategyFactory;
-
-    /**
-     * The sync strategy factory object to generate.
-     */
-    private final RequestMerger merger;
 
     /**
      * Request queue.
@@ -100,11 +96,11 @@ public class SyncHandler {
      * @param executorService              provider of threads for real time syncing
      * @param syncScheduledExecutorService provider of thread for periodic syncing
      * @param syncQueue                    a request queue
-     * @param merger                       the request merger
+     * @param direction                    The sync direction
      */
     @Inject
     public SyncHandler(ExecutorService executorService, ScheduledExecutorService syncScheduledExecutorService,
-                       RequestBlockingQueue syncQueue, RequestMerger merger) {
+                       RequestBlockingQueue syncQueue, DirectionWrapper direction) {
         this(executorService, syncScheduledExecutorService,
                 // retry wrapper so that requests can be mocked
                 (config, request, context) ->
@@ -113,7 +109,7 @@ public class SyncHandler {
                                     request.execute(context);
                                     return null;
                                 },
-                                SYNC_EVENT_TYPE, logger), syncQueue, merger);
+                                SYNC_EVENT_TYPE, logger), syncQueue, direction);
     }
 
     /**
@@ -123,11 +119,12 @@ public class SyncHandler {
      * @param syncScheduledExecutorService provider of thread for periodic syncing
      * @param retryer                      The retryer object.
      * @param syncQueue                    a request queue.
-     * @param merger                       the request merger
+     * @param direction                    The sync direction
      */
     private SyncHandler(ExecutorService executorService, ScheduledExecutorService syncScheduledExecutorService,
-                        Retryer retryer, RequestBlockingQueue syncQueue, RequestMerger merger) {
-        this(new SyncStrategyFactory(retryer, executorService, syncScheduledExecutorService), syncQueue, merger);
+                        Retryer retryer, RequestBlockingQueue syncQueue, DirectionWrapper direction) {
+        this(new SyncStrategyFactory(retryer, executorService, syncScheduledExecutorService, direction),
+                syncQueue, direction);
     }
 
     /**
@@ -135,12 +132,12 @@ public class SyncHandler {
      *
      * @param syncStrategyFactory The sync strategy factory object to generate.
      * @param syncQueue           a request queue.
-     * @param merger              the request merger
+     * @param direction           The sync direction
      */
-    SyncHandler(SyncStrategyFactory syncStrategyFactory, RequestBlockingQueue syncQueue, RequestMerger merger) {
+    SyncHandler(SyncStrategyFactory syncStrategyFactory, RequestBlockingQueue syncQueue, DirectionWrapper direction) {
         this.syncStrategyFactory = syncStrategyFactory;
         this.syncQueue = syncQueue;
-        this.merger = merger;
+        this.direction = direction;
         setSyncStrategy(Strategy.builder().type(StrategyType.REALTIME).build());
     }
 
@@ -151,16 +148,6 @@ public class SyncHandler {
      */
     public void setSyncStrategy(Strategy syncStrategy) {
         this.overallSyncStrategy = this.syncStrategyFactory.createSyncStrategy(syncStrategy, syncQueue);
-    }
-
-    /**
-     * Sets the sync direction in SyncHandler as well as RequestMerger.
-     *
-     * @param syncDirection The sync direction.
-     */
-    public void setSyncDirection(Direction syncDirection) {
-        this.syncDirection = syncDirection;
-        this.merger.setSyncDirection(syncDirection);
     }
 
     /**
@@ -179,7 +166,7 @@ public class SyncHandler {
                     .log("There are more shadows than space in the sync queue. Syncing will block");
         }
         Stream<BaseSyncRequest> requestStream = null;
-        switch (getSyncDirection()) {
+        switch (direction.get()) {
             case BETWEEN_DEVICE_AND_CLOUD:
                 requestStream = shadows.stream().map(p -> new FullShadowSyncRequest(p.getLeft(), p.getRight()));
                 break;
@@ -242,7 +229,7 @@ public class SyncHandler {
      * @param updateDocument The update shadow request
      */
     public void pushCloudUpdateSyncRequest(String thingName, String shadowName, JsonNode updateDocument) {
-        if (isShadowSynced(thingName, shadowName) && !Direction.CLOUD_TO_DEVICE.equals(syncDirection)) {
+        if (isShadowSynced(thingName, shadowName) && !Direction.CLOUD_TO_DEVICE.equals(direction.get())) {
             overallSyncStrategy.putSyncRequest(new CloudUpdateSyncRequest(thingName, shadowName, updateDocument));
         }
     }
@@ -256,7 +243,7 @@ public class SyncHandler {
      * @param updateDocument Update document to be applied to local shadow
      */
     public void pushLocalUpdateSyncRequest(String thingName, String shadowName, byte[] updateDocument) {
-        if (isShadowSynced(thingName, shadowName) && !Direction.DEVICE_TO_CLOUD.equals(syncDirection)) {
+        if (isShadowSynced(thingName, shadowName) && !Direction.DEVICE_TO_CLOUD.equals(direction.get())) {
             overallSyncStrategy.putSyncRequest(new LocalUpdateSyncRequest(thingName, shadowName, updateDocument));
         }
     }
@@ -269,7 +256,7 @@ public class SyncHandler {
      * @param shadowName The shadow name associated with the sync shadow update
      */
     public void pushCloudDeleteSyncRequest(String thingName, String shadowName) {
-        if (isShadowSynced(thingName, shadowName) && !Direction.CLOUD_TO_DEVICE.equals(syncDirection)) {
+        if (isShadowSynced(thingName, shadowName) && !Direction.CLOUD_TO_DEVICE.equals(direction.get())) {
             overallSyncStrategy.putSyncRequest(new CloudDeleteSyncRequest(thingName, shadowName));
         }
     }
@@ -283,7 +270,7 @@ public class SyncHandler {
      * @param deletePayload Delete response payload containing the deleted shadow version
      */
     public void pushLocalDeleteSyncRequest(String thingName, String shadowName, byte[] deletePayload) {
-        if (isShadowSynced(thingName, shadowName) && !Direction.DEVICE_TO_CLOUD.equals(syncDirection)) {
+        if (isShadowSynced(thingName, shadowName) && !Direction.DEVICE_TO_CLOUD.equals(direction.get())) {
             overallSyncStrategy.putSyncRequest(new LocalDeleteSyncRequest(thingName, shadowName, deletePayload));
         }
     }

@@ -9,6 +9,7 @@ import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
 import com.aws.greengrass.shadowmanager.sync.Retryer;
+import com.aws.greengrass.shadowmanager.sync.model.DirectionWrapper;
 import com.aws.greengrass.shadowmanager.sync.model.SyncContext;
 import com.aws.greengrass.shadowmanager.sync.model.SyncRequest;
 import com.aws.greengrass.util.RetryUtils;
@@ -36,9 +37,11 @@ public class RealTimeSyncStrategy extends BaseSyncStrategy {
      * @param executorService executor service.
      * @param retryer         The retryer object.
      * @param syncQueue       The sync queue from the previous strategy if any.
+     * @param direction       The sync direction
      */
-    public RealTimeSyncStrategy(ExecutorService executorService, Retryer retryer, RequestBlockingQueue syncQueue) {
-        super(retryer, syncQueue);
+    public RealTimeSyncStrategy(ExecutorService executorService, Retryer retryer, RequestBlockingQueue syncQueue,
+                                DirectionWrapper direction) {
+        super(retryer, syncQueue, direction);
         this.syncExecutorService = executorService;
         this.syncThreadEnd = new CountDownLatch(1);
     }
@@ -50,10 +53,12 @@ public class RealTimeSyncStrategy extends BaseSyncStrategy {
      * @param retryer         The retryer object.
      * @param retryConfig     The retryer configuration.
      * @param syncQueue       The sync queue from the previous strategy if any.
+     * @param direction       The sync direction
      */
     public RealTimeSyncStrategy(ExecutorService executorService, Retryer retryer,
-                                RetryUtils.RetryConfig retryConfig, RequestBlockingQueue syncQueue) {
-        super(retryer, retryConfig, syncQueue);
+                                RetryUtils.RetryConfig retryConfig, RequestBlockingQueue syncQueue,
+                                DirectionWrapper direction) {
+        super(retryer, retryConfig, syncQueue, direction);
         this.syncExecutorService = executorService;
     }
 

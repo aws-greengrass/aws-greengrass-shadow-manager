@@ -7,6 +7,7 @@ package com.aws.greengrass.shadowmanager.sync.strategy;
 
 import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
 import com.aws.greengrass.shadowmanager.sync.Retryer;
+import com.aws.greengrass.shadowmanager.sync.model.DirectionWrapper;
 import com.aws.greengrass.shadowmanager.sync.strategy.model.Strategy;
 
 import java.util.concurrent.ExecutorService;
@@ -22,6 +23,7 @@ public class SyncStrategyFactory {
     private final Retryer retryer;
     private final ExecutorService syncExecutorService;
     private final ScheduledExecutorService syncScheduledExecutorService;
+    private final DirectionWrapper direction;
 
     /**
      * Constructor for SyncStrategyFactory to maintain sync strategy clients.
@@ -29,12 +31,14 @@ public class SyncStrategyFactory {
      * @param retryer                  The retryer object.
      * @param executorService          The executor service object.
      * @param scheduledExecutorService The scheduled executor service object.
+     * @param direction               The sync direction
      */
     public SyncStrategyFactory(Retryer retryer, ExecutorService executorService,
-                               ScheduledExecutorService scheduledExecutorService) {
+                               ScheduledExecutorService scheduledExecutorService, DirectionWrapper direction) {
         this.retryer = retryer;
         this.syncExecutorService = executorService;
         this.syncScheduledExecutorService = scheduledExecutorService;
+        this.direction = direction;
     }
 
     /**
@@ -49,10 +53,10 @@ public class SyncStrategyFactory {
         switch (syncStrategy.getType()) {
             case PERIODIC:
                 return new PeriodicSyncStrategy(syncScheduledExecutorService, retryer, syncStrategy.getDelay(),
-                        syncQueue);
+                        syncQueue, direction);
             case REALTIME:
             default:
-                return new RealTimeSyncStrategy(syncExecutorService, retryer, syncQueue);
+                return new RealTimeSyncStrategy(syncExecutorService, retryer, syncQueue, direction);
         }
     }
 }

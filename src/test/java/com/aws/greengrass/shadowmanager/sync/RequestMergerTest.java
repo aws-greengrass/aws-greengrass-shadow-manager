@@ -8,6 +8,7 @@ package com.aws.greengrass.shadowmanager.sync;
 import com.aws.greengrass.shadowmanager.sync.model.CloudDeleteSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.CloudUpdateSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.Direction;
+import com.aws.greengrass.shadowmanager.sync.model.DirectionWrapper;
 import com.aws.greengrass.shadowmanager.sync.model.FullShadowSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.LocalDeleteSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.LocalUpdateSyncRequest;
@@ -50,16 +51,18 @@ class RequestMergerTest {
 
     static LocalDeleteSyncRequest localDeleteSyncRequest = mock(LocalDeleteSyncRequest.class, "localDelete");
 
+    private final DirectionWrapper direction = new DirectionWrapper();
+
     @BeforeEach
     void setup() {
-        merger = new RequestMerger();
+        merger = new RequestMerger(direction);
     }
 
     @ParameterizedTest
     @MethodSource("overridingRequests")
     void GIVEN_overriding_requests_WHEN_merge_THEN_return_overriding_request(SyncRequest old, SyncRequest value,
             SyncRequest expected, Direction direction) {
-        merger.setSyncDirection(direction);
+        this.direction.setDirection(direction);
         assertThat(merger.merge(old, value), is(instanceOf(expected.getClass())));
     }
 
@@ -84,7 +87,7 @@ class RequestMergerTest {
     @MethodSource("nonMergingRequests")
     void GIVEN_non_mergable_request_WHEN_merge_THEN_return_full_shadow_sync(SyncRequest request1,
             SyncRequest request2, Direction direction) {
-        merger.setSyncDirection(direction);
+        this.direction.setDirection(direction);
         switch (direction) {
             case BETWEEN_DEVICE_AND_CLOUD:
                 assertThat(merger.merge(request1, request2), is(instanceOf(FullShadowSyncRequest.class)));

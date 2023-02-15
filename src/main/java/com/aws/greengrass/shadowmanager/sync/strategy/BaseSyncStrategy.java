@@ -12,7 +12,10 @@ import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
 import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
 import com.aws.greengrass.shadowmanager.sync.Retryer;
+import com.aws.greengrass.shadowmanager.sync.model.DirectionWrapper;
 import com.aws.greengrass.shadowmanager.sync.model.FullShadowSyncRequest;
+import com.aws.greengrass.shadowmanager.sync.model.OverwriteCloudShadowRequest;
+import com.aws.greengrass.shadowmanager.sync.model.OverwriteLocalShadowRequest;
 import com.aws.greengrass.shadowmanager.sync.model.SyncContext;
 import com.aws.greengrass.shadowmanager.sync.model.SyncRequest;
 import com.aws.greengrass.util.RetryUtils;
@@ -113,6 +116,8 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
 
     int syncParallelism;
 
+    private final DirectionWrapper syncDirection;
+
 
     /**
      * Getter for syncing boolean.
@@ -132,8 +137,8 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
         return executing.get();
     }
 
-    protected BaseSyncStrategy(Retryer retryer, RequestBlockingQueue syncQueue) {
-        this(retryer, DEFAULT_RETRY_CONFIG, syncQueue);
+    protected BaseSyncStrategy(Retryer retryer, RequestBlockingQueue syncQueue, DirectionWrapper syncDirection) {
+        this(retryer, DEFAULT_RETRY_CONFIG, syncQueue, syncDirection);
     }
 
     /**
@@ -143,7 +148,8 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
      * @param retryConfig The config to be used by the retryer.
      * @param syncQueue   A queue to use for sync requests.
      */
-    protected BaseSyncStrategy(Retryer retryer, RetryUtils.RetryConfig retryConfig, RequestBlockingQueue syncQueue) {
+    protected BaseSyncStrategy(Retryer retryer, RetryUtils.RetryConfig retryConfig, RequestBlockingQueue syncQueue,
+                               DirectionWrapper syncDirection) {
         this.retryer = (config, request, context) -> {
             try {
                 executing.set(true);
@@ -158,6 +164,8 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
         // initialize some defaults
         this.syncParallelism = 1;
         this.criticalExecBlock = new Semaphore(1);
+
+        this.syncDirection = syncDirection;
     }
 
     /**
@@ -410,15 +418,17 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
                             .addKeyValue(LOG_SHADOW_NAME_KEY, currProcessingShadowName)
                             .log("Received conflict when processing request. Retrying as a full sync");
                     // add back to queue to merge over any shadow request that came in while it was executing
-                    request = syncQueue.offerAndTake(new FullShadowSyncRequest(currProcessingThingName,
-                            currProcessingShadowName), true);
+                    request = syncQueue.offerAndTake(
+                            fullSyncRequestBasedOnDirection(currProcessingThingName, currProcessingShadowName),
+                            true);
                 } catch (UnknownShadowException e) {
                     logger.atWarn(SYNC_EVENT_TYPE).cause(e).addKeyValue(LOG_THING_NAME_KEY, currProcessingThingName)
                             .addKeyValue(LOG_SHADOW_NAME_KEY, currProcessingShadowName)
                             .log("Received unknown shadow when processing request. Retrying as a full sync");
                     // add back to queue to merge over any shadow request that came in while it was executing
                     request = syncQueue.offerAndTake(
-                            new FullShadowSyncRequest(currProcessingThingName, currProcessingShadowName), true);
+                            fullSyncRequestBasedOnDirection(currProcessingThingName, currProcessingShadowName),
+                            true);
                 } catch (Exception e) {
                     logger.atError(SYNC_EVENT_TYPE)
                             .cause(e)
@@ -442,6 +452,18 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
                 syncQueue.offer(request);
             }
             logger.atInfo(SYNC_EVENT_TYPE).log("Finished processing sync requests");
+        }
+    }
+
+    private SyncRequest fullSyncRequestBasedOnDirection(String thingName, String shadowName) {
+        switch (syncDirection.get()) {
+            case DEVICE_TO_CLOUD:
+                return new OverwriteCloudShadowRequest(thingName, shadowName);
+            case CLOUD_TO_DEVICE:
+                return new OverwriteLocalShadowRequest(thingName, shadowName);
+            case BETWEEN_DEVICE_AND_CLOUD:
+            default:
+                return new FullShadowSyncRequest(thingName, shadowName);
         }
     }
 }

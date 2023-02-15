@@ -22,6 +22,7 @@ import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientFactory;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientWrapper;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
 import com.aws.greengrass.shadowmanager.sync.model.Direction;
+import com.aws.greengrass.shadowmanager.sync.model.DirectionWrapper;
 import com.aws.greengrass.shadowmanager.sync.strategy.BaseSyncStrategy;
 import com.aws.greengrass.shadowmanager.sync.strategy.PeriodicSyncStrategy;
 import com.aws.greengrass.shadowmanager.sync.strategy.RealTimeSyncStrategy;
@@ -220,22 +221,22 @@ class ShadowManagerTest extends NucleusLaunchUtils {
                 .configFile(DEFAULT_CONFIG)
                 .mqttConnected(false)
                 .build());
-        SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
+        DirectionWrapper direction = kernel.getContext().get(DirectionWrapper.class);
         shadowManager.getConfig().lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC)
                 .lookup(CONFIGURATION_SYNC_DIRECTION_TOPIC).withValue(Direction.DEVICE_TO_CLOUD.getCode());
         kernel.getContext().waitForPublishQueueToClear();
-        assertThat(syncHandler.getSyncDirection(), is(Direction.DEVICE_TO_CLOUD));
+        assertThat(direction.get(), is(Direction.DEVICE_TO_CLOUD));
 
         shadowManager.getConfig().lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC)
                 .lookup(CONFIGURATION_SYNC_DIRECTION_TOPIC).remove();
         kernel.getContext().waitForPublishQueueToClear();
-        assertThat(syncHandler.getSyncDirection(), is(Direction.BETWEEN_DEVICE_AND_CLOUD));
+        assertThat(direction.get(), is(Direction.BETWEEN_DEVICE_AND_CLOUD));
 
         shadowManager.getConfig().lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC)
                 .lookup(CONFIGURATION_SYNC_DIRECTION_TOPIC).withValue(Direction.DEVICE_TO_CLOUD.getCode());
         kernel.getContext().waitForPublishQueueToClear();
 
-        assertThat(syncHandler.getSyncDirection(), is(Direction.DEVICE_TO_CLOUD));
+        assertThat(direction.get(), is(Direction.DEVICE_TO_CLOUD));
     }
 
     @Test

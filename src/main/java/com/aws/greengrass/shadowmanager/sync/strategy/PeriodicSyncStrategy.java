@@ -9,6 +9,7 @@ import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
 import com.aws.greengrass.shadowmanager.sync.Retryer;
+import com.aws.greengrass.shadowmanager.sync.model.DirectionWrapper;
 import com.aws.greengrass.shadowmanager.sync.model.SyncContext;
 import com.aws.greengrass.shadowmanager.sync.model.SyncRequest;
 import com.aws.greengrass.util.RetryUtils;
@@ -36,10 +37,11 @@ public class PeriodicSyncStrategy extends BaseSyncStrategy {
      * @param retryer   The retryer object.
      * @param interval  The interval at which to sync the shadows.
      * @param syncQueue The sync queue from the previous strategy if any.
+     * @param  direction  The sync direction
      */
     public PeriodicSyncStrategy(ScheduledExecutorService ses, Retryer retryer, long interval,
-                                RequestBlockingQueue syncQueue) {
-        super(retryer, syncQueue);
+                                RequestBlockingQueue syncQueue, DirectionWrapper direction) {
+        super(retryer, syncQueue, direction);
         this.syncExecutorService = ses;
         this.interval = interval;
     }
@@ -52,10 +54,12 @@ public class PeriodicSyncStrategy extends BaseSyncStrategy {
      * @param interval    The interval at which to sync the shadows.
      * @param retryConfig The retryer configuration.
      * @param syncQueue   The sync queue from the previous strategy if any.
+     * @param  direction  The sync direction
      */
     public PeriodicSyncStrategy(ScheduledExecutorService ses, Retryer retryer, long interval,
-                                RetryUtils.RetryConfig retryConfig, RequestBlockingQueue syncQueue) {
-        super(retryer, retryConfig, syncQueue);
+                                RetryUtils.RetryConfig retryConfig, RequestBlockingQueue syncQueue,
+                                DirectionWrapper direction) {
+        super(retryer, retryConfig, syncQueue, direction);
         this.syncExecutorService = ses;
         this.interval = interval;
     }

@@ -10,7 +10,7 @@ import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfi
 import com.aws.greengrass.shadowmanager.sync.model.BaseSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.CloudDeleteSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.CloudUpdateSyncRequest;
-import com.aws.greengrass.shadowmanager.sync.model.Direction;
+import com.aws.greengrass.shadowmanager.sync.model.DirectionWrapper;
 import com.aws.greengrass.shadowmanager.sync.model.LocalDeleteSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.LocalUpdateSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.SyncContext;
@@ -23,8 +23,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Answers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
@@ -43,7 +41,6 @@ import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.atMostOnce;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -66,11 +63,7 @@ class SyncHandlerTest {
     @Mock
     SyncStrategyFactory mockSyncStrategyFactory;
 
-    @Mock
-    Retryer mockRetryer;
-
-    @Mock
-    RequestMerger mockRequestMerger;
+    DirectionWrapper direction = new DirectionWrapper();
 
     @Mock(answer = Answers.RETURNS_DEEP_STUBS)
     SyncContext context;
@@ -82,7 +75,7 @@ class SyncHandlerTest {
 
     @BeforeEach
     void setup() {
-        syncHandler = new SyncHandler(executorService, scheduledExecutorService, mock(RequestBlockingQueue.class), mockRequestMerger);
+        syncHandler = new SyncHandler(executorService, scheduledExecutorService, mock(RequestBlockingQueue.class), direction);
         syncHandler.setOverallSyncStrategy(mockSyncStrategy);
     }
 
@@ -124,7 +117,7 @@ class SyncHandlerTest {
     @Test
     void GIVEN_sync_strategy_WHEN_setSyncStrategy_THEN_calls_sync_factory() {
         // GIVEN
-        syncHandler = new SyncHandler(mockSyncStrategyFactory, mock(RequestBlockingQueue.class), mockRequestMerger);
+        syncHandler = new SyncHandler(mockSyncStrategyFactory, mock(RequestBlockingQueue.class), direction);
 
         // WHEN
         syncHandler.setSyncStrategy(mock(Strategy.class));
@@ -207,13 +200,5 @@ class SyncHandlerTest {
         // THEN
         verify(mockSyncStrategy, times(1)).putSyncRequest(any());
         assertThat(syncRequestCaptor.getValue(), is(instanceOf(LocalDeleteSyncRequest.class)));
-    }
-
-    @ParameterizedTest
-    @EnumSource(Direction.class)
-    void GIVEN_direction_WHEN_setSyncDirection_THEN_sets_syncHandler_and_RequestMerger_direction(Direction direction) {
-        syncHandler.setSyncDirection(direction);
-        assertThat(syncHandler.getSyncDirection(), is(direction));
-        verify(mockRequestMerger, atMostOnce()).setSyncDirection(direction);
     }
 }

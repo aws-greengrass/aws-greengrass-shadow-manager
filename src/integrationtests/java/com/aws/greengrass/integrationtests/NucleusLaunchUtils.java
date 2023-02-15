@@ -18,6 +18,7 @@ import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientFactory;
 import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
+import com.aws.greengrass.shadowmanager.sync.model.DirectionWrapper;
 import com.aws.greengrass.shadowmanager.sync.strategy.BaseSyncStrategy;
 import com.aws.greengrass.shadowmanager.sync.strategy.PeriodicSyncStrategy;
 import com.aws.greengrass.shadowmanager.sync.strategy.RealTimeSyncStrategy;
@@ -61,6 +62,7 @@ public class NucleusLaunchUtils extends GGServiceTestUtil {
     AuthorizationHandlerWrapper mockAuthorizationHandlerWrapper;
     @Mock
     ShadowManagerDatabase mockShadowManagerDatabase;
+    private final DirectionWrapper direction = new DirectionWrapper();
 
     @Deprecated()
     public void startNucleusWithConfig(String configFile) throws InterruptedException {
@@ -130,10 +132,10 @@ public class NucleusLaunchUtils extends GGServiceTestUtil {
                     .build();
             SyncStrategy syncStrategy;
             if (RealTimeSyncStrategy.class.equals(config.getSyncClazz())) {
-                syncStrategy = new RealTimeSyncStrategy(es, ((RealTimeSyncStrategy) realTimeSyncStrategy).getRetryer(), retryConfig, queue);
+                syncStrategy = new RealTimeSyncStrategy(es, ((RealTimeSyncStrategy) realTimeSyncStrategy).getRetryer(), retryConfig, queue, direction);
                 kernel.getContext().put(RealTimeSyncStrategy.class, (RealTimeSyncStrategy) syncStrategy);
             } else {
-                syncStrategy = new PeriodicSyncStrategy(ses, ((RealTimeSyncStrategy) realTimeSyncStrategy).getRetryer(), 3, retryConfig, queue);
+                syncStrategy = new PeriodicSyncStrategy(ses, ((RealTimeSyncStrategy) realTimeSyncStrategy).getRetryer(), 3, retryConfig, queue, direction);
                 kernel.getContext().put(PeriodicSyncStrategy.class, (PeriodicSyncStrategy) syncStrategy);
 
             }
