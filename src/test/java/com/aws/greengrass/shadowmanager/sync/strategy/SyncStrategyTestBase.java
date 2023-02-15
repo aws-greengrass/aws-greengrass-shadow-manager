@@ -6,10 +6,14 @@
 package com.aws.greengrass.shadowmanager.sync.strategy;
 
 import com.aws.greengrass.logging.impl.config.LogConfig;
+import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
 import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
 import com.aws.greengrass.shadowmanager.sync.Retryer;
 import com.aws.greengrass.shadowmanager.sync.model.CloudUpdateSyncRequest;
+import com.aws.greengrass.shadowmanager.sync.model.Direction;
 import com.aws.greengrass.shadowmanager.sync.model.FullShadowSyncRequest;
+import com.aws.greengrass.shadowmanager.sync.model.OverwriteCloudShadowRequest;
+import com.aws.greengrass.shadowmanager.sync.model.OverwriteLocalShadowRequest;
 import com.aws.greengrass.shadowmanager.sync.model.SyncContext;
 import com.aws.greengrass.shadowmanager.sync.model.SyncRequest;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
@@ -20,8 +24,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.params.provider.Arguments;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.event.Level;
+import software.amazon.awssdk.aws.greengrass.model.ConflictError;
+import software.amazon.awssdk.services.iotdataplane.model.ConflictException;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -30,9 +37,11 @@ import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 import static java.time.Duration.ofSeconds;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
@@ -183,6 +192,20 @@ public abstract class SyncStrategyTestBase<T extends BaseSyncStrategy, S extends
         verify(mockRetryer, never()).run(any(), eq(request2), any());
 
         verify(mockRequestBlockingQueue, timeout(ofSeconds(5).toMillis()).times(1)).offer(request2);
+    }
+
+    static Stream<Arguments> expectedSyncRequestsOnConflictByDirection() {
+        return Stream.of(
+                arguments(Direction.CLOUD_TO_DEVICE, ConflictException.class, OverwriteLocalShadowRequest.class),
+                arguments(Direction.CLOUD_TO_DEVICE, ConflictError.class, OverwriteLocalShadowRequest.class),
+                arguments(Direction.CLOUD_TO_DEVICE, UnknownShadowException.class, OverwriteLocalShadowRequest.class),
+                arguments(Direction.DEVICE_TO_CLOUD, ConflictException.class, OverwriteCloudShadowRequest.class),
+                arguments(Direction.DEVICE_TO_CLOUD, ConflictError.class, OverwriteCloudShadowRequest.class),
+                arguments(Direction.DEVICE_TO_CLOUD, UnknownShadowException.class, OverwriteCloudShadowRequest.class),
+                arguments(Direction.BETWEEN_DEVICE_AND_CLOUD, ConflictException.class, FullShadowSyncRequest.class),
+                arguments(Direction.BETWEEN_DEVICE_AND_CLOUD, ConflictError.class, FullShadowSyncRequest.class),
+                arguments(Direction.BETWEEN_DEVICE_AND_CLOUD, UnknownShadowException.class, FullShadowSyncRequest.class)
+        );
     }
 
 }

@@ -38,6 +38,7 @@ import com.aws.greengrass.shadowmanager.sync.CloudDataClient;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientWrapper;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
 import com.aws.greengrass.shadowmanager.sync.model.Direction;
+import com.aws.greengrass.shadowmanager.sync.model.DirectionWrapper;
 import com.aws.greengrass.shadowmanager.sync.model.SyncContext;
 import com.aws.greengrass.shadowmanager.sync.strategy.model.Strategy;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
@@ -61,7 +62,6 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -130,6 +130,8 @@ public class ShadowManager extends PluginService {
     private final ChildChanged deviceThingNameWatcher;
     private String thingName;
 
+    private final DirectionWrapper direction;
+
     /**
      * Ctr for ShadowManager.
      *
@@ -145,6 +147,7 @@ public class ShadowManager extends PluginService {
      * @param syncHandler                 a synchronization handler
      * @param cloudDataClient             the data client subscribing to cloud shadow topics
      * @param mqttClient                  the mqtt client connected to IoT Core
+     * @param direction                   The sync direction
      */
     @SuppressWarnings("PMD.ExcessiveParameterList")
     @Inject
@@ -160,7 +163,8 @@ public class ShadowManager extends PluginService {
             IotDataPlaneClientWrapper iotDataPlaneClientWrapper,
             SyncHandler syncHandler,
             CloudDataClient cloudDataClient,
-            MqttClient mqttClient) {
+            MqttClient mqttClient,
+            DirectionWrapper direction) {
         super(topics);
         this.database = database;
         this.authorizationHandlerWrapper = authorizationHandlerWrapper;
@@ -181,6 +185,7 @@ public class ShadowManager extends PluginService {
         this.deviceThingNameWatcher = this::handleDeviceThingNameChange;
         this.pubSubIntegrator = new PubSubIntegrator(pubSubClientWrapper, deleteThingShadowRequestHandler,
                 updateThingShadowRequestHandler, getThingShadowRequestHandler);
+        this.direction = direction;
     }
 
     private void registerHandlers() {
@@ -342,13 +347,12 @@ public class ShadowManager extends PluginService {
                 .setEventType("config")
                 .kv("syncDirection", newSyncDirection.toString())
                 .log();
-        Direction currentDirection = syncHandler.getSyncDirection();
-        // if the sync direction is the same, then just return and do nothing.
-        if (newSyncDirection.equals(currentDirection)) {
+        Direction previousDirection = direction.get();
+        if (newSyncDirection.equals(previousDirection)) {
             return;
         }
-        setupSync(newSyncDirection, Optional.of(currentDirection));
-        syncHandler.setSyncDirection(newSyncDirection);
+        direction.setDirection(newSyncDirection);
+        setupSync(previousDirection);
     }
 
     private void configureStrategy(Node newv) {
@@ -376,45 +380,44 @@ public class ShadowManager extends PluginService {
         currentStrategy.set(replaceStrategyIfNecessary(currentStrategy.get(), strategy));
     }
 
-    private void setupSync(Direction newSyncDirection, Optional<Direction> currentDirection) {
-        if (Direction.DEVICE_TO_CLOUD.equals(newSyncDirection)) {
-            // If we are going to update the cloud after a local shadow has been updated, then stop
-            // the existing sync loop future which is trying to subscribe to shadow topics.
-            // Also unsubscribe all the shadow topics that we have already subscribed to.
-            // Start the sync strategy if the current direction was FROMCLOUDONLY
-            cloudDataClient.stopSubscribing();
-            cloudDataClient.unsubscribeForAllShadowsTopics();
-            startSyncingShadows(StartSyncInfo.builder()
-                    .overrideRunningCheck(!currentDirection.isPresent())
-                    .reInitializeSyncInfo(!currentDirection.isPresent())
-                    .startSyncStrategy(!currentDirection.isPresent())
-                    .build());
-        } else if (Direction.CLOUD_TO_DEVICE.equals(newSyncDirection)) {
-            // If we are only going to get an update after a cloud shadow has been updated, then
-            // update the shadow subscriptions if the current direction was FROMDEVICEONLY (since we
-            // would have unsubscribed from all topics).
-            // Stop the sync strategy loop.
-            // TODO: do we need to clear the sync queue?
-            if (!currentDirection.isPresent() || Direction.DEVICE_TO_CLOUD.equals(currentDirection.get())) {
-                cloudDataClient.updateSubscriptions(syncConfiguration.getSyncShadows());
-            }
-            startSyncingShadows(StartSyncInfo.builder()
-                    .overrideRunningCheck(!currentDirection.isPresent())
-                    .reInitializeSyncInfo(!currentDirection.isPresent())
-                    .startSyncStrategy(!currentDirection.isPresent())
-                    .build());
-        } else {
-            // If we need to do a bidrectional sync, then start the sync strategy loop only if the
-            // current direction was FROMCLOUDONLY (since we would have stopped the loop) and update
-            // all the cloud subscriptions only if the current direction was FROMDEVICEONLY (since we
-            // would have unsubscribed from all topics).
-            startSyncingShadows(StartSyncInfo.builder()
-                    .startSyncStrategy(!currentDirection.isPresent())
-                    .updateCloudSubscriptions(!currentDirection.isPresent()
-                            || Direction.DEVICE_TO_CLOUD.equals(currentDirection.get()))
-                    .reInitializeSyncInfo(!currentDirection.isPresent())
-                    .overrideRunningCheck(!currentDirection.isPresent())
-                    .build());
+    @SuppressWarnings("PMD.MissingBreakInSwitch")
+    private void setupSync() {
+        switch (direction.get()) {
+            case DEVICE_TO_CLOUD:
+                cloudDataClient.stopSubscribing();
+                cloudDataClient.unsubscribeForAllShadowsTopics();
+                startSyncingShadows(StartSyncInfo.builder()
+                        .overrideRunningCheck(true)
+                        .reInitializeSyncInfo(true)
+                        .startSyncStrategy(true)
+                        .build());
+                break;
+            case CLOUD_TO_DEVICE:          // fall-through
+            case BETWEEN_DEVICE_AND_CLOUD: // fall-through
+            default:
+                startSyncingShadows(StartSyncInfo.builder()
+                        .updateCloudSubscriptions(true)
+                        .overrideRunningCheck(true)
+                        .reInitializeSyncInfo(true)
+                        .startSyncStrategy(true)
+                        .build());
+        }
+    }
+
+    @SuppressWarnings("PMD.MissingBreakInSwitch")
+    private void setupSync(Direction previousDirection) {
+        switch (direction.get()) {
+            case DEVICE_TO_CLOUD:
+                cloudDataClient.stopSubscribing();
+                cloudDataClient.unsubscribeForAllShadowsTopics();
+                startSyncingShadows(StartSyncInfo.builder().build());
+                break;
+            case CLOUD_TO_DEVICE:          // fall-through
+            case BETWEEN_DEVICE_AND_CLOUD: // fall-through
+            default:
+                startSyncingShadows(StartSyncInfo.builder()
+                        .updateCloudSubscriptions(Direction.DEVICE_TO_CLOUD.equals(previousDirection))
+                        .build());
         }
     }
 
@@ -476,7 +479,7 @@ public class ShadowManager extends PluginService {
             database.open();
 
             reportState(State.RUNNING);
-            setupSync(syncHandler.getSyncDirection(), Optional.empty());
+            setupSync();
         } catch (Exception e) {
             serviceErrored(e);
         }

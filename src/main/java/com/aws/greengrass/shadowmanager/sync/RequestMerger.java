@@ -13,7 +13,7 @@ import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.sync.model.BaseSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.CloudDeleteSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.CloudUpdateSyncRequest;
-import com.aws.greengrass.shadowmanager.sync.model.Direction;
+import com.aws.greengrass.shadowmanager.sync.model.DirectionWrapper;
 import com.aws.greengrass.shadowmanager.sync.model.FullShadowSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.LocalDeleteSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.LocalUpdateSyncRequest;
@@ -21,19 +21,24 @@ import com.aws.greengrass.shadowmanager.sync.model.OverwriteCloudShadowRequest;
 import com.aws.greengrass.shadowmanager.sync.model.OverwriteLocalShadowRequest;
 import com.aws.greengrass.shadowmanager.sync.model.SyncRequest;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import lombok.Setter;
 
 import java.io.IOException;
+import javax.inject.Inject;
+
 
 /**
- * Merge requests that can be combined together. Falls back to FullSync if requests cannot be combined in a
+ * Merge requests that can be combined. Falls back to FullSync if requests cannot be combined in a
  * meaningful way.
  */
 public class RequestMerger {
     private static final Logger logger = LogManager.getLogger(RequestMerger.class);
 
-    @Setter
-    private Direction syncDirection = Direction.BETWEEN_DEVICE_AND_CLOUD;
+    private final DirectionWrapper direction;
+
+    @Inject
+    public RequestMerger(DirectionWrapper direction) {
+        this.direction = direction;
+    }
 
     /**
      * Merge two requests into one.
@@ -105,7 +110,7 @@ public class RequestMerger {
     }
 
     private BaseSyncRequest returnRequestBasedOnDirection(SyncRequest value, LogEventBuilder logEvent) {
-        switch (syncDirection) {
+        switch (direction.get()) {
             case DEVICE_TO_CLOUD:
                 logEvent.log("Creating overwrite cloud shadow sync request");
                 // Instead of a partial update, an overwrite cloud shadow sync request will force the device to

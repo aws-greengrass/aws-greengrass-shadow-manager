@@ -25,6 +25,7 @@ import com.aws.greengrass.shadowmanager.sync.CloudDataClient;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientWrapper;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
 import com.aws.greengrass.shadowmanager.sync.model.Direction;
+import com.aws.greengrass.shadowmanager.sync.model.DirectionWrapper;
 import com.aws.greengrass.shadowmanager.sync.model.SyncContext;
 import com.aws.greengrass.shadowmanager.sync.strategy.SyncStrategy;
 import com.aws.greengrass.shadowmanager.sync.strategy.model.Strategy;
@@ -84,6 +85,7 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -147,7 +149,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
     private ArgumentCaptor<CallbackEventManager.OnConnectCallback> mqtOnConnectCallbackCaptor;
     @Captor
     private ArgumentCaptor<Strategy> strategyCaptor;
-
+    private final DirectionWrapper direction = new DirectionWrapper();
     private ShadowManager shadowManager;
 
     @BeforeEach
@@ -156,7 +158,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         initializeMockedConfig();
         shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper,
                 mockPubSubClientWrapper, mockInboundRateLimiter, mockDeviceConfiguration, mockSynchronizeHelper,
-                mockIotDataPlaneClientWrapper, mockSyncHandler, mockCloudDataClient, mockMqttClient);
+                mockIotDataPlaneClientWrapper, mockSyncHandler, mockCloudDataClient, mockMqttClient, direction);
         lenient().when(config.lookupTopics(CONFIGURATION_CONFIG_KEY))
                 .thenReturn(Topics.of(context, CONFIGURATION_CONFIG_KEY, null));
         // These are added to not break the existing unit tests. Will be removed later.
@@ -183,19 +185,19 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         lenient().when(mockMqttClient.connected()).thenReturn(true);
         SyncStrategy mockSyncStrategy = mock(SyncStrategy.class);
         lenient().when(mockSyncHandler.getOverallSyncStrategy()).thenReturn(mockSyncStrategy);
-        when(mockSyncHandler.getSyncDirection()).thenReturn(current);
+        direction.setDirection(current);
         Topic directionTopic = Topic.of(context, CONFIGURATION_SYNC_DIRECTION_TOPIC, Direction.BETWEEN_DEVICE_AND_CLOUD.getCode());
         when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC, CONFIGURATION_SYNC_DIRECTION_TOPIC))
                 .thenReturn(directionTopic);
         s.install(ShadowManager.InstallConfig.builder().configureSyncDirectionConfig(true).build());
 
         assertFalse(s.isErrored());
+        assertEquals(Direction.BETWEEN_DEVICE_AND_CLOUD, direction.get());
 
         if (Direction.BETWEEN_DEVICE_AND_CLOUD.equals(current)) {
             verify(mockSyncHandler, never()).start(any(), anyInt());
             verify(mockCloudDataClient, never()).updateSubscriptions(any());
             verify(mockSyncHandler, never()).stop();
-            verify(mockSyncHandler, never()).setSyncDirection(eq(Direction.BETWEEN_DEVICE_AND_CLOUD));
             return;
         }
 
@@ -206,7 +208,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
             verify(mockCloudDataClient, never()).updateSubscriptions(any());
         }
         verify(mockSyncHandler, never()).stop();
-        verify(mockSyncHandler, times(1)).setSyncDirection(eq(Direction.BETWEEN_DEVICE_AND_CLOUD));
         verify(mockDao, never()).listSyncedShadows();
         verify(mockDao, never()).deleteSyncInformation(anyString(), anyString());
         verify(mockDao, never()).insertSyncInfoIfNotExists(any());
@@ -225,19 +226,19 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         lenient().when(mockMqttClient.connected()).thenReturn(true);
         SyncStrategy mockSyncStrategy = mock(SyncStrategy.class);
         lenient().when(mockSyncHandler.getOverallSyncStrategy()).thenReturn(mockSyncStrategy);
-        when(mockSyncHandler.getSyncDirection()).thenReturn(current);
+        direction.setDirection(current);
         Topic directionTopic = Topic.of(context, CONFIGURATION_SYNC_DIRECTION_TOPIC, Direction.DEVICE_TO_CLOUD.getCode());
         when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC, CONFIGURATION_SYNC_DIRECTION_TOPIC))
                 .thenReturn(directionTopic);
         s.install(ShadowManager.InstallConfig.builder().configureSyncDirectionConfig(true).build());
 
         assertFalse(s.isErrored());
+        assertEquals(Direction.DEVICE_TO_CLOUD, direction.get());
 
         if (Direction.DEVICE_TO_CLOUD.equals(current)) {
             verify(mockSyncHandler, never()).start(any(), anyInt());
             verify(mockCloudDataClient, never()).updateSubscriptions(any());
             verify(mockSyncHandler, never()).stop();
-            verify(mockSyncHandler, never()).setSyncDirection(eq(Direction.BETWEEN_DEVICE_AND_CLOUD));
             return;
         }
 
@@ -246,7 +247,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         verify(mockCloudDataClient, never()).updateSubscriptions(any());
         verify(mockSyncHandler, never()).stop();
 
-        verify(mockSyncHandler, times(1)).setSyncDirection(eq(Direction.DEVICE_TO_CLOUD));
         verify(mockDao, never()).listSyncedShadows();
         verify(mockDao, never()).deleteSyncInformation(anyString(), anyString());
         verify(mockDao, never()).insertSyncInfoIfNotExists(any());
@@ -265,19 +265,19 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         lenient().when(mockMqttClient.connected()).thenReturn(true);
         SyncStrategy mockSyncStrategy = mock(SyncStrategy.class);
         lenient().when(mockSyncHandler.getOverallSyncStrategy()).thenReturn(mockSyncStrategy);
-        when(mockSyncHandler.getSyncDirection()).thenReturn(current);
+        direction.setDirection(current);
         Topic directionTopic = Topic.of(context, CONFIGURATION_SYNC_DIRECTION_TOPIC, Direction.CLOUD_TO_DEVICE.getCode());
         when(config.lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_SYNCHRONIZATION_TOPIC, CONFIGURATION_SYNC_DIRECTION_TOPIC))
                 .thenReturn(directionTopic);
         s.install(ShadowManager.InstallConfig.builder().configureSyncDirectionConfig(true).build());
 
         assertFalse(s.isErrored());
+        assertEquals(Direction.CLOUD_TO_DEVICE, direction.get());
 
         if (Direction.CLOUD_TO_DEVICE.equals(current)) {
             verify(mockSyncHandler, never()).start(any(), anyInt());
             verify(mockCloudDataClient, never()).updateSubscriptions(any());
             verify(mockSyncHandler, never()).stop();
-            verify(mockSyncHandler, never()).setSyncDirection(eq(Direction.BETWEEN_DEVICE_AND_CLOUD));
             return;
         }
 
@@ -289,7 +289,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
 
         verify(mockSyncHandler, never()).stop();
         verify(mockSyncHandler, never()).start(any(), anyInt());
-        verify(mockSyncHandler, times(1)).setSyncDirection(eq(Direction.CLOUD_TO_DEVICE));
         verify(mockDao, never()).listSyncedShadows();
         verify(mockDao, never()).deleteSyncInformation(anyString(), anyString());
         verify(mockDao, never()).insertSyncInfoIfNotExists(any());

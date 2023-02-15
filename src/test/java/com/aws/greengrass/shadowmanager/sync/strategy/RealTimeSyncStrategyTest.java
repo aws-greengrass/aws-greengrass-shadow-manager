@@ -6,10 +6,11 @@
 package com.aws.greengrass.shadowmanager.sync.strategy;
 
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
-import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
 import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
 import com.aws.greengrass.shadowmanager.sync.RequestMerger;
 import com.aws.greengrass.shadowmanager.sync.model.CloudUpdateSyncRequest;
+import com.aws.greengrass.shadowmanager.sync.model.Direction;
+import com.aws.greengrass.shadowmanager.sync.model.DirectionWrapper;
 import com.aws.greengrass.shadowmanager.sync.model.FullShadowSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.SyncRequest;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
@@ -17,11 +18,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
-import software.amazon.awssdk.aws.greengrass.model.ConflictError;
-import software.amazon.awssdk.services.iotdataplane.model.ConflictException;
 
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
@@ -52,20 +51,22 @@ import static org.mockito.Mockito.when;
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 class RealTimeSyncStrategyTest extends SyncStrategyTestBase<RealTimeSyncStrategy, ExecutorService> {
 
+    DirectionWrapper direction = new DirectionWrapper();
+
     RealTimeSyncStrategyTest() {
         super(Executors::newCachedThreadPool);
     }
 
     @Override
     RealTimeSyncStrategy defaultTestInstance() {
-        return new RealTimeSyncStrategy(executorService, mockRetryer, mockRequestBlockingQueue);
+        return new RealTimeSyncStrategy(executorService, mockRetryer, mockRequestBlockingQueue, direction);
     }
 
     @Test
     void GIVEN_sync_request_WHEN_putSyncRequest_and_sync_loop_runs_THEN_request_is_executed_successfully()
             throws Exception {
         strategy = new RealTimeSyncStrategy(executorService, mockRetryer,
-                new RequestBlockingQueue(new RequestMerger()));
+                new RequestBlockingQueue(new RequestMerger(direction)), direction);
         strategy.start(mockSyncContext, 1);
         strategy.putSyncRequest(mockFullShadowSyncRequest);
 
@@ -128,7 +129,7 @@ class RealTimeSyncStrategyTest extends SyncStrategyTestBase<RealTimeSyncStrategy
     void GIVEN_request_queue_WHEN_put_and_clear_THEN_queue_has_correct_number_of_requests() throws InterruptedException {
 
         strategy = new RealTimeSyncStrategy(executorService, mockRetryer,
-                new RequestBlockingQueue(new RequestMerger()));
+                new RequestBlockingQueue(new RequestMerger(direction)), direction);
         strategy.syncing.set(true);
         strategy.syncThreadEnd = new CountDownLatch(0); // no sync actually running
 
@@ -214,13 +215,15 @@ class RealTimeSyncStrategyTest extends SyncStrategyTestBase<RealTimeSyncStrategy
     }
 
     @ParameterizedTest
-    @ValueSource(classes = { ConflictException.class, ConflictError.class, UnknownShadowException.class})
-    void GIVEN_syncing_WHEN_error_THEN_full_sync(Class clazz, ExtensionContext extensionContext)
+    @MethodSource("expectedSyncRequestsOnConflictByDirection")
+    void GIVEN_syncing_WHEN_error_THEN_full_sync(Direction direction, Class<? extends Throwable> error, Class<? extends SyncRequest> expectedSyncRequest, ExtensionContext extensionContext)
             throws Exception {
-        ignoreExceptionOfType(extensionContext, clazz);
+        ignoreExceptionOfType(extensionContext, error);
+
+        this.direction.setDirection(direction);
 
         ExecutorService executorService = Executors.newSingleThreadExecutor();
-        strategy = new RealTimeSyncStrategy(executorService, mockRetryer, mockRequestBlockingQueue);
+        strategy = new RealTimeSyncStrategy(executorService, mockRetryer, mockRequestBlockingQueue, this.direction);
 
         CloudUpdateSyncRequest request1 = mock(CloudUpdateSyncRequest.class);
         lenient().when(request1.getThingName()).thenReturn("thing1");
@@ -239,17 +242,17 @@ class RealTimeSyncStrategyTest extends SyncStrategyTestBase<RealTimeSyncStrategy
 
         doAnswer(invocation -> {
             executeLatch.countDown();
-            throw (Throwable)mock(clazz);
+            throw (Throwable)mock(error);
         }).when(mockRetryer).run(any(), eq(request1), any());
 
         doAnswer(invocation -> {
             executeLatch.countDown();
             return null;
-        }).when(mockRetryer).run(any(), any(FullShadowSyncRequest.class), any());
+        }).when(mockRetryer).run(any(), any(expectedSyncRequest), any());
 
         // return the offered request
-        when(mockRequestBlockingQueue.offerAndTake(any(FullShadowSyncRequest.class), eq(true)))
-                .thenAnswer(invocation -> invocation.getArgument(0, FullShadowSyncRequest.class));
+        when(mockRequestBlockingQueue.offerAndTake(any(expectedSyncRequest), eq(true)))
+                .thenAnswer(invocation -> invocation.getArgument(0, expectedSyncRequest));
 
         try {
             strategy.start(mockSyncContext, 1);
@@ -262,7 +265,7 @@ class RealTimeSyncStrategyTest extends SyncStrategyTestBase<RealTimeSyncStrategy
         ArgumentCaptor<SyncRequest> requestCaptor = ArgumentCaptor.forClass(SyncRequest.class);
         verify(mockRetryer, times(2)).run(any(), requestCaptor.capture(), any());
         assertThat(requestCaptor.getAllValues().get(0), is(request1));
-        assertThat(requestCaptor.getAllValues().get(1), instanceOf(FullShadowSyncRequest.class));
+        assertThat(requestCaptor.getAllValues().get(1), instanceOf(expectedSyncRequest));
         assertThat(requestCaptor.getAllValues().get(1).getThingName(), is("thing1"));
         assertThat(requestCaptor.getAllValues().get(1).getShadowName(), is("shadow1"));
     }
