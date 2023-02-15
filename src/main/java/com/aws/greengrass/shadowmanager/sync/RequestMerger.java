@@ -56,11 +56,11 @@ public class RequestMerger {
 
         if (oldValue instanceof FullShadowSyncRequest || oldValue instanceof OverwriteCloudShadowRequest
                 || oldValue instanceof OverwriteLocalShadowRequest) {
-            return returnRequestBasedOnDirection(oldValue, logEvent);
+            return returnRequestBasedOnDirection(oldValue, value, logEvent);
         }
         if (value instanceof FullShadowSyncRequest || value instanceof OverwriteCloudShadowRequest
                 || value instanceof OverwriteLocalShadowRequest) {
-            return returnRequestBasedOnDirection(value, logEvent);
+            return returnRequestBasedOnDirection(value, oldValue, logEvent);
         }
 
         if (oldValue instanceof CloudUpdateSyncRequest && value instanceof CloudUpdateSyncRequest) {
@@ -106,10 +106,10 @@ public class RequestMerger {
                     .log("Received bi-directional updates. Converting to a full shadow sync request");
         }
 
-        return returnRequestBasedOnDirection(value, logEvent);
+        return returnRequestBasedOnDirection(value, oldValue, logEvent);
     }
 
-    private BaseSyncRequest returnRequestBasedOnDirection(SyncRequest value, LogEventBuilder logEvent) {
+    private BaseSyncRequest returnRequestBasedOnDirection(SyncRequest value, SyncRequest otherValue, LogEventBuilder logEvent) {
         switch (direction.get()) {
             case DEVICE_TO_CLOUD:
                 logEvent.log("Creating overwrite cloud shadow sync request");
@@ -126,7 +126,7 @@ public class RequestMerger {
                 logEvent.log("Creating full shadow sync request");
                 // Instead of a partial update, a full sync request will force a get of the latest local
                 // and remote shadows
-                return new FullShadowSyncRequest(value.getThingName(), value.getShadowName());
+                return new FullShadowSyncRequest(value.getThingName(), value.getShadowName(), value, otherValue);
         }
     }
 }

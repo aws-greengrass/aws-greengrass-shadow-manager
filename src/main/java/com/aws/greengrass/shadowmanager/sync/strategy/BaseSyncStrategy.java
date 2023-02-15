@@ -285,23 +285,6 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
         }
 
         try {
-            if (!request.isUpdateNecessary(context)) {
-                logger.atDebug()
-                        .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
-                        .addKeyValue(LOG_SHADOW_NAME_KEY, request.getShadowName())
-                        .addKeyValue("type", request.getClass())
-                        .log("Ignoring sync request since update is not necessary");
-                return;
-            }
-        } catch (SkipSyncRequestException | RetryableException | UnknownShadowException e) {
-            logger.atWarn(SYNC_EVENT_TYPE)
-                    .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
-                    .addKeyValue(LOG_SHADOW_NAME_KEY, request.getShadowName())
-                    .log("Ignoring sync request since update is not necessary");
-            return;
-        }
-
-        try {
             logger.atDebug(SYNC_EVENT_TYPE)
                     .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
                     .addKeyValue(LOG_SHADOW_NAME_KEY, request.getShadowName())

@@ -10,6 +10,7 @@ import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
+import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.ShadowState;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
@@ -17,10 +18,13 @@ import com.aws.greengrass.shadowmanager.util.DataOwner;
 import com.aws.greengrass.shadowmanager.util.SyncNodeMerger;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import lombok.Getter;
 import lombok.NonNull;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_CLOUD_VERSION_KEY;
@@ -37,6 +41,9 @@ import static com.aws.greengrass.shadowmanager.util.JsonUtil.OBJECT_MAPPER;
 public class FullShadowSyncRequest extends BaseSyncRequest {
     private static final Logger logger = LogManager.getLogger(FullShadowSyncRequest.class);
 
+    @Getter
+    private List<SyncRequest> mergedRequests;
+
     /**
      * Ctr for FullShadowSyncRequest.
      *
@@ -45,6 +52,20 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
      */
     public FullShadowSyncRequest(String thingName, String shadowName) {
         super(thingName, shadowName);
+    }
+
+    public FullShadowSyncRequest(String thingName, String shadowName, SyncRequest... mergedRequests) {
+        super(thingName, shadowName);
+        if (mergedRequests != null) {
+            this.mergedRequests = new ArrayList<>();
+            for (SyncRequest req : mergedRequests) {
+                if (req instanceof FullShadowSyncRequest) {
+                    this.mergedRequests.addAll(((FullShadowSyncRequest) req).getMergedRequests());
+                } else {
+                    this.mergedRequests.add(req);
+                }
+            }
+        }
     }
 
     /**
@@ -58,6 +79,20 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
         return true;
     }
 
+    private List<SyncRequest> getNecessaryMergedRequests(SyncContext context)
+            throws RetryableException, UnknownShadowException, SkipSyncRequestException {
+        if (mergedRequests == null) {
+            return null;
+        }
+        List<SyncRequest> necessaryUpdates = new ArrayList<>();
+        for (SyncRequest request : mergedRequests) {
+            if (request.isUpdateNecessary(context)) {
+                necessaryUpdates.add(request);
+            }
+        }
+        return necessaryUpdates;
+    }
+
     /**
      * Executes a full shadow sync.
      *
@@ -68,8 +103,26 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
      * @throws InterruptedException     if the thread is interrupted while syncing shadow with cloud.
      */
     @Override
-    public void execute(SyncContext context) throws RetryableException, SkipSyncRequestException, InterruptedException {
+    public void execute(SyncContext context) throws RetryableException, SkipSyncRequestException,
+            InterruptedException, UnknownShadowException {
         super.setContext(context);
+
+        List<SyncRequest> necessaryMergedUpdates = getNecessaryMergedRequests(context);
+        if (necessaryMergedUpdates != null) {
+            if (necessaryMergedUpdates.isEmpty()) {
+                // TODO log
+                return;
+            }
+
+            if (necessaryMergedUpdates.size() == 1) {
+                SyncRequest request = necessaryMergedUpdates.get(0);
+                if (request instanceof CloudUpdateSyncRequest || request instanceof LocalUpdateSyncRequest) {
+                    request.execute(context);
+                    return;
+                }
+            }
+        }
+
         SyncInformation syncInformation = getSyncInformation();
 
         Optional<ShadowDocument> localShadowDocument = context.getDao().getShadowThing(getThingName(), getShadowName());
