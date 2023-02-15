@@ -41,8 +41,38 @@ import static com.aws.greengrass.shadowmanager.util.JsonUtil.OBJECT_MAPPER;
 public class FullShadowSyncRequest extends BaseSyncRequest {
     private static final Logger logger = LogManager.getLogger(FullShadowSyncRequest.class);
 
+    /**
+     * Create a full sync request as the result of a merge. This allows us to preserve the
+     * individual requests that were merged, to drive decisions in {@link FullShadowSyncRequest#execute(SyncContext)}
+     * if we indeed need a full sync.
+     *
+     * @param thingName      thing name
+     * @param shadowName     shadow name
+     * @param mergedRequests sync requests that are being merged
+     * @return full sync request
+     */
+    public static FullShadowSyncRequest fromMerge(String thingName, String shadowName, SyncRequest... mergedRequests) {
+        if (mergedRequests == null || mergedRequests.length == 0) {
+            return new FullShadowSyncRequest(thingName, shadowName);
+        }
+        List<SyncRequest> requests = new ArrayList<>();
+        for (SyncRequest req : mergedRequests) {
+            if (req instanceof FullShadowSyncRequest) {
+                requests.addAll(((FullShadowSyncRequest) req).getMergedRequests());
+            } else {
+                requests.add(req);
+            }
+        }
+        return new FullShadowSyncRequest(thingName, shadowName, requests);
+    }
+
+    /**
+     * If this full sync request is the product of merging other requests,
+     * in {@link com.aws.greengrass.shadowmanager.sync.RequestMerger},
+     * those merged requests will show up here.
+     */
     @Getter
-    private List<SyncRequest> mergedRequests;
+    private final List<SyncRequest> mergedRequests;
 
     /**
      * Ctr for FullShadowSyncRequest.
@@ -51,21 +81,12 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
      * @param shadowName The shadow name associated with the sync shadow update
      */
     public FullShadowSyncRequest(String thingName, String shadowName) {
-        super(thingName, shadowName);
+        this(thingName, shadowName, null);
     }
 
-    public FullShadowSyncRequest(String thingName, String shadowName, SyncRequest... mergedRequests) {
+    private FullShadowSyncRequest(String thingName, String shadowName, List<SyncRequest> mergedRequests) {
         super(thingName, shadowName);
-        if (mergedRequests != null) {
-            this.mergedRequests = new ArrayList<>();
-            for (SyncRequest req : mergedRequests) {
-                if (req instanceof FullShadowSyncRequest) {
-                    this.mergedRequests.addAll(((FullShadowSyncRequest) req).getMergedRequests());
-                } else {
-                    this.mergedRequests.add(req);
-                }
-            }
-        }
+        this.mergedRequests = mergedRequests;
     }
 
     /**
