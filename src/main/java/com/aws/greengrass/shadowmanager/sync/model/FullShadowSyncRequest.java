@@ -59,10 +59,12 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
      *
      * @param thingName      thing name
      * @param shadowName     shadow name
+     * @param merger         merger
      * @param mergedRequests sync requests that are being merged
      * @return full sync request
      */
-    public static FullShadowSyncRequest fromMerge(String thingName, String shadowName, RequestMerger merger, SyncRequest... mergedRequests) {
+    public static FullShadowSyncRequest fromMerge(String thingName, String shadowName,
+                                                  RequestMerger merger, SyncRequest... mergedRequests) {
         if (mergedRequests == null || mergedRequests.length == 0) {
             return new FullShadowSyncRequest(thingName, shadowName);
         }
