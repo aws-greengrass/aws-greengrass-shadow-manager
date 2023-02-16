@@ -100,20 +100,6 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
         return true;
     }
 
-    private List<SyncRequest> getNecessaryMergedRequests(SyncContext context)
-            throws RetryableException, UnknownShadowException, SkipSyncRequestException {
-        if (mergedRequests == null) {
-            return null;
-        }
-        List<SyncRequest> necessaryUpdates = new ArrayList<>();
-        for (SyncRequest request : mergedRequests) {
-            if (request.isUpdateNecessary(context)) {
-                necessaryUpdates.add(request);
-            }
-        }
-        return necessaryUpdates;
-    }
-
     /**
      * Executes a full shadow sync.
      *
@@ -134,10 +120,10 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
                 // TODO log
                 return;
             }
-
             if (necessaryMergedUpdates.size() == 1) {
                 SyncRequest request = necessaryMergedUpdates.get(0);
                 if (request instanceof CloudUpdateSyncRequest || request instanceof LocalUpdateSyncRequest) {
+                    // TODO log
                     request.execute(context);
                     return;
                 }
@@ -265,6 +251,31 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
                 .kv(LOG_LOCAL_VERSION_KEY, localShadowDocument.get().getVersion())
                 .kv(LOG_CLOUD_VERSION_KEY, cloudShadowDocument.get().getVersion())
                 .log("Successfully performed full sync");
+    }
+
+    /**
+     * If this request was made as the result of merging, return
+     * a list of all the "sub-requests" that require execution,
+     * as deemed by {@link SyncRequest#isUpdateNecessary(SyncContext)}.
+     *
+     * @param context sync context
+     * @return sync requests
+     * @throws RetryableException       When error occurs in sync operation indicating a request needs to be retried
+     * @throws SkipSyncRequestException When error occurs in sync operation indicating a request needs to be skipped.
+     * @throws UnknownShadowException   When shadow not found in the sync table.
+     */
+    private List<SyncRequest> getNecessaryMergedRequests(SyncContext context)
+            throws RetryableException, UnknownShadowException, SkipSyncRequestException {
+        if (mergedRequests == null) {
+            return null;
+        }
+        List<SyncRequest> necessaryUpdates = new ArrayList<>();
+        for (SyncRequest request : mergedRequests) {
+            if (request.isUpdateNecessary(context)) {
+                necessaryUpdates.add(request);
+            }
+        }
+        return necessaryUpdates;
     }
 
     /**
