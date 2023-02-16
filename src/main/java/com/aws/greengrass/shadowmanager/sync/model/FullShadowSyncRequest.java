@@ -58,7 +58,10 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
         List<SyncRequest> requests = new ArrayList<>();
         for (SyncRequest req : mergedRequests) {
             if (req instanceof FullShadowSyncRequest) {
-                requests.addAll(((FullShadowSyncRequest) req).getMergedRequests());
+                FullShadowSyncRequest fullSyncReq = (FullShadowSyncRequest) req;
+                if (fullSyncReq.getMergedRequests() != null) {
+                    requests.addAll(fullSyncReq.getMergedRequests());
+                }
             } else {
                 requests.add(req);
             }
