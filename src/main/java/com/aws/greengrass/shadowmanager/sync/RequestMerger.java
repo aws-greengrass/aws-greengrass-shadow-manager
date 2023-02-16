@@ -127,7 +127,8 @@ public class RequestMerger {
                 logEvent.log("Creating full shadow sync request");
                 // Instead of a partial update, a full sync request will force a get of the latest local
                 // and remote shadows
-                return FullShadowSyncRequest.fromMerge(value.getThingName(), value.getShadowName(), value, otherValue);
+                return FullShadowSyncRequest.fromMerge(value.getThingName(), value.getShadowName(),
+                        this, value, otherValue);
         }
     }
 }
