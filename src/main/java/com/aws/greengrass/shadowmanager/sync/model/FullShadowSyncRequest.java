@@ -14,18 +14,14 @@ import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.ShadowState;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
-import com.aws.greengrass.shadowmanager.sync.RequestMerger;
 import com.aws.greengrass.shadowmanager.util.DataOwner;
 import com.aws.greengrass.shadowmanager.util.SyncNodeMerger;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import lombok.Getter;
 import lombok.NonNull;
 
 import java.io.IOException;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Optional;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_CLOUD_VERSION_KEY;
@@ -43,60 +39,13 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
     private static final Logger logger = LogManager.getLogger(FullShadowSyncRequest.class);
 
     /**
-     * If this full sync request is the product of merging other requests,
-     * in {@link com.aws.greengrass.shadowmanager.sync.RequestMerger},
-     * those merged requests will show up here.
-     */
-    @Getter
-    private final List<SyncRequest> mergedRequests;
-
-    private final RequestMerger requestMerger;
-
-    /**
-     * Create a full sync request as the result of a merge. This allows us to preserve the
-     * individual requests that were merged, to drive decisions in {@link FullShadowSyncRequest#execute(SyncContext)}
-     * if we indeed need a full sync.
-     *
-     * @param thingName      thing name
-     * @param shadowName     shadow name
-     * @param merger         merger
-     * @param mergedRequests sync requests that are being merged
-     * @return full sync request
-     */
-    public static FullShadowSyncRequest fromMerge(String thingName, String shadowName,
-                                                  RequestMerger merger, SyncRequest... mergedRequests) {
-        if (mergedRequests == null || mergedRequests.length == 0) {
-            return new FullShadowSyncRequest(thingName, shadowName);
-        }
-        List<SyncRequest> requests = new ArrayList<>();
-        for (SyncRequest req : mergedRequests) {
-            if (req instanceof FullShadowSyncRequest) {
-                FullShadowSyncRequest fullSyncReq = (FullShadowSyncRequest) req;
-                if (fullSyncReq.getMergedRequests() != null) {
-                    requests.addAll(fullSyncReq.getMergedRequests());
-                }
-            } else {
-                requests.add(req);
-            }
-        }
-        return new FullShadowSyncRequest(thingName, shadowName, requests, merger);
-    }
-
-    /**
      * Ctr for FullShadowSyncRequest.
      *
      * @param thingName  The thing name associated with the sync shadow update
      * @param shadowName The shadow name associated with the sync shadow update
      */
     public FullShadowSyncRequest(String thingName, String shadowName) {
-        this(thingName, shadowName, null, null);
-    }
-
-    private FullShadowSyncRequest(String thingName, String shadowName,
-                                  List<SyncRequest> mergedRequests, RequestMerger requestMerger) {
         super(thingName, shadowName);
-        this.mergedRequests = mergedRequests;
-        this.requestMerger = requestMerger;
     }
 
     /**
@@ -123,21 +72,6 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
     public void execute(SyncContext context) throws RetryableException, SkipSyncRequestException,
             InterruptedException, UnknownShadowException {
         super.setContext(context);
-
-        List<SyncRequest> necessaryMergedUpdates = getNecessaryMergedRequests(context);
-        if (necessaryMergedUpdates != null && requestMerger != null) {
-            if (necessaryMergedUpdates.isEmpty()) {
-                // TODO log
-                return;
-            }
-            if (necessaryMergedUpdates.stream().allMatch(r -> r instanceof CloudUpdateSyncRequest)
-                || necessaryMergedUpdates.stream().allMatch(r -> r instanceof LocalUpdateSyncRequest)) {
-                SyncRequest consolidatedUpdateRequest =
-                        necessaryMergedUpdates.stream().reduce(requestMerger::merge).get();
-                consolidatedUpdateRequest.execute(context);
-                return;
-            }
-        }
 
         SyncInformation syncInformation = getSyncInformation();
 
@@ -260,31 +194,6 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
                 .kv(LOG_LOCAL_VERSION_KEY, localShadowDocument.get().getVersion())
                 .kv(LOG_CLOUD_VERSION_KEY, cloudShadowDocument.get().getVersion())
                 .log("Successfully performed full sync");
-    }
-
-    /**
-     * If this request was made as the result of merging, return
-     * a list of all the "sub-requests" that require execution,
-     * as deemed by {@link SyncRequest#isUpdateNecessary(SyncContext)}.
-     *
-     * @param context sync context
-     * @return sync requests
-     * @throws RetryableException       When error occurs in sync operation indicating a request needs to be retried
-     * @throws SkipSyncRequestException When error occurs in sync operation indicating a request needs to be skipped.
-     * @throws UnknownShadowException   When shadow not found in the sync table.
-     */
-    private List<SyncRequest> getNecessaryMergedRequests(SyncContext context)
-            throws RetryableException, UnknownShadowException, SkipSyncRequestException {
-        if (mergedRequests == null) {
-            return null;
-        }
-        List<SyncRequest> necessaryUpdates = new ArrayList<>();
-        for (SyncRequest request : mergedRequests) {
-            if (request.isUpdateNecessary(context)) {
-                necessaryUpdates.add(request);
-            }
-        }
-        return necessaryUpdates;
     }
 
     /**

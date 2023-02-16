@@ -17,6 +17,7 @@ import com.aws.greengrass.shadowmanager.sync.model.DirectionWrapper;
 import com.aws.greengrass.shadowmanager.sync.model.FullShadowSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.LocalDeleteSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.LocalUpdateSyncRequest;
+import com.aws.greengrass.shadowmanager.sync.model.MergedFullShadowSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.OverwriteCloudShadowRequest;
 import com.aws.greengrass.shadowmanager.sync.model.OverwriteLocalShadowRequest;
 import com.aws.greengrass.shadowmanager.sync.model.SyncRequest;
@@ -127,7 +128,7 @@ public class RequestMerger {
                 logEvent.log("Creating full shadow sync request");
                 // Instead of a partial update, a full sync request will force a get of the latest local
                 // and remote shadows
-                return FullShadowSyncRequest.fromMerge(value.getThingName(), value.getShadowName(),
+                return new MergedFullShadowSyncRequest(value.getThingName(), value.getShadowName(),
                         this, value, otherValue);
         }
     }
