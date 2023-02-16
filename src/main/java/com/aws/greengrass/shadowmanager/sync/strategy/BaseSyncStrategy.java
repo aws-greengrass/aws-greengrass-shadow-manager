@@ -8,7 +8,6 @@ package com.aws.greengrass.shadowmanager.sync.strategy;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
-import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
 import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
 import com.aws.greengrass.shadowmanager.sync.Retryer;

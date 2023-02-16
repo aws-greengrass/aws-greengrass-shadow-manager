@@ -109,7 +109,8 @@ public class RequestMerger {
         return returnRequestBasedOnDirection(value, oldValue, logEvent);
     }
 
-    private BaseSyncRequest returnRequestBasedOnDirection(SyncRequest value, SyncRequest otherValue, LogEventBuilder logEvent) {
+    private BaseSyncRequest returnRequestBasedOnDirection(SyncRequest value, SyncRequest otherValue,
+                                                          LogEventBuilder logEvent) {
         switch (direction.get()) {
             case DEVICE_TO_CLOUD:
                 logEvent.log("Creating overwrite cloud shadow sync request");

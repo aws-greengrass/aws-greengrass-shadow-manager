@@ -42,6 +42,14 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
     private static final Logger logger = LogManager.getLogger(FullShadowSyncRequest.class);
 
     /**
+     * If this full sync request is the product of merging other requests,
+     * in {@link com.aws.greengrass.shadowmanager.sync.RequestMerger},
+     * those merged requests will show up here.
+     */
+    @Getter
+    private final List<SyncRequest> mergedRequests;
+
+    /**
      * Create a full sync request as the result of a merge. This allows us to preserve the
      * individual requests that were merged, to drive decisions in {@link FullShadowSyncRequest#execute(SyncContext)}
      * if we indeed need a full sync.
@@ -68,14 +76,6 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
         }
         return new FullShadowSyncRequest(thingName, shadowName, requests);
     }
-
-    /**
-     * If this full sync request is the product of merging other requests,
-     * in {@link com.aws.greengrass.shadowmanager.sync.RequestMerger},
-     * those merged requests will show up here.
-     */
-    @Getter
-    private final List<SyncRequest> mergedRequests;
 
     /**
      * Ctr for FullShadowSyncRequest.
