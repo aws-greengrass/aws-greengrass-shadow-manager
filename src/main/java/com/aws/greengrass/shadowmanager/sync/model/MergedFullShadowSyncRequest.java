@@ -129,16 +129,14 @@ public class MergedFullShadowSyncRequest extends FullShadowSyncRequest {
     private static List<SyncRequest> flatten(List<SyncRequest> mergedRequests) {
         return mergedRequests.stream()
                 .flatMap(r -> {
-                    if (r instanceof MergedFullShadowSyncRequest) {
-                        MergedFullShadowSyncRequest other = (MergedFullShadowSyncRequest) r;
-                        if (other.getMergedRequests() == null) {
-                            return Stream.empty();
-                        } else {
-                            return other.getMergedRequests().stream();
-                        }
-                    } else {
+                    if (!(r instanceof MergedFullShadowSyncRequest)) {
                         return Stream.of(r);
                     }
+                    MergedFullShadowSyncRequest other = (MergedFullShadowSyncRequest) r;
+                    if (other.getMergedRequests() == null) {
+                        return Stream.empty();
+                    }
+                    return other.getMergedRequests().stream();
                 })
                 .collect(Collectors.toList());
     }
