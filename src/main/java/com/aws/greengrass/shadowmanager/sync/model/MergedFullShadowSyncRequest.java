@@ -5,6 +5,8 @@
 
 package com.aws.greengrass.shadowmanager.sync.model;
 
+import com.aws.greengrass.logging.api.Logger;
+import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
@@ -18,6 +20,9 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
+
 /**
  * A {@link FullShadowSyncRequest} that was created by merging other {@link SyncRequest}s
  * together. This class keeps track of all such merged requests.
@@ -26,6 +31,8 @@ import java.util.stream.Stream;
  * and determine if a full sync is truly needed, based on {@link BaseSyncRequest#isUpdateNecessary(SyncContext)}.
  */
 public class MergedFullShadowSyncRequest extends FullShadowSyncRequest {
+
+    private static final Logger logger = LogManager.getLogger(MergedFullShadowSyncRequest.class);
 
     /**
      * List of individual {@link SyncRequest}s that were merged together to become a full sync request.
@@ -57,10 +64,22 @@ public class MergedFullShadowSyncRequest extends FullShadowSyncRequest {
         super.setContext(context);
 
         List<SyncRequest> necessaryMergedUpdates = getNecessaryMergedRequests(context);
-        if (!necessaryMergedUpdates.isEmpty()
-                && (necessaryMergedUpdates.stream().allMatch(r -> r instanceof CloudUpdateSyncRequest)
-                || necessaryMergedUpdates.stream().allMatch(r -> r instanceof LocalUpdateSyncRequest))) {
+        if (necessaryMergedUpdates.isEmpty()) {
+            logger.atDebug()
+                    .kv(LOG_THING_NAME_KEY, getThingName())
+                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                    .log("Ignoring unnecessary sync request");
+            return;
+        }
+
+        if (necessaryMergedUpdates.stream().allMatch(r -> r instanceof CloudUpdateSyncRequest)
+                || necessaryMergedUpdates.stream().allMatch(r -> r instanceof LocalUpdateSyncRequest)) {
             SyncRequest consolidatedUpdateRequest = necessaryMergedUpdates.stream().reduce(merger::merge).get();
+            logger.atDebug()
+                    .kv(LOG_THING_NAME_KEY, getThingName())
+                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                    .log("Full sync not needed, executing a "
+                            + consolidatedUpdateRequest.getClass().getSimpleName() + " instead");
             consolidatedUpdateRequest.execute(context);
             return;
         }
