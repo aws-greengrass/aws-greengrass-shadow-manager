@@ -187,7 +187,7 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
      * @throws SkipSyncRequestException if unable to deserialize cloud shadow update payload,
      */
     @Override
-    public boolean isUpdateNecessary(SyncContext context) throws SkipSyncRequestException, UnknownShadowException {
+    boolean isUpdateNecessary(SyncContext context) throws SkipSyncRequestException, UnknownShadowException {
         //TODO: store this information in a return object to avoid unnecessary calls to DAO.
         ShadowDocument shadowDocument;
         try {

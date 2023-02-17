@@ -177,7 +177,7 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
      * @throws UnknownShadowException   if the shadow sync information is missing
      */
     @Override
-    public boolean isUpdateNecessary(SyncContext context) throws SkipSyncRequestException, UnknownShadowException {
+    boolean isUpdateNecessary(SyncContext context) throws SkipSyncRequestException, UnknownShadowException {
         Optional<ShadowDocument> shadowDocument = context.getDao().getShadowThing(getThingName(), getShadowName());
 
         //TODO: store this information in a return object to avoid unnecessary calls to DAO.

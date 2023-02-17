@@ -45,7 +45,6 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
@@ -79,7 +78,6 @@ public abstract class SyncStrategyTestBase<T extends BaseSyncStrategy, S extends
         mockSyncContext = mock(SyncContext.class);
         mockRetryer = mock(Retryer.class);
         mockFullShadowSyncRequest = mock(FullShadowSyncRequest.class);
-        lenient().when(mockFullShadowSyncRequest.isUpdateNecessary(any())).thenReturn(true);
         strategy = defaultTestInstance();
     }
 

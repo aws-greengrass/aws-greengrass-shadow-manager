@@ -23,7 +23,7 @@ import java.util.stream.Stream;
  * together. This class keeps track of all such merged requests.
  *
  * <p>When this sync request is executed, it will look through the merged requests
- * and determine if a full sync is truly needed, based on {@link SyncRequest#isUpdateNecessary(SyncContext)}.
+ * and determine if a full sync is truly needed, based on {@link BaseSyncRequest#isUpdateNecessary(SyncContext)}.
  */
 public class MergedFullShadowSyncRequest extends FullShadowSyncRequest {
 
@@ -70,7 +70,7 @@ public class MergedFullShadowSyncRequest extends FullShadowSyncRequest {
 
     /**
      * Create a list of all the merged requests that require execution,
-     * as deemed by {@link SyncRequest#isUpdateNecessary(SyncContext)}.
+     * as deemed by {@link BaseSyncRequest#isUpdateNecessary(SyncContext)}.
      *
      * @param context sync context
      * @return sync requests
@@ -82,7 +82,10 @@ public class MergedFullShadowSyncRequest extends FullShadowSyncRequest {
             throws RetryableException, UnknownShadowException, SkipSyncRequestException {
         List<SyncRequest> necessaryUpdates = new ArrayList<>();
         for (SyncRequest request : mergedRequests) {
-            if (request.isUpdateNecessary(context)) {
+            if (!(request instanceof BaseSyncRequest)) {
+                continue;
+            }
+            if (((BaseSyncRequest) request).isUpdateNecessary(context)) {
                 necessaryUpdates.add(request);
             }
         }

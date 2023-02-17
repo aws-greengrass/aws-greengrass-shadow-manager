@@ -30,15 +30,4 @@ public interface SyncRequest {
     void execute(SyncContext context) throws RetryableException, SkipSyncRequestException,
             UnknownShadowException, InterruptedException;
 
-    /**
-     * Check if an update is necessary or not.
-     *
-     * @param context context object containing useful objects for requests to use when executing.
-     * @return true if an update is necessary; Else false.
-     * @throws RetryableException       When error occurs in sync operation indicating a request needs to be retried
-     * @throws SkipSyncRequestException When error occurs in sync operation indicating a request needs to be skipped.
-     * @throws UnknownShadowException   When shadow not found in the sync table.
-     */
-    boolean isUpdateNecessary(SyncContext context) throws RetryableException, SkipSyncRequestException,
-            UnknownShadowException;
 }

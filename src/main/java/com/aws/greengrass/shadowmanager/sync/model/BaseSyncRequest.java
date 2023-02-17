@@ -14,6 +14,7 @@ import com.aws.greengrass.shadowmanager.exception.IoTDataPlaneClientCreationExce
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
+import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.ShadowRequest;
 import com.aws.greengrass.shadowmanager.model.UpdateThingShadowHandlerResponse;
@@ -76,13 +77,25 @@ public abstract class BaseSyncRequest extends ShadowRequest implements SyncReque
     }
 
     /**
+     * Check if this request is necessary or not.
+     *
+     * @param context context object containing useful objects for requests to use when executing.
+     * @return true if an update is necessary; Else false.
+     * @throws RetryableException       When error occurs in sync operation indicating a request needs to be retried
+     * @throws SkipSyncRequestException When error occurs in sync operation indicating a request needs to be skipped.
+     * @throws UnknownShadowException   When shadow not found in the sync table.
+     */
+    abstract boolean isUpdateNecessary(SyncContext context) throws RetryableException, SkipSyncRequestException,
+            UnknownShadowException;
+
+    /**
      * Answer whether the update is already part of the shadow.
      *
      * @param baseDocument the shadow to compare against
      * @param update       the partial update to check
      * @return true if an update to the shadow is needed, otherwise false
      */
-    protected boolean isUpdateNecessary(JsonNode baseDocument, JsonNode update) {
+    boolean isUpdateNecessary(JsonNode baseDocument, JsonNode update) {
         JsonNode merged = baseDocument.deepCopy();
         JsonMerger.merge(merged.get(SHADOW_DOCUMENT_STATE), update.get(SHADOW_DOCUMENT_STATE));
         return !baseDocument.equals(merged);
@@ -96,7 +109,7 @@ public abstract class BaseSyncRequest extends ShadowRequest implements SyncReque
      * @return true if an update to the shadow is needed, otherwise false
      * @throws SkipSyncRequestException if an error occurs parsing the shadow documents
      */
-    protected boolean isUpdateNecessary(byte[] baseDocument, JsonNode update) throws SkipSyncRequestException {
+    boolean isUpdateNecessary(byte[] baseDocument, JsonNode update) throws SkipSyncRequestException {
         // if the base document is empty, then we need to update
         Optional<JsonNode> existing;
         try {

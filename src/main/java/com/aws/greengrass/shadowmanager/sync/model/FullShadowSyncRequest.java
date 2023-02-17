@@ -55,7 +55,7 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
      * @return true.
      */
     @Override
-    public boolean isUpdateNecessary(SyncContext context) {
+    boolean isUpdateNecessary(SyncContext context) {
         return true;
     }
 
