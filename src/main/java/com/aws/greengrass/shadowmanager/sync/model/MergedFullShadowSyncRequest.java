@@ -78,19 +78,21 @@ public class MergedFullShadowSyncRequest extends FullShadowSyncRequest {
             return;
         }
 
-        if (necessaryMergedUpdates.stream().allMatch(r -> r instanceof CloudUpdateSyncRequest)
-                || necessaryMergedUpdates.stream().allMatch(r -> r instanceof LocalUpdateSyncRequest)) {
-            SyncRequest consolidatedUpdateRequest = necessaryMergedUpdates.stream().reduce(merger::merge).get();
-            logger.atDebug()
-                    .kv(LOG_THING_NAME_KEY, getThingName())
-                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
-                    .log("Full sync not needed, executing a "
-                            + consolidatedUpdateRequest.getClass().getSimpleName() + " instead");
-            consolidatedUpdateRequest.execute(context);
+        SyncRequest mergedRequest = necessaryMergedUpdates.stream().reduce(merger::merge).get();
+        if (mergedRequest instanceof FullShadowSyncRequest) {
+            // mergedRequest could be a MergedFullShadowSyncRequest,
+            // explicitly call execute on superclass rather than on
+            // mergedRequest to prevent an infinite loop
+            super.execute(context);
             return;
         }
 
-        super.execute(context);
+        logger.atDebug()
+                .kv(LOG_THING_NAME_KEY, getThingName())
+                .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                .log("Full sync not needed, executing a "
+                        + mergedRequest.getClass().getSimpleName() + " instead");
+        mergedRequest.execute(context);
     }
 
     /**
