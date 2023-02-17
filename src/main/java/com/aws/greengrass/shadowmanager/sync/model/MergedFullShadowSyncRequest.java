@@ -63,6 +63,12 @@ public class MergedFullShadowSyncRequest extends FullShadowSyncRequest {
             throws RetryableException, SkipSyncRequestException, InterruptedException, UnknownShadowException {
         super.setContext(context);
 
+        if (getMergedRequests().stream().anyMatch(r -> r.getClass().equals(FullShadowSyncRequest.class))) {
+            // If a full sync has been directly requested, not due to merging of requests, respect it.
+            super.execute(context);
+            return;
+        }
+
         List<SyncRequest> necessaryMergedUpdates = getNecessaryMergedRequests(context);
         if (necessaryMergedUpdates.isEmpty()) {
             logger.atDebug()
