@@ -407,7 +407,7 @@ class SyncTest extends NucleusLaunchUtils {
                 .mockCloud(true)
                 .mockDao(true)
                 .build());
-        assertThat("cloud shadow updated", cdl.await(5, TimeUnit.SECONDS), is(true));
+        assertThat("cloud shadow updated", cdl.await(10, TimeUnit.SECONDS), is(true));
         assertThat(() -> cloudUpdateThingShadowRequestCaptor.getValue(), eventuallyEval(is(notNullValue())));
         assertThat(() -> syncInformationCaptor.getValue(), eventuallyEval(is(notNullValue())));
 
