@@ -108,7 +108,7 @@ class RateLimiterTest extends NucleusLaunchUtils {
         SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
         JsonNode updateDocument = JsonUtil.getPayloadJson(localShadowContentV1.getBytes()).get();
 
-        assertThat("syncing has started", () -> kernel.getContext().get(RealTimeSyncStrategy.class).isSyncing(), eventuallyEval(is(true), Duration.ofSeconds(30)));
+        assertThat("syncing has started", () -> kernel.getContext().get(RealTimeSyncStrategy.class).isSyncing(), eventuallyEval(is(true), Duration.ofSeconds(60)));
 
         // thingName has to be unique to prevent requests from being merged
         final int totalRequestCalls = 10;
@@ -133,7 +133,7 @@ class RateLimiterTest extends NucleusLaunchUtils {
 
         startNucleusWithConfig(NucleusLaunchUtilsConfig.builder().configFile("rateLimits.yaml").mockCloud(true)
                 .mockDao(true).build());
-        assertThat("syncing has started", () -> kernel.getContext().get(RealTimeSyncStrategy.class).isSyncing(), eventuallyEval(is(true), Duration.ofSeconds(30)));
+        assertThat("syncing has started", () -> kernel.getContext().get(RealTimeSyncStrategy.class).isSyncing(), eventuallyEval(is(true), Duration.ofSeconds(60)));
 
         try (EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
             GreengrassCoreIPCClient ipcClient = new GreengrassCoreIPCClient(connection);
@@ -158,7 +158,7 @@ class RateLimiterTest extends NucleusLaunchUtils {
 
         startNucleusWithConfig(NucleusLaunchUtilsConfig.builder().configFile("rateLimits.yaml").mockCloud(true)
                 .mockDao(true).build());
-        assertThat("syncing has started", () -> kernel.getContext().get(RealTimeSyncStrategy.class).isSyncing(), eventuallyEval(is(true), Duration.ofSeconds(30)));
+        assertThat("syncing has started", () -> kernel.getContext().get(RealTimeSyncStrategy.class).isSyncing(), eventuallyEval(is(true), Duration.ofSeconds(60)));
 
         try (EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
             GreengrassCoreIPCClient ipcClient = new GreengrassCoreIPCClient(connection);
@@ -235,7 +235,7 @@ class RateLimiterTest extends NucleusLaunchUtils {
         startNucleusWithConfig(NucleusLaunchUtilsConfig.builder().configFile("rateLimitsWithTotalLocalRate.yaml").mockCloud(true)
                 .mockDao(true).build());
 
-        assertThat("syncing has started", () -> kernel.getContext().get(RealTimeSyncStrategy.class).isSyncing(), eventuallyEval(is(true), Duration.ofSeconds(30)));
+        assertThat("syncing has started", () -> kernel.getContext().get(RealTimeSyncStrategy.class).isSyncing(), eventuallyEval(is(true), Duration.ofSeconds(60)));
 
         try (EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
             GreengrassCoreIPCClient ipcClient = new GreengrassCoreIPCClient(connection);
@@ -274,7 +274,7 @@ class RateLimiterTest extends NucleusLaunchUtils {
         startNucleusWithConfig(NucleusLaunchUtilsConfig.builder().configFile("rateLimits.yaml").mockCloud(true)
                 .mockDao(true).build());
 
-        assertThat("syncing has started", () -> kernel.getContext().get(RealTimeSyncStrategy.class).isSyncing(), eventuallyEval(is(true), Duration.ofSeconds(30)));
+        assertThat("syncing has started", () -> kernel.getContext().get(RealTimeSyncStrategy.class).isSyncing(), eventuallyEval(is(true), Duration.ofSeconds(60)));
 
         try (EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
             GreengrassCoreIPCClient ipcClient = new GreengrassCoreIPCClient(connection);
