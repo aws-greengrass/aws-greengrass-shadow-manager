@@ -1046,14 +1046,6 @@ class SyncTest extends NucleusLaunchUtils {
         CountDownLatch outOfOrderRequestsHaveBeenQueued = new CountDownLatch(1);
 
         when(iotDataPlaneClientFactory.getIotDataPlaneClient().updateThingShadow(cloudUpdateThingShadowRequestCaptor.capture()))
-                // initial full sync
-                .thenReturn(mockUpdateThingShadowResponse)
-                // block the first cloud update to ensure the remaining two updates
-                // are merged when they are received.
-                .thenAnswer(invocationOnMock -> {
-                    assertTrue(outOfOrderRequestsHaveBeenQueued.await(5000L, TimeUnit.SECONDS));
-                    return mockUpdateThingShadowResponse;
-                })
                 .thenReturn(mockUpdateThingShadowResponse);
 
         // setup initial cloud state
@@ -1074,7 +1066,8 @@ class SyncTest extends NucleusLaunchUtils {
                 .mockCloud(true)
                 .build());
 
-        // verify sync info is empty
+        // verify initial full sync
+        assertThatSyncQueue(clazz, q -> q.peek() instanceof CloudUpdateSyncRequest);
         assertEmptySyncQueue(clazz);
         assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
         assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(1L)));
@@ -1082,25 +1075,34 @@ class SyncTest extends NucleusLaunchUtils {
 
         SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
 
-        when(iotDataPlaneClientFactory.getIotDataPlaneClient().getThingShadow(any(GetThingShadowRequest.class))).thenReturn(finalCloudStateShadowResponse);
-
-        // receive cloud update 1 of 3
+        // block cloud update 1 of 3 to ensure the remaining two updates
+        // are merged when they are received.
+        lenient().when(iotDataPlaneClientFactory.getIotDataPlaneClient().updateThingShadow(cloudUpdateThingShadowRequestCaptor.capture()))
+                .thenReturn(mockUpdateThingShadowResponse)
+                .thenAnswer(invocationOnMock -> {
+                    assertTrue(outOfOrderRequestsHaveBeenQueued.await(5000L, TimeUnit.SECONDS));
+                    return mockUpdateThingShadowResponse;
+                })
+                .thenReturn(mockUpdateThingShadowResponse);
         syncHandler.pushLocalUpdateSyncRequest(MOCK_THING_NAME_1, CLASSIC_SHADOW, JsonUtil.getPayloadBytes(cloudUpdateDocument));
+        assertThatSyncQueue(clazz, q -> q.peek() instanceof CloudUpdateSyncRequest);
+        assertEmptySyncQueue(clazz);
+
+        // cloud state to return on full sync when version conflict is detected below
+        when(iotDataPlaneClientFactory.getIotDataPlaneClient().getThingShadow(any(GetThingShadowRequest.class)))
+                .thenReturn(finalCloudStateShadowResponse);
+
         // receive cloud update 3 of 3 (out of order)
         syncHandler.pushLocalUpdateSyncRequest(MOCK_THING_NAME_1, CLASSIC_SHADOW, JsonUtil.getPayloadBytes(cloudUpdateDocument3));
         // receive cloud update 2 of 3 (out of order)
         syncHandler.pushLocalUpdateSyncRequest(MOCK_THING_NAME_1, CLASSIC_SHADOW, JsonUtil.getPayloadBytes(cloudUpdateDocument2));
         outOfOrderRequestsHaveBeenQueued.countDown();
 
-        assertEmptySyncQueue(clazz);
+        assertLocalShadowEquals(expectedLocalShadowState);
 
         assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
         assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(4L)));
-        long expectedLocalVersion = clazz.equals(PeriodicSyncStrategy.class)
-                ? 2L  // 1) initial full sync, 2) merged cloud update (1 & 3 & 2)
-                : 3L; // 1) initial full sync, 2) cloud update 1, 3) merged cloud update (3 & 2)
-        assertThat("local version", () -> syncInfo.get().get().getLocalVersion(), eventuallyEval(is(expectedLocalVersion)));
-        assertLocalShadowEquals(expectedLocalShadowState);
+        assertThat("local version", () -> syncInfo.get().get().getLocalVersion(), eventuallyEval(is(3L)));
     }
 
     @ParameterizedTest
