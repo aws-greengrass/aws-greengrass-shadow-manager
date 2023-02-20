@@ -35,6 +35,7 @@ import software.amazon.awssdk.services.iotdataplane.model.ResourceNotFoundExcept
 import software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowResponse;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -131,6 +132,7 @@ class RateLimiterTest extends NucleusLaunchUtils {
         when(dao.getShadowThing(anyString(), any())).thenReturn(Optional.of(new ShadowDocument(localShadowContentV1.getBytes())));
 
         startNucleusWithConfig("rateLimits.yaml", true, true);
+        assertThat("syncing has started", () -> kernel.getContext().get(RealTimeSyncStrategy.class).isSyncing(), eventuallyEval(is(true)));
 
         try (EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
             GreengrassCoreIPCClient ipcClient = new GreengrassCoreIPCClient(connection);
@@ -154,6 +156,7 @@ class RateLimiterTest extends NucleusLaunchUtils {
         when(dao.getShadowThing(anyString(), any())).thenReturn(Optional.of(new ShadowDocument(localShadowContentV1.getBytes())));
 
         startNucleusWithConfig("rateLimits.yaml", true, true);
+        assertThat("syncing has started", () -> kernel.getContext().get(RealTimeSyncStrategy.class).isSyncing(), eventuallyEval(is(true)));
 
         try (EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
             GreengrassCoreIPCClient ipcClient = new GreengrassCoreIPCClient(connection);
@@ -184,7 +187,7 @@ class RateLimiterTest extends NucleusLaunchUtils {
         startNucleusWithConfig(NucleusLaunchUtilsConfig.builder().configFile("rateLimits.yaml").mockCloud(true)
                 .mockDao(true).build());
 
-        assertThat("syncing has started", () -> kernel.getContext().get(RealTimeSyncStrategy.class).isSyncing(), eventuallyEval(is(true)));
+        assertThat("syncing has started", () -> kernel.getContext().get(RealTimeSyncStrategy.class).isSyncing(), eventuallyEval(is(true), Duration.ofSeconds(15L)));
 
         try (EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
             GreengrassCoreIPCClient ipcClient = new GreengrassCoreIPCClient(connection);
@@ -223,10 +226,14 @@ class RateLimiterTest extends NucleusLaunchUtils {
     @Test
     void GIVEN_max_inbound_shadow_request_rate_exceeded_WHEN_requests_processed_THEN_any_request_throttled(ExtensionContext context) throws Exception {
         ignoreExceptionOfType(context, ThrottledRequestException.class);
+        ignoreExceptionOfType(context, InterruptedException.class);
 
         when(dao.getShadowThing(anyString(), any())).thenReturn(Optional.of(new ShadowDocument(localShadowContentV1.getBytes())));
 
-        startNucleusWithConfig("rateLimitsWithTotalLocalRate.yaml", true, true);
+        startNucleusWithConfig(NucleusLaunchUtilsConfig.builder().configFile("rateLimitsWithTotalLocalRate.yaml").mockCloud(true)
+                .mockDao(true).build());
+
+        assertThat("syncing has started", () -> kernel.getContext().get(RealTimeSyncStrategy.class).isSyncing(), eventuallyEval(is(true)));
 
         try (EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
             GreengrassCoreIPCClient ipcClient = new GreengrassCoreIPCClient(connection);
@@ -263,6 +270,8 @@ class RateLimiterTest extends NucleusLaunchUtils {
 
         startNucleusWithConfig(NucleusLaunchUtilsConfig.builder().configFile("rateLimits.yaml").mockCloud(true)
                 .mockDao(true).build());
+
+        assertThat("syncing has started", () -> kernel.getContext().get(RealTimeSyncStrategy.class).isSyncing(), eventuallyEval(is(true)));
 
         try (EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
             GreengrassCoreIPCClient ipcClient = new GreengrassCoreIPCClient(connection);
