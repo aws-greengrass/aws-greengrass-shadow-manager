@@ -568,6 +568,8 @@ class SyncTest extends NucleusLaunchUtils {
                 .syncClazz(clazz)
                 .mockCloud(true)
                 .build());
+        // wait for initial full sync to complete
+        verify(syncQueue, timeout(5000).atLeast(1)).put(any(FullShadowSyncRequest.class));
         assertEmptySyncQueue(clazz);
 
         UpdateThingShadowRequestHandler updateHandler = shadowManager.getUpdateThingShadowRequestHandler();
