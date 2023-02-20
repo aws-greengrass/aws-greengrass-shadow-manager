@@ -687,6 +687,8 @@ class SyncTest extends NucleusLaunchUtils {
                 .mockCloud(true)
                 .build());
 
+        // verify initial full sync
+        verify(syncQueue, timeout(5000).atLeast(1)).put(any(FullShadowSyncRequest.class));
         assertEmptySyncQueue(clazz);
 
         assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
