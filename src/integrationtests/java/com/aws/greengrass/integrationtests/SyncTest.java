@@ -18,8 +18,11 @@ import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
+import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
+import com.aws.greengrass.shadowmanager.sync.RequestMerger;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
 import com.aws.greengrass.shadowmanager.sync.model.CloudUpdateSyncRequest;
+import com.aws.greengrass.shadowmanager.sync.model.DirectionWrapper;
 import com.aws.greengrass.shadowmanager.sync.model.FullShadowSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.strategy.BaseSyncStrategy;
 import com.aws.greengrass.shadowmanager.sync.strategy.PeriodicSyncStrategy;
@@ -94,6 +97,8 @@ import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -129,6 +134,8 @@ class SyncTest extends NucleusLaunchUtils {
     @Mock
     UpdateThingShadowResponse mockUpdateThingShadowResponse;
 
+    RequestBlockingQueue syncQueue;
+
     @Captor
     private ArgumentCaptor<SyncInformation> syncInformationCaptor;
     @Captor
@@ -144,6 +151,8 @@ class SyncTest extends NucleusLaunchUtils {
         // Set this property for kernel to scan its own classpath to find plugins
         System.setProperty("aws.greengrass.scanSelfClasspath", "true");
         kernel = new Kernel();
+        syncQueue = spy(new RequestBlockingQueue(new RequestMerger(new DirectionWrapper())));
+        kernel.getContext().put(RequestBlockingQueue.class, syncQueue);
         syncInfo = () -> kernel.getContext().get(ShadowManagerDAOImpl.class).getShadowSyncInformation(MOCK_THING_NAME_1,
                 CLASSIC_SHADOW);
         localShadow = () -> kernel.getContext().get(ShadowManagerDAOImpl.class).getShadowThing(MOCK_THING_NAME_1,
@@ -625,7 +634,7 @@ class SyncTest extends NucleusLaunchUtils {
                 .build());
 
         // wait for initial full sync to complete
-        assertThatSyncQueue(clazz, q -> q.peek() instanceof FullShadowSyncRequest);
+        verify(syncQueue, timeout(5000).atLeast(1)).put(any(FullShadowSyncRequest.class));
         assertEmptySyncQueue(clazz);
 
         assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
@@ -1067,7 +1076,7 @@ class SyncTest extends NucleusLaunchUtils {
                 .build());
 
         // verify initial full sync
-        assertThatSyncQueue(clazz, q -> q.peek() instanceof CloudUpdateSyncRequest);
+        verify(syncQueue, timeout(5000).atLeast(1)).put(any(CloudUpdateSyncRequest.class));
         assertEmptySyncQueue(clazz);
         assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
         assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(1L)));
@@ -1085,7 +1094,7 @@ class SyncTest extends NucleusLaunchUtils {
                 })
                 .thenReturn(mockUpdateThingShadowResponse);
         syncHandler.pushLocalUpdateSyncRequest(MOCK_THING_NAME_1, CLASSIC_SHADOW, JsonUtil.getPayloadBytes(cloudUpdateDocument));
-        assertThatSyncQueue(clazz, q -> q.peek() instanceof CloudUpdateSyncRequest);
+        verify(syncQueue, timeout(5000).atLeast(1)).put(any(CloudUpdateSyncRequest.class));
         assertEmptySyncQueue(clazz);
 
         // cloud state to return on full sync when version conflict is detected below
@@ -1220,7 +1229,7 @@ class SyncTest extends NucleusLaunchUtils {
                 .build());
 
         // wait for initial full sync to complete
-        assertThatSyncQueue(clazz, q -> q.peek() instanceof CloudUpdateSyncRequest);
+        verify(syncQueue, timeout(5000).atLeast(1)).put(any(CloudUpdateSyncRequest.class));
         assertEmptySyncQueue(clazz);
 
         UpdateThingShadowRequestHandler updateHandler = shadowManager.getUpdateThingShadowRequestHandler();
@@ -1246,7 +1255,7 @@ class SyncTest extends NucleusLaunchUtils {
         syncHandler.pushLocalUpdateSyncRequest(MOCK_THING_NAME_1, CLASSIC_SHADOW, JsonUtil.getPayloadBytes(cloudUpdateDocument));
 
         // make sure that the requests merge as expected
-        assertThatSyncQueue(clazz, q -> q.size() == 1 && q.peek() instanceof FullShadowSyncRequest);
+        verify(syncQueue, timeout(5000).atLeast(1)).put(any(FullShadowSyncRequest.class));
         bidirectionalRequestsHaveBeenQueued.countDown();
 
         // full sync has been popped off the queue
@@ -1309,7 +1318,7 @@ class SyncTest extends NucleusLaunchUtils {
                 .build());
 
         // wait for initial full sync to complete
-        assertThatSyncQueue(clazz, q -> q.peek() instanceof CloudUpdateSyncRequest);
+        verify(syncQueue, timeout(5000).atLeast(1)).put(any(CloudUpdateSyncRequest.class));
         assertEmptySyncQueue(clazz);
 
         UpdateThingShadowRequestHandler updateHandler = shadowManager.getUpdateThingShadowRequestHandler();
@@ -1335,7 +1344,7 @@ class SyncTest extends NucleusLaunchUtils {
         syncHandler.pushLocalUpdateSyncRequest(MOCK_THING_NAME_1, CLASSIC_SHADOW, JsonUtil.getPayloadBytes(cloudUpdateDocument));
 
         // make sure that the requests merge as expected
-        assertThatSyncQueue(clazz, q -> q.size() == 1 && q.peek() instanceof FullShadowSyncRequest);
+        verify(syncQueue, timeout(5000).atLeast(1)).put(any(FullShadowSyncRequest.class));
         bidirectionalRequestsHaveBeenQueued.countDown();
 
         // full sync has been popped off the queue

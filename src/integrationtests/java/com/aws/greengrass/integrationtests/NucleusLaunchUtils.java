@@ -189,14 +189,4 @@ public class NucleusLaunchUtils extends GGServiceTestUtil {
         assertThat("sync queue is eventually empty", () -> q.isEmpty() && !s.isExecuting(),
                 eventuallyEval(is(true), Duration.ofSeconds(10)));
     }
-
-    protected void assertThatSyncQueue(Class<? extends BaseSyncStrategy> clazz, Predicate<RequestBlockingQueue> condition) {
-        BaseSyncStrategy s = kernel.getContext().get(clazz);
-        assertThat("syncing has started", s::isSyncing, eventuallyEval(is(true)));
-        RequestBlockingQueue q = s.getSyncQueue();
-
-        assertThat("sync queue meets condition",
-                () -> condition.test(q),
-                eventuallyEval(is(true), Duration.ofSeconds(10)));
-    }
 }
