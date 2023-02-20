@@ -327,6 +327,10 @@ class ShadowManagerTest extends NucleusLaunchUtils {
                 .mqttConnected(true)
                 .mockCloud(false)
                 .build());
+
+        // wait for retry policy in IotDataPlaneClientFactory#waitForCryptoKeyServiceProvider to fail
+        TimeUnit.SECONDS.sleep(15L);
+
         BaseSyncStrategy syncStrategy = kernel.getContext().get(RealTimeSyncStrategy.class);
         assertThat("syncing has started", syncStrategy::isSyncing, eventuallyEval(is(true)));
         verify(wrapper, timeout(5000).atLeast(1)).getThingShadow("Thing1", "");
@@ -339,7 +343,7 @@ class ShadowManagerTest extends NucleusLaunchUtils {
             cdl.countDown();
             return new KeyManager[0];
         });
-        assertThat("request is retried with a new client", cdl.await(10, TimeUnit.SECONDS), is(true));
+        assertThat("request is retried with a new client", cdl.await(15L, TimeUnit.SECONDS), is(true));
         verify(wrapper, timeout(5000).atLeast(2)).getThingShadow("Thing1", "");
         // Once the request is processed, the sync queue should be empty.
         assertEmptySyncQueue(RealTimeSyncStrategy.class);
