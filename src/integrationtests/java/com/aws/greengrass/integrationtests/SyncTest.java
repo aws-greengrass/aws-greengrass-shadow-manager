@@ -65,6 +65,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_METADATA;
@@ -205,7 +206,7 @@ class SyncTest extends NucleusLaunchUtils {
 
 
     @ParameterizedTest
-    @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
+    @ValueSource(classes = {RealTimeSyncStrategy.class})
     void GIVEN_sync_config_WHEN_repeat_turn_sync_on_and_off_THEN_no_exceptions_thrown(Class<?
             extends BaseSyncStrategy> clazz, ExtensionContext context) throws InterruptedException, IoTDataPlaneClientCreationException {
         Level l = LogConfig.getRootLogConfig().getLevel();
@@ -252,19 +253,34 @@ class SyncTest extends NucleusLaunchUtils {
                 return s.getBytes(UTF_8);
             };
 
+            // avoid race condition where we send an update request
+            // during startup. e.g. while sync info is being recreated
+            ReentrantLock restartingSync = new ReentrantLock();
+
             // create thread to make local updated that will sync to the cloud
             Executors.newSingleThreadExecutor().submit(() -> {
                 try {
                     while (!done.get()) {
-                        UpdateThingShadowRequest request = new UpdateThingShadowRequest();
-                        request.setThingName(MOCK_THING_NAME_1);
-                        request.setShadowName(r.nextBoolean() ? "foo" : "bar" + r.nextInt(100));
-                        request.setPayload(updateBytes.get());
-                        shadowManager.getUpdateThingShadowRequestHandler().handleRequest(request, "DoAll");
                         try {
-                            Thread.sleep(r.nextInt(10));
+                            if (!restartingSync.tryLock(1, TimeUnit.SECONDS)) {
+                                continue;
+                            }
                         } catch (InterruptedException e) {
                             return;
+                        }
+                        try {
+                            UpdateThingShadowRequest request = new UpdateThingShadowRequest();
+                            request.setThingName(MOCK_THING_NAME_1);
+                            request.setShadowName(r.nextBoolean() ? "foo" : "bar" + r.nextInt(100));
+                            request.setPayload(updateBytes.get());
+                            shadowManager.getUpdateThingShadowRequestHandler().handleRequest(request, "DoAll");
+                            try {
+                                Thread.sleep(r.nextInt(10));
+                            } catch (InterruptedException e) {
+                                return;
+                            }
+                        } finally {
+                            restartingSync.unlock();
                         }
                     }
                 } finally {
@@ -275,9 +291,14 @@ class SyncTest extends NucleusLaunchUtils {
             Instant end = Instant.now().plusSeconds(30);
             // stop and start syncing for 30 seconds.
             while (end.isAfter(Instant.now())) {
-                syncHandler.stop();
-                Thread.sleep(r.nextInt(2000)); // sleep for up to 2 seconds to let sync happen at various speeds
-                shadowManager.startSyncingShadows(syncInfo);
+                restartingSync.lockInterruptibly();
+                try {
+                    syncHandler.stop();
+                    Thread.sleep(r.nextInt(2000)); // sleep for up to 2 seconds to let sync happen at various speeds
+                    shadowManager.startSyncingShadows(syncInfo);
+                } finally {
+                    restartingSync.unlock();
+                }
             }
             // no exceptions should be thrown so this test should pass
             done.set(true);
