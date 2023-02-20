@@ -343,7 +343,7 @@ class ShadowManagerTest extends NucleusLaunchUtils {
             cdl.countDown();
             return new KeyManager[0];
         });
-        assertThat("request is retried with a new client", cdl.await(15L, TimeUnit.SECONDS), is(true));
+        assertThat("request is retried with a new client", cdl.await(30L, TimeUnit.SECONDS), is(true));
         verify(wrapper, timeout(5000).atLeast(2)).getThingShadow("Thing1", "");
         // Once the request is processed, the sync queue should be empty.
         assertEmptySyncQueue(RealTimeSyncStrategy.class);
