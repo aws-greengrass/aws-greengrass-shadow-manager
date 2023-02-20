@@ -13,6 +13,7 @@ import com.aws.greengrass.shadowmanager.exception.ThrottledRequestException;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
+import com.aws.greengrass.shadowmanager.sync.strategy.RealTimeSyncStrategy;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -34,6 +35,7 @@ import software.amazon.awssdk.services.iotdataplane.model.ResourceNotFoundExcept
 import software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowResponse;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -41,10 +43,12 @@ import java.util.concurrent.TimeUnit;
 import static com.aws.greengrass.shadowmanager.TestUtils.THING_NAME;
 import static com.aws.greengrass.shadowmanager.model.Constants.CLASSIC_SHADOW_IDENTIFIER;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
+import static com.github.grantwest.eventually.EventuallyLambdaMatcher.eventuallyEval;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.instanceOf;
+import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -104,6 +108,8 @@ class RateLimiterTest extends NucleusLaunchUtils {
         SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
         JsonNode updateDocument = JsonUtil.getPayloadJson(localShadowContentV1.getBytes()).get();
 
+        assertThat("syncing has started", () -> kernel.getContext().get(RealTimeSyncStrategy.class).isSyncing(), eventuallyEval(is(true)));
+
         // thingName has to be unique to prevent requests from being merged
         final int totalRequestCalls = 10;
         for (int i = 0; i < totalRequestCalls; i++) {
@@ -125,7 +131,9 @@ class RateLimiterTest extends NucleusLaunchUtils {
 
         when(dao.getShadowThing(anyString(), any())).thenReturn(Optional.of(new ShadowDocument(localShadowContentV1.getBytes())));
 
-        startNucleusWithConfig("rateLimits.yaml", true, true);
+        startNucleusWithConfig(NucleusLaunchUtilsConfig.builder().configFile("rateLimits.yaml").mockCloud(true)
+                .mockDao(true).build());
+        assertThat("syncing has started", () -> kernel.getContext().get(RealTimeSyncStrategy.class).isSyncing(), eventuallyEval(is(true)));
 
         try (EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
             GreengrassCoreIPCClient ipcClient = new GreengrassCoreIPCClient(connection);
@@ -148,7 +156,9 @@ class RateLimiterTest extends NucleusLaunchUtils {
 
         when(dao.getShadowThing(anyString(), any())).thenReturn(Optional.of(new ShadowDocument(localShadowContentV1.getBytes())));
 
-        startNucleusWithConfig("rateLimits.yaml", true, true);
+        startNucleusWithConfig(NucleusLaunchUtilsConfig.builder().configFile("rateLimits.yaml").mockCloud(true)
+                .mockDao(true).build());
+        assertThat("syncing has started", () -> kernel.getContext().get(RealTimeSyncStrategy.class).isSyncing(), eventuallyEval(is(true)));
 
         try (EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
             GreengrassCoreIPCClient ipcClient = new GreengrassCoreIPCClient(connection);
@@ -172,11 +182,14 @@ class RateLimiterTest extends NucleusLaunchUtils {
     @Test
     void GIVEN_multiple_classic_and_named_shadow_request_for_thing_WHEN_requests_processed_THEN_requests_throttled_classic_and_named_shadows_for_thing(ExtensionContext context) throws Exception {
         ignoreExceptionOfType(context, ThrottledRequestException.class);
+        ignoreExceptionOfType(context, InterruptedException.class);
 
         when(dao.getShadowThing(anyString(), any())).thenReturn(Optional.of(new ShadowDocument(localShadowContentV1.getBytes())));
 
         startNucleusWithConfig(NucleusLaunchUtilsConfig.builder().configFile("rateLimits.yaml").mockCloud(true)
                 .mockDao(true).build());
+
+        assertThat("syncing has started", () -> kernel.getContext().get(RealTimeSyncStrategy.class).isSyncing(), eventuallyEval(is(true), Duration.ofSeconds(30L)));
 
         try (EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
             GreengrassCoreIPCClient ipcClient = new GreengrassCoreIPCClient(connection);
@@ -215,10 +228,14 @@ class RateLimiterTest extends NucleusLaunchUtils {
     @Test
     void GIVEN_max_inbound_shadow_request_rate_exceeded_WHEN_requests_processed_THEN_any_request_throttled(ExtensionContext context) throws Exception {
         ignoreExceptionOfType(context, ThrottledRequestException.class);
+        ignoreExceptionOfType(context, InterruptedException.class);
 
         when(dao.getShadowThing(anyString(), any())).thenReturn(Optional.of(new ShadowDocument(localShadowContentV1.getBytes())));
 
-        startNucleusWithConfig("rateLimitsWithTotalLocalRate.yaml", true, true);
+        startNucleusWithConfig(NucleusLaunchUtilsConfig.builder().configFile("rateLimitsWithTotalLocalRate.yaml").mockCloud(true)
+                .mockDao(true).build());
+
+        assertThat("syncing has started", () -> kernel.getContext().get(RealTimeSyncStrategy.class).isSyncing(), eventuallyEval(is(true)));
 
         try (EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
             GreengrassCoreIPCClient ipcClient = new GreengrassCoreIPCClient(connection);
@@ -250,11 +267,14 @@ class RateLimiterTest extends NucleusLaunchUtils {
     @Test
     void GIVEN_requests_throttled_for_thing_WHEN_request_sent_for_different_thing_THEN_request_for_different_thing_not_throttled(ExtensionContext context) throws Exception {
         ignoreExceptionOfType(context, ThrottledRequestException.class);
+        ignoreExceptionOfType(context, InterruptedException.class);
 
         when(dao.getShadowThing(anyString(), any())).thenReturn(Optional.of(new ShadowDocument(localShadowContentV1.getBytes())));
 
         startNucleusWithConfig(NucleusLaunchUtilsConfig.builder().configFile("rateLimits.yaml").mockCloud(true)
                 .mockDao(true).build());
+
+        assertThat("syncing has started", () -> kernel.getContext().get(RealTimeSyncStrategy.class).isSyncing(), eventuallyEval(is(true)));
 
         try (EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
             GreengrassCoreIPCClient ipcClient = new GreengrassCoreIPCClient(connection);

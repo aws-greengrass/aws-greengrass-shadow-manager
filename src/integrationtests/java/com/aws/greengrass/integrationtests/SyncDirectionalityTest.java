@@ -109,6 +109,8 @@ class SyncDirectionalityTest extends NucleusLaunchUtils {
                 .resetRetryConfig(false)
                 .build());
 
+        assertSyncingHasStarted(RealTimeSyncStrategy.class);
+
         UpdateThingShadowRequestHandler updateHandler = shadowManager.getUpdateThingShadowRequestHandler();
 
         // update local shadow
@@ -157,6 +159,7 @@ class SyncDirectionalityTest extends NucleusLaunchUtils {
         // There is a race condition which can cause us to check queue is empty before having inserted any full sync
         // requests in it. This check avoids that.
         assertThat("all the sync requests are processed", cdl.await(10, TimeUnit.SECONDS), is(true));
+        assertSyncingHasStarted(RealTimeSyncStrategy.class);
         assertEmptySyncQueue(RealTimeSyncStrategy.class);
         UpdateThingShadowRequestHandler updateHandler = shadowManager.getUpdateThingShadowRequestHandler();
 
@@ -201,6 +204,7 @@ class SyncDirectionalityTest extends NucleusLaunchUtils {
                 .build());
 
         shadowManager.startSyncingShadows(ShadowManager.StartSyncInfo.builder().build());
+        assertSyncingHasStarted(RealTimeSyncStrategy.class);
         assertEmptySyncQueue(RealTimeSyncStrategy.class);
 
         SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
@@ -231,10 +235,12 @@ class SyncDirectionalityTest extends NucleusLaunchUtils {
                 .resetRetryConfig(false)
                 .build());
         shadowManager.startSyncingShadows(ShadowManager.StartSyncInfo.builder().build());
+        assertSyncingHasStarted(RealTimeSyncStrategy.class);
         assertEmptySyncQueue(RealTimeSyncStrategy.class);
 
         SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
         syncHandler.pushLocalUpdateSyncRequest(MOCK_THING_NAME_1, CLASSIC_SHADOW, JsonUtil.getPayloadBytes(cloudDocument));
+        assertSyncingHasStarted(RealTimeSyncStrategy.class);
         assertEmptySyncQueue(RealTimeSyncStrategy.class);
 
         TimeUnit.SECONDS.sleep(2);

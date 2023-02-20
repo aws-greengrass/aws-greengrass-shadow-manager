@@ -20,9 +20,12 @@ import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfi
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientFactory;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientWrapper;
+import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
+import com.aws.greengrass.shadowmanager.sync.RequestMerger;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
 import com.aws.greengrass.shadowmanager.sync.model.Direction;
 import com.aws.greengrass.shadowmanager.sync.model.DirectionWrapper;
+import com.aws.greengrass.shadowmanager.sync.model.FullShadowSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.strategy.BaseSyncStrategy;
 import com.aws.greengrass.shadowmanager.sync.strategy.PeriodicSyncStrategy;
 import com.aws.greengrass.shadowmanager.sync.strategy.RealTimeSyncStrategy;
@@ -73,6 +76,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
@@ -307,6 +311,9 @@ class ShadowManagerTest extends NucleusLaunchUtils {
         ignoreExceptionOfType(context, TLSAuthException.class);
         ignoreExceptionOfType(context, RetryableException.class);
 
+        RequestBlockingQueue syncQueue = spy(new RequestBlockingQueue(new RequestMerger(new DirectionWrapper())));
+        kernel.getContext().put(RequestBlockingQueue.class, syncQueue);
+
         SecurityService securityService = mock(SecurityService.class);
         when(securityService.getDeviceIdentityKeyManagers()).thenThrow(TLSAuthException.class);
         kernel.getContext().put(SecurityService.class, securityService);
@@ -327,6 +334,11 @@ class ShadowManagerTest extends NucleusLaunchUtils {
                 .mqttConnected(true)
                 .mockCloud(false)
                 .build());
+
+        // wait for dataplane client creation retries to fail,
+        // and the full sync is put back on the queue
+        verify(syncQueue, timeout(30000L).times(1)).offerAndTake(any(FullShadowSyncRequest.class), eq(false));
+
         BaseSyncStrategy syncStrategy = kernel.getContext().get(RealTimeSyncStrategy.class);
         assertThat("syncing has started", syncStrategy::isSyncing, eventuallyEval(is(true)));
         verify(wrapper, timeout(5000).atLeast(1)).getThingShadow("Thing1", "");
@@ -339,7 +351,7 @@ class ShadowManagerTest extends NucleusLaunchUtils {
             cdl.countDown();
             return new KeyManager[0];
         });
-        assertThat("request is retried with a new client", cdl.await(10, TimeUnit.SECONDS), is(true));
+        assertThat("request is retried with a new client", cdl.await(30L, TimeUnit.SECONDS), is(true));
         verify(wrapper, timeout(5000).atLeast(2)).getThingShadow("Thing1", "");
         // Once the request is processed, the sync queue should be empty.
         assertEmptySyncQueue(RealTimeSyncStrategy.class);

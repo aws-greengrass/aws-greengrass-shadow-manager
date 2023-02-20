@@ -10,6 +10,7 @@ import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
+import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.ShadowState;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
@@ -54,7 +55,7 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
      * @return true.
      */
     @Override
-    public boolean isUpdateNecessary(SyncContext context) {
+    boolean isUpdateNecessary(SyncContext context) {
         return true;
     }
 
@@ -68,8 +69,10 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
      * @throws InterruptedException     if the thread is interrupted while syncing shadow with cloud.
      */
     @Override
-    public void execute(SyncContext context) throws RetryableException, SkipSyncRequestException, InterruptedException {
+    public void execute(SyncContext context) throws RetryableException, SkipSyncRequestException,
+            InterruptedException, UnknownShadowException {
         super.setContext(context);
+
         SyncInformation syncInformation = getSyncInformation();
 
         Optional<ShadowDocument> localShadowDocument = context.getDao().getShadowThing(getThingName(), getShadowName());

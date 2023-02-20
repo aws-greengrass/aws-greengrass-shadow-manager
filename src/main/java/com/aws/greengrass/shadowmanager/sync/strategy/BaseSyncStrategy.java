@@ -8,7 +8,6 @@ package com.aws.greengrass.shadowmanager.sync.strategy;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
-import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
 import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
 import com.aws.greengrass.shadowmanager.sync.Retryer;
@@ -281,23 +280,6 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
                     .addKeyValue(LOG_SHADOW_NAME_KEY, request.getShadowName())
                     .addKeyValue("type", request.getClass())
                     .log("Syncing is stopped. Ignoring sync request");
-            return;
-        }
-
-        try {
-            if (!request.isUpdateNecessary(context)) {
-                logger.atDebug()
-                        .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
-                        .addKeyValue(LOG_SHADOW_NAME_KEY, request.getShadowName())
-                        .addKeyValue("type", request.getClass())
-                        .log("Ignoring sync request since update is not necessary");
-                return;
-            }
-        } catch (SkipSyncRequestException | RetryableException | UnknownShadowException e) {
-            logger.atWarn(SYNC_EVENT_TYPE)
-                    .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
-                    .addKeyValue(LOG_SHADOW_NAME_KEY, request.getShadowName())
-                    .log("Ignoring sync request since update is not necessary");
             return;
         }
 

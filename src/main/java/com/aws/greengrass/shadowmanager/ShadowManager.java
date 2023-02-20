@@ -96,7 +96,6 @@ public class ShadowManager extends PluginService {
     private final UpdateThingShadowRequestHandler updateThingShadowRequestHandler;
     private final GetThingShadowRequestHandler getThingShadowRequestHandler;
     private final IotDataPlaneClientWrapper iotDataPlaneClientWrapper;
-    private final ShadowWriteSynchronizeHelper synchronizeHelper;
     @Getter(AccessLevel.PACKAGE)
     private final SyncHandler syncHandler;
     private final CloudDataClient cloudDataClient;
@@ -175,7 +174,6 @@ public class ShadowManager extends PluginService {
         this.syncHandler = syncHandler;
         this.cloudDataClient = cloudDataClient;
         this.mqttClient = mqttClient;
-        this.synchronizeHelper = synchronizeHelper;
         this.deleteThingShadowRequestHandler = new DeleteThingShadowRequestHandler(dao, authorizationHandlerWrapper,
                 pubSubClientWrapper, synchronizeHelper, this.syncHandler);
         this.updateThingShadowRequestHandler = new UpdateThingShadowRequestHandler(dao, authorizationHandlerWrapper,
@@ -545,8 +543,7 @@ public class ShadowManager extends PluginService {
                         dao,
                         getUpdateThingShadowRequestHandler(),
                         getDeleteThingShadowRequestHandler(),
-                        iotDataPlaneClientWrapper,
-                        synchronizeHelper
+                        iotDataPlaneClientWrapper
                 );
                 syncHandler.start(syncContext, SyncHandler.DEFAULT_PARALLELISM);
             }

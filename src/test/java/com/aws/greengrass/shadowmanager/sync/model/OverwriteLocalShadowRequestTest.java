@@ -15,7 +15,6 @@ import com.aws.greengrass.shadowmanager.model.UpdateThingShadowHandlerResponse;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientWrapper;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
-import com.aws.greengrass.shadowmanager.util.ShadowWriteSynchronizeHelper;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -71,8 +70,6 @@ class OverwriteLocalShadowRequestTest {
     private DeleteThingShadowRequestHandler mockDeleteThingShadowRequestHandler;
     @Mock(answer = Answers.RETURNS_DEEP_STUBS)
     private UpdateThingShadowHandlerResponse mockUpdateThingShadowHandlerResponse;
-    @Mock
-    private ShadowWriteSynchronizeHelper mockSynchronizeHelper;
     @Captor
     private ArgumentCaptor<SyncInformation> syncInformationCaptor;
     @Captor
@@ -86,7 +83,7 @@ class OverwriteLocalShadowRequestTest {
     void setup() throws IOException {
         lenient().when(mockDao.updateSyncInformation(any())).thenReturn(true);
         syncContext = new SyncContext(mockDao, mockUpdateThingShadowRequestHandler, mockDeleteThingShadowRequestHandler,
-                mockIotDataPlaneClientWrapper, mockSynchronizeHelper);
+                mockIotDataPlaneClientWrapper);
         JsonUtil.loadSchema();
     }
 

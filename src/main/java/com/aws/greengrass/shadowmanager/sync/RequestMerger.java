@@ -17,6 +17,7 @@ import com.aws.greengrass.shadowmanager.sync.model.DirectionWrapper;
 import com.aws.greengrass.shadowmanager.sync.model.FullShadowSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.LocalDeleteSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.LocalUpdateSyncRequest;
+import com.aws.greengrass.shadowmanager.sync.model.MergedFullShadowSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.OverwriteCloudShadowRequest;
 import com.aws.greengrass.shadowmanager.sync.model.OverwriteLocalShadowRequest;
 import com.aws.greengrass.shadowmanager.sync.model.SyncRequest;
@@ -56,11 +57,11 @@ public class RequestMerger {
 
         if (oldValue instanceof FullShadowSyncRequest || oldValue instanceof OverwriteCloudShadowRequest
                 || oldValue instanceof OverwriteLocalShadowRequest) {
-            return returnRequestBasedOnDirection(oldValue, logEvent);
+            return returnRequestBasedOnDirection(oldValue, value, logEvent);
         }
         if (value instanceof FullShadowSyncRequest || value instanceof OverwriteCloudShadowRequest
                 || value instanceof OverwriteLocalShadowRequest) {
-            return returnRequestBasedOnDirection(value, logEvent);
+            return returnRequestBasedOnDirection(value, oldValue, logEvent);
         }
 
         if (oldValue instanceof CloudUpdateSyncRequest && value instanceof CloudUpdateSyncRequest) {
@@ -106,10 +107,11 @@ public class RequestMerger {
                     .log("Received bi-directional updates. Converting to a full shadow sync request");
         }
 
-        return returnRequestBasedOnDirection(value, logEvent);
+        return returnRequestBasedOnDirection(value, oldValue, logEvent);
     }
 
-    private BaseSyncRequest returnRequestBasedOnDirection(SyncRequest value, LogEventBuilder logEvent) {
+    private BaseSyncRequest returnRequestBasedOnDirection(SyncRequest value, SyncRequest otherValue,
+                                                          LogEventBuilder logEvent) {
         switch (direction.get()) {
             case DEVICE_TO_CLOUD:
                 logEvent.log("Creating overwrite cloud shadow sync request");
@@ -123,10 +125,13 @@ public class RequestMerger {
                 return new OverwriteLocalShadowRequest(value.getThingName(), value.getShadowName());
             case BETWEEN_DEVICE_AND_CLOUD:
             default:
-                logEvent.log("Creating full shadow sync request");
+                logEvent.kv("left", value.getClass().getSimpleName())
+                        .kv("right", otherValue.getClass().getSimpleName())
+                        .log("Creating full shadow sync request by merging");
                 // Instead of a partial update, a full sync request will force a get of the latest local
                 // and remote shadows
-                return new FullShadowSyncRequest(value.getThingName(), value.getShadowName());
+                return new MergedFullShadowSyncRequest(value.getThingName(), value.getShadowName(),
+                        this, value, otherValue);
         }
     }
 }
