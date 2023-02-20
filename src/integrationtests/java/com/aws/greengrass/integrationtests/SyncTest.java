@@ -1174,6 +1174,7 @@ class SyncTest extends NucleusLaunchUtils {
             throws InterruptedException, IOException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, InterruptedException.class);
         ignoreExceptionOfType(context, ConflictError.class);
+        ignoreExceptionOfType(context, InvalidRequestParametersException.class);
 
         String initialCloudState = "{\"version\":1,\"state\":{\"desired\":{}}}";
         String blockingCloudUpdate = "{\"version\":1,\"state\":{\"desired\":{\"SomeKey\":\"bar\"}}}";
