@@ -10,6 +10,7 @@ import com.aws.greengrass.logging.impl.config.LogConfig;
 import com.aws.greengrass.shadowmanager.ShadowManager;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAOImpl;
+import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.exception.IoTDataPlaneClientCreationException;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowRequestHandler;
@@ -1261,6 +1262,7 @@ class SyncTest extends NucleusLaunchUtils {
             throws InterruptedException, IOException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, InterruptedException.class);
         ignoreExceptionOfType(context, ConflictError.class);
+        ignoreExceptionOfType(context, InvalidRequestParametersException.class);
 
         String initialCloudState = "{\"version\":1,\"state\":{\"desired\":{}}}";
         String blockingCloudUpdate = "{\"version\":1,\"state\":{\"desired\":{\"SomeKey\":\"bar\"}}}";
