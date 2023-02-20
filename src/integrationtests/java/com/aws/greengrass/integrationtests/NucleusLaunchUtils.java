@@ -37,6 +37,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Predicate;
 
 import static com.github.grantwest.eventually.EventuallyLambdaMatcher.eventuallyEval;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -141,9 +142,7 @@ public class NucleusLaunchUtils extends GGServiceTestUtil {
             }
             syncHandler.setOverallSyncStrategy(syncStrategy);
             isSyncMocked.set(true);
-            shadowManager.startSyncingShadows(ShadowManager.StartSyncInfo.builder().startSyncStrategy(true).build());
         }
-
     }
 
     @Deprecated()
@@ -188,6 +187,16 @@ public class NucleusLaunchUtils extends GGServiceTestUtil {
 
         // queue is eventually empty (full syncs are added and then eventually removed)
         assertThat("sync queue is eventually empty", () -> q.isEmpty() && !s.isExecuting(),
+                eventuallyEval(is(true), Duration.ofSeconds(10)));
+    }
+
+    protected void assertThatSyncQueue(Class<? extends BaseSyncStrategy> clazz, Predicate<RequestBlockingQueue> condition) {
+        BaseSyncStrategy s = kernel.getContext().get(clazz);
+        assertThat("syncing has started", s::isSyncing, eventuallyEval(is(true)));
+        RequestBlockingQueue q = s.getSyncQueue();
+
+        assertThat("sync queue meets condition",
+                () -> condition.test(q),
                 eventuallyEval(is(true), Duration.ofSeconds(10)));
     }
 }

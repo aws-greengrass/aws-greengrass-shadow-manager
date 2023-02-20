@@ -125,7 +125,9 @@ public class RequestMerger {
                 return new OverwriteLocalShadowRequest(value.getThingName(), value.getShadowName());
             case BETWEEN_DEVICE_AND_CLOUD:
             default:
-                logEvent.log("Creating full shadow sync request");
+                logEvent.kv("left", value.getClass().getSimpleName())
+                        .kv("right", otherValue.getClass().getSimpleName())
+                        .log("Creating full shadow sync request by merging");
                 // Instead of a partial update, a full sync request will force a get of the latest local
                 // and remote shadows
                 return new MergedFullShadowSyncRequest(value.getThingName(), value.getShadowName(),
