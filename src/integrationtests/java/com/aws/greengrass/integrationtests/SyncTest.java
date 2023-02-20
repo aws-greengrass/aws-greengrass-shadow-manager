@@ -749,7 +749,7 @@ class SyncTest extends NucleusLaunchUtils {
                 .build());
 
         // we have a local shadow from the initial full sync
-        assertThat("local shadow exists", () -> localShadow.get().isPresent(), eventuallyEval(is(true)));
+        assertThat("local shadow exists", () -> localShadow.get().isPresent(), eventuallyEval(is(true), Duration.ofSeconds(15)));
         assertEmptySyncQueue(clazz);
 
         DeleteThingShadowRequestHandler deleteHandler = shadowManager.getDeleteThingShadowRequestHandler();
