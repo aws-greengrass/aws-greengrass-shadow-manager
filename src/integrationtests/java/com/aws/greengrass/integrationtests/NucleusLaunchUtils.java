@@ -119,9 +119,6 @@ public class NucleusLaunchUtils extends GGServiceTestUtil {
         ScheduledExecutorService ses = kernel.getContext().get(ScheduledExecutorService.class);
         RequestBlockingQueue queue = kernel.getContext().get(RequestBlockingQueue.class);
         // set retry config to only try once so we can test failures earlier
-        kernel.launch();
-
-        assertTrue(shadowManagerRunning.await(TEST_TIME_OUT_SEC, TimeUnit.SECONDS));
 
         if (config.isResetRetryConfig()) {
             realTimeSyncStrategy.stop();
@@ -142,6 +139,9 @@ public class NucleusLaunchUtils extends GGServiceTestUtil {
             syncHandler.setOverallSyncStrategy(syncStrategy);
             isSyncMocked.set(true);
         }
+
+        kernel.launch();
+        assertTrue(shadowManagerRunning.await(TEST_TIME_OUT_SEC, TimeUnit.SECONDS));
     }
 
     @Deprecated()
@@ -177,13 +177,14 @@ public class NucleusLaunchUtils extends GGServiceTestUtil {
         assertTrue(shadowManagerRunning.await(TEST_TIME_OUT_SEC, TimeUnit.SECONDS));
     }
 
+    protected void assertSyncingHasStarted(Class<? extends BaseSyncStrategy> clazz) {
+        BaseSyncStrategy s = kernel.getContext().get(clazz);
+        assertThat("syncing has started", s::isSyncing, eventuallyEval(is(true)));
+    }
+
     protected void assertEmptySyncQueue(Class<? extends BaseSyncStrategy> clazz) {
         BaseSyncStrategy s = kernel.getContext().get(clazz);
-
-        assertThat("syncing has started", s::isSyncing, eventuallyEval(is(true)));
-
         RequestBlockingQueue q = s.getSyncQueue();
-
         // queue is eventually empty (full syncs are added and then eventually removed)
         assertThat("sync queue is eventually empty", () -> q.isEmpty() && !s.isExecuting(),
                 eventuallyEval(is(true), Duration.ofSeconds(10)));
