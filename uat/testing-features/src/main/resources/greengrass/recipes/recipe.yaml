@@ -1,0 +1,18 @@
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+---
+RecipeFormatVersion: '2020-01-25'
+ComponentName: aws.greengrass.ShadowManager
+ComponentDescription: AWS Greengrass Shadow Manager
+ComponentPublisher: AWS
+ComponentVersion: '2.4.0'
+ComponentType: 'aws.greengrass.plugin'
+Manifests:
+  - Artifacts:
+      - URI: "classpath:/greengrass/artifacts/aws.greengrass.ShadowManager.jar"
+        Permission:
+          Read: ALL
+          Execute: ALL
