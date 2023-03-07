@@ -10,7 +10,7 @@ Feature: Shadow-6
   @stable @functional
   Scenario: Shadow-6-T1: As a customer I can reset the strategy field and merge it back again and it should work correctly.
     When I create a Greengrass deployment with components
-      | aws.greengrass.ShadowManager | LATEST |
+      | aws.greengrass.ShadowManager |  classpath:/greengrass/recipes/recipe.yaml |
       | aws.greengrass.Cli           | LATEST |
     And I update my Greengrass deployment configuration, setting the component aws.greengrass.ShadowManager configuration to:
       """

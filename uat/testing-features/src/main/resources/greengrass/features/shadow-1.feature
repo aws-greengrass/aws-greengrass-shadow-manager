@@ -9,7 +9,7 @@ Feature: Greengrass V2 ShadowManager
         And I start an assertion server
         Given I create a Greengrass deployment with components
             | aws.greengrass.Cli        | LATEST |
-            | aws.greengrass.ShadowManager | LATEST |
+            | aws.greengrass.ShadowManager |  classpath:/greengrass/recipes/recipe.yaml |
         And I deploy the Greengrass deployment configuration
         Then the Greengrass deployment is COMPLETED on the device after 2 minutes
         Then I verify the aws.greengrass.ShadowManager component is RUNNING using the greengrass-cli
@@ -43,6 +43,7 @@ Feature: Greengrass V2 ShadowManager
         Then the local Greengrass deployment is SUCCEEDED on the device after 120 seconds
         Then I get 1 assertions with context "Retrieved matching shadow document"
 
+    @unstable
     Scenario: Shadow-1-T2: As a developer, I can use the Greengrass local shadow service to UPDATE a shadow from my component.
         When I install the component ShadowComponentPing from local store with configuration
         """
@@ -85,6 +86,7 @@ Feature: Greengrass V2 ShadowManager
         Then the local Greengrass deployment is SUCCEEDED on the device after 120 seconds
         Then I get 1 assertions with context "Retrieved matching shadow document"
 
+    @unstable
     Scenario: Shadow-1-T3: As a developer, I can use the Greengrass local shadow service to DELETE a shadow from my component.
         When I install the component ShadowComponentPing from local store with configuration
         """

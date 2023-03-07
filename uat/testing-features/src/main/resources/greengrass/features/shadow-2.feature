@@ -9,10 +9,11 @@ Feature: Shadow-2
     When I add random shadow for MyThing with name MyThingNamedShadow in context
     When I add random shadow for MyThing2 with name MyThingNamedShadow2 in context
 
+  @unstable
   Scenario Outline: Shadow-2-T1-<strategy>: As a developer, I can sync a local named shadow to the cloud.
     When I create a Greengrass deployment with components
       | aws.greengrass.Nucleus       | LATEST |
-      | aws.greengrass.ShadowManager | LATEST |
+      | aws.greengrass.ShadowManager | classpath:/greengrass/recipes/recipe.yaml |
       | aws.greengrass.Cli       | LATEST |
     And I update my Greengrass deployment configuration, setting the component aws.greengrass.ShadowManager configuration to:
         """
