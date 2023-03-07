@@ -112,7 +112,6 @@ public class ShadowSteps {
         return String.format("e2e-%d-%s", System.currentTimeMillis(), UUID.randomUUID().toString());
     }
 
-    @SuppressWarnings("PMD.UnusedFormalParameter")
     private void canGetShadow(final String thingName, final String shadowName, final String stateString,
                               final int timeoutSeconds, final boolean shouldNotExist)
             throws IOException, InterruptedException {

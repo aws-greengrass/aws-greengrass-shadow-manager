@@ -6,7 +6,7 @@ name: OTF UATS
 
 on:
   pull_request:
-    branches: '*'
+    branches: 'main'
 
 env:
   AWS_REGION : "us-west-2"
@@ -27,7 +27,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v1
         with:
           role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
-          role-session-name: nucleusCI
+          role-session-name: shadowManagerCI
           aws-region: ${{ env.AWS_REGION }}
       - name: Run UAT on linux
         uses: aws-actions/aws-codebuild-run-build@v1
