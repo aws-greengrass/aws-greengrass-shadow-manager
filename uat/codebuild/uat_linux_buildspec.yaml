@@ -10,15 +10,17 @@ phases:
       java: corretto11
   build:
     commands:
+      - curl -s https://d2s8p88vqu9w66.cloudfront.net/releases/greengrass-nucleus-latest.zip > /tmp/greengrass-nucleus-latest.zip
+      - mvn -U -ntp verify -DskipTests=true
       - mvn -U -ntp clean verify -f uat/pom.xml
-      - java -Dggc.archive=./target/aws.greengrass.nucleus.zip
-        -Dtags=ShadowManager -Dggc.install.root=$CODEBUILD_SRC_DIR -Dggc.log.level=INFO -Daws.region=us-east-1
-        -jar uat/testing-features/target/greengrass-shadow-manager-testing-features
+      - java -Dggc.archive=/tmp/greengrass-nucleus-latest.zip
+        -Dtags='ShadowManager&!unstable' -Dggc.install.root=$CODEBUILD_SRC_DIR -Dggc.log.level=INFO -Daws.region=$AWS_REGION
+        -jar uat/testing-features/target/greengrass-shadow-manager-testing-features.jar
 
 artifacts:
   files:
     - 'testResults/**/*'
-  name: 'NucleusUatLinuxLogs.zip'
+  name: 'ShadowManagerUatLinuxLogs.zip'
 
 reports:
   uat-reports:
