@@ -1,4 +1,6 @@
 ## AWS Greengrass Shadow Manager
+![CI](https://github.com/aws-greengrass/aws-greengrass-shadow-manager/actions/workflows/maven.yml/badge.svg?branch=main)
+![UAT](https://github.com/aws-greengrass/aws-greengrass-shadow-manager/actions/workflows/uat.yaml/badge.svg?branch=main)
 
 This is an AWS GreengrassV2 Component that handles offline device shadow
 document storage and synchronization to the AWS IoT Device Shadow Service.
