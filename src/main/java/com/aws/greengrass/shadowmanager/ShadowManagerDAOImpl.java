@@ -87,10 +87,11 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
                 .kv(LOG_THING_NAME_KEY, thingName)
                 .kv(LOG_SHADOW_NAME_KEY, shadowName)
                 .log("Deleting shadow");
+        String sql = "UPDATE documents SET deleted = 1, document = null, updateTime = ?, version = ?"
+                + " WHERE thingName = ? AND shadowName = ?";
         return getShadowThing(thingName, shadowName)
                 .flatMap(shadowDocument ->
-                        execute("UPDATE documents SET deleted = 1, document = null, updateTime = ?, version = ?"
-                                        + " WHERE thingName = ? AND shadowName = ?",
+                        executeWriteOperation(sql,
                                 preparedStatement -> {
                                     preparedStatement.setLong(1, Instant.now().getEpochSecond());
                                     preparedStatement.setLong(2, shadowDocument.getVersion() + 1);
@@ -119,8 +120,9 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
                 .kv(LOG_THING_NAME_KEY, thingName)
                 .kv(LOG_SHADOW_NAME_KEY, shadowName)
                 .log("Updating shadow");
-        return execute("MERGE INTO documents(thingName, shadowName, document, version, deleted, updateTime) "
-                        + "KEY (thingName, shadowName) VALUES (?, ?, ?, ?, ?, ?)",
+        String sql = "MERGE INTO documents(thingName, shadowName, document, version, deleted, updateTime) "
+                + "KEY (thingName, shadowName) VALUES (?, ?, ?, ?, ?, ?)";
+        return executeWriteOperation(sql,
                 preparedStatement -> {
                     preparedStatement.setString(1, thingName);
                     preparedStatement.setString(2, shadowName);
@@ -176,9 +178,10 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
                 .kv(LOG_LOCAL_VERSION_KEY, request.getLocalVersion())
                 .kv(LOG_CLOUD_VERSION_KEY, request.getCloudVersion())
                 .log("Updating sync info");
-        return execute("MERGE INTO sync(thingName, shadowName, lastSyncedDocument, cloudVersion, cloudDeleted, "
-                        + "cloudUpdateTime, lastSyncTime, localVersion) KEY (thingName, shadowName) "
-                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        String sql = "MERGE INTO sync(thingName, shadowName, lastSyncedDocument, cloudVersion, cloudDeleted, "
+                + "cloudUpdateTime, lastSyncTime, localVersion) KEY (thingName, shadowName) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+        return executeWriteOperation(sql,
                 preparedStatement -> {
                     preparedStatement.setString(1, request.getThingName());
                     preparedStatement.setString(2, request.getShadowName());
@@ -285,7 +288,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
                 .kv(LOG_THING_NAME_KEY, thingName)
                 .kv(LOG_SHADOW_NAME_KEY, shadowName)
                 .log("Deleting sync info");
-        return execute("DELETE FROM sync WHERE thingName = ? AND shadowName = ?",
+        return executeWriteOperation("DELETE FROM sync WHERE thingName = ? AND shadowName = ?",
                 preparedStatement -> {
                     preparedStatement.setString(1, thingName);
                     preparedStatement.setString(2, shadowName);
@@ -334,7 +337,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
         String sql = "INSERT INTO sync(thingName, shadowName, lastSyncedDocument, cloudVersion, cloudDeleted, "
                 + "cloudUpdateTime, lastSyncTime, localVersion) SELECT ?, ?, ?, ?, ?, ?, ?, ? "
                 + "WHERE NOT EXISTS(SELECT 1 FROM sync WHERE thingName = ? AND shadowName = ?)";
-        return execute(sql,
+        return executeWriteOperation(sql,
                 preparedStatement -> {
                     preparedStatement.setString(1, request.getThingName());
                     preparedStatement.setString(2, request.getShadowName());
@@ -352,6 +355,15 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
 
     }
 
+    @Override
+    public void waitForDBOperationsToFinish() {
+        if (!dbWriteOperations.tryAcquire(maxPermits)) {
+            logger.atDebug().log("Waiting for the DB write operations to finish");
+            dbWriteOperations.acquireUninterruptibly(maxPermits);
+        }
+        logger.atDebug().log("Finished all the DB write operations");
+    }
+
     private <T> T execute(String sql, SQLExecution<T> thunk) {
         try (Connection c = database.getPool().getConnection();
              PreparedStatement statement = c.prepareStatement(sql)) {
@@ -359,5 +371,17 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
         } catch (SQLException | IllegalStateException e) {
             throw new ShadowManagerDataException(e);
         }
+    }
+
+    private <T> T executeWriteOperation(String sql, SQLExecution<T> thunk) {
+        try {
+            dbWriteOperations.acquire();
+        } catch (InterruptedException e) {
+            logger.atDebug().log("Interrupted before performing the DB operation");
+            Thread.currentThread().interrupt();
+        }
+        T result = execute(sql, thunk);
+        dbWriteOperations.release();
+        return result;
     }
 }
