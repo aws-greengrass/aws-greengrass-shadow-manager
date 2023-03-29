@@ -59,6 +59,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.ERROR_CODE_FIELD_
 import static com.aws.greengrass.shadowmanager.model.Constants.ERROR_MESSAGE_FIELD_NAME;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_METADATA;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE;
+import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE_DELTA;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_TIMESTAMP;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_VERSION;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
@@ -70,10 +71,12 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.startsWith;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
@@ -97,6 +100,7 @@ class UpdateThingShadowRequestHandlerTest {
     private final static String GOOD_DOCUMENTS_PAYLOAD_WITH_NO_PREVIOUS_FILE_NAME = "good_documents_payload_with_no_previous.json";
     private final static String GOOD_DELTA_FILE_NAME = "good_delta_node.json";
     private final static String BAD_UPDATE_DOCUMENT_WITHOUT_STATE_NODE_FILE_NAME = "bad_update_document_without_state_node.json";
+    private final static String BAD_UPDATE_DOCUMENT_WITH_DELTA_FILE_NAME = "bad_update_document_with_delta_node.json";
 
     @Mock
     AuthorizationHandlerWrapper mockAuthorizationHandlerWrapper;
@@ -733,6 +737,26 @@ class UpdateThingShadowRequestHandlerTest {
         String expectedErrorString = "Invalid JSON: state";
         int expectedErrorCode = 400;
         assertInvalidArgumentsErrorFromPayloadUpdate(null, badUpdateRequest, expectedErrorString, expectedErrorCode, context);
+    }
+
+    @Test
+    void GIVEN_update_document_with_delta_WHEN_handle_request_THEN_delta_is_dropped_from_data() throws IOException, URISyntaxException {
+        byte[] badUpdateRequest =
+                getJsonFromResource(RESOURCE_DIRECTORY_NAME + BAD_UPDATE_DOCUMENT_WITH_DELTA_FILE_NAME);
+        UpdateThingShadowRequestHandler updateThingShadowIPCHandler = new UpdateThingShadowRequestHandler(mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockSynchronizeHelper, mockSyncHandler);
+        ArgumentCaptor<JsonNode> documentCaptor = ArgumentCaptor.forClass(JsonNode.class);
+        doNothing().when(mockSyncHandler).pushCloudUpdateSyncRequest(any(), any(), documentCaptor.capture());
+        when(mockDao.updateShadowThing(any(), any(), any(), anyLong()))
+                .thenReturn(Optional.of(new byte[]{}));
+
+        UpdateThingShadowHandlerResponse actualResponse =
+                updateThingShadowIPCHandler.handleRequest(new UpdateThingShadowRequest()
+                        .withPayload(badUpdateRequest).withThingName("thing"), TEST_SERVICE);
+        Optional<JsonNode> responseJson = JsonUtil.getPayloadJson(actualResponse.getUpdateThingShadowResponse().getPayload());
+        assertTrue(responseJson.isPresent());
+        // Validate that the state doesn't contain the delta
+        assertThat(documentCaptor.getValue().toString(), not(containsString("delta")));
+        assertFalse(responseJson.get().get(SHADOW_DOCUMENT_STATE).has(SHADOW_DOCUMENT_STATE_DELTA));
     }
 
     @Test
