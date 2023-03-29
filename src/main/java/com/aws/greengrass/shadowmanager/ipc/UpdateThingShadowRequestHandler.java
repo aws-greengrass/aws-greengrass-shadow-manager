@@ -43,6 +43,8 @@ import static com.aws.greengrass.shadowmanager.model.Constants.LOG_LOCAL_VERSION
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_METADATA;
+import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE;
+import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE_DELTA;
 import static com.aws.greengrass.shadowmanager.util.JsonUtil.isNullOrMissing;
 import static software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService.UPDATE_THING_SHADOW;
 
@@ -129,6 +131,14 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
                             .orElseThrow(() ->
                                     new InvalidRequestParametersException(ErrorMessage
                                             .createInvalidPayloadJsonMessage("")));
+
+                    // drop "delta" from the state (if we have a state).
+                    // delta isn't valid for users to set.
+                    if (updateDocumentRequest.has(SHADOW_DOCUMENT_STATE)
+                            && updateDocumentRequest.get(SHADOW_DOCUMENT_STATE).isObject()) {
+                        ((ObjectNode) updateDocumentRequest.get(SHADOW_DOCUMENT_STATE))
+                                .remove(SHADOW_DOCUMENT_STATE_DELTA);
+                    }
                     // Validate the payload schema
                     JsonUtil.validatePayloadSchema(updateDocumentRequest);
 

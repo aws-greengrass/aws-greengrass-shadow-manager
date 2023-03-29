@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "clientToken": "device",
+  "state": {
+    "desired": {
+      "a": 1
+    },
+    "delta": {
+      "something": {}
+    }
+  }
+}
