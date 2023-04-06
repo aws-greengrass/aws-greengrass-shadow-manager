@@ -362,6 +362,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
             dbWriteOperations.acquireUninterruptibly(maxPermits);
         }
         logger.atDebug().log("Finished all the DB write operations");
+        dbWriteOperations.release(maxPermits);
     }
 
     private <T> T execute(String sql, SQLExecution<T> thunk) {
@@ -376,12 +377,13 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
     private <T> T executeWriteOperation(String sql, SQLExecution<T> thunk) {
         try {
             dbWriteOperations.acquire();
+            return execute(sql, thunk);
         } catch (InterruptedException e) {
             logger.atDebug().log("Interrupted before performing the DB operation");
-            Thread.currentThread().interrupt();
+            throw new ShadowManagerDataException(e);
+        } finally {
+            dbWriteOperations.release();
         }
-        T result = execute(sql, thunk);
-        dbWriteOperations.release();
-        return result;
     }
 }
+
