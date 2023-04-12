@@ -6,16 +6,21 @@
 package com.aws.greengrass.shadowmanager;
 
 import com.aws.greengrass.lifecyclemanager.Kernel;
+import com.aws.greengrass.logging.api.Logger;
+import com.aws.greengrass.logging.impl.LogManager;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import lombok.Getter;
 import lombok.Synchronized;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.FlywayException;
+import org.flywaydb.core.internal.exception.FlywaySqlException;
+import org.h2.jdbc.JdbcSQLNonTransientException;
 import org.h2.jdbcx.JdbcConnectionPool;
 import org.h2.jdbcx.JdbcDataSource;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -27,9 +32,10 @@ import static com.aws.greengrass.shadowmanager.ShadowManager.SERVICE_NAME;
  */
 @Singleton
 public class ShadowManagerDatabase implements Closeable {
+    private static final String DATABASE_NAME = "shadow";
     // see https://www.h2database.com/javadoc/org/h2/engine/DbSettings.html
     // these setting optimize for minimal disk space over concurrent performance
-    private static final String DATABASE_FORMAT = "jdbc:h2:%s/shadow"
+    private static final String DATABASE_FORMAT = "jdbc:h2:%s/%s"
             + ";RETENTION_TIME=1000" // ms - time to keep values for before writing to disk (default is 45000)
             + ";DEFRAG_ALWAYS=TRUE" // defragment db on shutdown (ensures only a single value in db on close)
             + ";COMPRESS=TRUE" // compress large objects (clob/blob) (default false)
@@ -40,6 +46,8 @@ public class ShadowManagerDatabase implements Closeable {
     private JdbcConnectionPool pool;
 
     private boolean closed = true;
+    private static final Logger logger = LogManager.getLogger(ShadowManagerDatabase.class);
+    private final Path databasePath;
 
     /**
      * Creates a database with a {@link javax.sql.DataSource} using the kernel config.
@@ -57,21 +65,45 @@ public class ShadowManagerDatabase implements Closeable {
      */
     public ShadowManagerDatabase(Path path) {
         this.dataSource = new JdbcDataSource();
-        this.dataSource.setURL(String.format(DATABASE_FORMAT, path));
+        this.dataSource.setURL(String.format(DATABASE_FORMAT, path, DATABASE_NAME));
+        this.databasePath = path.resolve(DATABASE_NAME + ".mv.db");
     }
 
     /**
      * Performs the database installation. This includes any migrations that needs to be performed.
      *
+     * @throws IOException     io exception
      * @throws FlywayException if an error occurs migrating the database.
      */
     @Synchronized
-    public void install() throws FlywayException {
+    public void install() throws IOException, FlywayException {
         Flyway flyway = Flyway.configure(getClass().getClassLoader())
                 .locations("db/migration")
                 .dataSource(dataSource)
                 .load();
-        flyway.migrate();
+        migrateDB(flyway);
+    }
+
+    private void migrateDB(Flyway flyway) throws IOException, FlywayException {
+        try {
+            flyway.migrate();
+        } catch (FlywaySqlException flywaySqlException) {
+            if (flywaySqlException.getCause() instanceof JdbcSQLNonTransientException) {
+                if (flywaySqlException.getCause().getCause() instanceof IllegalStateException) {
+                    logger.atWarn().cause(flywaySqlException).log("Shadow manager DB is corrupted. "
+                            + "Removing it and creating a new one.");
+                    recreateDB(flyway);
+                }
+            } else {
+                throw flywaySqlException;
+            }
+        }
+    }
+
+    private void recreateDB(Flyway flyway) throws IOException {
+        logger.atDebug().kv("database-path", databasePath.toString()).log("Deleting the existing DB");
+        Files.deleteIfExists(databasePath);
+        migrateDB(flyway);
     }
 
     /**
