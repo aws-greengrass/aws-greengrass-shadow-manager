@@ -66,7 +66,7 @@ public class ShadowManagerDatabase implements Closeable {
     public ShadowManagerDatabase(Path path) {
         this.dataSource = new JdbcDataSource();
         this.dataSource.setURL(String.format(DATABASE_FORMAT, path, DATABASE_NAME));
-        this.databasePath = path.resolve(DATABASE_NAME + ".mv.db");
+        this.databasePath = path;
     }
 
     /**
@@ -88,12 +88,11 @@ public class ShadowManagerDatabase implements Closeable {
         try {
             flyway.migrate();
         } catch (FlywaySqlException flywaySqlException) {
-            if (flywaySqlException.getCause() instanceof JdbcSQLNonTransientException) {
-                if (flywaySqlException.getCause().getCause() instanceof IllegalStateException) {
-                    logger.atWarn().cause(flywaySqlException).log("Shadow manager DB is corrupted. "
-                            + "Removing it and creating a new one.");
-                    recreateDB(flyway);
-                }
+            if (flywaySqlException.getCause() instanceof JdbcSQLNonTransientException
+                    && flywaySqlException.getCause().getCause() instanceof IllegalStateException) {
+                logger.atWarn().cause(flywaySqlException).log("Shadow manager DB is corrupted. "
+                        + "Removing it and creating a new one.");
+                recreateDB(flyway);
             } else {
                 throw flywaySqlException;
             }
@@ -102,7 +101,15 @@ public class ShadowManagerDatabase implements Closeable {
 
     private void recreateDB(Flyway flyway) throws IOException {
         logger.atDebug().kv("database-path", databasePath.toString()).log("Deleting the existing DB");
-        Files.deleteIfExists(databasePath);
+        Files.list(databasePath).forEach((path -> {
+            if (path.endsWith("db")) {
+                try {
+                    Files.deleteIfExists(path);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        }));
         migrateDB(flyway);
     }
 
