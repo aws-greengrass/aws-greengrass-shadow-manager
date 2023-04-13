@@ -13,6 +13,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import lombok.Getter;
 import lombok.Synchronized;
 import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.FlywayException;
 import org.flywaydb.core.internal.exception.FlywaySqlException;
 import org.h2.jdbc.JdbcSQLNonTransientException;
 import org.h2.jdbcx.JdbcConnectionPool;
@@ -76,7 +77,6 @@ public class ShadowManagerDatabase implements Closeable {
      * @throws ShadowManagerDataException if flyway migration fails
      */
     @Synchronized
-    @SuppressWarnings({"PMD.AvoidCatchingGenericException"})
     public void install() throws ShadowManagerDataException {
         try {
             if (!isMigrationSuccessful()) {
@@ -85,7 +85,7 @@ public class ShadowManagerDatabase implements Closeable {
                 deleteDB(databasePath);
                 migrateDB();
             }
-        } catch (RuntimeException | IOException e) {
+        } catch (FlywayException | IOException e) {
             throw new ShadowManagerDataException(e);
         }
     }
@@ -114,15 +114,13 @@ public class ShadowManagerDatabase implements Closeable {
 
     private void deleteDB(Path databasePath) throws IOException {
         try (Stream<Path> workPathFiles = Files.list(databasePath)) {
-            workPathFiles.forEach(path -> {
-                if (!path.toString().endsWith("db")) {
-                    return;
-                }
+            workPathFiles.filter(path -> path.toString().endsWith("db"))
+            .forEach(path -> {
                 try {
                     logger.atDebug().kv("file", path).log("Deleting db file");
                     Files.deleteIfExists(path);
                 } catch (IOException e) {
-                    throw new RuntimeException(e);
+                    throw new ShadowManagerDataException(e);
                 }
             });
         }
