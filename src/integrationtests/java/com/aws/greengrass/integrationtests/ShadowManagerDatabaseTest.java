@@ -10,6 +10,7 @@ import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAOImpl;
 import com.aws.greengrass.shadowmanager.ShadowManagerDatabase;
+import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import org.flywaydb.core.internal.exception.FlywaySqlException;
@@ -151,10 +152,10 @@ class ShadowManagerDatabaseTest extends NucleusLaunchUtils {
     @Test
     void GIVEN_corrupted_db_WHEN_install_THEN_shadow_manager_database_reinstalls_and_starts_successfully(ExtensionContext context)
             throws Exception {
+        ignoreExceptionOfType(context, ShadowManagerDataException.class);
         ignoreExceptionOfType(context, FlywaySqlException.class);
         Path dest = Paths.get(rootDir.toString()+"/shadow.mv.db");
         Path source = Paths.get(getClass().getResource("database/corrupted.mv.db").toURI());
-        Files.deleteIfExists(dest);
         Files.copy(source, dest, StandardCopyOption.REPLACE_EXISTING);
         // GIVEN
         db.open();

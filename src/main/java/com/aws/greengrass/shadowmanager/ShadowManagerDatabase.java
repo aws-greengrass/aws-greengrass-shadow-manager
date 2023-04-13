@@ -13,7 +13,6 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import lombok.Getter;
 import lombok.Synchronized;
 import org.flywaydb.core.Flyway;
-import org.flywaydb.core.api.FlywayException;
 import org.flywaydb.core.internal.exception.FlywaySqlException;
 import org.h2.jdbc.JdbcSQLNonTransientException;
 import org.h2.jdbcx.JdbcConnectionPool;
@@ -74,20 +73,23 @@ public class ShadowManagerDatabase implements Closeable {
     /**
      * Performs the database installation. This includes any migrations that needs to be performed.
      *
-     * @throws IOException     io exception
-     * @throws FlywayException if an error occurs migrating the database.
+     * @throws ShadowManagerDataException if flyway migration fails
      */
     @Synchronized
-    public void install() throws FlywayException, IOException {
-        if (!isMigrationSuccessful()){
-            logger.atWarn().log("Failed to migrate the existing shadow manager DB. "
-                    + "Removing it and creating a new one.");
-            deleteDB(databasePath);
-            migrateDB();
+    public void install() throws ShadowManagerDataException {
+        try {
+            if (!isMigrationSuccessful()) {
+                logger.atWarn().log("Failed to migrate the existing shadow manager DB. "
+                        + "Removing it and creating a new one.");
+                deleteDB(databasePath);
+                migrateDB();
+            }
+        } catch (RuntimeException | IOException e) {
+            throw new ShadowManagerDataException(e);
         }
     }
 
-    private void migrateDB() throws FlywaySqlException{
+    private void migrateDB() {
         Flyway flyway = Flyway.configure(getClass().getClassLoader())
                 .locations("db/migration")
                 .dataSource(dataSource)
@@ -95,7 +97,7 @@ public class ShadowManagerDatabase implements Closeable {
         flyway.migrate();
     }
 
-    private boolean isMigrationSuccessful() throws FlywayException {
+    private boolean isMigrationSuccessful() {
         try {
             migrateDB();
             return true;
@@ -112,10 +114,11 @@ public class ShadowManagerDatabase implements Closeable {
     private void deleteDB(Path databasePath) throws IOException {
         try (Stream<Path> workPathFiles = Files.list(databasePath)) {
             workPathFiles.forEach(path -> {
-                if (!path.endsWith("db")) {
+                if (!path.toString().endsWith("db")) {
                     return;
                 }
                 try {
+                    logger.atDebug().kv("file", path).log("Deleting db file");
                     Files.deleteIfExists(path);
                 } catch (IOException e) {
                     throw new RuntimeException(e);
