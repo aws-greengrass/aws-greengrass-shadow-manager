@@ -8,6 +8,7 @@ package com.aws.greengrass.shadowmanager;
 import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
+import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import lombok.Getter;
 import lombok.Synchronized;
@@ -77,31 +78,38 @@ public class ShadowManagerDatabase implements Closeable {
      * @throws FlywayException if an error occurs migrating the database.
      */
     @Synchronized
-    public void install() throws IOException, FlywayException {
+    public void install() throws FlywayException, IOException {
+        if (!isMigrationSuccessful()){
+            logger.atWarn().log("Failed to migrate the existing shadow manager DB. "
+                    + "Removing it and creating a new one.");
+            deleteDB(databasePath);
+            migrateDB();
+        }
+    }
+
+    private void migrateDB() throws FlywaySqlException{
         Flyway flyway = Flyway.configure(getClass().getClassLoader())
                 .locations("db/migration")
                 .dataSource(dataSource)
                 .load();
-        migrateDB(flyway);
+        flyway.migrate();
     }
 
-    private void migrateDB(Flyway flyway) throws IOException, FlywayException {
+    private boolean isMigrationSuccessful() throws FlywayException {
         try {
-            flyway.migrate();
+            migrateDB();
+            return true;
         } catch (FlywaySqlException flywaySqlException) {
             if (flywaySqlException.getCause() instanceof JdbcSQLNonTransientException
                     && flywaySqlException.getCause().getCause() instanceof IllegalStateException) {
-                logger.atWarn().cause(flywaySqlException).log("Shadow manager DB is corrupted. "
-                        + "Removing it and creating a new one.");
-                recreateDB(flyway);
-            } else {
-                throw flywaySqlException;
+                logger.atError().cause(flywaySqlException).log("Shadow manager DB is corrupted.");
+                return false;
             }
+            throw flywaySqlException;
         }
     }
 
-    private void recreateDB(Flyway flyway) throws IOException {
-        logger.atDebug().kv("database-path", databasePath.toString()).log("Deleting the existing DB");
+    private void deleteDB(Path databasePath) throws IOException {
         try (Stream<Path> workPathFiles = Files.list(databasePath)) {
             workPathFiles.forEach(path -> {
                 if (!path.endsWith("db")) {
@@ -114,7 +122,6 @@ public class ShadowManagerDatabase implements Closeable {
                 }
             });
         }
-        migrateDB(flyway);
     }
 
     /**
