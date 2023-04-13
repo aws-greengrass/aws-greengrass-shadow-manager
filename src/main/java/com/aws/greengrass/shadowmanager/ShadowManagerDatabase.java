@@ -22,6 +22,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.stream.Stream;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
@@ -101,15 +102,18 @@ public class ShadowManagerDatabase implements Closeable {
 
     private void recreateDB(Flyway flyway) throws IOException {
         logger.atDebug().kv("database-path", databasePath.toString()).log("Deleting the existing DB");
-        Files.list(databasePath).forEach((path -> {
-            if (path.endsWith("db")) {
+        try (Stream<Path> workPathFiles = Files.list(databasePath)) {
+            workPathFiles.forEach(path -> {
+                if (!path.endsWith("db")) {
+                    return;
+                }
                 try {
                     Files.deleteIfExists(path);
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }
-            }
-        }));
+            });
+        }
         migrateDB(flyway);
     }
 
