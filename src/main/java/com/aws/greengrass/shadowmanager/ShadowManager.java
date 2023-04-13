@@ -53,7 +53,6 @@ import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.Synchronized;
-import org.flywaydb.core.api.FlywayException;
 import software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService;
 import software.amazon.awssdk.crt.mqtt.MqttClientConnectionEvents;
 

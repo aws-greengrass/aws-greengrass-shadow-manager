@@ -76,6 +76,7 @@ public class ShadowManagerDatabase implements Closeable {
      * @throws ShadowManagerDataException if flyway migration fails
      */
     @Synchronized
+    @SuppressWarnings({"PMD.AvoidCatchingGenericException"})
     public void install() throws ShadowManagerDataException {
         try {
             if (!isMigrationSuccessful()) {
