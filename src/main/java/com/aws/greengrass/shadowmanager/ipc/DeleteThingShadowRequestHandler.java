@@ -87,7 +87,7 @@ public class DeleteThingShadowRequestHandler extends BaseRequestHandler {
         return translateExceptions(() -> {
             String thingName = request.getThingName();
             String shadowName = request.getShadowName();
-            logger.atTrace("ipc-update-thing-shadow-request").log();
+            logger.atTrace("ipc-delete-thing-shadow-request").log();
 
             ShadowRequest shadowRequest = new ShadowRequest(thingName, shadowName);
             try {
@@ -118,7 +118,7 @@ public class DeleteThingShadowRequestHandler extends BaseRequestHandler {
                     logger.atDebug()
                             .kv(LOG_THING_NAME_KEY, thingName)
                             .kv(LOG_SHADOW_NAME_KEY, shadowName)
-                            .log("Successfully delete shadow");
+                            .log("Successfully deleted shadow the local shadow");
 
                     JsonNode responseNode = ResponseMessageBuilder.builder()
                             .withVersion(deletedShadowDocument.get().getVersion())

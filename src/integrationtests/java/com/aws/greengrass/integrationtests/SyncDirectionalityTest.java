@@ -110,7 +110,7 @@ class SyncDirectionalityTest extends NucleusLaunchUtils {
                 .build());
 
         assertSyncingHasStarted(RealTimeSyncStrategy.class);
-
+        assertEmptySyncQueue(RealTimeSyncStrategy.class);
         UpdateThingShadowRequestHandler updateHandler = shadowManager.getUpdateThingShadowRequestHandler();
 
         // update local shadow

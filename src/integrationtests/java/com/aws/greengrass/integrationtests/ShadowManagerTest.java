@@ -11,6 +11,7 @@ import com.aws.greengrass.deployment.DeviceConfiguration;
 import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.mqttclient.MqttClient;
 import com.aws.greengrass.security.SecurityService;
+import com.aws.greengrass.shadowmanager.ShadowManager;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAOImpl;
 import com.aws.greengrass.shadowmanager.exception.IoTDataPlaneClientCreationException;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
@@ -169,6 +170,7 @@ class ShadowManagerTest extends NucleusLaunchUtils {
                 .configFile(DEFAULT_CONFIG)
                 .mqttConnected(false)
                 .build());
+        shadowManager.startSyncingShadows(ShadowManager.StartSyncInfo.builder().build());
         ShadowManagerDAOImpl impl = kernel.getContext().get(ShadowManagerDAOImpl.class);
         createThingShadowSyncInfo(impl, THING_NAME);
         createThingShadowSyncInfo(impl, THING_NAME2);
