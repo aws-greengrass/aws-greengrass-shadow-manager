@@ -15,7 +15,7 @@ ComponentConfiguration:
     Operation: "NoOp"
     ThingName: "testThing"
     ShadowName: "testShadow"
-    ShadowDocument: "{\"id\": 1, \"name\": \"The_Beatles\"}"
+    ShadowDocument: ""
     PageSize: ""
     NextToken: ""
     OperationTimeout: 0
