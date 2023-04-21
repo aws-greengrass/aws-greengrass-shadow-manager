@@ -118,7 +118,7 @@ public class DeleteThingShadowRequestHandler extends BaseRequestHandler {
                     logger.atDebug()
                             .kv(LOG_THING_NAME_KEY, thingName)
                             .kv(LOG_SHADOW_NAME_KEY, shadowName)
-                            .log("Successfully deleted shadow the local shadow");
+                            .log("Successfully deleted the local shadow");
 
                     JsonNode responseNode = ResponseMessageBuilder.builder()
                             .withVersion(deletedShadowDocument.get().getVersion())
