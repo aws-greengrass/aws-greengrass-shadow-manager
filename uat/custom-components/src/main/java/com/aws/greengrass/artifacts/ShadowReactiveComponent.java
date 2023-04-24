@@ -13,34 +13,26 @@ import com.fasterxml.jackson.databind.node.IntNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import software.amazon.awssdk.aws.greengrass.GreengrassCoreIPC;
 import software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCClientV2;
-import software.amazon.awssdk.aws.greengrass.model.ReportedLifecycleState;
 import software.amazon.awssdk.aws.greengrass.model.SubscribeToTopicRequest;
-import software.amazon.awssdk.aws.greengrass.model.SubscribeToTopicResponse;
-import software.amazon.awssdk.aws.greengrass.model.SubscriptionResponseMessage;
-import software.amazon.awssdk.aws.greengrass.model.UnauthorizedError;
-import software.amazon.awssdk.aws.greengrass.model.UpdateStateRequest;
 import software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest;
 import software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowResponse;
-import software.amazon.awssdk.eventstreamrpc.StreamResponseHandler;
-
 import java.io.IOException;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 public class ShadowReactiveComponent implements Consumer<String[]> {
-    private static final Logger LOGGER = LoggerFactory.getLogger(ShadowReactiveComponent.class);
-    private GreengrassCoreIPCClientV2 eventStreamRpcConnection = null;
-    private static final ObjectMapper MAPPER = new ObjectMapper();
-    private static final CountDownLatch LATCH = new CountDownLatch(1);
+    private final Logger LOGGER = LoggerFactory.getLogger(ShadowReactiveComponent.class);
+    private final ObjectMapper MAPPER = new ObjectMapper();
+    private final CountDownLatch LATCH = new CountDownLatch(1);
+    private final AtomicBoolean messageReceived = new AtomicBoolean();
+    private GreengrassCoreIPCClientV2 greengrassCoreIPCClient = null;
 
     @Override
     public void accept(String[] args) {
@@ -56,6 +48,7 @@ public class ShadowReactiveComponent implements Consumer<String[]> {
             byte[] updateShadowDocumentPayload1 = null;
             JsonNode expectedUpdateShadowDocumentJson = null;
             JsonNode expectedUpdateShadowDocumentJson2 = null;
+            greengrassCoreIPCClient = IPCTestUtils.getGreengrassClient();
             if (!isNullOrEmpty(updateShadowDocumentRequest1)) {
                 updateShadowDocumentPayload1 = updateShadowDocumentRequest1.getBytes(UTF_8);
             }
@@ -83,9 +76,9 @@ public class ShadowReactiveComponent implements Consumer<String[]> {
             LOGGER.error("Error", e);
             System.exit(1);
         } finally {
-            if (eventStreamRpcConnection != null) {
+            if (greengrassCoreIPCClient != null) {
                 try {
-                    eventStreamRpcConnection.close();
+                    greengrassCoreIPCClient.close();
                 } catch (Exception ex) {
                     LOGGER.error("Unexpected error occurred while closing IPC connection", ex);
                 }
@@ -97,83 +90,45 @@ public class ShadowReactiveComponent implements Consumer<String[]> {
         return s == null || "".equals(s) || "null".equals(s);
     }
 
-    private void updateComponentState(GreengrassCoreIPC greengrassCoreIPCClient, ReportedLifecycleState state) throws InterruptedException, ExecutionException {
-        UpdateStateRequest updateStateRequest = new UpdateStateRequest();
-        updateStateRequest.setState(state);
-        greengrassCoreIPCClient.updateState(updateStateRequest, Optional.empty()).getResponse().get();
-    }
-
     private void subscribeToShadowUpdates(String thingName, String shadowName, String topic, JsonNode expectedUpdateShadowDocumentJson, JsonNode expectedUpdateShadowDocumentJson2) {
+        SubscribeToTopicRequest subscribe = new SubscribeToTopicRequest().withTopic(topic);
         try {
-            SubscribeToTopicRequest subscribe = new SubscribeToTopicRequest();
-            subscribe.setTopic(topic);
-            eventStreamRpcConnection = IPCTestUtils.getGreengrassClient();
-            GreengrassCoreIPC greengrassCoreIPCClient = eventStreamRpcConnection.getClient();
-            CompletableFuture<SubscribeToTopicResponse> fut = greengrassCoreIPCClient.subscribeToTopic(subscribe, Optional.of(new StreamResponseHandler<SubscriptionResponseMessage>() {
-                @Override
-                public void onStreamEvent(SubscriptionResponseMessage message) {
-                    String payload = new String(message.getBinaryMessage().getMessage(), UTF_8);
-                    LOGGER.info("Received new message: {}", payload);
-                    try {
-                        LOGGER.info("Received new message on {}", topic);
-                        if (topic.contains("delta")) {
-                            JsonNode retrievedDeltaPayloadJson = MAPPER.readTree(message.getBinaryMessage().getMessage());
-                            JsonNode newUpdateDocument = calculateNewDocument(retrievedDeltaPayloadJson, expectedUpdateShadowDocumentJson);
-                            handleUpdateThingShadowOperation(thingName, shadowName, MAPPER.writeValueAsBytes(newUpdateDocument), expectedUpdateShadowDocumentJson2);
+            greengrassCoreIPCClient.subscribeToTopic(subscribe, (message) ->
+                    {
+                        String payload = new String(message.getBinaryMessage().getMessage(), UTF_8);
+                        LOGGER.info("Received new message: {}", payload);
+                        try {
+                            LOGGER.info("Received new message on {}", topic);
+                            if (topic.contains("delta")) {
+                                JsonNode retrievedDeltaPayloadJson = MAPPER
+                                        .readTree(message.getBinaryMessage().getMessage());
+                                JsonNode newUpdateDocument = calculateNewDocument(retrievedDeltaPayloadJson, expectedUpdateShadowDocumentJson);
+                                handleUpdateThingShadowOperation(thingName, shadowName, MAPPER
+                                        .writeValueAsBytes(newUpdateDocument), expectedUpdateShadowDocumentJson2);
+                            }
+                        } catch (IOException | ExecutionException | InterruptedException e) {
+                            LOGGER.error("Unable to send assertion for receive message", e);
                         }
-                    } catch (IOException | ExecutionException | InterruptedException e) {
-                        LOGGER.error("Unable to send assertion for receive message", e);
-                    }
 
-                    LATCH.countDown();
-                    LOGGER.info("Assertion posted");
-                }
-
-                @Override
-                public boolean onStreamError(Throwable error) {
-                    LOGGER.error("Received a stream error", error);
-                    return false;
-                }
-
-                @Override
-                public void onStreamClosed() {
-                    LOGGER.info("Subscribe to topic stream closed.");
-                }
-            })).getResponse();
-
-            try {
-                fut.get(50, TimeUnit.SECONDS);
-                LOGGER.info("Successfully subscribed to {}", topic);
-
-                if (!LATCH.await(180, TimeUnit.SECONDS)) {
-                    LOGGER.error("Timed out waiting for the message");
-                    updateComponentState(greengrassCoreIPCClient, ReportedLifecycleState.ERRORED);
-                }
-            } catch (TimeoutException e) {
-                LOGGER.error("Timeout occurred while subscribing to {}", topic, e);
-                updateComponentState(greengrassCoreIPCClient, ReportedLifecycleState.ERRORED);
-            } catch (ExecutionException e) {
-                if (e.getCause() instanceof UnauthorizedError) {
-                    UnauthorizedError unauthorizedError = (UnauthorizedError) e.getCause();
-                    LOGGER.error("Unauthorized error while subscribing to {}", topic, e);
-                    updateComponentState(greengrassCoreIPCClient, ReportedLifecycleState.ERRORED);
-                } else {
-                    LOGGER.error("Execution error while subscribing to {}", topic, e);
-                    updateComponentState(greengrassCoreIPCClient, ReportedLifecycleState.ERRORED);
+                        LATCH.countDown();
+                        messageReceived.set(true);
+                        LOGGER.info("Assertion posted");
+                    },
+                    Optional.of((error) -> {
+                        LOGGER.error("Received a stream error", error);
+                        return false;
+                    }),
+                    Optional.of(() -> {
+                        LOGGER.error("Subscribe to topic stream closed.");
+                    })).getResponse();
+            while (!messageReceived.get()) {
+                LOGGER.info("Waiting for message on topic for 5 seconds...");
+                if (LATCH.await(5, TimeUnit.SECONDS)) {
+                    break;
                 }
             }
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
-        } catch (IOException | ExecutionException e) {
-            LOGGER.error("Exception occurred while running subscribe", e);
-        } finally {
-            if (eventStreamRpcConnection != null) {
-                try {
-                    eventStreamRpcConnection.close();
-                } catch (Exception ex) {
-                    LOGGER.error("Unexpected error occurred while closing IPC connection", ex);
-                }
-            }
         }
     }
 
@@ -194,39 +149,21 @@ public class ShadowReactiveComponent implements Consumer<String[]> {
 
     void handleUpdateThingShadowOperation(String thingName, String shadowName, byte[] updateDocument, JsonNode expectedShadowDocumentJson)
             throws ExecutionException, InterruptedException, IOException {
-        GreengrassCoreIPCClientV2 eventStreamRpcConnection = null;
-        try {
-            LOGGER.info("Updating shadow for {} with name {}", thingName, shadowName);
+        LOGGER.info("Updating shadow for {} with name {}", thingName, shadowName);
+        UpdateThingShadowRequest updateThingShadowRequest = new UpdateThingShadowRequest();
+        updateThingShadowRequest.setThingName(thingName);
+        updateThingShadowRequest.setShadowName(shadowName);
+        updateThingShadowRequest.setPayload(updateDocument);
 
-            eventStreamRpcConnection = IPCTestUtils.getGreengrassClient();
-            GreengrassCoreIPC greengrassCoreIPCClient = eventStreamRpcConnection.getClient();
-            UpdateThingShadowRequest updateThingShadowRequest = new UpdateThingShadowRequest();
-            updateThingShadowRequest.setThingName(thingName);
-            updateThingShadowRequest.setShadowName(shadowName);
-            updateThingShadowRequest.setPayload(updateDocument);
-
-            CompletableFuture<UpdateThingShadowResponse> fut =
-                    greengrassCoreIPCClient.updateThingShadow(updateThingShadowRequest, Optional.empty()).getResponse();
-
-            UpdateThingShadowResponse updateThingShadowResponse = fut.get(90, TimeUnit.SECONDS);
-            JsonNode receivedShadowDocumentJson = MAPPER.readTree(updateThingShadowResponse.getPayload());
-            removeTimeStamp(receivedShadowDocumentJson);
-            removeMetadata(receivedShadowDocumentJson);
-            if (receivedShadowDocumentJson.equals(expectedShadowDocumentJson)) {
-                LOGGER.info("Updated shadow for {} with name {} successfully", thingName, shadowName);
-            } else {
-                LOGGER.info("Not Updated shadow for {} with name {} successfully", thingName, shadowName);
-            }
-        } catch (TimeoutException e) {
-            LOGGER.error("Timeout occurred while updating shadow to {}:{}", thingName, shadowName, e);
-        } finally {
-            if (eventStreamRpcConnection != null) {
-                try {
-                    eventStreamRpcConnection.close();
-                } catch (Exception ex) {
-                    LOGGER.error("Unexpected error occurred while closing IPC connection", ex);
-                }
-            }
+        UpdateThingShadowResponse updateThingShadowResponse = greengrassCoreIPCClient
+                .updateThingShadow(updateThingShadowRequest);
+        JsonNode receivedShadowDocumentJson = MAPPER.readTree(updateThingShadowResponse.getPayload());
+        removeTimeStamp(receivedShadowDocumentJson);
+        removeMetadata(receivedShadowDocumentJson);
+        if (receivedShadowDocumentJson.equals(expectedShadowDocumentJson)) {
+            LOGGER.info("Updated shadow for {} with name {} successfully", thingName, shadowName);
+        } else {
+            LOGGER.info("Not Updated shadow for {} with name {} successfully", thingName, shadowName);
         }
     }
 

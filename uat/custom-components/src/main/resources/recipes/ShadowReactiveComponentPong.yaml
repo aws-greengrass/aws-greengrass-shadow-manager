@@ -46,5 +46,5 @@ Manifests:
     Lifecycle:
       Setenv:
         SubscribeTopic: "{configuration:/SubscribeTopic}"
-      Startup: >-
-        java -Dlog.level=INFO -DcomponentName="ShadowReactiveComponent" -jar {artifacts:path}/custom-components.jar "{configuration:/ThingName}" "{configuration:/ShadowName}" "{configuration:/UpdateDocumentRequest1}"
+      Run: >-
+        java -Dlog.level=INFO -DcomponentName="ShadowReactiveComponent" -jar {artifacts:path}/custom-components.jar "{configuration:/ThingName}" "{configuration:/ShadowName}" "{configuration:/UpdateDocumentRequest1}" "{configuration:/ExpectedShadowDocument1}" "{configuration:/ExpectedShadowDocument2}"

@@ -395,6 +395,7 @@ Feature: Greengrass V2 ShadowManager
            }
         }
         """
+        Then the local Greengrass deployment is SUCCEEDED on the device after 120 seconds
         When I install the component ShadowComponentPong from local store with configuration
         """
         {
