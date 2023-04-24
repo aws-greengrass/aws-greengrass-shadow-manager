@@ -1211,6 +1211,7 @@ class SyncTest extends NucleusLaunchUtils {
 
         CountDownLatch bidirectionalRequestsHaveBeenQueued = new CountDownLatch(1);
         CountDownLatch finalCloudRequestProcessed = new CountDownLatch(1);
+        CountDownLatch executingBlockingCloudUpdate = new CountDownLatch(1);
         when(iotDataPlaneClientFactory.getIotDataPlaneClient()
                 .getThingShadow(any(GetThingShadowRequest.class)))
                 .thenReturn(initialCloudStateShadowResponse)
@@ -1228,6 +1229,7 @@ class SyncTest extends NucleusLaunchUtils {
                         finalCloudRequestProcessed.countDown();
                     }
                     if (doc.getState().toJson().equals(blockingCloudUpdateDoc.getState().toJson())) {
+                        executingBlockingCloudUpdate.countDown();
                         assertTrue(bidirectionalRequestsHaveBeenQueued.await(5000L, TimeUnit.SECONDS));
                     }
                     return mockUpdateThingShadowResponse;
@@ -1252,6 +1254,10 @@ class SyncTest extends NucleusLaunchUtils {
         blockingRequest.setShadowName(CLASSIC_SHADOW);
         blockingRequest.setPayload(blockingCloudUpdate.getBytes(UTF_8));
         updateHandler.handleRequest(blockingRequest, "DoAll");
+        // If the next cloud request comes in before this one is executed, both of the cloud requests are merged.
+        // But the test is to verify merging of cloud and local requests.
+        assertThat("executing blocking cloud update request", executingBlockingCloudUpdate
+                .await(5000L, TimeUnit.SECONDS));
 
         // receive cloud update
         UpdateThingShadowRequest updateRequest = new UpdateThingShadowRequest();
@@ -1305,6 +1311,7 @@ class SyncTest extends NucleusLaunchUtils {
 
         CountDownLatch bidirectionalRequestsHaveBeenQueued = new CountDownLatch(1);
         CountDownLatch finalCloudRequestProcessed = new CountDownLatch(1);
+        CountDownLatch executingBlockingCloudUpdate = new CountDownLatch(1);
         when(iotDataPlaneClientFactory.getIotDataPlaneClient()
                 .getThingShadow(any(GetThingShadowRequest.class)))
                 .thenReturn(initialCloudStateShadowResponse)
@@ -1316,10 +1323,11 @@ class SyncTest extends NucleusLaunchUtils {
                 .thenAnswer(unused -> {
                     ShadowDocument doc = new ShadowDocument(cloudUpdateThingShadowRequestCaptor.getValue().payload().asByteArray());
                     ShadowDocument blockedShadowDocument = new ShadowDocument(blockingCloudUpdate.getBytes(UTF_8));
-                    if (doc.getState().getDesired().has("OtherKey")){
+                    if (doc.getState().getDesired().has("OtherKey")) {
                         finalCloudRequestProcessed.countDown();
                     }
-                    if (doc.getState().toJson().equals(blockedShadowDocument.getState().toJson())){
+                    if (doc.toJson(true).equals(blockedShadowDocument.toJson(true))) {
+                        executingBlockingCloudUpdate.countDown();
                         assertTrue(bidirectionalRequestsHaveBeenQueued.await(5000L, TimeUnit.SECONDS));
                     }
                     return mockUpdateThingShadowResponse;
@@ -1344,6 +1352,10 @@ class SyncTest extends NucleusLaunchUtils {
         blockingRequest.setShadowName(CLASSIC_SHADOW);
         blockingRequest.setPayload(blockingCloudUpdate.getBytes(UTF_8));
         updateHandler.handleRequest(blockingRequest, "DoAll");
+        // If the next cloud request comes in before this one is executed, both of the cloud requests are merged.
+        // But the test is to verify merging of cloud and local requests.
+        assertThat("executing blocking cloud update request", executingBlockingCloudUpdate
+                .await(5000L, TimeUnit.SECONDS));
 
         // receive cloud update
         UpdateThingShadowRequest updateRequest = new UpdateThingShadowRequest();
