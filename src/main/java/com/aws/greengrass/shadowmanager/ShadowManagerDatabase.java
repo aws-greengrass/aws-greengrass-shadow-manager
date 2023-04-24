@@ -79,7 +79,8 @@ public class ShadowManagerDatabase implements Closeable {
     @Synchronized
     public void install() throws ShadowManagerDataException {
         try {
-            if (!isMigrationSuccessful()) {
+            boolean isMigrationSuccessful = migrateAndGetResult();
+            if (!isMigrationSuccessful) {
                 logger.atWarn().log("Failed to migrate the existing shadow manager DB. "
                         + "Removing it and creating a new one.");
                 deleteDB(databasePath);
@@ -98,7 +99,7 @@ public class ShadowManagerDatabase implements Closeable {
         flyway.migrate();
     }
 
-    private boolean isMigrationSuccessful() {
+    private boolean migrateAndGetResult() {
         try {
             migrateDB();
             return true;
