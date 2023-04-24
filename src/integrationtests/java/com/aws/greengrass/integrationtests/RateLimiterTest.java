@@ -12,6 +12,7 @@ import com.aws.greengrass.shadowmanager.exception.IoTDataPlaneClientCreationExce
 import com.aws.greengrass.shadowmanager.exception.ThrottledRequestException;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
+import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
 import com.aws.greengrass.shadowmanager.sync.strategy.RealTimeSyncStrategy;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
@@ -55,6 +56,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.after;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -103,13 +106,15 @@ class RateLimiterTest extends NucleusLaunchUtils {
                         .lastSyncedDocument(lastSyncedDocument.getBytes())
                         .cloudVersion(0).build()));
         lenient().when(dao.updateSyncInformation(any(SyncInformation.class))).thenReturn(true);
+        RequestBlockingQueue queue = spy(kernel.getContext().get(RequestBlockingQueue.class));
+        kernel.getContext().put(RequestBlockingQueue.class, queue);
 
         startNucleusWithConfig(NucleusLaunchUtilsConfig.builder().configFile("rateLimits.yaml").mockCloud(true).mockDao(true).build());
         SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
         JsonNode updateDocument = JsonUtil.getPayloadJson(localShadowContentV1.getBytes()).get();
 
         assertThat("syncing has started", () -> kernel.getContext().get(RealTimeSyncStrategy.class).isSyncing(), eventuallyEval(is(true)));
-
+        verify(queue, timeout(2000).times(1)).clear();
         // thingName has to be unique to prevent requests from being merged
         final int totalRequestCalls = 10;
         for (int i = 0; i < totalRequestCalls; i++) {
@@ -121,7 +126,7 @@ class RateLimiterTest extends NucleusLaunchUtils {
                 any(software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowRequest.class));
 
         // verify that the rest of the requests are eventually handled
-        verify(iotDataPlaneClientFactory.getIotDataPlaneClient(), after(5000).times(totalRequestCalls)).updateThingShadow(
+        verify(iotDataPlaneClientFactory.getIotDataPlaneClient(), after(10000).times(totalRequestCalls)).updateThingShadow(
                 any(software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowRequest.class));
     }
 

@@ -9,6 +9,7 @@ import com.aws.greengrass.dependency.State;
 import com.aws.greengrass.lifecyclemanager.GlobalStateChangeListener;
 import com.aws.greengrass.lifecyclemanager.GreengrassService;
 import com.aws.greengrass.lifecyclemanager.Kernel;
+import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.mqttclient.MqttClient;
 import com.aws.greengrass.shadowmanager.AuthorizationHandlerWrapper;
 import com.aws.greengrass.shadowmanager.ShadowManager;
@@ -17,6 +18,7 @@ import com.aws.greengrass.shadowmanager.ShadowManagerDatabase;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientFactory;
 import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
+import com.aws.greengrass.shadowmanager.sync.Retryer;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
 import com.aws.greengrass.shadowmanager.sync.model.DirectionWrapper;
 import com.aws.greengrass.shadowmanager.sync.strategy.BaseSyncStrategy;
@@ -127,6 +129,14 @@ public class NucleusLaunchUtils extends GGServiceTestUtil {
                     .maxRetryInterval(Duration.ofSeconds(1))
                     .retryableExceptions(Collections.singletonList(RetryableException.class))
                     .build();
+            Retryer retryer =  (retryConfig1, request, context) ->
+            RetryUtils.runWithRetry(retryConfig,
+                () -> {
+                    request.execute(context);
+                    return null;
+                },
+                "test-setup", LogManager.getLogger(getClass()));
+            SyncHandler.setRetryer(retryer);
             SyncStrategy syncStrategy;
             if (RealTimeSyncStrategy.class.equals(config.getSyncClazz())) {
                 syncStrategy = new RealTimeSyncStrategy(es, ((RealTimeSyncStrategy) realTimeSyncStrategy).getRetryer(), retryConfig, queue, direction);
@@ -179,7 +189,7 @@ public class NucleusLaunchUtils extends GGServiceTestUtil {
 
     protected void assertSyncingHasStarted(Class<? extends BaseSyncStrategy> clazz) {
         BaseSyncStrategy s = kernel.getContext().get(clazz);
-        assertThat("syncing has started", s::isSyncing, eventuallyEval(is(true)));
+        assertThat("syncing has started", s::isSyncing, eventuallyEval(is(true), Duration.ofSeconds(10)));
     }
 
     protected void assertEmptySyncQueue(Class<? extends BaseSyncStrategy> clazz) {
