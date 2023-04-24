@@ -89,6 +89,17 @@ public class SyncHandler {
      * Request queue.
      */
     private final RequestBlockingQueue syncQueue;
+    // retry wrapper so that requests can be mocked
+    // setter is used in integ tests only
+    @Setter
+    private static Retryer retryer = (config, request, context) ->
+            RetryUtils.runWithRetry(config,
+                    () -> {
+                        request.execute(context);
+                        return null;
+                    },
+                    SYNC_EVENT_TYPE, logger);
+
 
     /**
      * Construct a new instance.
@@ -101,15 +112,7 @@ public class SyncHandler {
     @Inject
     public SyncHandler(ExecutorService executorService, ScheduledExecutorService syncScheduledExecutorService,
                        RequestBlockingQueue syncQueue, DirectionWrapper direction) {
-        this(executorService, syncScheduledExecutorService,
-                // retry wrapper so that requests can be mocked
-                (config, request, context) ->
-                        RetryUtils.runWithRetry(config,
-                                () -> {
-                                    request.execute(context);
-                                    return null;
-                                },
-                                SYNC_EVENT_TYPE, logger), syncQueue, direction);
+        this(executorService, syncScheduledExecutorService, retryer, syncQueue, direction);
     }
 
     /**

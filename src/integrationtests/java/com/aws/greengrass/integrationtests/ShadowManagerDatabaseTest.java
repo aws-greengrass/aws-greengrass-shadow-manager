@@ -12,6 +12,7 @@ import com.aws.greengrass.shadowmanager.ShadowManagerDAOImpl;
 import com.aws.greengrass.shadowmanager.ShadowManagerDatabase;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
+import org.apache.commons.io.FileUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -79,6 +80,7 @@ class ShadowManagerDatabaseTest extends NucleusLaunchUtils {
     @AfterEach
     void close() throws IOException {
         db.close();
+        FileUtils.deleteDirectory(rootDir.toFile());
     }
 
     @Test
@@ -186,11 +188,11 @@ class ShadowManagerDatabaseTest extends NucleusLaunchUtils {
 
         final String[] things = new String[numThings];
         for (int i = 0; i < numThings; i++) {
-            things[i] = UUID.randomUUID().toString();
+            things[i] = "thing-"+i;
         }
         final String[] shadows = new String[numShadows];
         for (int i = 0; i < numShadows; i++) {
-            shadows[i] = UUID.randomUUID().toString();
+            shadows[i] = "shadow-"+i;
         }
 
         List<Long> sizes = Collections.synchronizedList(new ArrayList<>());
