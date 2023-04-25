@@ -489,7 +489,6 @@ public class ShadowManager extends PluginService {
             stopSyncingShadows(true);
             pubSubIntegrator.unsubscribe();
             inboundRateLimiter.clear();
-            dao.waitForDBOperationsToFinish();
             database.close();
         } catch (IOException e) {
             logger.atError()

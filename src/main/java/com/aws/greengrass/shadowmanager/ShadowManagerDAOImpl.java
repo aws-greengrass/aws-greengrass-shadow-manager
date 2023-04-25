@@ -355,16 +355,6 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
 
     }
 
-    @Override
-    public void waitForDBOperationsToFinish() {
-        if (!dbWriteOperations.tryAcquire(maxPermits)) {
-            logger.atDebug().log("Waiting for the DB write operations to finish");
-            dbWriteOperations.acquireUninterruptibly(maxPermits);
-        }
-        logger.atDebug().log("Finished all the DB write operations");
-        dbWriteOperations.release(maxPermits);
-    }
-
     private <T> T execute(String sql, SQLExecution<T> thunk) {
         try (Connection c = database.getPool().getConnection();
              PreparedStatement statement = c.prepareStatement(sql)) {
@@ -376,13 +366,13 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
 
     private <T> T executeWriteOperation(String sql, SQLExecution<T> thunk) {
         try {
-            dbWriteOperations.acquire();
+            database.getDbWriteOperations().acquire();
             return execute(sql, thunk);
         } catch (InterruptedException e) {
             logger.atDebug().log("Interrupted before performing the DB operation");
             throw new ShadowManagerDataException(e);
         } finally {
-            dbWriteOperations.release();
+            database.getDbWriteOperations().release();
         }
     }
 }

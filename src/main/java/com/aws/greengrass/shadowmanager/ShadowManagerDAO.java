@@ -11,12 +11,8 @@ import com.aws.greengrass.util.Pair;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.Semaphore;
 
 public interface ShadowManagerDAO {
-    int maxPermits = 10;
-    Semaphore dbWriteOperations = new Semaphore(maxPermits);
-
     /**
      * Attempts to obtain a shadow document from the local shadow storage.
      *
@@ -114,6 +110,4 @@ public interface ShadowManagerDAO {
      * @return true if the insert is successful; Else false.
      */
     boolean insertSyncInfoIfNotExists(SyncInformation request);
-
-    void waitForDBOperationsToFinish();
 }
