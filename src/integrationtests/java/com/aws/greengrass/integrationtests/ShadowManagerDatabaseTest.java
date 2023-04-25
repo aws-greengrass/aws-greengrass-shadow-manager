@@ -10,13 +10,16 @@ import com.aws.greengrass.lifecyclemanager.Kernel;
 import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAOImpl;
 import com.aws.greengrass.shadowmanager.ShadowManagerDatabase;
+import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
+import org.flywaydb.core.internal.exception.FlywaySqlException;
 import org.apache.commons.io.FileUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -28,7 +31,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -49,6 +54,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
+import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static java.util.concurrent.CompletableFuture.allOf;
 import static java.util.concurrent.CompletableFuture.runAsync;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -70,7 +76,7 @@ class ShadowManagerDatabaseTest extends NucleusLaunchUtils {
     ShadowManagerDatabase db;
 
     @BeforeEach
-    void initializeShadowManagerDatabase() {
+    void initializeShadowManagerDatabase() throws IOException {
         System.setProperty("aws.greengrass.scanSelfClasspath", "true");
         db = new ShadowManagerDatabase(rootDir);
         db.install();
@@ -119,6 +125,38 @@ class ShadowManagerDatabaseTest extends NucleusLaunchUtils {
 
     @Test
     void GIVEN_migrations_WHEN_install_THEN_shadow_manager_database_installs_and_starts_successfully() throws Exception {
+        // GIVEN
+        db.open();
+        assertNotNull(db.getPool());
+
+        // WHEN
+        db.install();
+
+        // THEN
+        List<String> tables = loadTables(db.getPool().getConnection());
+        // flyway installed
+        assertThat(tables, hasItem(equalToIgnoringCase("flyway_schema_history")));
+
+        // expected tables
+        assertThat(tables, hasItems(equalToIgnoringCase("documents"),
+                equalToIgnoringCase("sync")));
+
+        // tables loaded by migrations provided as test resources
+        assertThat(tables, hasItems(equalToIgnoringCase("foo"),
+                equalToIgnoringCase("baz")));
+
+        // table removed from migration
+        assertThat(tables, not(hasItem(equalToIgnoringCase("bar"))));
+    }
+
+    @Test
+    void GIVEN_corrupted_db_WHEN_install_THEN_shadow_manager_database_reinstalls_and_starts_successfully(ExtensionContext context)
+            throws Exception {
+        ignoreExceptionOfType(context, ShadowManagerDataException.class);
+        ignoreExceptionOfType(context, FlywaySqlException.class);
+        Path dest = Paths.get(rootDir.toString()+"/shadow.mv.db");
+        Path source = Paths.get(getClass().getResource("database/corrupted.mv.db").toURI());
+        Files.copy(source, dest, StandardCopyOption.REPLACE_EXISTING);
         // GIVEN
         db.open();
         assertNotNull(db.getPool());

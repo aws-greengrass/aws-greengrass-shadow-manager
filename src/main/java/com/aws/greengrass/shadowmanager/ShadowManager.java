@@ -21,6 +21,7 @@ import com.aws.greengrass.shadowmanager.configuration.ComponentConfiguration;
 import com.aws.greengrass.shadowmanager.configuration.RateLimitsConfiguration;
 import com.aws.greengrass.shadowmanager.configuration.ShadowDocSizeConfiguration;
 import com.aws.greengrass.shadowmanager.exception.InvalidConfigurationException;
+import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowIPCHandler;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.ipc.GetThingShadowIPCHandler;
@@ -52,7 +53,6 @@ import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.Synchronized;
-import org.flywaydb.core.api.FlywayException;
 import software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService;
 import software.amazon.awssdk.crt.mqtt.MqttClientConnectionEvents;
 
@@ -236,7 +236,7 @@ public class ShadowManager extends PluginService {
                 database.install();
                 JsonUtil.loadSchema();
             }
-        } catch (FlywayException | IOException e) {
+        } catch (ShadowManagerDataException | IOException e) {
             serviceErrored(e);
             return;
         }
