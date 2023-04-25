@@ -11,7 +11,7 @@ Feature: Greengrass V2 ShadowManager
             | aws.greengrass.Cli        | LATEST |
             | aws.greengrass.ShadowManager |  classpath:/greengrass/recipes/recipe.yaml |
         And I deploy the Greengrass deployment configuration
-        Then the Greengrass deployment is COMPLETED on the device after 2 minutes
+        Then the Greengrass deployment is COMPLETED on the device after 3 minutes
         Then I verify the aws.greengrass.ShadowManager component is RUNNING using the greengrass-cli
 
     Scenario: Shadow-1-T1: As a developer, I can use the Greengrass local shadow service to UPDATE and GET a shadow from my component.
