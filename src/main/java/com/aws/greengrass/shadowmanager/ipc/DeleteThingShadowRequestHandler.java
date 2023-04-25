@@ -102,6 +102,7 @@ public class DeleteThingShadowRequestHandler extends BaseRequestHandler {
                     authorizationHandlerWrapper.doAuthorization(DELETE_THING_SHADOW, serviceName, shadowRequest);
 
                     Optional<ShadowDocument> deletedShadowDocument = dao.deleteShadowThing(thingName, shadowName);
+                    this.syncHandler.removeShadowOnInteraction(thingName, shadowName);
                     if (!deletedShadowDocument.isPresent()) {
                         ResourceNotFoundError rnf = new ResourceNotFoundError("No shadow found");
                         rnf.setResourceType(SHADOW_RESOURCE_TYPE);

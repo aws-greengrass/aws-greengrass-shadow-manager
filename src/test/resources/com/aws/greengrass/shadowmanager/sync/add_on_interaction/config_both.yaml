@@ -1,0 +1,11 @@
+---
+configuration:
+  synchronize:
+    shadowDocuments:
+      - thingName: existingThing
+        classic: true
+        namedShadows: ["existingShadow"]
+
+    addedOnInteraction:
+      existingThing:
+        existingShadow2: true

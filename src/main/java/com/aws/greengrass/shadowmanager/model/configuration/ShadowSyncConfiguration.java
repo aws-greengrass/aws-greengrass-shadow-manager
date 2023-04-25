@@ -24,6 +24,9 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.CLASSIC_SHADOW_IDENTIFIER;
+import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_ADDED_ON_INTERACTION_TOPIC;
+import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_ADD_ON_INTERACTION_ENABLED_TOPIC;
+import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_ADD_ON_INTERACTION_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_CLASSIC_SHADOW_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_CORE_THING_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_NAMED_SHADOWS_TOPIC;
@@ -40,6 +43,8 @@ public class ShadowSyncConfiguration {
 
     private final Set<ThingShadowSyncConfiguration> syncConfigurations;
 
+    private final AddOnInteractionSyncConfiguration addOnInteraction;
+
     @Override
     public boolean equals(Object o) {
         // If the object is compared with itself then return true
@@ -55,7 +60,8 @@ public class ShadowSyncConfiguration {
         ShadowSyncConfiguration newConfiguration = (ShadowSyncConfiguration) o;
 
         // Compare the data members and return accordingly
-        return Objects.equals(this.syncConfigurations, newConfiguration.syncConfigurations);
+        return Objects.equals(this.syncConfigurations, newConfiguration.syncConfigurations)
+            && Objects.equals(this.addOnInteraction, newConfiguration.addOnInteraction);
     }
 
     @SuppressWarnings("PMD.UselessOverridingMethod")
@@ -74,16 +80,22 @@ public class ShadowSyncConfiguration {
      */
     public static ShadowSyncConfiguration processConfiguration(Map<String, Object> configTopicsPojo, String thingName) {
         Set<ThingShadowSyncConfiguration> syncConfigurationSet = new HashSet<>();
+        AddOnInteractionSyncConfiguration addOnInteraction = AddOnInteractionSyncConfiguration.builder()
+            .enabled(false)
+            .build();
         try {
             processCoreThingConfiguration(configTopicsPojo, thingName, syncConfigurationSet);
             processOtherThingConfigurations(configTopicsPojo, syncConfigurationSet);
+            processAddedOnInteractionConfigurations(configTopicsPojo, syncConfigurationSet);
+            processAddOnInteractionConfiguration(configTopicsPojo, addOnInteraction);
         } catch (InvalidRequestParametersException e) {
             throw new InvalidConfigurationException(e);
         }
 
         return ShadowSyncConfiguration.builder()
-                .syncConfigurations(syncConfigurationSet)
-                .build();
+            .syncConfigurations(syncConfigurationSet)
+            .addOnInteraction(addOnInteraction)
+            .build();
     }
 
     /**
@@ -107,9 +119,7 @@ public class ShadowSyncConfiguration {
                                 processThingConfiguration(componentConfigObject, componentName, syncConfigurationSet,
                                         CONFIGURATION_SHADOW_DOCUMENTS_MAP_TOPIC));
                     } else {
-                        throw new InvalidConfigurationException(String.format("Unexpected type in %s: %s",
-                                CONFIGURATION_SHADOW_DOCUMENTS_MAP_TOPIC,
-                                shadowDocumentsObject.getClass().getTypeName()));
+                        throw unexpectedTypeException(shadowDocumentsObject, CONFIGURATION_SHADOW_DOCUMENTS_MAP_TOPIC);
                     }
                     return shadowDocumentsObject;
                 });
@@ -125,11 +135,18 @@ public class ShadowSyncConfiguration {
                 shadowDocumentsToSyncList.forEach(shadowDocumentsToSync ->
                         processThingConfiguration(shadowDocumentsToSync, syncConfigurationSet));
             } else {
-                throw new InvalidConfigurationException(String.format("Unexpected type in %s: %s",
-                        CONFIGURATION_SHADOW_DOCUMENTS_TOPIC, shadowDocumentsObject.getClass().getTypeName()));
+                throw unexpectedTypeException(shadowDocumentsObject, CONFIGURATION_SHADOW_DOCUMENTS_TOPIC);
             }
             return shadowDocumentsObject;
         });
+    }
+
+    private static InvalidConfigurationException unexpectedTypeException(Object object, String path) {
+        return new InvalidConfigurationException(String.format(
+            UNEXPECTED_TYPE_FORMAT,
+            path,
+            object == null ? null : object.getClass().getTypeName()
+        ));
     }
 
     /**
@@ -164,8 +181,7 @@ public class ShadowSyncConfiguration {
             Map<String, Object> thingConfig = (Map) thingConfigObject;
             processThingShadowSyncConfiguration(syncConfigurationSet, thingConfig, thingName);
         } else {
-            throw new InvalidConfigurationException(String.format(UNEXPECTED_TYPE_FORMAT,
-                    configName, thingConfigObject.getClass().getTypeName()));
+            throw unexpectedTypeException(thingConfigObject, configName);
         }
     }
 
@@ -182,8 +198,7 @@ public class ShadowSyncConfiguration {
             Map<String, Object> thingConfig = (Map) thingConfigObject;
             processThingShadowSyncConfiguration(syncConfigurationSet, thingConfig, getThingName(thingConfig));
         } else {
-            throw new InvalidConfigurationException(String.format(UNEXPECTED_TYPE_FORMAT,
-                    CONFIGURATION_SHADOW_DOCUMENTS_TOPIC, thingConfigObject.getClass().getTypeName()));
+            throw unexpectedTypeException(thingConfigObject, CONFIGURATION_SHADOW_DOCUMENTS_TOPIC);
         }
     }
 
@@ -206,8 +221,7 @@ public class ShadowSyncConfiguration {
                 return thingName;
             }
         }
-        throw new InvalidConfigurationException(String.format(UNEXPECTED_TYPE_FORMAT,
-                CONFIGURATION_THING_NAME_TOPIC, name == null ? null : name.getClass().getTypeName()));
+        throw unexpectedTypeException(name, CONFIGURATION_THING_NAME_TOPIC);
 
     }
 
@@ -243,8 +257,7 @@ public class ShadowSyncConfiguration {
                             syncConfigurationSet.add(syncConfiguration);
                         }
                     } else {
-                        throw new InvalidConfigurationException(String.format(UNEXPECTED_TYPE_FORMAT,
-                                configObjectEntry.getKey(), configObjectEntry.getClass().getTypeName()));
+                        throw unexpectedTypeException(configObjectEntry, configObjectEntry.getKey());
                     }
                     break;
                 default:
@@ -259,6 +272,88 @@ public class ShadowSyncConfiguration {
                     .build();
             syncConfigurationSet.add(syncConfiguration);
         }
+    }
+
+    private static void processAddOnInteractionConfiguration(
+        Map<String, Object> configTopicsPojo, AddOnInteractionSyncConfiguration addOnInteraction
+    ) {
+        Object configObject = configTopicsPojo.get(CONFIGURATION_ADD_ON_INTERACTION_TOPIC);
+        if (configObject == null) {
+            return;
+        }
+        if (!(configObject instanceof Map)) {
+            throw unexpectedTypeException(configObject, CONFIGURATION_ADD_ON_INTERACTION_TOPIC);
+        }
+        Map<String, Object> configMap = (Map<String, Object>) configObject;
+
+        Object enabledObject = configMap.get(CONFIGURATION_ADD_ON_INTERACTION_ENABLED_TOPIC);
+        if (enabledObject == null) {
+            return;
+        }
+        if (!(enabledObject instanceof Boolean)) {
+            throw unexpectedTypeException(configObject, String.format(
+                "%s.%s", CONFIGURATION_ADD_ON_INTERACTION_TOPIC, CONFIGURATION_ADD_ON_INTERACTION_ENABLED_TOPIC
+            ));
+        }
+        addOnInteraction.setEnabled((Boolean) enabledObject);
+    }
+
+    private static void processAddedOnInteractionConfigurations(
+        Map<String, Object> configTopicsPojo, Set<ThingShadowSyncConfiguration> syncConfigurationSet
+    ) {
+        Object configObject = configTopicsPojo.get(CONFIGURATION_ADDED_ON_INTERACTION_TOPIC);
+        if (configObject == null) {
+            return;
+        }
+        if (!(configObject instanceof Map)) {
+            throw unexpectedTypeException(configObject, CONFIGURATION_ADDED_ON_INTERACTION_TOPIC);
+        }
+        Map<String, Object> configMap = (Map<String, Object>) configObject;
+
+        Set<ThingShadowSyncConfiguration> thingShadowsAddedOnInteraction = new HashSet<>();
+        configMap.forEach((thingName, shadowsConfigObject) -> processAddedOnInteractionThingConfiguration(
+            thingName, shadowsConfigObject, thingShadowsAddedOnInteraction
+        ));
+
+        // merge shadows added on interaction and not on interaction
+        for (ThingShadowSyncConfiguration thingShadow: thingShadowsAddedOnInteraction) {
+            if (syncConfigurationSet.contains(thingShadow)) {
+                continue;
+            }
+            syncConfigurationSet.add(thingShadow);
+        }
+    }
+
+    private static void processAddedOnInteractionThingConfiguration(
+        String thingName, Object configObject, Set<ThingShadowSyncConfiguration> syncConfigurationSet
+    ) {
+        if (configObject == null) {
+            return;
+        }
+        if (!(configObject instanceof Map)) {
+            throw unexpectedTypeException(configObject, String.format(
+                "%s[%s]", CONFIGURATION_ADDED_ON_INTERACTION_TOPIC, thingName
+            ));
+        }
+
+        Map<String, Boolean> configMap = (Map<String, Boolean>)configObject;
+        configMap.forEach((shadowName, onInteraction) -> {
+            if (!onInteraction) {
+                return;
+            }
+            ThingShadowSyncConfiguration sync = ThingShadowSyncConfiguration
+                .builder()
+                .thingName(thingName)
+                .shadowName(shadowName)
+                .addedOnInteraction(true)
+                .build();
+            syncConfigurationSet.add(sync);
+            if (syncConfigurationSet.contains(sync)) {
+                // it already contains this sync configuration and it was not added on interaction.
+                return;
+            }
+            syncConfigurationSet.add(sync);
+        });
     }
 
     /**
