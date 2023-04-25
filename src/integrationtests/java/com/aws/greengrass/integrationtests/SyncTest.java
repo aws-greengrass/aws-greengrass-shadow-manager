@@ -1016,20 +1016,25 @@ class SyncTest extends NucleusLaunchUtils {
 
         // verify sync info is empty
         assertEmptySyncQueue(clazz);
+        verify(syncQueue, after(7000).atMost(4)).put(any(FullShadowSyncRequest.class));
         assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
         assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(1L)));
         assertThat("local version", syncInfo.get().get().getLocalVersion(), is(1L));
 
         SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
-
+        CountDownLatch cdl = new CountDownLatch(1);
         // at this point:
         //  * two cloud updates have happened. So far the updates haven't been received, but they will be received out of order
         //  * cloud shadow reflects shadow state after two updates
-        when(iotDataPlaneClientFactory.getIotDataPlaneClient().getThingShadow(any(GetThingShadowRequest.class))).thenReturn(finalCloudStateShadowResponse);
+        when(iotDataPlaneClientFactory.getIotDataPlaneClient().getThingShadow(any(GetThingShadowRequest.class)))
+                .thenAnswer((i)->{
+                    cdl.countDown();
+                    return finalCloudStateShadowResponse;
+                });
 
         // receive cloud update 2 of 2 (out of order)
         syncHandler.pushLocalUpdateSyncRequest(MOCK_THING_NAME_1, CLASSIC_SHADOW, JsonUtil.getPayloadBytes(cloudUpdateDocument2));
-        assertEmptySyncQueue(clazz);
+        assertThat("processed first cloud update request", cdl.await(5, TimeUnit.SECONDS));
         assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
         assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(3L)));
         assertThat("local version", syncInfo.get().get().getLocalVersion(), is(2L));
