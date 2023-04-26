@@ -93,7 +93,7 @@ class SyncDirectionalityTest extends NucleusLaunchUtils {
     void GIVEN_cloud_sync_enabled_WHEN_local_update_THEN_syncs_shadow_to_cloud(String configFileName, ExtensionContext context) throws InterruptedException, IOException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, InterruptedException.class);
         ignoreExceptionOfType(context, ResourceNotFoundException.class);
-
+        CountDownLatch cdl =  new CountDownLatch(1);
         // no shadow exists in cloud
         when(iotDataPlaneClientFactory.getIotDataPlaneClient().getThingShadow(any(GetThingShadowRequest.class)))
                 .thenThrow(ResourceNotFoundException.class);
@@ -101,7 +101,10 @@ class SyncDirectionalityTest extends NucleusLaunchUtils {
         // mock response to update cloud
         when(mockUpdateThingShadowResponse.payload()).thenReturn(SdkBytes.fromString("{\"version\": 1}", UTF_8));
         when(iotDataPlaneClientFactory.getIotDataPlaneClient().updateThingShadow(cloudUpdateThingShadowRequestCaptor.capture()))
-                .thenReturn(mockUpdateThingShadowResponse);
+                .thenAnswer((i)->{
+                    cdl.countDown();
+                    return mockUpdateThingShadowResponse;
+                });
 
         startNucleusWithConfig(NucleusLaunchUtilsConfig.builder()
                 .configFile(configFileName)
@@ -121,6 +124,7 @@ class SyncDirectionalityTest extends NucleusLaunchUtils {
 
         updateHandler.handleRequest(request, "DoAll");
         assertEmptySyncQueue(RealTimeSyncStrategy.class);
+        assertThat("updated cloud shadow", cdl.await(10, TimeUnit.SECONDS));
 
         assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
 
