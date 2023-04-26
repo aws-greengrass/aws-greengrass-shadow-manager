@@ -305,7 +305,7 @@ public class SyncHandler {
      * @param shadowName - The shadow name to be added to synchronization
      */
     public void addShadowOnInteraction(String thingName, String shadowName) {
-        if (!syncConfiguration.getAddOnInteraction().getEnabled()) {
+        if (!addOnInteractionEnabled()) {
             return;
         }
 
@@ -333,7 +333,7 @@ public class SyncHandler {
      * @param shadowName - The shadow name to be removed from synchronization
      */
     public void removeShadowOnInteraction(String thingName, String shadowName) {
-        if (!syncConfiguration.getAddOnInteraction().getEnabled()) {
+        if (!addOnInteractionEnabled()) {
             return;
         }
         ThingShadowSyncConfiguration sync = buildThingShadowSyncConfiguration(thingName, shadowName);
@@ -359,6 +359,11 @@ public class SyncHandler {
         Set<ThingShadowSyncConfiguration> syncConfigurations = new HashSet<>(this.getSyncConfigurations());
         syncConfigurations.remove(existingSync);
         syncConfigurationUpdater.updateThingShadowsAddedOnInteraction(syncConfigurations);
+    }
+
+    private boolean addOnInteractionEnabled() {
+        return syncConfiguration.getAddOnInteraction() != null && syncConfiguration.getAddOnInteraction().getEnabled();
+
     }
 
     private ThingShadowSyncConfiguration buildThingShadowSyncConfiguration(String thingName, String shadowName) {
