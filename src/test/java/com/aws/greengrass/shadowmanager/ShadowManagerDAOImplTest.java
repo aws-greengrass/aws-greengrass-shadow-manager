@@ -25,6 +25,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -46,6 +47,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
@@ -62,6 +64,9 @@ class ShadowManagerDAOImplTest {
 
     @Mock
     private Connection mockConnection;
+
+    @Mock
+    private Statement statement;
 
     @Mock
     private PreparedStatement mockPreparedStatement;
@@ -83,6 +88,7 @@ class ShadowManagerDAOImplTest {
     @BeforeEach
     void setup() throws SQLException, IOException {
         when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+        lenient().when(mockConnection.createStatement()).thenReturn(statement);
         when(mockDatabase.getPool()).thenReturn(mockPool);
         when(mockPool.getConnection()).thenReturn(mockConnection);
         JsonUtil.loadSchema();

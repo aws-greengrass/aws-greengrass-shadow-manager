@@ -18,6 +18,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -367,9 +368,20 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
         }
     }
 
+    private void checkpointSync() {
+        try (Connection c = database.getPool().getConnection();
+             Statement statement = c.createStatement()) {
+             statement.execute("CHECKPOINT SYNC");
+        } catch (SQLException | IllegalStateException e) {
+            throw new ShadowManagerDataException(e);
+        }
+    }
+
     private <T> T executeWriteOperation(String sql, SQLExecution<T> thunk) {
         try {
-            return dbWriteThreadPool.submit(() -> execute(sql, thunk)).get(10, TimeUnit.SECONDS);
+            T result = dbWriteThreadPool.submit(() -> execute(sql, thunk)).get(10, TimeUnit.SECONDS);
+            checkpointSync();
+            return result;
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             throw new ShadowManagerDataException(e);
         }

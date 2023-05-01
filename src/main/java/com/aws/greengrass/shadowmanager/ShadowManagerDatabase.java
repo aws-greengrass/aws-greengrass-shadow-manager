@@ -41,6 +41,7 @@ public class ShadowManagerDatabase implements Closeable {
             + ";RETENTION_TIME=1000" // ms - time to keep values for before writing to disk (default is 45000)
             + ";DEFRAG_ALWAYS=TRUE" // defragment db on shutdown (ensures only a single value in db on close)
             + ";COMPRESS=TRUE" // compress large objects (clob/blob) (default false)
+            + ";WRITE_DELAY=0" // maximum delay between commit and flushing the log
             ;
     private final JdbcDataSource dataSource;
 
