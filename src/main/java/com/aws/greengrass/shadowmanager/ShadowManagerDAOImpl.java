@@ -22,6 +22,9 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import javax.inject.Inject;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_CLOUD_VERSION_KEY;
@@ -366,13 +369,9 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
 
     private <T> T executeWriteOperation(String sql, SQLExecution<T> thunk) {
         try {
-            database.getDbWriteOperations().acquire();
-            return execute(sql, thunk);
-        } catch (InterruptedException e) {
-            logger.atDebug().log("Interrupted before performing the DB operation");
+            return dbWriteThreadPool.submit(() -> execute(sql, thunk)).get(10, TimeUnit.SECONDS);
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
             throw new ShadowManagerDataException(e);
-        } finally {
-            database.getDbWriteOperations().release();
         }
     }
 }

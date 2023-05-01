@@ -28,7 +28,6 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -47,7 +46,6 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
@@ -61,9 +59,6 @@ class ShadowManagerDAOImplTest {
 
     @Mock
     private JdbcConnectionPool mockPool;
-
-    @Mock
-    private Semaphore mockSemaphore;
 
     @Mock
     private Connection mockConnection;
@@ -87,7 +82,6 @@ class ShadowManagerDAOImplTest {
 
     @BeforeEach
     void setup() throws SQLException, IOException {
-        lenient().when(mockDatabase.getDbWriteOperations()).thenReturn(mockSemaphore);
         when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
         when(mockDatabase.getPool()).thenReturn(mockPool);
         when(mockPool.getConnection()).thenReturn(mockConnection);
