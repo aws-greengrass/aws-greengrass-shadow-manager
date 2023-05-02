@@ -29,6 +29,7 @@ import java.sql.Statement;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -89,6 +90,7 @@ class ShadowManagerDAOImplTest {
     void setup() throws SQLException, IOException {
         when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
         lenient().when(mockConnection.createStatement()).thenReturn(statement);
+        lenient().when(mockDatabase.getDbWriteThreadPool()).thenReturn(Executors.newCachedThreadPool());
         when(mockDatabase.getPool()).thenReturn(mockPool);
         when(mockPool.getConnection()).thenReturn(mockConnection);
         JsonUtil.loadSchema();

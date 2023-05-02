@@ -11,12 +11,8 @@ import com.aws.greengrass.util.Pair;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 public interface ShadowManagerDAO {
-    ExecutorService dbWriteThreadPool = Executors.newCachedThreadPool();
-
     /**
      * Attempts to obtain a shadow document from the local shadow storage.
      *

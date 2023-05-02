@@ -379,7 +379,8 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
 
     private <T> T executeWriteOperation(String sql, SQLExecution<T> thunk) {
         try {
-            T result = dbWriteThreadPool.submit(() -> execute(sql, thunk)).get(10, TimeUnit.SECONDS);
+            T result = database.getDbWriteThreadPool().submit(() ->
+                    execute(sql, thunk)).get(10, TimeUnit.SECONDS);
             checkpointSync();
             return result;
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
