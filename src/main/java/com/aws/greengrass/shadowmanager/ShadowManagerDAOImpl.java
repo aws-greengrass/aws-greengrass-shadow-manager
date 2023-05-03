@@ -361,6 +361,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
     private <T> T execute(String sql, SQLExecution<T> thunk) {
         try (Connection c = database.getPool().getConnection();
              PreparedStatement statement = c.prepareStatement(sql)) {
+            statement.setQueryTimeout(10);
             return thunk.apply(statement);
         } catch (SQLException | IllegalStateException e) {
             throw new ShadowManagerDataException(e);
@@ -370,8 +371,12 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
     private <T> T executeWriteOperation(String sql, SQLExecution<T> thunk) {
         try {
             return database.getDbWriteThreadPool().submit(() ->
-                    execute(sql, thunk)).get(10, TimeUnit.SECONDS);
-        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+                    execute(sql, thunk)).get(15, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            logger.atDebug().log("Interrupted while executing the DB write operation");
+            Thread.currentThread().interrupt();
+            throw new ShadowManagerDataException(e);
+        } catch (ExecutionException | TimeoutException e) {
             throw new ShadowManagerDataException(e);
         }
     }
