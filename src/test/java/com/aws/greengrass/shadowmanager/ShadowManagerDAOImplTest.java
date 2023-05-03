@@ -25,7 +25,6 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -67,9 +66,6 @@ class ShadowManagerDAOImplTest {
     private Connection mockConnection;
 
     @Mock
-    private Statement statement;
-
-    @Mock
     private PreparedStatement mockPreparedStatement;
 
     @Mock
@@ -89,7 +85,6 @@ class ShadowManagerDAOImplTest {
     @BeforeEach
     void setup() throws SQLException, IOException {
         when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
-        lenient().when(mockConnection.createStatement()).thenReturn(statement);
         lenient().when(mockDatabase.getDbWriteThreadPool()).thenReturn(Executors.newCachedThreadPool());
         when(mockDatabase.getPool()).thenReturn(mockPool);
         when(mockPool.getConnection()).thenReturn(mockConnection);
