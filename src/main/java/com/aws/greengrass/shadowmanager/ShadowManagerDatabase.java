@@ -23,6 +23,8 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Stream;
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -50,6 +52,8 @@ public class ShadowManagerDatabase implements Closeable {
     private boolean closed = true;
     private static final Logger logger = LogManager.getLogger(ShadowManagerDatabase.class);
     private final Path databasePath;
+    @Getter
+    private final ExecutorService dbWriteThreadPool = Executors.newCachedThreadPool();
 
     /**
      * Creates a database with a {@link javax.sql.DataSource} using the kernel config.
@@ -144,6 +148,7 @@ public class ShadowManagerDatabase implements Closeable {
     @SuppressFBWarnings(value = "UWF_FIELD_NOT_INITIALIZED_IN_CONSTRUCTOR", justification = "Field gated by flag")
     public void close() throws IOException {
         if (!closed) {
+            dbWriteThreadPool.shutdown();
             pool.dispose();
             closed = true;
         }
