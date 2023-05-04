@@ -16,6 +16,7 @@ import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
+import com.aws.greengrass.shadowmanager.model.configuration.ThingShadow;
 import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
@@ -59,10 +60,10 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
-import java.util.HashSet;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
-import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -70,6 +71,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_METADATA;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE;
@@ -77,9 +79,9 @@ import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector
 import static com.github.grantwest.eventually.EventuallyLambdaMatcher.eventuallyEval;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.hamcrest.Matchers.hasEntry;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
@@ -236,7 +238,7 @@ class SyncTest extends NucleusLaunchUtils {
 
 
             // set up more shadows to sync
-            Set<ThingShadowSyncConfiguration> syncConfigs = new HashSet<>();
+            Map<ThingShadow, ThingShadowSyncConfiguration> syncConfigs = new HashMap<>();
             ThingShadowSyncConfiguration.ThingShadowSyncConfigurationBuilder b =
                     ThingShadowSyncConfiguration.builder()
                             .thingName(MOCK_THING_NAME_1)
@@ -245,7 +247,7 @@ class SyncTest extends NucleusLaunchUtils {
             for (int i = 0; i < 100; i++) {
                 b = b.shadowName("bar" + i);
             }
-            syncConfigs.add(b.build());
+            syncConfigs.put(b.build().toThingShadow(), b.build());
 
             syncHandler.setSyncConfigurations(syncConfigs);
             AtomicBoolean done = new AtomicBoolean();
@@ -339,12 +341,18 @@ class SyncTest extends NucleusLaunchUtils {
                 .mockCloud(true)
                 .build());
 
-        assertThat(shadowManager.getSyncConfiguration().getSyncConfigurations(),
-                containsInAnyOrder(
-                        ThingShadowSyncConfiguration.builder().thingName(MOCK_THING_NAME_1).shadowName("").build(),
-                        ThingShadowSyncConfiguration.builder().thingName(MOCK_THING_NAME_2).shadowName("bar").build(),
-                        ThingShadowSyncConfiguration.builder().thingName(MOCK_THING_NAME_2).shadowName("").build(),
-                        ThingShadowSyncConfiguration.builder().thingName(MOCK_THING_NAME_2).shadowName("foo").build()));
+        Stream<ThingShadowSyncConfiguration> expectedSyncConfigurations = Stream.of(
+            ThingShadowSyncConfiguration.builder().thingName(MOCK_THING_NAME_1).shadowName("").build(),
+            ThingShadowSyncConfiguration.builder().thingName(MOCK_THING_NAME_2).shadowName("bar").build(),
+            ThingShadowSyncConfiguration.builder().thingName(MOCK_THING_NAME_2).shadowName("").build(),
+            ThingShadowSyncConfiguration.builder().thingName(MOCK_THING_NAME_2).shadowName("foo").build()
+        );
+        expectedSyncConfigurations.forEach(
+            expectedSyncConfiguration -> assertThat(
+                shadowManager.getSyncConfiguration().getSyncConfigurations(),
+                hasEntry(expectedSyncConfiguration.toThingShadow(), expectedSyncConfiguration)
+            )
+        );
 
         assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
         assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(10L)));

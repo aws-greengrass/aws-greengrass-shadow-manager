@@ -57,13 +57,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import java.util.stream.Stream;
 
 import static com.aws.greengrass.componentmanager.KernelConfigResolver.CONFIGURATION_CONFIG_KEY;
 import static com.aws.greengrass.deployment.DeviceConfiguration.DEVICE_PARAM_THING_NAME;
@@ -80,8 +79,8 @@ import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_THI
 import static com.aws.greengrass.shadowmanager.model.Constants.STRATEGY_TYPE_REAL_TIME;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.hasEntry;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -178,9 +177,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
 
         lenient().doReturn(true).when(s).inState(eq(State.RUNNING));
 
-        s.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurations(new HashSet<>()).build());
-        ThingShadowSyncConfiguration syncConfiguration = mock(ThingShadowSyncConfiguration.class);
-        s.getSyncConfiguration().getSyncConfigurations().add(syncConfiguration);
+        createSyncConfigForSingleShadow(s, "thing", "shadow");
 
         lenient().when(mockMqttClient.connected()).thenReturn(true);
         SyncStrategy mockSyncStrategy = mock(SyncStrategy.class);
@@ -219,9 +216,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         ShadowManager s = spy(shadowManager);
 
         lenient().doReturn(true).when(s).inState(eq(State.RUNNING));
-        s.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurations(new HashSet<>()).build());
-        ThingShadowSyncConfiguration syncConfiguration = mock(ThingShadowSyncConfiguration.class);
-        s.getSyncConfiguration().getSyncConfigurations().add(syncConfiguration);
+        createSyncConfigForSingleShadow(s, "thing", "shadow");
 
         lenient().when(mockMqttClient.connected()).thenReturn(true);
         SyncStrategy mockSyncStrategy = mock(SyncStrategy.class);
@@ -258,9 +253,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         ShadowManager s = spy(shadowManager);
 
         lenient().doReturn(true).when(s).inState(eq(State.RUNNING));
-        s.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurations(new HashSet<>()).build());
-        ThingShadowSyncConfiguration syncConfiguration = mock(ThingShadowSyncConfiguration.class);
-        s.getSyncConfiguration().getSyncConfigurations().add(syncConfiguration);
+        createSyncConfigForSingleShadow(s, "thing", "shadow");
 
         lenient().when(mockMqttClient.connected()).thenReturn(true);
         SyncStrategy mockSyncStrategy = mock(SyncStrategy.class);
@@ -337,14 +330,20 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         verify(thingNameTopic, times(0)).remove(any());
         assertFalse(shadowManager.isErrored());
 
-        assertThat(shadowManager.getSyncConfiguration().getSyncConfigurations(),
-                containsInAnyOrder(
-                        ThingShadowSyncConfiguration.builder().thingName(KERNEL_THING).shadowName("").build(),
-                        ThingShadowSyncConfiguration.builder().thingName(KERNEL_THING).shadowName("boo2").build(),
-                        ThingShadowSyncConfiguration.builder().thingName(THING_NAME_A).shadowName("foo").build(),
-                        ThingShadowSyncConfiguration.builder().thingName(THING_NAME_A).shadowName("bar").build(),
-                        ThingShadowSyncConfiguration.builder().thingName(THING_NAME_B).shadowName("").build(),
-                        ThingShadowSyncConfiguration.builder().thingName(THING_NAME_B).shadowName("foo2").build()));
+        Stream<ThingShadowSyncConfiguration> expectedSyncConfigurations = Stream.of(
+            ThingShadowSyncConfiguration.builder().thingName(KERNEL_THING).shadowName("").build(),
+            ThingShadowSyncConfiguration.builder().thingName(KERNEL_THING).shadowName("boo2").build(),
+            ThingShadowSyncConfiguration.builder().thingName(THING_NAME_A).shadowName("foo").build(),
+            ThingShadowSyncConfiguration.builder().thingName(THING_NAME_A).shadowName("bar").build(),
+            ThingShadowSyncConfiguration.builder().thingName(THING_NAME_B).shadowName("").build(),
+            ThingShadowSyncConfiguration.builder().thingName(THING_NAME_B).shadowName("foo2").build()
+        );
+        expectedSyncConfigurations.forEach(
+            expectedSyncConfiguration -> assertThat(
+                shadowManager.getSyncConfiguration().getSyncConfigurations(),
+                hasEntry(expectedSyncConfiguration.toThingShadow(), expectedSyncConfiguration)
+            )
+        );
     }
 
     @Test
@@ -372,12 +371,18 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         verify(thingNameTopic, times(0)).subscribeGeneric(any());
         verify(thingNameTopic, times(1)).remove(any());
         assertFalse(shadowManager.isErrored());
-        assertThat(shadowManager.getSyncConfiguration().getSyncConfigurations(),
-                containsInAnyOrder(
-                        ThingShadowSyncConfiguration.builder().thingName(THING_NAME_A).shadowName("foo").build(),
-                        ThingShadowSyncConfiguration.builder().thingName(THING_NAME_A).shadowName("bar").build(),
-                        ThingShadowSyncConfiguration.builder().thingName(THING_NAME_B).shadowName("").build(),
-                        ThingShadowSyncConfiguration.builder().thingName(THING_NAME_B).shadowName("foo2").build()));
+        Stream<ThingShadowSyncConfiguration> expectedSyncConfigurations = Stream.of(
+            ThingShadowSyncConfiguration.builder().thingName(THING_NAME_A).shadowName("foo").build(),
+            ThingShadowSyncConfiguration.builder().thingName(THING_NAME_A).shadowName("bar").build(),
+            ThingShadowSyncConfiguration.builder().thingName(THING_NAME_B).shadowName("").build(),
+            ThingShadowSyncConfiguration.builder().thingName(THING_NAME_B).shadowName("foo2").build()
+        );
+        expectedSyncConfigurations.forEach(
+            expectedSyncConfiguration -> assertThat(
+                shadowManager.getSyncConfiguration().getSyncConfigurations(),
+                hasEntry(expectedSyncConfiguration.toThingShadow(), expectedSyncConfiguration)
+            )
+        );
     }
 
     @Test
@@ -400,12 +405,18 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         verify(thingNameTopic, times(0)).subscribeGeneric(any());
         verify(thingNameTopic, times(1)).remove(any());
         assertFalse(shadowManager.isErrored());
-        assertThat(shadowManager.getSyncConfiguration().getSyncConfigurations(),
-                containsInAnyOrder(
-                        ThingShadowSyncConfiguration.builder().thingName(THING_NAME_A).shadowName("foo").build(),
-                        ThingShadowSyncConfiguration.builder().thingName(THING_NAME_A).shadowName("bar").build(),
-                        ThingShadowSyncConfiguration.builder().thingName(THING_NAME_B).shadowName("").build(),
-                        ThingShadowSyncConfiguration.builder().thingName(THING_NAME_B).shadowName("foo2").build()));
+        Stream<ThingShadowSyncConfiguration> expectedSyncConfigurations = Stream.of(
+            ThingShadowSyncConfiguration.builder().thingName(THING_NAME_A).shadowName("foo").build(),
+            ThingShadowSyncConfiguration.builder().thingName(THING_NAME_A).shadowName("bar").build(),
+            ThingShadowSyncConfiguration.builder().thingName(THING_NAME_B).shadowName("").build(),
+            ThingShadowSyncConfiguration.builder().thingName(THING_NAME_B).shadowName("foo2").build()
+        );
+        expectedSyncConfigurations.forEach(
+            expectedSyncConfiguration -> assertThat(
+                shadowManager.getSyncConfiguration().getSyncConfigurations(),
+                hasEntry(expectedSyncConfiguration.toThingShadow(), expectedSyncConfiguration)
+            )
+        );
     }
 
     @Test
@@ -439,14 +450,20 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         verify(thingNameTopic, times(0)).subscribeGeneric(any());
         verify(thingNameTopic, times(1)).remove(any());
         assertFalse(shadowManager.isErrored());
-        assertThat(shadowManager.getSyncConfiguration().getSyncConfigurations(),
-                containsInAnyOrder(
-                        ThingShadowSyncConfiguration.builder().thingName(THING_NAME_A).shadowName("foo").build(),
-                        ThingShadowSyncConfiguration.builder().thingName(THING_NAME_A).shadowName("bar").build(),
-                        ThingShadowSyncConfiguration.builder().thingName(THING_NAME_C).shadowName("").build(),
-                        ThingShadowSyncConfiguration.builder().thingName(THING_NAME_C).shadowName("foo100").build(),
-                        ThingShadowSyncConfiguration.builder().thingName(THING_NAME_B).shadowName("").build(),
-                        ThingShadowSyncConfiguration.builder().thingName(THING_NAME_B).shadowName("foo2").build()));
+        Stream<ThingShadowSyncConfiguration> expectedSyncConfigurations = Stream.of(
+            ThingShadowSyncConfiguration.builder().thingName(THING_NAME_A).shadowName("foo").build(),
+            ThingShadowSyncConfiguration.builder().thingName(THING_NAME_A).shadowName("bar").build(),
+            ThingShadowSyncConfiguration.builder().thingName(THING_NAME_C).shadowName("").build(),
+            ThingShadowSyncConfiguration.builder().thingName(THING_NAME_C).shadowName("foo100").build(),
+            ThingShadowSyncConfiguration.builder().thingName(THING_NAME_B).shadowName("").build(),
+            ThingShadowSyncConfiguration.builder().thingName(THING_NAME_B).shadowName("foo2").build()
+        );
+        expectedSyncConfigurations.forEach(
+            expectedSyncConfiguration -> assertThat(
+                shadowManager.getSyncConfiguration().getSyncConfigurations(),
+                hasEntry(expectedSyncConfiguration.toThingShadow(), expectedSyncConfiguration)
+            )
+        );
     }
 
     @Test
@@ -463,10 +480,16 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         shadowManager.install(ShadowManager.InstallConfig.builder().configureSynchronizeConfig(true).build());
 
         assertFalse(shadowManager.isErrored());
-        assertThat(shadowManager.getSyncConfiguration().getSyncConfigurations(),
-                containsInAnyOrder(
-                        ThingShadowSyncConfiguration.builder().thingName(KERNEL_THING).shadowName("").build(),
-                        ThingShadowSyncConfiguration.builder().thingName(KERNEL_THING).shadowName("boo2").build()));
+        Stream<ThingShadowSyncConfiguration> expectedSyncConfigurations = Stream.of(
+            ThingShadowSyncConfiguration.builder().thingName(KERNEL_THING).shadowName("").build(),
+            ThingShadowSyncConfiguration.builder().thingName(KERNEL_THING).shadowName("boo2").build()
+        );
+        expectedSyncConfigurations.forEach(
+            expectedSyncConfiguration -> assertThat(
+                shadowManager.getSyncConfiguration().getSyncConfigurations(),
+                hasEntry(expectedSyncConfiguration.toThingShadow(), expectedSyncConfiguration)
+            )
+        );
     }
 
     @Test
@@ -586,8 +609,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
     @Test
     void GIVEN_mqtt_client_callbacks_WHEN_onConnectionInterrupted_THEN_stops_sync_handler_and_unsubscribes() throws AuthorizationException {
         shadowManager.setGreengrassCoreIPCService(mockGreengrassCoreIPCService);
-        shadowManager.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurations(new HashSet<>()).build());
-        shadowManager.getSyncConfiguration().getSyncConfigurations().add(mock(ThingShadowSyncConfiguration.class));
+        createSyncConfigForSingleShadow(shadowManager, "thing", "shadow");
         doNothing().when(mockMqttClient).addToCallbackEvents(mqtOnConnectCallbackCaptor.capture(), mqttCallbacksCaptor.capture());
         when(mockDeviceConfiguration.isDeviceConfiguredToTalkToCloud()).thenReturn(true);
         shadowManager.postInject();
@@ -608,7 +630,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
 
     @Test
     void GIVEN_shadow_manager_WHEN_startup_THEN_updates_stored_config_and_starts_sync_handler_and_unsubscribes() {
-        createSyncConfigForSingleShadow("thing", "shadow");
+        createSyncConfigForSingleShadow(shadowManager, "thing", "shadow");
         when(mockDao.listSyncedShadows()).thenReturn(Collections.singletonList(new Pair<>("foo", "bar")));
 
         when(mockMqttClient.connected()).thenReturn(true);
@@ -625,20 +647,20 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         assertThat(captor.getValue().getThingName(), is("thing"));
         assertThat(captor.getValue().getShadowName(), is("shadow"));
     }
-    
-    private void createSyncConfigForSingleShadow(String thing, String shadow) {
-        shadowManager.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurations(new HashSet<>()).build());
-        ThingShadowSyncConfiguration config = mock(ThingShadowSyncConfiguration.class);
-        when(config.getThingName()).thenReturn(thing);
-        when(config.getShadowName()).thenReturn(shadow);
-        shadowManager.getSyncConfiguration().getSyncConfigurations().add(config);
+
+    private void createSyncConfigForSingleShadow(ShadowManager s, String thing, String shadow) {
+        s.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurations(new HashMap<>()).build());
+        ThingShadowSyncConfiguration config = ThingShadowSyncConfiguration.builder()
+            .thingName(thing)
+            .shadowName(shadow)
+            .build();
+        s.getSyncConfiguration().getSyncConfigurations().put(config.toThingShadow(), config);
     }
 
     @Test
     void GIVEN_shadow_manager_WHEN_shutdown_THEN_shuts_down_gracefully() throws IOException {
         shadowManager.setGreengrassCoreIPCService(mockGreengrassCoreIPCService);
-        shadowManager.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurations(new HashSet<>()).build());
-        shadowManager.getSyncConfiguration().getSyncConfigurations().add(mock(ThingShadowSyncConfiguration.class));
+        createSyncConfigForSingleShadow(shadowManager, "thing", "shadow");
         doNothing().when(mockMqttClient).addToCallbackEvents(mqtOnConnectCallbackCaptor.capture(), mqttCallbacksCaptor.capture());
         when(mockDeviceConfiguration.isDeviceConfiguredToTalkToCloud()).thenReturn(true);
         shadowManager.postInject();
@@ -728,9 +750,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_STRATEGY_TOPIC))
                 .thenReturn(strategyTopics);
         doNothing().when(shadowManager.getSyncHandler()).setSyncStrategy(strategyCaptor.capture());
-        s.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurations(new HashSet<>()).build());
-        ThingShadowSyncConfiguration config = mock(ThingShadowSyncConfiguration.class);
-        s.getSyncConfiguration().getSyncConfigurations().add(config);
+        createSyncConfigForSingleShadow(s, "thing", "shadow");
 
         when(mockMqttClient.connected()).thenReturn(true);
         s.install(ShadowManager.InstallConfig.builder().configureStrategyConfig(true).build());
@@ -773,14 +793,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         when(config.lookupTopics(CONFIGURATION_CONFIG_KEY, CONFIGURATION_STRATEGY_TOPIC))
                 .thenReturn(strategyTopics);
         when(mockMqttClient.connected()).thenReturn(true);
-        Set<ThingShadowSyncConfiguration> syncConfigs = new HashSet<ThingShadowSyncConfiguration>() {{
-            add(ThingShadowSyncConfiguration.builder().thingName("foo").shadowName("bar").build());
-        }};
-
-        ShadowSyncConfiguration config = ShadowSyncConfiguration.builder()
-                .syncConfigurations(syncConfigs)
-                .build();
-        s.setSyncConfiguration(config);
+        createSyncConfigForSingleShadow(s, "foo", "bar");
         doReturn(true,true).when(s).inState(eq(State.RUNNING));
         s.install(ShadowManager.InstallConfig.builder().configureStrategyConfig(true).build());
         reset(mockSyncHandler);

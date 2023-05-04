@@ -47,4 +47,15 @@ public class ThingShadowSyncConfiguration {
     public String toString() {
         return String.format("%s-%s", thingName, shadowName);
     }
+
+    /**
+     * Returns a (thingName, shadowName) key from the sync configuration.
+     * @return ThingShadow the corresponding pair of (thingName, shadowName)
+     */
+    public ThingShadow toThingShadow() {
+        return ThingShadow.builder()
+            .thingName(thingName)
+            .shadowName(shadowName)
+            .build();
+    }
 }

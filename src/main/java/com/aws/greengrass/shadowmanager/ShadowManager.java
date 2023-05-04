@@ -33,6 +33,7 @@ import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowIPCHandler;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.model.configuration.ShadowSyncConfiguration;
+import com.aws.greengrass.shadowmanager.model.configuration.ThingShadow;
 import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.CloudDataClient;
@@ -64,7 +65,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
 import javax.inject.Inject;
 
 import static com.aws.greengrass.componentmanager.KernelConfigResolver.CONFIGURATION_CONFIG_KEY;
@@ -216,8 +216,20 @@ public class ShadowManager extends PluginService {
             // First time.
             return;
         }
-        getCoreThingShadowSyncConfiguration(oldThingName).forEach(thingShadowSyncConfiguration ->
-                thingShadowSyncConfiguration.setThingName(thingName));
+
+        // first update old core thing shadows
+        Map<ThingShadow, ThingShadowSyncConfiguration> syncConfigurations = syncConfiguration.getSyncConfigurations();
+        syncConfigurations
+            .entrySet()
+            .stream()
+            .filter(entry -> entry.getKey().getThingName().equals(oldThingName))
+            .forEach(entry -> {
+                ThingShadowSyncConfiguration syncConfiguration = entry.getValue();
+                syncConfiguration.setThingName(thingName);
+                syncConfigurations.put(syncConfiguration.toThingShadow(), syncConfiguration);
+            });
+        // remove core thing shadows with the old name
+        syncConfigurations.entrySet().removeIf(entry -> entry.getValue().getThingName().equals(oldThingName));
     }
 
     @Override
@@ -303,12 +315,14 @@ public class ShadowManager extends PluginService {
             this.syncHandler.setSyncConfigurations(this.syncConfiguration.getSyncConfigurations());
 
             // Subscribe to the thing name topic if the Nucleus thing shadows have been synced.
-            List<ThingShadowSyncConfiguration> coreThingConfig =
-                    getCoreThingShadowSyncConfiguration(thingName);
-            if (coreThingConfig.isEmpty()) {
-                thingNameTopic.remove(this.deviceThingNameWatcher);
-            } else {
+            boolean coreThingConfigExists = syncConfiguration.getSyncConfigurations()
+                .entrySet()
+                .stream()
+                .anyMatch(entry -> entry.getKey().getThingName().equals(thingName));
+            if (coreThingConfigExists) {
                 thingNameTopic.subscribeGeneric(this.deviceThingNameWatcher);
+            } else {
+                thingNameTopic.remove(this.deviceThingNameWatcher);
             }
 
             // only stop / start syncing if we are not in install - it will otherwise be started by lifecycle
@@ -428,7 +442,7 @@ public class ShadowManager extends PluginService {
 
     private void initializeSyncInfo() {
         long epochSeconds = Instant.EPOCH.getEpochSecond();
-        for (ThingShadowSyncConfiguration configuration : syncConfiguration.getSyncConfigurations()) {
+        for (ThingShadowSyncConfiguration configuration : syncConfiguration.getSyncConfigurations().values()) {
             insertSyncInfoIfNotPresent(epochSeconds, configuration);
         }
     }
@@ -444,13 +458,6 @@ public class ShadowManager extends PluginService {
                 .localVersion(0)
                 .lastSyncTime(epochSeconds)
                 .build());
-    }
-
-    private List<ThingShadowSyncConfiguration> getCoreThingShadowSyncConfiguration(String thingName) {
-        return syncConfiguration.getSyncConfigurations()
-                .stream()
-                .filter(thingShadowSyncConfiguration -> thingName.equals(thingShadowSyncConfiguration.getThingName()))
-                .collect(Collectors.toList());
     }
 
     @Override
