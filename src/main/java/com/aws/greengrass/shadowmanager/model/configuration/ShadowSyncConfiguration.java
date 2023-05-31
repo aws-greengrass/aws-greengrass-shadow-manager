@@ -16,7 +16,7 @@ import com.aws.greengrass.util.Utils;
 import lombok.Builder;
 import lombok.Getter;
 
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -38,7 +38,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.UNEXPECTED_VALUE_
 public class ShadowSyncConfiguration {
     private static final Logger logger = LogManager.getLogger(ShadowSyncConfiguration.class);
 
-    private final Set<ThingShadowSyncConfiguration> syncConfigurations;
+    private final Map<ThingShadow, ThingShadowSyncConfiguration> syncConfigurations;
 
     @Override
     public boolean equals(Object o) {
@@ -46,12 +46,12 @@ public class ShadowSyncConfiguration {
         if (o == this) {
             return true;
         }
-        // Check if o is an instance of LoggerConfiguration or not "null instanceof [type]" also returns false
+        // Check if o is an instance of ShadowSyncConfiguration or not "null instanceof [type]" also returns false
         if (!(o instanceof ShadowSyncConfiguration)) {
             return false;
         }
 
-        // typecast o to LoggerConfiguration so that we can compare data members
+        // typecast o to ShadowSyncConfiguration so that we can compare data members
         ShadowSyncConfiguration newConfiguration = (ShadowSyncConfiguration) o;
 
         // Compare the data members and return accordingly
@@ -73,16 +73,16 @@ public class ShadowSyncConfiguration {
      * @throws InvalidConfigurationException if the configuration is bad.
      */
     public static ShadowSyncConfiguration processConfiguration(Map<String, Object> configTopicsPojo, String thingName) {
-        Set<ThingShadowSyncConfiguration> syncConfigurationSet = new HashSet<>();
+        Map<ThingShadow, ThingShadowSyncConfiguration> syncConfigurationMap = new HashMap<>();
         try {
-            processCoreThingConfiguration(configTopicsPojo, thingName, syncConfigurationSet);
-            processOtherThingConfigurations(configTopicsPojo, syncConfigurationSet);
+            processCoreThingConfiguration(configTopicsPojo, thingName, syncConfigurationMap);
+            processOtherThingConfigurations(configTopicsPojo, syncConfigurationMap);
         } catch (InvalidRequestParametersException e) {
             throw new InvalidConfigurationException(e);
         }
 
         return ShadowSyncConfiguration.builder()
-                .syncConfigurations(syncConfigurationSet)
+                .syncConfigurations(syncConfigurationMap)
                 .build();
     }
 
@@ -90,13 +90,15 @@ public class ShadowSyncConfiguration {
      * Processes the device thing configuration.
      *
      * @param configTopicsPojo     The POJO for the configuration topic of device thing.
-     * @param syncConfigurationSet the sync configuration list to add the device thing configuration to.
+     * @param syncConfigurationMap the sync configuration map to add the device thing configuration to.
      * @throws InvalidRequestParametersException if the named shadow validation fails.
      * @implNote The implementation can handle the synchronize object being both a map and a list. The map approach is
      *     preferred since it is easier to add/remove sync configuration.
      */
-    private static void processOtherThingConfigurations(Map<String, Object> configTopicsPojo,
-                                                        Set<ThingShadowSyncConfiguration> syncConfigurationSet) {
+    private static void processOtherThingConfigurations(
+        Map<String, Object> configTopicsPojo,
+        Map<ThingShadow, ThingShadowSyncConfiguration> syncConfigurationMap
+    ) {
         // Process the shadow documents map first.
         final boolean isMapPresent = configTopicsPojo.containsKey(CONFIGURATION_SHADOW_DOCUMENTS_MAP_TOPIC);
         configTopicsPojo.computeIfPresent(CONFIGURATION_SHADOW_DOCUMENTS_MAP_TOPIC,
@@ -104,7 +106,7 @@ public class ShadowSyncConfiguration {
                     if (shadowDocumentsObject instanceof Map) {
                         Map<String, Object> shadowDocumentsMap = (Map) shadowDocumentsObject;
                         shadowDocumentsMap.forEach((componentName, componentConfigObject) ->
-                                processThingConfiguration(componentConfigObject, componentName, syncConfigurationSet,
+                                processThingConfiguration(componentConfigObject, componentName, syncConfigurationMap,
                                         CONFIGURATION_SHADOW_DOCUMENTS_MAP_TOPIC));
                     } else {
                         throw new InvalidConfigurationException(String.format("Unexpected type in %s: %s",
@@ -123,7 +125,7 @@ public class ShadowSyncConfiguration {
                 }
                 List<Object> shadowDocumentsToSyncList = (List) shadowDocumentsObject;
                 shadowDocumentsToSyncList.forEach(shadowDocumentsToSync ->
-                        processThingConfiguration(shadowDocumentsToSync, syncConfigurationSet));
+                        processThingConfiguration(shadowDocumentsToSync, syncConfigurationMap));
             } else {
                 throw new InvalidConfigurationException(String.format("Unexpected type in %s: %s",
                         CONFIGURATION_SHADOW_DOCUMENTS_TOPIC, shadowDocumentsObject.getClass().getTypeName()));
@@ -137,14 +139,20 @@ public class ShadowSyncConfiguration {
      *
      * @param configTopicsPojo     The POJO for the configuration topic of nucleus thing.
      * @param thingName            The nucleus thing name.
-     * @param syncConfigurationSet the sync configuration list to add the nucleus thing configuration to.
+     * @param syncConfigurationMap the sync configuration map to add the nucleus thing configuration to.
      * @throws InvalidRequestParametersException if the named shadow validation fails.
      */
-    private static void processCoreThingConfiguration(Map<String, Object> configTopicsPojo, String thingName,
-                                                      Set<ThingShadowSyncConfiguration> syncConfigurationSet) {
+    private static void processCoreThingConfiguration(
+        Map<String, Object> configTopicsPojo,
+        String thingName,
+        Map<ThingShadow, ThingShadowSyncConfiguration> syncConfigurationMap) {
         configTopicsPojo.computeIfPresent(CONFIGURATION_CORE_THING_TOPIC, (ignored, coreThingConfigObject) -> {
-            processThingConfiguration(coreThingConfigObject, thingName, syncConfigurationSet,
-                    CONFIGURATION_CORE_THING_TOPIC);
+            processThingConfiguration(
+                coreThingConfigObject,
+                thingName,
+                syncConfigurationMap,
+                CONFIGURATION_CORE_THING_TOPIC
+            );
             return coreThingConfigObject;
         });
     }
@@ -154,15 +162,18 @@ public class ShadowSyncConfiguration {
      *
      * @param thingConfigObject    The thing configuration object
      * @param thingName            The thing name
-     * @param syncConfigurationSet the sync configuration list to add the nucleus thing configuration to.
+     * @param syncConfigurationMap the sync configuration map to add the nucleus thing configuration to.
      * @throws InvalidConfigurationException if the named shadow validation fails.
      */
-    private static void processThingConfiguration(Object thingConfigObject, String thingName,
-                                                  Set<ThingShadowSyncConfiguration> syncConfigurationSet,
-                                                  String configName) {
+    private static void processThingConfiguration(
+        Object thingConfigObject,
+        String thingName,
+        Map<ThingShadow, ThingShadowSyncConfiguration> syncConfigurationMap,
+        String configName
+    ) {
         if (thingConfigObject instanceof Map) {
             Map<String, Object> thingConfig = (Map) thingConfigObject;
-            processThingShadowSyncConfiguration(syncConfigurationSet, thingConfig, thingName);
+            processThingShadowSyncConfiguration(syncConfigurationMap, thingConfig, thingName);
         } else {
             throw new InvalidConfigurationException(String.format(UNEXPECTED_TYPE_FORMAT,
                     configName, thingConfigObject.getClass().getTypeName()));
@@ -173,14 +184,16 @@ public class ShadowSyncConfiguration {
      * Processes the thing configuration if presented in a list format.
      *
      * @param thingConfigObject    The thing configuration object
-     * @param syncConfigurationSet the sync configuration list to add the nucleus thing configuration to.
+     * @param syncConfigurationMap the sync configuration map to add the nucleus thing configuration to.
      * @throws InvalidRequestParametersException if the named shadow validation fails.
      */
-    private static void processThingConfiguration(Object thingConfigObject,
-                                                  Set<ThingShadowSyncConfiguration> syncConfigurationSet) {
+    private static void processThingConfiguration(
+        Object thingConfigObject,
+        Map<ThingShadow, ThingShadowSyncConfiguration> syncConfigurationMap
+    ) {
         if (thingConfigObject instanceof Map) {
             Map<String, Object> thingConfig = (Map) thingConfigObject;
-            processThingShadowSyncConfiguration(syncConfigurationSet, thingConfig, getThingName(thingConfig));
+            processThingShadowSyncConfiguration(syncConfigurationMap, thingConfig, getThingName(thingConfig));
         } else {
             throw new InvalidConfigurationException(String.format(UNEXPECTED_TYPE_FORMAT,
                     CONFIGURATION_SHADOW_DOCUMENTS_TOPIC, thingConfigObject.getClass().getTypeName()));
@@ -214,14 +227,16 @@ public class ShadowSyncConfiguration {
     /**
      * Process the thing configuration map and add the new ThingShadowSyncConfiguration reference in the set.
      *
-     * @param syncConfigurationSet the sync configuration list to add the nucleus thing configuration to.
+     * @param syncConfigurationMap the sync configuration map to add the nucleus thing configuration to.
      * @param thingConfig          The thing configuration map.
      * @param thingName            The thing name.
      * @throws InvalidConfigurationException if named shadows list is in a bad format.
      */
-    private static void processThingShadowSyncConfiguration(Set<ThingShadowSyncConfiguration> syncConfigurationSet,
-                                                            Map<String, Object> thingConfig,
-                                                            String thingName) {
+    private static void processThingShadowSyncConfiguration(
+        Map<ThingShadow, ThingShadowSyncConfiguration> syncConfigurationMap,
+        Map<String, Object> thingConfig,
+        String thingName
+    ) {
         Validator.validateThingName(thingName);
 
         ThingShadowSyncConfiguration syncConfiguration;
@@ -240,7 +255,10 @@ public class ShadowSyncConfiguration {
                                     .thingName(thingName)
                                     .shadowName(namedShadow)
                                     .build();
-                            syncConfigurationSet.add(syncConfiguration);
+                            syncConfigurationMap.put(
+                                syncConfiguration.toThingShadow(),
+                                syncConfiguration
+                            );
                         }
                     } else {
                         throw new InvalidConfigurationException(String.format(UNEXPECTED_TYPE_FORMAT,
@@ -257,7 +275,7 @@ public class ShadowSyncConfiguration {
                     .thingName(thingName)
                     .shadowName(CLASSIC_SHADOW_IDENTIFIER)
                     .build();
-            syncConfigurationSet.add(syncConfiguration);
+            syncConfigurationMap.put(syncConfiguration.toThingShadow(), syncConfiguration);
         }
     }
 
@@ -267,9 +285,8 @@ public class ShadowSyncConfiguration {
      * @return Set of shadows to be synced.
      */
     public Set<Pair<String, String>> getSyncShadows() {
-        return syncConfigurations.stream().map(thingShadowSyncConfiguration2 ->
-                new Pair<>(thingShadowSyncConfiguration2.getThingName(),
-                        thingShadowSyncConfiguration2.getShadowName()))
+        return syncConfigurations.keySet().stream().map(thingShadow ->
+                new Pair<>(thingShadow.getThingName(), thingShadow.getShadowName()))
                 .collect(Collectors.toSet());
     }
 }

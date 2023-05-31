@@ -7,6 +7,7 @@ package com.aws.greengrass.shadowmanager.sync;
 
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
+import com.aws.greengrass.shadowmanager.model.configuration.ThingShadow;
 import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.sync.model.BaseSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.CloudDeleteSyncRequest;
@@ -32,7 +33,7 @@ import lombok.Synchronized;
 
 import java.util.Iterator;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Stream;
@@ -63,7 +64,7 @@ public class SyncHandler {
      */
     // TODO: [GG-36231]: Figure out a better way to set this configuration in only one place.
     @Setter
-    private Set<ThingShadowSyncConfiguration> syncConfigurations;
+    private Map<ThingShadow, ThingShadowSyncConfiguration> syncConfigurations;
 
     /**
      * The sync strategy for all shadows.
@@ -219,8 +220,9 @@ public class SyncHandler {
      * @return true if the shadow is supposed to be synced; Else false.
      */
     private boolean isShadowSynced(String thingName, String shadowName) {
-        return this.syncConfigurations != null && this.syncConfigurations
-                .contains(ThingShadowSyncConfiguration.builder().shadowName(shadowName).thingName(thingName).build());
+        return this.syncConfigurations != null && this.syncConfigurations.containsKey(
+            ThingShadow.builder().thingName(thingName).shadowName(shadowName).build()
+        );
     }
 
     /**

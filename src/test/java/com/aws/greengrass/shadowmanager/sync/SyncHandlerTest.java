@@ -6,6 +6,7 @@
 package com.aws.greengrass.shadowmanager.sync;
 
 
+import com.aws.greengrass.shadowmanager.model.configuration.ThingShadow;
 import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.sync.model.BaseSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.CloudDeleteSyncRequest;
@@ -30,9 +31,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Arrays;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
 
@@ -133,8 +134,9 @@ class SyncHandlerTest {
         when(context.getDao().listSyncedShadows()).thenReturn(shadows);
 
         doNothing().when(mockSyncStrategy).putSyncRequest(syncRequestCaptor.capture());
-        Set<ThingShadowSyncConfiguration> syncConfigurations = new HashSet<>();
-        syncConfigurations.add(ThingShadowSyncConfiguration.builder().thingName("a").shadowName("1").build());
+        Map<ThingShadow, ThingShadowSyncConfiguration> syncConfigurations = new HashMap<>();
+        ThingShadowSyncConfiguration syncConfig = ThingShadowSyncConfiguration.builder().thingName("a").shadowName("1").build();
+        syncConfigurations.put(syncConfig.toThingShadow(), syncConfig);
         syncHandler.setSyncConfigurations(syncConfigurations);
 
         // WHEN
@@ -152,8 +154,9 @@ class SyncHandlerTest {
         when(context.getDao().listSyncedShadows()).thenReturn(shadows);
 
         doNothing().when(mockSyncStrategy).putSyncRequest(syncRequestCaptor.capture());
-        Set<ThingShadowSyncConfiguration> syncConfigurations = new HashSet<>();
-        syncConfigurations.add(ThingShadowSyncConfiguration.builder().thingName("a").shadowName("1").build());
+        Map<ThingShadow, ThingShadowSyncConfiguration> syncConfigurations = new HashMap<>();
+        ThingShadowSyncConfiguration syncConfig = ThingShadowSyncConfiguration.builder().thingName("a").shadowName("1").build();
+        syncConfigurations.put(syncConfig.toThingShadow(), syncConfig);
         syncHandler.setSyncConfigurations(syncConfigurations);
 
         // WHEN
@@ -171,8 +174,9 @@ class SyncHandlerTest {
         when(context.getDao().listSyncedShadows()).thenReturn(shadows);
 
         doNothing().when(mockSyncStrategy).putSyncRequest(syncRequestCaptor.capture());
-        Set<ThingShadowSyncConfiguration> syncConfigurations = new HashSet<>();
-        syncConfigurations.add(ThingShadowSyncConfiguration.builder().thingName("a").shadowName("1").build());
+        Map<ThingShadow, ThingShadowSyncConfiguration> syncConfigurations = new HashMap<>();
+        ThingShadowSyncConfiguration syncConfig = ThingShadowSyncConfiguration.builder().thingName("a").shadowName("1").build();
+        syncConfigurations.put(syncConfig.toThingShadow(), syncConfig);
         syncHandler.setSyncConfigurations(syncConfigurations);
 
         // WHEN
@@ -190,8 +194,9 @@ class SyncHandlerTest {
         when(context.getDao().listSyncedShadows()).thenReturn(shadows);
 
         doNothing().when(mockSyncStrategy).putSyncRequest(syncRequestCaptor.capture());
-        Set<ThingShadowSyncConfiguration> syncConfigurations = new HashSet<>();
-        syncConfigurations.add(ThingShadowSyncConfiguration.builder().thingName("a").shadowName("1").build());
+        Map<ThingShadow, ThingShadowSyncConfiguration> syncConfigurations = new HashMap<>();
+        ThingShadowSyncConfiguration syncConfig = ThingShadowSyncConfiguration.builder().thingName("a").shadowName("1").build();
+        syncConfigurations.put(syncConfig.toThingShadow(), syncConfig);
         syncHandler.setSyncConfigurations(syncConfigurations);
 
         // WHEN
