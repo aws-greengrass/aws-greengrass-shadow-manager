@@ -12,6 +12,7 @@ import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.util.Pair;
 import org.h2.jdbcx.JdbcConnectionPool;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,6 +29,8 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -46,6 +49,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
@@ -53,6 +57,8 @@ class ShadowManagerDAOImplTest {
     private static final byte[] BASE_DOCUMENT = "{\"version\": 1, \"state\": {\"reported\": {\"name\": \"The Beatles\"}}}".getBytes();
     private static final String THING_NAME = "thingName";
     private static final String SHADOW_NAME = "shadowName";
+
+    private ExecutorService es;
 
     @Mock
     private ShadowManagerDatabase mockDatabase;
@@ -79,6 +85,20 @@ class ShadowManagerDAOImplTest {
     private ArgumentCaptor<Integer> integerArgumentCaptor;
     @Captor
     private ArgumentCaptor<byte[]> bytesArgumentCaptor;
+
+    @BeforeEach
+    void setup() throws SQLException, IOException {
+        when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
+        es = Executors.newCachedThreadPool();
+        lenient().when(mockDatabase.getDbWriteThreadPool()).thenReturn(es);
+        when(mockDatabase.getPool()).thenReturn(mockPool);
+        when(mockPool.getConnection()).thenReturn(mockConnection);
+        JsonUtil.loadSchema();
+    }
+    @AfterEach
+    void after()  {
+        es.shutdownNow();
+    }
 
     private void assertUpdateShadowStatementMocks(long epochNow) {
         assertThat(stringArgumentCaptor.getAllValues().size(), is(2));
@@ -218,13 +238,6 @@ class ShadowManagerDAOImplTest {
         assertThat(longArgumentCaptor.getAllValues().get(3), is(0L));
     }
 
-    @BeforeEach
-    void setup() throws SQLException, IOException {
-        when(mockConnection.prepareStatement(anyString())).thenReturn(mockPreparedStatement);
-        when(mockDatabase.getPool()).thenReturn(mockPool);
-        when(mockPool.getConnection()).thenReturn(mockConnection);
-        JsonUtil.loadSchema();
-    }
 
     @Test
     void GIVEN_updated_shadow_document_WHEN_updateShadowThing_THEN_successfully_updates_shadow() throws SQLException {
