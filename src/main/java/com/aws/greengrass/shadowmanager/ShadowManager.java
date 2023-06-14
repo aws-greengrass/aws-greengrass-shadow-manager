@@ -474,8 +474,6 @@ public class ShadowManager extends PluginService {
     @SuppressWarnings({"PMD.AvoidCatchingGenericException"})
     public void startup() {
         try {
-            database.open();
-
             reportState(State.RUNNING);
             setupSync();
         } catch (Exception e) {
@@ -484,13 +482,14 @@ public class ShadowManager extends PluginService {
     }
 
     @Override
+    @SuppressWarnings("PMD.AvoidCatchingGenericException")
     protected void shutdown() throws InterruptedException {
         try {
             stopSyncingShadows(true);
             pubSubIntegrator.unsubscribe();
             inboundRateLimiter.clear();
             database.close();
-        } catch (IOException e) {
+        } catch (Exception e) {
             logger.atError()
                     .setEventType(LogEvents.DATABASE_CLOSE_ERROR.code())
                     .setCause(e)

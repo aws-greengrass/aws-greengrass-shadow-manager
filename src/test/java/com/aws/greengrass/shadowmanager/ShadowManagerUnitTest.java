@@ -617,7 +617,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         verify(mockCloudDataClient, times(1)).updateSubscriptions(anySet());
         verify(mockSyncHandler, times(1)).start(any(SyncContext.class), anyInt());
 
-        verify(mockDatabase, times(1)).open();
         verify(mockDao, times(1)).deleteSyncInformation("foo", "bar");
 
         ArgumentCaptor<SyncInformation> captor = ArgumentCaptor.forClass(SyncInformation.class);

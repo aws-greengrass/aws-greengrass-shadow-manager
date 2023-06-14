@@ -80,7 +80,6 @@ class ShadowManagerDAOImplTest {
         database = new ShadowManagerDatabase(kernel);
         database.install();
         JsonUtil.loadSchema();
-        database.open();
         dao = new ShadowManagerDAOImpl(database);
     }
 

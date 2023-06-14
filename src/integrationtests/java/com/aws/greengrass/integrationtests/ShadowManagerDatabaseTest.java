@@ -80,7 +80,6 @@ class ShadowManagerDatabaseTest extends NucleusLaunchUtils {
         System.setProperty("aws.greengrass.scanSelfClasspath", "true");
         db = new ShadowManagerDatabase(rootDir);
         db.install();
-        db.open();
     }
 
     @AfterEach
@@ -126,7 +125,6 @@ class ShadowManagerDatabaseTest extends NucleusLaunchUtils {
     @Test
     void GIVEN_migrations_WHEN_install_THEN_shadow_manager_database_installs_and_starts_successfully() throws Exception {
         // GIVEN
-        db.open();
         assertNotNull(db.getPool());
 
         // WHEN
@@ -158,7 +156,6 @@ class ShadowManagerDatabaseTest extends NucleusLaunchUtils {
         Path source = Paths.get(getClass().getResource("database/corrupted.mv.db").toURI());
         Files.copy(source, dest, StandardCopyOption.REPLACE_EXISTING);
         // GIVEN
-        db.open();
         assertNotNull(db.getPool());
 
         // WHEN
@@ -196,7 +193,6 @@ class ShadowManagerDatabaseTest extends NucleusLaunchUtils {
     @Test
     void GIVEN_shadow_manager_database_open_WHEN_closed_and_opened_THEN_shadow_manager_database_can_return_connections() throws Exception {
         db.close();
-        db.open();
         Connection c = assertDoesNotThrow(() -> db.getPool().getConnection());
         assertNotNull(c, "connection should not be null");
         assertThat("connection is not closed", c.isClosed(), is(false));
