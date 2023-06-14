@@ -12,6 +12,7 @@ import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.util.Pair;
+import org.h2.jdbcx.JdbcConnectionPool;
 
 import java.io.IOException;
 import java.sql.Connection;
@@ -58,7 +59,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
         String sql = "SELECT document, version, updateTime FROM documents  WHERE deleted = 0 AND "
                 + "thingName = ? AND shadowName = ?";
 
-        try (Connection c = database.getPool().getConnection();
+        try (Connection c = getPool().getConnection();
              PreparedStatement preparedStatement = c.prepareStatement(sql)) {
             preparedStatement.setString(1, thingName);
             preparedStatement.setString(2, shadowName);
@@ -73,6 +74,15 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
         } catch (SQLException | IOException | IllegalStateException e) {
             throw new ShadowManagerDataException(e);
         }
+    }
+
+    private JdbcConnectionPool getPool() {
+        JdbcConnectionPool pool = database.getPool();
+        if (pool == null) {
+            throw new ShadowManagerDataException("Database pool not initialized. Shadow manager most likely isn't "
+                    + "running yet. Wait for Shadow manager to be running.");
+        }
+        return pool;
     }
 
     /**
@@ -262,7 +272,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
     public Optional<Long> getDeletedShadowVersion(String thingName, String shadowName) {
         String sql = "SELECT version FROM documents  WHERE deleted = 1 AND thingName = ? AND shadowName = ?";
 
-        try (Connection c = database.getPool().getConnection();
+        try (Connection c = getPool().getConnection();
              PreparedStatement preparedStatement = c.prepareStatement(sql)) {
             preparedStatement.setString(1, thingName);
             preparedStatement.setString(2, shadowName);
@@ -359,7 +369,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
     }
 
     private <T> T execute(String sql, SQLExecution<T> thunk) {
-        try (Connection c = database.getPool().getConnection();
+        try (Connection c = getPool().getConnection();
              PreparedStatement statement = c.prepareStatement(sql)) {
             statement.setQueryTimeout(10);
             return thunk.apply(statement);
