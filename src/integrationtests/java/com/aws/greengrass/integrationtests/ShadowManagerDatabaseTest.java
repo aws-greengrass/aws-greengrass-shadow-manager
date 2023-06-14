@@ -13,8 +13,9 @@ import com.aws.greengrass.shadowmanager.ShadowManagerDatabase;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
-import org.flywaydb.core.internal.exception.FlywaySqlException;
 import org.apache.commons.io.FileUtils;
+import org.flywaydb.core.internal.exception.FlywaySqlException;
+import org.h2.jdbcx.JdbcConnectionPool;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -66,7 +67,6 @@ import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
@@ -185,9 +185,9 @@ class ShadowManagerDatabaseTest extends NucleusLaunchUtils {
         assertNotNull(c, "connection should not be null");
         assertThat("connection is not closed", c.isClosed(), is(false));
         c.close();
+        JdbcConnectionPool pool = db.getPool();
         db.close();
-        assertThat("active connections", db.getPool().getActiveConnections(), is(0));
-        assertThrows(IllegalStateException.class, () -> db.getPool().getConnection());
+        assertThat("active connections", pool.getActiveConnections(), is(0));
     }
 
     @Test

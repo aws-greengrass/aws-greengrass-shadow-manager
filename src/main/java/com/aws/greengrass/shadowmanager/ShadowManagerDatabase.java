@@ -10,6 +10,7 @@ import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import lombok.Getter;
 import lombok.Synchronized;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.FlywayException;
@@ -41,7 +42,7 @@ public class ShadowManagerDatabase implements Closeable {
     // these setting optimize for minimal disk space over concurrent performance
     private static final String DATABASE_FORMAT = "jdbc:h2:%s/%s"
             + ";RETENTION_TIME=1000" // ms - time to keep values for before writing to disk (default is 45000)
-            + ";DEFRAG_ALWAYS=FALSE" // don't defragment db on shutdown because that's a risky time to change the db
+            + ";DEFRAG_ALWAYS=TRUE" // defragment db on shutdown (ensures only a single value in db on close)
             + ";COMPRESS=TRUE" // compress large objects (clob/blob) (default false)
             ;
     private final JdbcDataSource dataSource;
@@ -51,6 +52,8 @@ public class ShadowManagerDatabase implements Closeable {
     private static final Logger logger = LogManager.getLogger(ShadowManagerDatabase.class);
     private final Path databasePath;
     private ExecutorService dbWriteThreadPool;
+    @Getter
+    private boolean initialized = false;
 
     /**
      * Creates a database with a {@link javax.sql.DataSource} using the kernel config.
@@ -87,6 +90,7 @@ public class ShadowManagerDatabase implements Closeable {
                 deleteDB(databasePath);
                 migrateDB();
             }
+            initialized = true;
         } catch (FlywayException | IOException e) {
             throw new ShadowManagerDataException(e);
         }

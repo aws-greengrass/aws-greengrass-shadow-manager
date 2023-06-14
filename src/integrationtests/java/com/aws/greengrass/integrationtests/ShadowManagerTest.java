@@ -169,6 +169,9 @@ class ShadowManagerTest extends NucleusLaunchUtils {
                 .configFile(DEFAULT_CONFIG)
                 .mqttConnected(false)
                 .build());
+        // Validate that shadow manager will continue to work properly even if it is reinstalled.
+        shadowManager.requestReinstall();
+        Thread.sleep(1000);
         shadowManager.startSyncingShadows(ShadowManager.StartSyncInfo.builder().build());
         ShadowManagerDAOImpl impl = kernel.getContext().get(ShadowManagerDAOImpl.class);
         createThingShadowSyncInfo(impl, THING_NAME);

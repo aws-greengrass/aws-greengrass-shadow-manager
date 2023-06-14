@@ -77,12 +77,11 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
     }
 
     private JdbcConnectionPool getPool() {
-        JdbcConnectionPool pool = database.getPool();
-        if (pool == null) {
+        if (!database.isInitialized()) {
             throw new ShadowManagerDataException("Database pool not initialized. Shadow manager most likely isn't "
                     + "running yet. Wait for Shadow manager to be running.");
         }
-        return pool;
+        return database.getPool();
     }
 
     /**

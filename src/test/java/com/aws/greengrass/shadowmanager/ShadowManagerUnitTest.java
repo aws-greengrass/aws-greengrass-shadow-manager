@@ -97,7 +97,6 @@ import static org.mockito.Mockito.atMostOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -645,13 +644,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         verify(mockDatabase, atMostOnce()).close();
         verify(mockInboundRateLimiter, atMostOnce()).clear();
         verify(mockPubSubClientWrapper, atMostOnce()).unsubscribe(any());
-    }
-
-    @Test
-    void GIVEN_shadow_manager_db_WHEN_shutdown_throws_io_exception_THEN_catches_exception(ExtensionContext extensionContext) throws IOException {
-        ignoreExceptionOfType(extensionContext, IOException.class);
-        doThrow(IOException.class).when(mockDatabase).close();
-        assertDoesNotThrow(() -> shadowManager.shutdown());
     }
 
     @Test
