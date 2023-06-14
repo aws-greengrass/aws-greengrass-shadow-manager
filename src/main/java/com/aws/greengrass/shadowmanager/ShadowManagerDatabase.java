@@ -53,7 +53,7 @@ public class ShadowManagerDatabase implements Closeable {
     private static final Logger logger = LogManager.getLogger(ShadowManagerDatabase.class);
     private final Path databasePath;
     @Getter
-    private final ExecutorService dbWriteThreadPool = Executors.newCachedThreadPool();
+    private ExecutorService dbWriteThreadPool = Executors.newCachedThreadPool();
 
     /**
      * Creates a database with a {@link javax.sql.DataSource} using the kernel config.
@@ -136,6 +136,11 @@ public class ShadowManagerDatabase implements Closeable {
      */
     @Synchronized
     public void open() {
+        // The DB can be closed and then opened again, so we need to create a new threadpool if this happens
+        // because we shut it down in the close().
+        if (dbWriteThreadPool == null || dbWriteThreadPool.isShutdown()) {
+            dbWriteThreadPool = Executors.newCachedThreadPool();
+        }
         if (closed) {
             // defaults to 10 connections with a 30s timeout waiting for a connection
             pool = JdbcConnectionPool.create(dataSource);
