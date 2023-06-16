@@ -42,7 +42,6 @@ import org.junit.jupiter.api.extension.ExtensionContext;
 import org.mockito.junit.jupiter.MockitoExtension;
 import software.amazon.awssdk.services.iotdataplane.model.GetThingShadowResponse;
 
-import javax.net.ssl.KeyManager;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -53,6 +52,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import javax.net.ssl.KeyManager;
 
 import static com.aws.greengrass.componentmanager.KernelConfigResolver.CONFIGURATION_CONFIG_KEY;
 import static com.aws.greengrass.deployment.DeviceConfiguration.DEVICE_PARAM_THING_NAME;
@@ -66,7 +66,6 @@ import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_STR
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SYNCHRONIZATION_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_SYNC_DIRECTION_TOPIC;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_THING_NAME_TOPIC;
-
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static com.github.grantwest.eventually.EventuallyLambdaMatcher.eventuallyEval;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -170,6 +169,9 @@ class ShadowManagerTest extends NucleusLaunchUtils {
                 .configFile(DEFAULT_CONFIG)
                 .mqttConnected(false)
                 .build());
+        // Validate that shadow manager will continue to work properly even if it is reinstalled.
+        shadowManager.requestReinstall();
+        Thread.sleep(1000);
         shadowManager.startSyncingShadows(ShadowManager.StartSyncInfo.builder().build());
         ShadowManagerDAOImpl impl = kernel.getContext().get(ShadowManagerDAOImpl.class);
         createThingShadowSyncInfo(impl, THING_NAME);

@@ -13,8 +13,9 @@ import com.aws.greengrass.shadowmanager.ShadowManagerDatabase;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
-import org.flywaydb.core.internal.exception.FlywaySqlException;
 import org.apache.commons.io.FileUtils;
+import org.flywaydb.core.internal.exception.FlywaySqlException;
+import org.h2.jdbcx.JdbcConnectionPool;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -66,7 +67,6 @@ import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
@@ -80,7 +80,6 @@ class ShadowManagerDatabaseTest extends NucleusLaunchUtils {
         System.setProperty("aws.greengrass.scanSelfClasspath", "true");
         db = new ShadowManagerDatabase(rootDir);
         db.install();
-        db.open();
     }
 
     @AfterEach
@@ -126,7 +125,6 @@ class ShadowManagerDatabaseTest extends NucleusLaunchUtils {
     @Test
     void GIVEN_migrations_WHEN_install_THEN_shadow_manager_database_installs_and_starts_successfully() throws Exception {
         // GIVEN
-        db.open();
         assertNotNull(db.getPool());
 
         // WHEN
@@ -158,7 +156,6 @@ class ShadowManagerDatabaseTest extends NucleusLaunchUtils {
         Path source = Paths.get(getClass().getResource("database/corrupted.mv.db").toURI());
         Files.copy(source, dest, StandardCopyOption.REPLACE_EXISTING);
         // GIVEN
-        db.open();
         assertNotNull(db.getPool());
 
         // WHEN
@@ -188,15 +185,14 @@ class ShadowManagerDatabaseTest extends NucleusLaunchUtils {
         assertNotNull(c, "connection should not be null");
         assertThat("connection is not closed", c.isClosed(), is(false));
         c.close();
+        JdbcConnectionPool pool = db.getPool();
         db.close();
-        assertThat("active connections", db.getPool().getActiveConnections(), is(0));
-        assertThrows(IllegalStateException.class, () -> db.getPool().getConnection());
+        assertThat("active connections", pool.getActiveConnections(), is(0));
     }
 
     @Test
     void GIVEN_shadow_manager_database_open_WHEN_closed_and_opened_THEN_shadow_manager_database_can_return_connections() throws Exception {
         db.close();
-        db.open();
         Connection c = assertDoesNotThrow(() -> db.getPool().getConnection());
         assertNotNull(c, "connection should not be null");
         assertThat("connection is not closed", c.isClosed(), is(false));

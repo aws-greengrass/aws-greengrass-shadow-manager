@@ -11,4 +11,8 @@ public class ShadowManagerDataException extends RuntimeException {
     public ShadowManagerDataException(final Throwable ex) {
         super(ex);
     }
+
+    public ShadowManagerDataException(final String s) {
+        super(s);
+    }
 }

@@ -23,6 +23,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.Connection;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Stream;
@@ -46,14 +47,13 @@ public class ShadowManagerDatabase implements Closeable {
             ;
     private final JdbcDataSource dataSource;
 
-    @Getter
     private JdbcConnectionPool pool;
 
-    private boolean closed = true;
     private static final Logger logger = LogManager.getLogger(ShadowManagerDatabase.class);
     private final Path databasePath;
+    private ExecutorService dbWriteThreadPool;
     @Getter
-    private final ExecutorService dbWriteThreadPool = Executors.newCachedThreadPool();
+    private boolean initialized = false;
 
     /**
      * Creates a database with a {@link javax.sql.DataSource} using the kernel config.
@@ -90,6 +90,7 @@ public class ShadowManagerDatabase implements Closeable {
                 deleteDB(databasePath);
                 migrateDB();
             }
+            initialized = true;
         } catch (FlywayException | IOException e) {
             throw new ShadowManagerDataException(e);
         }
@@ -103,18 +104,40 @@ public class ShadowManagerDatabase implements Closeable {
         flyway.migrate();
     }
 
+    @SuppressWarnings({"checkstyle:EmptyBlock", "checkstyle:WhitespaceAround", "PMD.AvoidCatchingGenericException"})
     private boolean migrateAndGetResult() {
         try {
             migrateDB();
-            return true;
         } catch (FlywaySqlException flywaySqlException) {
             if (flywaySqlException.getCause() instanceof JdbcSQLNonTransientException
                     && flywaySqlException.getCause().getCause() instanceof IllegalStateException) {
-                logger.atError().cause(flywaySqlException).log("Shadow manager DB is corrupted.");
+                logger.atError().cause(flywaySqlException).log("Shadow manager DB is corrupted");
                 return false;
             }
             throw flywaySqlException;
         }
+
+        // Validate that after migration we're actually able to open and connect to the DB.
+        // This may fail if closing the DB after migration failed for some reason.
+        try {
+            try (Connection p = getPool().getConnection()) {}
+            return true;
+        } catch (Exception e) {
+            logger.atError().cause(e).log("Shadow manager DB could not be opened. Deleting and recreating it");
+            close();
+            return false;
+        }
+    }
+
+    /**
+     * Get a reference to the connection pool.
+     * @return JDBC connection pool
+     */
+    public synchronized JdbcConnectionPool getPool() {
+        if (pool == null) {
+            pool = JdbcConnectionPool.create(dataSource);
+        }
+        return pool;
     }
 
     private void deleteDB(Path databasePath) throws IOException {
@@ -131,26 +154,29 @@ public class ShadowManagerDatabase implements Closeable {
         }
     }
 
-    /**
-     * Open the database to allow connections.
-     */
+    @Override
     @Synchronized
-    public void open() {
-        if (closed) {
-            // defaults to 10 connections with a 30s timeout waiting for a connection
-            pool = JdbcConnectionPool.create(dataSource);
-            closed = false;
+    @SuppressWarnings("PMD.NullAssignment")
+    @SuppressFBWarnings(value = "UWF_FIELD_NOT_INITIALIZED_IN_CONSTRUCTOR", justification = "Field gated by flag")
+    public void close() {
+        if (dbWriteThreadPool != null) {
+            dbWriteThreadPool.shutdown();
+        }
+        if (pool != null) {
+            pool.dispose();
+            pool = null;
         }
     }
 
-    @Override
-    @Synchronized
-    @SuppressFBWarnings(value = "UWF_FIELD_NOT_INITIALIZED_IN_CONSTRUCTOR", justification = "Field gated by flag")
-    public void close() throws IOException {
-        if (!closed) {
-            dbWriteThreadPool.shutdown();
-            pool.dispose();
-            closed = true;
+    /**
+     * Get the thread pool used for writing to the DB.
+     *
+     * @return a running thread pool
+     */
+    public synchronized ExecutorService getDbWriteThreadPool() {
+        if (dbWriteThreadPool == null || dbWriteThreadPool.isShutdown()) {
+            dbWriteThreadPool = Executors.newCachedThreadPool();
         }
+        return dbWriteThreadPool;
     }
 }

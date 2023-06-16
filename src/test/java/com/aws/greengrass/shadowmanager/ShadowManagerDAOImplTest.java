@@ -93,6 +93,7 @@ class ShadowManagerDAOImplTest {
         lenient().when(mockDatabase.getDbWriteThreadPool()).thenReturn(es);
         when(mockDatabase.getPool()).thenReturn(mockPool);
         when(mockPool.getConnection()).thenReturn(mockConnection);
+        when(mockDatabase.isInitialized()).thenReturn(true);
         JsonUtil.loadSchema();
     }
     @AfterEach
