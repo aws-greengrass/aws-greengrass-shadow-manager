@@ -171,15 +171,18 @@ public class ShadowManager extends PluginService {
         this.dao = dao;
         this.deviceConfiguration = deviceConfiguration;
         this.iotDataPlaneClientWrapper = iotDataPlaneClientWrapper;
+        // TODO: Is there a better way of injecting the topics to a service?
+        syncHandler.getSyncConfigurationUpdater().setTopics(topics);
         this.syncHandler = syncHandler;
         this.cloudDataClient = cloudDataClient;
         this.mqttClient = mqttClient;
+
         this.deleteThingShadowRequestHandler = new DeleteThingShadowRequestHandler(dao, authorizationHandlerWrapper,
                 pubSubClientWrapper, synchronizeHelper, this.syncHandler);
         this.updateThingShadowRequestHandler = new UpdateThingShadowRequestHandler(dao, authorizationHandlerWrapper,
                 pubSubClientWrapper, synchronizeHelper, this.syncHandler);
         this.getThingShadowRequestHandler = new GetThingShadowRequestHandler(dao, authorizationHandlerWrapper,
-                pubSubClientWrapper);
+                pubSubClientWrapper, this.syncHandler);
         this.deviceThingNameWatcher = this::handleDeviceThingNameChange;
         this.pubSubIntegrator = new PubSubIntegrator(pubSubClientWrapper, deleteThingShadowRequestHandler,
                 updateThingShadowRequestHandler, getThingShadowRequestHandler);
@@ -300,7 +303,7 @@ public class ShadowManager extends PluginService {
                 return;
             }
             this.syncConfiguration = newSyncConfiguration;
-            this.syncHandler.setSyncConfigurations(this.syncConfiguration.getSyncConfigurations());
+            this.syncHandler.setSyncConfiguration(this.syncConfiguration);
 
             // Subscribe to the thing name topic if the Nucleus thing shadows have been synced.
             List<ThingShadowSyncConfiguration> coreThingConfig =

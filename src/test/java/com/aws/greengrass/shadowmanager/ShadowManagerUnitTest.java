@@ -23,6 +23,7 @@ import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfi
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.CloudDataClient;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientWrapper;
+import com.aws.greengrass.shadowmanager.sync.SyncConfigurationUpdater;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
 import com.aws.greengrass.shadowmanager.sync.model.Direction;
 import com.aws.greengrass.shadowmanager.sync.model.DirectionWrapper;
@@ -134,6 +135,8 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
     @Mock
     private SyncHandler mockSyncHandler;
     @Mock
+    private SyncConfigurationUpdater mockSyncConfigurationUpdater;
+    @Mock
     private IotDataPlaneClientWrapper mockIotDataPlaneClientWrapper;
     @Mock
     private CloudDataClient mockCloudDataClient;
@@ -155,6 +158,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
     public void setup() {
         serviceFullName = "aws.greengrass.ShadowManager";
         initializeMockedConfig();
+        when(mockSyncHandler.getSyncConfigurationUpdater()).then(i -> mockSyncConfigurationUpdater);
         shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper,
                 mockPubSubClientWrapper, mockInboundRateLimiter, mockDeviceConfiguration, mockSynchronizeHelper,
                 mockIotDataPlaneClientWrapper, mockSyncHandler, mockCloudDataClient, mockMqttClient, direction);
@@ -623,7 +627,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         assertThat(captor.getValue().getThingName(), is("thing"));
         assertThat(captor.getValue().getShadowName(), is("shadow"));
     }
-    
+
     private void createSyncConfigForSingleShadow(String thing, String shadow) {
         shadowManager.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurations(new HashSet<>()).build());
         ThingShadowSyncConfiguration config = mock(ThingShadowSyncConfiguration.class);

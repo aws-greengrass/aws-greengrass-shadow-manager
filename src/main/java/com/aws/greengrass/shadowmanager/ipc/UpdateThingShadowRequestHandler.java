@@ -69,7 +69,8 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
             ShadowManagerDAO dao,
             AuthorizationHandlerWrapper authorizationHandlerWrapper,
             PubSubClientWrapper pubSubClientWrapper,
-            ShadowWriteSynchronizeHelper synchronizeHelper, SyncHandler syncHandler) {
+            ShadowWriteSynchronizeHelper synchronizeHelper,
+            SyncHandler syncHandler) {
         super(pubSubClientWrapper);
         this.authorizationHandlerWrapper = authorizationHandlerWrapper;
         this.dao = dao;
@@ -209,6 +210,8 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
                                 .log("Requested update is too large");
                         throw e;
                     }
+
+                    syncHandler.addShadowOnInteraction(thingName, shadowName);
 
                     // Update the new document in the DAO.
                     byte[] updateDocumentBytes = JsonUtil.getPayloadBytes(updatedDocument.toJson(false));

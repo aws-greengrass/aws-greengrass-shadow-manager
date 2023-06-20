@@ -16,6 +16,7 @@ import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
+import com.aws.greengrass.shadowmanager.model.configuration.ShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
@@ -247,7 +248,7 @@ class SyncTest extends NucleusLaunchUtils {
             }
             syncConfigs.add(b.build());
 
-            syncHandler.setSyncConfigurations(syncConfigs);
+            syncHandler.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurations(syncConfigs).build());
             AtomicBoolean done = new AtomicBoolean();
             final Random r = new Random();
             CountDownLatch finished = new CountDownLatch(1);

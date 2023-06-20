@@ -1,0 +1,6 @@
+---
+configuration:
+  synchronize:
+    addedOnInteraction:
+      existingThing:
+        existingShadow: true

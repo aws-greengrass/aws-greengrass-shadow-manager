@@ -19,6 +19,7 @@ import com.aws.greengrass.shadowmanager.model.LogEvents;
 import com.aws.greengrass.shadowmanager.model.ResponseMessageBuilder;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.ShadowRequest;
+import com.aws.greengrass.shadowmanager.sync.SyncHandler;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.shadowmanager.util.Validator;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -43,6 +44,7 @@ public class GetThingShadowRequestHandler extends BaseRequestHandler {
     private static final Logger logger = LogManager.getLogger(GetThingShadowRequestHandler.class);
     private final ShadowManagerDAO dao;
     private final AuthorizationHandlerWrapper authorizationHandlerWrapper;
+    private final SyncHandler syncHandler;
 
     /**
      * IPC Handler class for responding to GetThingShadow requests.
@@ -50,13 +52,16 @@ public class GetThingShadowRequestHandler extends BaseRequestHandler {
      * @param dao                         Local shadow database management
      * @param authorizationHandlerWrapper The authorization handler wrapper
      * @param pubSubClientWrapper         The PubSub client wrapper
+     * @param syncHandler                 The sync handler
      */
     public GetThingShadowRequestHandler(ShadowManagerDAO dao,
                                         AuthorizationHandlerWrapper authorizationHandlerWrapper,
-                                        PubSubClientWrapper pubSubClientWrapper) {
+                                        PubSubClientWrapper pubSubClientWrapper,
+                                        SyncHandler syncHandler) {
         super(pubSubClientWrapper);
         this.authorizationHandlerWrapper = authorizationHandlerWrapper;
         this.dao = dao;
+        this.syncHandler = syncHandler;
     }
 
     /**
@@ -86,6 +91,7 @@ public class GetThingShadowRequestHandler extends BaseRequestHandler {
                 Validator.validateShadowRequest(shadowRequest);
                 authorizationHandlerWrapper.doAuthorization(GET_THING_SHADOW, serviceName, shadowRequest);
 
+                this.syncHandler.addShadowOnInteraction(thingName, shadowName);
                 Optional<ShadowDocument> currentShadowDocument = dao.getShadowThing(thingName, shadowName);
                 if (!currentShadowDocument.isPresent()) {
                     ResourceNotFoundError rnf = new ResourceNotFoundError("No shadow found");

@@ -17,6 +17,7 @@ public class ThingShadowSyncConfiguration {
     @Setter
     private String thingName;
     private final String shadowName;
+    private final boolean addedOnInteraction;
 
     @Override
     public boolean equals(Object o) {

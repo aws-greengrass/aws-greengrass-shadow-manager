@@ -1,0 +1,28 @@
+---
+configuration:
+  synchronize:
+    coreThing:
+      classic: true
+      namedShadows: ["coreThingS1", "coreThingS2"]
+    shadowDocuments:
+      - thingName: t1
+        classic: true
+        namedShadows: ["s1", "s2"]
+      - thingName: t2
+        classic: false
+      - thingName: t3
+        namedShadows: ["s1", "s2", "s3"]
+    addedOnInteraction:
+      coreThing:
+        coreThingS2: true
+        coreThingS3: true
+        coreThingS4: false
+      t1:
+        "": true
+        s1: true
+        s2: false
+        s3: true
+      t2:
+        "": true
+        s1: true
+

@@ -62,6 +62,9 @@ public final class Constants {
     public static final String CONFIGURATION_SYNCHRONIZATION_TOPIC = "synchronize";
     public static final String CONFIGURATION_CORE_THING_TOPIC = "coreThing";
     public static final String CONFIGURATION_CLASSIC_SHADOW_TOPIC = "classic";
+    public static final String CONFIGURATION_ADD_ON_INTERACTION_TOPIC = "addOnInteraction";
+    public static final String CONFIGURATION_ADD_ON_INTERACTION_ENABLED_TOPIC = "enabled";
+    public static final String CONFIGURATION_ADDED_ON_INTERACTION_TOPIC = "addedOnInteraction";
     public static final String CONFIGURATION_NAMED_SHADOWS_TOPIC = "namedShadows";
     public static final String CONFIGURATION_SHADOW_DOCUMENTS_TOPIC = "shadowDocuments";
     public static final String CONFIGURATION_SHADOW_DOCUMENTS_MAP_TOPIC = "shadowDocumentsMap";

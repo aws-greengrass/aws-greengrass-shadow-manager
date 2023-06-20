@@ -7,6 +7,7 @@ package com.aws.greengrass.shadowmanager.sync;
 
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
+import com.aws.greengrass.shadowmanager.model.configuration.ShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.sync.model.BaseSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.CloudDeleteSyncRequest;
@@ -30,14 +31,19 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.Synchronized;
 
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Stream;
 import javax.inject.Inject;
 
+import static com.aws.greengrass.shadowmanager.model.Constants.CLASSIC_SHADOW_IDENTIFIER;
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
+import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.LogEvents.SYNC;
 
 /**
@@ -63,7 +69,7 @@ public class SyncHandler {
      */
     // TODO: [GG-36231]: Figure out a better way to set this configuration in only one place.
     @Setter
-    private Set<ThingShadowSyncConfiguration> syncConfigurations;
+    private ShadowSyncConfiguration syncConfiguration;
 
     /**
      * The sync strategy for all shadows.
@@ -101,6 +107,9 @@ public class SyncHandler {
                     SYNC_EVENT_TYPE, logger);
 
 
+    @Getter
+    private final SyncConfigurationUpdater syncConfigurationUpdater;
+
     /**
      * Construct a new instance.
      *
@@ -108,11 +117,13 @@ public class SyncHandler {
      * @param syncScheduledExecutorService provider of thread for periodic syncing
      * @param syncQueue                    a request queue
      * @param direction                    The sync direction
+     * @param syncConfigurationUpdater     updates the component configuration
      */
     @Inject
     public SyncHandler(ExecutorService executorService, ScheduledExecutorService syncScheduledExecutorService,
-                       RequestBlockingQueue syncQueue, DirectionWrapper direction) {
-        this(executorService, syncScheduledExecutorService, retryer, syncQueue, direction);
+                       RequestBlockingQueue syncQueue, DirectionWrapper direction,
+                       SyncConfigurationUpdater syncConfigurationUpdater) {
+        this(executorService, syncScheduledExecutorService, retryer, syncQueue, direction, syncConfigurationUpdater);
     }
 
     /**
@@ -123,24 +134,29 @@ public class SyncHandler {
      * @param retryer                      The retryer object.
      * @param syncQueue                    a request queue.
      * @param direction                    The sync direction
+     * @param syncConfigurationUpdater     updates the component configuration
      */
     private SyncHandler(ExecutorService executorService, ScheduledExecutorService syncScheduledExecutorService,
-                        Retryer retryer, RequestBlockingQueue syncQueue, DirectionWrapper direction) {
-        this(new SyncStrategyFactory(retryer, executorService, syncScheduledExecutorService, direction),
-                syncQueue, direction);
+                        Retryer retryer, RequestBlockingQueue syncQueue, DirectionWrapper direction,
+                        SyncConfigurationUpdater syncConfigurationUpdater) {
+        this(new SyncStrategyFactory(retryer, executorService, syncScheduledExecutorService, direction), syncQueue,
+                direction, syncConfigurationUpdater);
     }
 
     /**
      * Constructor for testing.
      *
-     * @param syncStrategyFactory The sync strategy factory object to generate.
-     * @param syncQueue           a request queue.
-     * @param direction           The sync direction
+     * @param syncStrategyFactory          The sync strategy factory object to generate.
+     * @param syncQueue                    a request queue.
+     * @param direction                    The sync direction
+     * @param syncConfigurationUpdater     updates the component configuration
      */
-    SyncHandler(SyncStrategyFactory syncStrategyFactory, RequestBlockingQueue syncQueue, DirectionWrapper direction) {
+    SyncHandler(SyncStrategyFactory syncStrategyFactory, RequestBlockingQueue syncQueue, DirectionWrapper direction,
+                SyncConfigurationUpdater syncConfigurationUpdater) {
         this.syncStrategyFactory = syncStrategyFactory;
         this.syncQueue = syncQueue;
         this.direction = direction;
+        this.syncConfigurationUpdater = syncConfigurationUpdater;
         setSyncStrategy(Strategy.builder().type(StrategyType.REALTIME).build());
     }
 
@@ -219,8 +235,12 @@ public class SyncHandler {
      * @return true if the shadow is supposed to be synced; Else false.
      */
     private boolean isShadowSynced(String thingName, String shadowName) {
-        return this.syncConfigurations != null && this.syncConfigurations
+        return this.getSyncConfigurations() != null && this.getSyncConfigurations()
                 .contains(ThingShadowSyncConfiguration.builder().shadowName(shadowName).thingName(thingName).build());
+    }
+
+    private Set<ThingShadowSyncConfiguration> getSyncConfigurations() {
+        return this.syncConfiguration.getSyncConfigurations();
     }
 
     /**
@@ -276,5 +296,88 @@ public class SyncHandler {
         if (isShadowSynced(thingName, shadowName) && !Direction.DEVICE_TO_CLOUD.equals(direction.get())) {
             overallSyncStrategy.putSyncRequest(new LocalDeleteSyncRequest(thingName, shadowName, deletePayload));
         }
+    }
+
+    /**
+     * If add on interaction feature is enabled then adds the shadow to synchronization.
+     *
+     * @param thingName - The thing name to be added to synchronization
+     * @param shadowName - The shadow name to be added to synchronization
+     */
+    public void addShadowOnInteraction(String thingName, String shadowName) {
+        if (!addOnInteractionEnabled()) {
+            return;
+        }
+
+        ThingShadowSyncConfiguration sync = buildThingShadowSyncConfiguration(thingName, shadowName);
+        if (this.getSyncConfigurations().contains(sync)) {
+            return;
+        }
+
+        logger.atInfo()
+            .kv(LOG_THING_NAME_KEY, thingName)
+            .kv(LOG_SHADOW_NAME_KEY, shadowName)
+            .log("trying to add thing shadow to synchronization on interaction");
+
+        // clone syncConfigurations to prevent the original set modification
+        Set<ThingShadowSyncConfiguration> syncConfigurations = new HashSet<>(this.getSyncConfigurations());
+        syncConfigurations.add(sync);
+        syncConfigurationUpdater.updateThingShadowsAddedOnInteraction(syncConfigurations);
+    }
+
+    /**
+     * If add on interaction feature is enabled then removes the shadow, previously added on interaction, from
+     * synchronization.
+     *
+     * @param thingName - The thing name to be removed from synchronization
+     * @param shadowName - The shadow name to be removed from synchronization
+     */
+    public void removeShadowOnInteraction(String thingName, String shadowName) {
+        if (!addOnInteractionEnabled()) {
+            return;
+        }
+        ThingShadowSyncConfiguration sync = buildThingShadowSyncConfiguration(thingName, shadowName);
+        Optional<ThingShadowSyncConfiguration> maybeExistingSync = this.getSyncConfigurations().stream()
+            .filter(x -> x.equals(sync))
+            .findFirst();
+        if (!maybeExistingSync.isPresent()) {
+            // the shadow being deleted does not exist in the synchronization config
+            return;
+        }
+
+        ThingShadowSyncConfiguration existingSync = maybeExistingSync.get();
+        if (!existingSync.isAddedOnInteraction()) {
+            // the shadow being deleted was not added on interaction, keep it in the config
+            return;
+        }
+
+        logger.atInfo()
+            .kv(LOG_THING_NAME_KEY, thingName)
+            .kv(LOG_SHADOW_NAME_KEY, shadowName)
+            .log("trying to remove thing shadow added on interaction");
+
+        Set<ThingShadowSyncConfiguration> syncConfigurations = new HashSet<>(this.getSyncConfigurations());
+        syncConfigurations.remove(existingSync);
+        syncConfigurationUpdater.updateThingShadowsAddedOnInteraction(syncConfigurations);
+    }
+
+    private boolean addOnInteractionEnabled() {
+        return syncConfiguration.getAddOnInteraction() != null && syncConfiguration.getAddOnInteraction().getEnabled();
+
+    }
+
+    private ThingShadowSyncConfiguration buildThingShadowSyncConfiguration(String thingName, String shadowName) {
+        if (thingName == null) {
+            throw new RuntimeException("thingName can not be null");
+        }
+        if (shadowName == null) {
+            shadowName = CLASSIC_SHADOW_IDENTIFIER;
+        }
+
+        return ThingShadowSyncConfiguration.builder()
+            .thingName(thingName)
+            .shadowName(shadowName)
+            .addedOnInteraction(true)
+            .build();
     }
 }

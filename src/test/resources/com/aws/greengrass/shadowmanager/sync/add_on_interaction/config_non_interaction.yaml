@@ -1,0 +1,7 @@
+---
+configuration:
+  synchronize:
+    shadowDocuments:
+      - thingName: existingThing
+        classic: true
+        namedShadows: ["existingShadow"]

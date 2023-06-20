@@ -6,6 +6,7 @@
 package com.aws.greengrass.shadowmanager.sync;
 
 
+import com.aws.greengrass.shadowmanager.model.configuration.ShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.sync.model.BaseSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.CloudDeleteSyncRequest;
@@ -36,6 +37,9 @@ import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
 
+import static com.aws.greengrass.shadowmanager.model.configuration.ShadowSyncConfigurationUtils.assertEqual;
+import static com.aws.greengrass.shadowmanager.model.configuration.ShadowSyncConfigurationUtils.syncConfig;
+import static com.aws.greengrass.shadowmanager.model.configuration.ShadowSyncConfigurationUtils.syncConfigs;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
@@ -68,6 +72,9 @@ class SyncHandlerTest {
     @Mock(answer = Answers.RETURNS_DEEP_STUBS)
     SyncContext context;
 
+    @Mock
+    SyncConfigurationUpdater syncConfigurationUpdater;
+
     @Captor
     ArgumentCaptor<BaseSyncRequest> syncRequestCaptor;
 
@@ -75,7 +82,8 @@ class SyncHandlerTest {
 
     @BeforeEach
     void setup() {
-        syncHandler = new SyncHandler(executorService, scheduledExecutorService, mock(RequestBlockingQueue.class), direction);
+        syncHandler = new SyncHandler(executorService, scheduledExecutorService, mock(RequestBlockingQueue.class), direction,
+                syncConfigurationUpdater);
         syncHandler.setOverallSyncStrategy(mockSyncStrategy);
     }
 
@@ -117,7 +125,8 @@ class SyncHandlerTest {
     @Test
     void GIVEN_sync_strategy_WHEN_setSyncStrategy_THEN_calls_sync_factory() {
         // GIVEN
-        syncHandler = new SyncHandler(mockSyncStrategyFactory, mock(RequestBlockingQueue.class), direction);
+        syncHandler = new SyncHandler(mockSyncStrategyFactory, mock(RequestBlockingQueue.class), direction,
+                syncConfigurationUpdater);
 
         // WHEN
         syncHandler.setSyncStrategy(mock(Strategy.class));
@@ -135,7 +144,7 @@ class SyncHandlerTest {
         doNothing().when(mockSyncStrategy).putSyncRequest(syncRequestCaptor.capture());
         Set<ThingShadowSyncConfiguration> syncConfigurations = new HashSet<>();
         syncConfigurations.add(ThingShadowSyncConfiguration.builder().thingName("a").shadowName("1").build());
-        syncHandler.setSyncConfigurations(syncConfigurations);
+        syncHandler.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurations(syncConfigurations).build());
 
         // WHEN
         syncHandler.pushCloudUpdateSyncRequest("a", "1", mock(JsonNode.class));
@@ -154,7 +163,7 @@ class SyncHandlerTest {
         doNothing().when(mockSyncStrategy).putSyncRequest(syncRequestCaptor.capture());
         Set<ThingShadowSyncConfiguration> syncConfigurations = new HashSet<>();
         syncConfigurations.add(ThingShadowSyncConfiguration.builder().thingName("a").shadowName("1").build());
-        syncHandler.setSyncConfigurations(syncConfigurations);
+        syncHandler.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurations(syncConfigurations).build());
 
         // WHEN
         syncHandler.pushLocalUpdateSyncRequest("a", "1", new byte[0]);
@@ -173,7 +182,7 @@ class SyncHandlerTest {
         doNothing().when(mockSyncStrategy).putSyncRequest(syncRequestCaptor.capture());
         Set<ThingShadowSyncConfiguration> syncConfigurations = new HashSet<>();
         syncConfigurations.add(ThingShadowSyncConfiguration.builder().thingName("a").shadowName("1").build());
-        syncHandler.setSyncConfigurations(syncConfigurations);
+        syncHandler.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurations(syncConfigurations).build());
 
         // WHEN
         syncHandler.pushCloudDeleteSyncRequest("a", "1");
@@ -192,7 +201,7 @@ class SyncHandlerTest {
         doNothing().when(mockSyncStrategy).putSyncRequest(syncRequestCaptor.capture());
         Set<ThingShadowSyncConfiguration> syncConfigurations = new HashSet<>();
         syncConfigurations.add(ThingShadowSyncConfiguration.builder().thingName("a").shadowName("1").build());
-        syncHandler.setSyncConfigurations(syncConfigurations);
+        syncHandler.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurations(syncConfigurations).build());
 
         // WHEN
         syncHandler.pushLocalDeleteSyncRequest("a", "1", new byte[0]);
@@ -200,5 +209,77 @@ class SyncHandlerTest {
         // THEN
         verify(mockSyncStrategy, times(1)).putSyncRequest(any());
         assertThat(syncRequestCaptor.getValue(), is(instanceOf(LocalDeleteSyncRequest.class)));
+    }
+
+    @Test
+    void GIVEN_addOnInteraction_is_disabled_WHEN_addShadowOnInteraction_THEN_ignored() {
+        syncHandler.setSyncConfiguration(syncConfig(false));
+
+        syncHandler.addShadowOnInteraction("thing1", "shadow1");
+
+        verify(syncConfigurationUpdater, times(0)).updateThingShadowsAddedOnInteraction(any());
+    }
+
+    @Test
+    void GIVEN_shadow_exists_WHEN_addShadowOnInteraction_THEN_ignored() {
+        syncHandler.setSyncConfiguration(syncConfig(true, "thing1", "shadow1", false));
+
+        syncHandler.addShadowOnInteraction("thing1", "shadow1");
+
+        verify(syncConfigurationUpdater, times(0)).updateThingShadowsAddedOnInteraction(any());
+    }
+
+    @Test
+    void GIVEN_shadow_does_not_exist_WHEN_addShadowOnInteraction_THEN_added() {
+        syncHandler.setSyncConfiguration(syncConfig(true, "thing1", "shadow1", false));
+
+        syncHandler.addShadowOnInteraction("thing1", "shadow2");
+
+        ArgumentCaptor<Set<ThingShadowSyncConfiguration>> captor = ArgumentCaptor.forClass(Set.class);
+        verify(syncConfigurationUpdater, times(1)).updateThingShadowsAddedOnInteraction(captor.capture());
+        Set<ThingShadowSyncConfiguration> actualSyncs = captor.getValue();
+        assertEqual(actualSyncs, syncConfigs(
+            "thing1", "shadow1", false,
+            "thing1", "shadow2", true
+        ));
+    }
+
+    @Test
+    void GIVEN_addOnInteraction_is_disabled_WHEN_removeShadowOnInteraction_THEN_ignored() {
+        syncHandler.setSyncConfiguration(syncConfig(false));
+
+        syncHandler.removeShadowOnInteraction("thing1", "shadow1");
+
+        verify(syncConfigurationUpdater, times(0)).updateThingShadowsAddedOnInteraction(any());
+    }
+
+    @Test
+    void GIVEN_shadow_does_not_exist_WHEN_removeShadowOnInteraction_THEN_ignored() {
+        syncHandler.setSyncConfiguration(syncConfig(true));
+
+        syncHandler.removeShadowOnInteraction("thing1", "shadow2");
+
+        verify(syncConfigurationUpdater, times(0)).updateThingShadowsAddedOnInteraction(any());
+    }
+
+    @Test
+    void GIVEN_shadow_not_added_on_interaction_WHEN_removeShadowOnInteraction_THEN_ignored() {
+        syncHandler.setSyncConfiguration(syncConfig(true, "thing1", "shadow1", false));
+
+        syncHandler.removeShadowOnInteraction("thing1", "shadow1");
+
+        verify(syncConfigurationUpdater, times(0)).updateThingShadowsAddedOnInteraction(any());
+    }
+
+    @Test
+    void GIVEN_shadow_added_on_interaction_WHEN_removeShadowOnInteraction_THEN_removed() {
+        syncHandler.setSyncConfiguration(syncConfig(true, "thing1", "shadow1", true));
+
+        syncHandler.removeShadowOnInteraction("thing1", "shadow1");
+
+        ArgumentCaptor<Set<ThingShadowSyncConfiguration>> captor = ArgumentCaptor.forClass(Set.class);
+        verify(syncConfigurationUpdater, times(1)).updateThingShadowsAddedOnInteraction(captor.capture());
+        Set<ThingShadowSyncConfiguration> actualSyncs = captor.getValue();
+        assertEqual(actualSyncs, new HashSet<>());
     }
 }
