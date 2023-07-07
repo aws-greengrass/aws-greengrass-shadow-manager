@@ -29,7 +29,7 @@
         <groups></groups>
         <shadowmanagerjar.name>aws.greengrass.ShadowManager</shadowmanagerjar.name>
 
-        <h2.version>1.4.200</h2.version>
+        <h2.version>2.2.220</h2.version>
         <nucleus.version>2.5.0-SNAPSHOT</nucleus.version>
         <junit.version>5.6.2</junit.version>
         <mockito.version>4.3.1</mockito.version>
