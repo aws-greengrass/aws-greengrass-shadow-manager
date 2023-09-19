@@ -42,7 +42,6 @@ class JsonUtilTest {
     @ValueSource(strings={
             "{\"version\": 1}",
             "{}",
-            "{\"state\": {}}",
             "{\"state\": {\"reported\": 1}}",
             "{\"state\": {\"desired\": 1}}",
             "{\"state\": {\"delta\": 1}}",
@@ -60,6 +59,7 @@ class JsonUtilTest {
 
     @ParameterizedTest
     @ValueSource(strings = {
+            "{\"state\": {}}",
             "{\"state\": {\"desired\":" + NAME_A + ", \"reported\":" + NAME_B + ", \"delta\":" + NAME_A + "}}",
             "{\"state\": {\"desired\":" + NAME_A + ", \"reported\":" + NAME_A + "}}",
             "{\"state\": {\"desired\":" + NAME_A + "}}",
@@ -74,7 +74,7 @@ class JsonUtilTest {
             "{\"version\": 1, \"state\": {\"reported\":" + NAME_A + "}}",
             "{\"version\": 1, \"state\": {\"reported\":" + NAME_A + ", \"desired\": null}}",
     })
-    void GIVEN_valid_request_WHEN_validatePayloadSchema_THEN_does_not_throw(String json) throws IOException {
+    void GIVEN_valid_request_WHEN_validatePayloadSchema_THEN_does_not_throw(String json) {
         assertDoesNotThrow(() -> {
             validatePayloadSchema(getPayloadJson(json.getBytes(StandardCharsets.UTF_8)).get());
         });

@@ -32,6 +32,9 @@
         },
         {
           "required": [ "desired" ]
+        },
+        {
+          "additionalProperties": false
         }
       ]
     },
