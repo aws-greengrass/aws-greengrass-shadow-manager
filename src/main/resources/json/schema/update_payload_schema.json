@@ -11,7 +11,7 @@
     },
     "state": {
       "description": "The state node containing the desired, reported, and delta shadow state.",
-      "type": "object",
+      "type": ["object", "null"],
       "properties": {
         "reported": {
           "description": "The shadow document state reported by the components.",

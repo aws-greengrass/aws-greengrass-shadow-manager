@@ -59,6 +59,7 @@ class JsonUtilTest {
 
     @ParameterizedTest
     @ValueSource(strings = {
+            "{\"state\": null}",
             "{\"state\": {}}",
             "{\"state\": {\"desired\":" + NAME_A + ", \"reported\":" + NAME_B + ", \"delta\":" + NAME_A + "}}",
             "{\"state\": {\"desired\":" + NAME_A + ", \"reported\":" + NAME_A + "}}",
