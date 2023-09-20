@@ -1498,7 +1498,6 @@ class SyncTest extends NucleusLaunchUtils {
     }
 
     private void assertLocalShadowEquals(String state) throws IOException {
-        System.out.println(getLocalShadowState());
         assertThat(this::getLocalShadowState, eventuallyEval(is(JsonUtil.getPayloadJson(state.getBytes(UTF_8)).get().get(SHADOW_DOCUMENT_STATE))));
     }
 
