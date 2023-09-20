@@ -102,11 +102,24 @@ public final class JsonUtil {
     }
 
     public static boolean isNullOrMissing(JsonNode node) {
-        return node == null || node.isNull() || node.isMissingNode() || node.isObject() && node.isEmpty();
+        return node == null || isMissing(node);
     }
 
+    public static boolean isMissing(JsonNode node) {
+        return node.isNull() || node.isMissingNode() || node.isObject() && node.isEmpty();
+    }
+
+    /**
+     * Determine if a node represents an empty state document.
+     *
+     * @param node node
+     * @return true if node is null, empty, or has a null or empty state node
+     */
     public static boolean isEmptyStateDocument(JsonNode node) {
-        return isNullOrMissing(node) || node.isObject() && isNullOrMissing(node.get(SHADOW_DOCUMENT_STATE));
+        return isNullOrMissing(node)
+                || node.isObject()
+                && node.get(SHADOW_DOCUMENT_STATE) != null
+                && isMissing(node.get(SHADOW_DOCUMENT_STATE));
     }
 
     /**
