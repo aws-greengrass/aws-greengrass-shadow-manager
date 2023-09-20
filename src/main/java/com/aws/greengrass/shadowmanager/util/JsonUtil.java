@@ -105,6 +105,10 @@ public final class JsonUtil {
         return node == null || node.isNull() || node.isMissingNode() || node.isObject() && node.isEmpty();
     }
 
+    public static boolean isEmptyStateDocument(JsonNode node) {
+        return isNullOrMissing(node) || node.isObject() && isNullOrMissing(node.get(SHADOW_DOCUMENT_STATE));
+    }
+
     /**
      * Validates that the state node depth is no deeper than the max depth for shadows (6).
      *

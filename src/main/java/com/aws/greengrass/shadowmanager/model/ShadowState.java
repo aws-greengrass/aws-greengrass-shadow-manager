@@ -58,6 +58,11 @@ public class ShadowState {
      */
     @SuppressWarnings({"PMD.ForLoopCanBeForeach", "PMD.NullAssignment"})
     public void update(JsonNode updatedStateNode) {
+        if (isNullOrMissing(updatedStateNode)) {
+            this.desired = null;
+            this.reported = null;
+            return;
+        }
         for (final Iterator<String> i = updatedStateNode.fieldNames(); i.hasNext(); ) {
             final String field = i.next();
             final JsonNode value = updatedStateNode.get(field);

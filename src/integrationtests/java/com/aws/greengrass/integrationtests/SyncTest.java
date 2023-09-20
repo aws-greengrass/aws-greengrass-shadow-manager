@@ -1418,7 +1418,59 @@ class SyncTest extends NucleusLaunchUtils {
         assertLocalShadowEquals(expectedLocalShadowState);
     }
 
+    @ParameterizedTest
+    @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
+    void GIVEN_local_shadow_state_empty_WHEN_shadow_manager_syncs_THEN_cloud_shadow_is_cleared(Class<?extends BaseSyncStrategy> clazz, ExtensionContext context)
+            throws InterruptedException, IOException, IoTDataPlaneClientCreationException {
+        ignoreExceptionOfType(context, InterruptedException.class);
+        ignoreExceptionOfType(context, ConflictError.class);
+
+        String initialCloudState = "{\"version\":1,\"state\":{\"desired\":{\"SomeKey\":\"foo\"}}}";
+        String initialLocalState = "{\"state\":{\"desired\":{\"SomeKey\":\"foo\"}}}";
+        String localUpdate1 = "{\"state\":{}}";
+        String finalLocalState = "{\"state\":{}}";
+
+        UpdateThingShadowRequest updateRequest1 = new UpdateThingShadowRequest();
+        updateRequest1.setThingName(MOCK_THING_NAME_1);
+        updateRequest1.setShadowName(CLASSIC_SHADOW);
+        updateRequest1.setPayload(localUpdate1.getBytes(UTF_8));
+
+        when(mockUpdateThingShadowResponse.payload())
+                .thenReturn(SdkBytes.fromString("{\"version\": 2}", UTF_8));
+        when(iotDataPlaneClientFactory.getIotDataPlaneClient().updateThingShadow(cloudUpdateThingShadowRequestCaptor.capture()))
+                .thenReturn(mockUpdateThingShadowResponse);
+
+        // setup initial cloud state
+        // which will be used as initial local state during full sync on startup
+        GetThingShadowResponse initialCloudStateShadowResponse = mock(GetThingShadowResponse.class, Answers.RETURNS_DEEP_STUBS);
+        lenient().when(initialCloudStateShadowResponse.payload().asByteArray()).thenReturn(initialCloudState.getBytes(UTF_8));
+        when(iotDataPlaneClientFactory.getIotDataPlaneClient().getThingShadow(any(GetThingShadowRequest.class))).thenReturn(initialCloudStateShadowResponse);
+
+        startNucleusWithConfig(NucleusLaunchUtilsConfig.builder()
+                .configFile(getSyncConfigFile(clazz))
+                .syncClazz(clazz)
+                .mockCloud(true)
+                .build());
+
+        // verify initial state
+        assertEmptySyncQueue(clazz);
+        assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
+        assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(1L)));
+        assertThat("local version", syncInfo.get().get().getLocalVersion(), is(1L));
+        assertLocalShadowEquals(initialLocalState);
+
+        UpdateThingShadowRequestHandler updateHandler = shadowManager.getUpdateThingShadowRequestHandler();
+
+        updateHandler.handleRequest(updateRequest1, "DoAll");
+        assertEmptySyncQueue(clazz);
+        assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
+        assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(2L)));
+        assertThat("local version", () -> syncInfo.get().get().getLocalVersion(), eventuallyEval(is(2L)));
+        assertLocalShadowEquals(finalLocalState);
+    }
+
     private void assertLocalShadowEquals(String state) throws IOException {
+        System.out.println(getLocalShadowState());
         assertThat(this::getLocalShadowState, eventuallyEval(is(JsonUtil.getPayloadJson(state.getBytes(UTF_8)).get().get(SHADOW_DOCUMENT_STATE))));
     }
 
