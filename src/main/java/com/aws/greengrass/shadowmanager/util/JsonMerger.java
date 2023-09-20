@@ -14,6 +14,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 import java.util.Iterator;
 
+import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE;
 import static com.aws.greengrass.shadowmanager.util.JsonUtil.isNullOrMissing;
 
 /**
@@ -34,6 +35,11 @@ public final class JsonMerger {
      */
     @SuppressFBWarnings(value = "BC_UNCONFIRMED_CAST", justification = "We do check the type before cast.")
     public static void merge(JsonNode source, final JsonNode patch) throws InvalidRequestParametersException {
+        if (JsonUtil.isEmptyStateDocument(patch)) {
+            clearState(source);
+            return;
+        }
+
         // If both nodes are objects then do a recursive patch
         if (source.isObject() && patch.isObject()) {
             merge((ObjectNode) source, (ObjectNode) patch);
@@ -136,5 +142,17 @@ public final class JsonMerger {
         }
 
         return result;
+    }
+
+    private static void clearState(JsonNode node) {
+        if (!node.isObject()) {
+            return;
+        }
+        JsonNode stateNode = node.get(SHADOW_DOCUMENT_STATE);
+        if (stateNode != null) {
+            clearState(stateNode);
+            return;
+        }
+        ((ObjectNode) node).removeAll();
     }
 }
