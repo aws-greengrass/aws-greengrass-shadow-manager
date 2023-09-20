@@ -60,6 +60,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
@@ -84,6 +85,7 @@ import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -1481,6 +1483,7 @@ class SyncTest extends NucleusLaunchUtils {
         assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(2L)));
         assertThat("local version", () -> syncInfo.get().get().getLocalVersion(), eventuallyEval(is(2L)));
         assertLocalShadowEquals(localUpdate1);
+        assertCloudUpdateEquals(localUpdate1);
 
         updateHandler.handleRequest(updateRequest2, "DoAll");
         assertEmptySyncQueue(clazz);
@@ -1488,6 +1491,7 @@ class SyncTest extends NucleusLaunchUtils {
         assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(3L)));
         assertThat("local version", () -> syncInfo.get().get().getLocalVersion(), eventuallyEval(is(3L)));
         assertLocalShadowEquals(localUpdate2);
+        assertCloudUpdateEquals(localUpdate2);
 
         updateHandler.handleRequest(updateRequest3, "DoAll");
         assertEmptySyncQueue(clazz);
@@ -1495,6 +1499,13 @@ class SyncTest extends NucleusLaunchUtils {
         assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(4L)));
         assertThat("local version", () -> syncInfo.get().get().getLocalVersion(), eventuallyEval(is(4L)));
         assertLocalShadowEquals(finalLocalState);
+        assertCloudUpdateEquals(finalLocalState);
+    }
+
+    private void assertCloudUpdateEquals(String state) throws IOException {
+        ShadowDocument expected = new ShadowDocument(state.getBytes(UTF_8), false);
+        ShadowDocument actual = new ShadowDocument(cloudUpdateThingShadowRequestCaptor.getValue().payload().asByteArray());
+        assertEquals(expected.toJson(false), actual.toJson(false));
     }
 
     private void assertLocalShadowEquals(String state) throws IOException {
