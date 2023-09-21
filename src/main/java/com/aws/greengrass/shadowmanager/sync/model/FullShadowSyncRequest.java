@@ -75,7 +75,7 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
 
         SyncInformation syncInformation = getSyncInformation();
 
-        Optional<ShadowDocument> localShadowDocument = context.getDao().getShadowThing(getThingName(), getShadowName());
+        Optional<ShadowDocument> localShadowDocument = getShadowThing(context);
         Optional<ShadowDocument> cloudShadowDocument = getCloudShadowDocument();
         // If both the local and cloud document does not exist, then update the sync info and return.
         if (!cloudShadowDocument.isPresent() && !localShadowDocument.isPresent()) {

@@ -9,6 +9,7 @@ import com.aws.greengrass.shadowmanager.ShadowManagerDAO;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientWrapper;
+import com.aws.greengrass.shadowmanager.util.ShadowWriteSynchronizeHelper;
 import lombok.AllArgsConstructor;
 import lombok.Value;
 
@@ -19,4 +20,5 @@ public class SyncContext {
     UpdateThingShadowRequestHandler updateHandler;
     DeleteThingShadowRequestHandler deleteHandler;
     IotDataPlaneClientWrapper iotDataPlaneClientWrapper;
+    ShadowWriteSynchronizeHelper synchronizeHelper;
 }

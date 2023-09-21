@@ -46,7 +46,7 @@ public class OverwriteCloudShadowRequest extends BaseSyncRequest {
         super.setContext(context);
         SyncInformation syncInformation = getSyncInformation();
 
-        Optional<ShadowDocument> localShadowDocument = context.getDao().getShadowThing(getThingName(), getShadowName());
+        Optional<ShadowDocument> localShadowDocument = getShadowThing(context);
 
         if (localShadowDocument.isPresent()) {
             if (syncInformation.getLocalVersion() == localShadowDocument.get().getVersion()) {

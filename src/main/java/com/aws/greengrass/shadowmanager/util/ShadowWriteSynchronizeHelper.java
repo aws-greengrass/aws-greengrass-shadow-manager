@@ -27,4 +27,8 @@ public class ShadowWriteSynchronizeHelper {
         thingLocksMap.computeIfAbsent(shadowRequest.computeShadowLockKey(), key -> new Object());
         return thingLocksMap.get(shadowRequest.computeShadowLockKey());
     }
+
+    public synchronized Object getThingShadowLock(String thingName, String shadowName) {
+        return getThingShadowLock(new ShadowRequest(thingName, shadowName));
+    }
 }

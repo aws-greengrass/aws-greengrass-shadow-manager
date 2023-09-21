@@ -85,7 +85,7 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
     @Override
     public void execute(SyncContext context) throws RetryableException, SkipSyncRequestException,
             ConflictException, UnknownShadowException, InterruptedException {
-        Optional<ShadowDocument> shadowDocument = context.getDao().getShadowThing(getThingName(), getShadowName());
+        Optional<ShadowDocument> shadowDocument = getShadowThing(context);
 
         //TODO: store this information in a return object to avoid unnecessary calls to DAO.
         SyncInformation currentSyncInformation = context.getDao()
@@ -178,7 +178,7 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
      */
     @Override
     boolean isUpdateNecessary(SyncContext context) throws SkipSyncRequestException, UnknownShadowException {
-        Optional<ShadowDocument> shadowDocument = context.getDao().getShadowThing(getThingName(), getShadowName());
+        Optional<ShadowDocument> shadowDocument = getShadowThing(context);
 
         //TODO: store this information in a return object to avoid unnecessary calls to DAO.
         SyncInformation currentSyncInformation = context.getDao()

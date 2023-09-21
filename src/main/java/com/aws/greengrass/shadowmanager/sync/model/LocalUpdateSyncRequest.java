@@ -205,7 +205,7 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
 
     private boolean isUpdateNecessary(SyncContext context, ShadowDocument shadowDocument,
                                       SyncInformation currentSyncInformation) {
-        Optional<ShadowDocument> currentLocal = context.getDao().getShadowThing(getThingName(), getShadowName());
+        Optional<ShadowDocument> currentLocal = getShadowThing(context);
         if (currentLocal.isPresent() && !isUpdateNecessary(currentLocal.get().toJson(false),
                 shadowDocument.toJson(false))) {
             logger.atDebug()

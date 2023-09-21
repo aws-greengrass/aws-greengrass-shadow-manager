@@ -130,8 +130,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
     @Mock
     private DeviceConfiguration mockDeviceConfiguration;
     @Mock
-    private ShadowWriteSynchronizeHelper mockSynchronizeHelper;
-    @Mock
     private SyncHandler mockSyncHandler;
     @Mock
     private IotDataPlaneClientWrapper mockIotDataPlaneClientWrapper;
@@ -156,7 +154,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         serviceFullName = "aws.greengrass.ShadowManager";
         initializeMockedConfig();
         shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper,
-                mockPubSubClientWrapper, mockInboundRateLimiter, mockDeviceConfiguration, mockSynchronizeHelper,
+                mockPubSubClientWrapper, mockInboundRateLimiter, mockDeviceConfiguration, new ShadowWriteSynchronizeHelper(),
                 mockIotDataPlaneClientWrapper, mockSyncHandler, mockCloudDataClient, mockMqttClient, direction);
         lenient().when(config.lookupTopics(CONFIGURATION_CONFIG_KEY))
                 .thenReturn(Topics.of(context, CONFIGURATION_CONFIG_KEY, null));

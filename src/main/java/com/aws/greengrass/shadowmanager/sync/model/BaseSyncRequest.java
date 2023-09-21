@@ -516,4 +516,12 @@ public abstract class BaseSyncRequest extends ShadowRequest implements SyncReque
         }
         return getUpdatedVersion(response.getUpdateThingShadowResponse().getPayload());
     }
+
+    Optional<ShadowDocument> getShadowThing(SyncContext context) {
+        // Lock to prevent interleaving with
+        // shadow dao updates performed on an IPC thread (UpdateThingShadowRequestHandler)
+        synchronized (context.getSynchronizeHelper().getThingShadowLock(getThingName(), getShadowName())) {
+            return context.getDao().getShadowThing(getThingName(), getShadowName());
+        }
+    }
 }
