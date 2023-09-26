@@ -28,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 class JsonMergerTest {
     private final static String SOURCE_NODE_STRING = "{\"id\": 100, \"SomeKey\": \"SomeValue\",\"SomeObjectKey\": {\"foo\": \"bar\"}}";
+    private final static String SOURCE_STATE_NODE_STRING = "{\"state\":{\"id\": 100, \"SomeKey\": \"SomeValue\",\"SomeObjectKey\": {\"foo\": \"bar\"}}}";
     private final static String SOURCE_NODE_WITH_ARRAY_STRING = "{\"id\": 100, \"SomeArrayKey\": [\"SomeValue1\", \"SomeValue2\"]}";
     private final static String SOURCE_NODE_WITH_ARRAY_NODE_STRING = "[\"SomeValue1\", \"SomeValue2\"]";
     private final static String PATCH_NODE_WITH_NEW_FIELD_STRING = "{\"NewKey\": true, \"NewNullParent\": {\"NewNullChild1\": null, \"NewNullChild2\": {\"NewNullChild3\": null}}, \"NewChildLevel1\": {\"NewChildLevel2\": {\"NewChildLevel3\":\"NewChildValue\"}}}";
@@ -37,7 +38,9 @@ class JsonMergerTest {
     private final static String MERGED_NODE_WITH_UPDATED_ARRAY_NODE_STRING = "[\"SomeValue3\", \"SomeValue4\"]";
     private final static String PATCH_NODE_WITH_ARRAY_VALUE_NODE_STRING = "[\"SomeValue3\", \"SomeValue4\"]";
     private final static String EMPTY_DOCUMENT = "{}";
+    private final static String EMPTY_STATE_DOCUMENT = "{\"state\": {}}";
     private final static String NULL_DOCUMENT = "null";
+    private final static String NULL_STATE_DOCUMENT = "{\"state\": null}";
     private static JsonNode sourceNodeWithArray;
 
     @SuppressWarnings("PMD.UnusedPrivateMethod")
@@ -46,9 +49,13 @@ class JsonMergerTest {
                 Arguments.of("GIVEN patch with new node, THEN add new field in source node", SOURCE_NODE_STRING, PATCH_NODE_WITH_NEW_FIELD_STRING, MERGED_NODE_WITH_NEW_FIELD_STRING),
                 Arguments.of("GIVEN patch with null nodes, THEN removes all null nodes in source node", SOURCE_NODE_STRING, PATCH_NODE_WITH_NULL_FIELD_STRING, MERGED_NODE_WITHOUT_NULL_FIELD_STRING),
                 Arguments.of("GIVEN patch with new nodes in an array node, THEN replaces all the elements in the source with the elements in the patch", SOURCE_NODE_WITH_ARRAY_NODE_STRING, PATCH_NODE_WITH_ARRAY_VALUE_NODE_STRING, MERGED_NODE_WITH_UPDATED_ARRAY_NODE_STRING),
-                Arguments.of("GIVEN patch with empty state, THEN source node is cleared", SOURCE_NODE_STRING, EMPTY_DOCUMENT, EMPTY_DOCUMENT),
-                Arguments.of("GIVEN patch with null state, THEN source node is cleared", SOURCE_NODE_STRING, NULL_DOCUMENT, EMPTY_DOCUMENT),
-                Arguments.of("GIVEN empty source and non-empty patch, THEN patch is the result", EMPTY_DOCUMENT, SOURCE_NODE_STRING, SOURCE_NODE_STRING));
+                Arguments.of("GIVEN empty patch, THEN source node is unaffected", SOURCE_NODE_STRING, EMPTY_DOCUMENT, SOURCE_NODE_STRING),
+                Arguments.of("GIVEN null patch, THEN source node is cleared", SOURCE_NODE_STRING, NULL_DOCUMENT, EMPTY_DOCUMENT),
+                Arguments.of("GIVEN empty source and non-empty patch, THEN patch is the result", EMPTY_DOCUMENT, SOURCE_NODE_STRING, SOURCE_NODE_STRING),
+                Arguments.of("GIVEN empty state patch, THEN source node is unaffected", SOURCE_STATE_NODE_STRING, EMPTY_STATE_DOCUMENT, SOURCE_STATE_NODE_STRING),
+                Arguments.of("GIVEN null state patch, THEN source node is cleared", SOURCE_STATE_NODE_STRING, NULL_STATE_DOCUMENT, EMPTY_STATE_DOCUMENT),
+                Arguments.of("GIVEN empty source and non-empty state patch, THEN patch is the result", EMPTY_STATE_DOCUMENT, SOURCE_STATE_NODE_STRING, SOURCE_STATE_NODE_STRING),
+                Arguments.of("GIVEN null source and non-empty state patch, THEN patch is the result", NULL_STATE_DOCUMENT, SOURCE_STATE_NODE_STRING, SOURCE_STATE_NODE_STRING));
     }
 
 

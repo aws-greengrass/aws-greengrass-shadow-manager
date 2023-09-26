@@ -136,10 +136,10 @@ class JsonUtilTest {
     @SuppressWarnings("PMD.UnusedPrivateMethod")
     private static Stream<Arguments> emptyStateDocuments() {
         return Stream.of(
-                Arguments.of("{\"state\": null}", true),
+                Arguments.of("{\"state\": null}", false),
                 Arguments.of("{\"state\": {}}", true),
                 Arguments.of("{}", true),
-                Arguments.of("null", true),
+                Arguments.of("null", false),
                 Arguments.of("{\"state\": {\"field\":1}}", false),
                 Arguments.of("{\"field\":1}", false)
         );
@@ -151,5 +151,25 @@ class JsonUtilTest {
         assertEquals(emptyDocumentExpected,
                 JsonUtil.isEmptyStateDocument(getPayloadJson(json.getBytes(StandardCharsets.UTF_8)).get()),
                 String.format("%s %sexpected to be empty", json, emptyDocumentExpected ? "" : "not "));
+    }
+
+    @SuppressWarnings("PMD.UnusedPrivateMethod")
+    private static Stream<Arguments> nullStateDocuments() {
+        return Stream.of(
+                Arguments.of("{\"state\": null}", true),
+                Arguments.of("{\"state\": {}}", false),
+                Arguments.of("{}", false),
+                Arguments.of("null", true),
+                Arguments.of("{\"state\": {\"field\":1}}", false),
+                Arguments.of("{\"field\":1}", false)
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("nullStateDocuments")
+    void GIVEN_null_state_document_WHEN_check_is_null_state_document_THEN_return_true(String json, boolean nullDocumentExpected) throws IOException {
+        assertEquals(nullDocumentExpected,
+                JsonUtil.isNullStateDocument(getPayloadJson(json.getBytes(StandardCharsets.UTF_8)).get()),
+                String.format("%s %sexpected to be null", json, nullDocumentExpected ? "" : "not "));
     }
 }

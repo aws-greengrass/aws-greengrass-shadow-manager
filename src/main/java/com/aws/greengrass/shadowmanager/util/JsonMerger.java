@@ -35,8 +35,12 @@ public final class JsonMerger {
      */
     @SuppressFBWarnings(value = "BC_UNCONFIRMED_CAST", justification = "We do check the type before cast.")
     public static void merge(JsonNode source, final JsonNode patch) throws InvalidRequestParametersException {
-        if (JsonUtil.isEmptyStateDocument(patch)) {
+        if (JsonUtil.isNullStateDocument(patch)) {
             clearState(source);
+            return;
+        }
+
+        if (JsonUtil.isEmptyStateDocument(patch)) {
             return;
         }
 
