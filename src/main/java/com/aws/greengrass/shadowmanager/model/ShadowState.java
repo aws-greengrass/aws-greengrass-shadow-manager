@@ -17,7 +17,9 @@ import java.util.Iterator;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE_DELTA;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE_DESIRED;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE_REPORTED;
+import static com.aws.greengrass.shadowmanager.util.JsonUtil.isEmptyStateDocument;
 import static com.aws.greengrass.shadowmanager.util.JsonUtil.isNullOrMissing;
+import static com.aws.greengrass.shadowmanager.util.JsonUtil.isNullStateDocument;
 import static com.aws.greengrass.shadowmanager.util.JsonUtil.nullIfEmpty;
 
 /**
@@ -58,9 +60,12 @@ public class ShadowState {
      */
     @SuppressWarnings({"PMD.ForLoopCanBeForeach", "PMD.NullAssignment"})
     public void update(JsonNode updatedStateNode) {
-        if (isNullOrMissing(updatedStateNode)) {
+        if (isNullStateDocument(updatedStateNode)) {
             this.desired = null;
             this.reported = null;
+            return;
+        }
+        if (isEmptyStateDocument(updatedStateNode)) {
             return;
         }
         for (final Iterator<String> i = updatedStateNode.fieldNames(); i.hasNext(); ) {

@@ -1429,8 +1429,7 @@ class SyncTest extends NucleusLaunchUtils {
         String initialCloudState = "{\"version\":1,\"state\":{\"desired\":{\"SomeKey\":\"foo\"}}}";
         String initialLocalState = "{\"state\":{\"desired\":{\"SomeKey\":\"foo\"}}}";
         String localUpdate1 = "{\"state\":{}}}";
-        String localUpdate2 = "{\"state\":{\"desired\":{\"SomeKey\":\"foo\"}}}";
-        String localUpdate3 = "{\"state\":null}}";
+        String localUpdate2 = "{\"state\":null}";
         String finalLocalState = "{\"state\":{}}";
 
         UpdateThingShadowRequest updateRequest1 = new UpdateThingShadowRequest();
@@ -1443,15 +1442,9 @@ class SyncTest extends NucleusLaunchUtils {
         updateRequest2.setShadowName(CLASSIC_SHADOW);
         updateRequest2.setPayload(localUpdate2.getBytes(UTF_8));
 
-        UpdateThingShadowRequest updateRequest3 = new UpdateThingShadowRequest();
-        updateRequest3.setThingName(MOCK_THING_NAME_1);
-        updateRequest3.setShadowName(CLASSIC_SHADOW);
-        updateRequest3.setPayload(localUpdate3.getBytes(UTF_8));
-
         when(mockUpdateThingShadowResponse.payload())
                 .thenReturn(SdkBytes.fromString("{\"version\": 2}", UTF_8))
-                .thenReturn(SdkBytes.fromString("{\"version\": 3}", UTF_8))
-                .thenReturn(SdkBytes.fromString("{\"version\": 4}", UTF_8));
+                .thenReturn(SdkBytes.fromString("{\"version\": 3}", UTF_8));
         when(iotDataPlaneClientFactory.getIotDataPlaneClient().updateThingShadow(cloudUpdateThingShadowRequestCaptor.capture()))
                 .thenReturn(mockUpdateThingShadowResponse);
 
@@ -1479,24 +1472,15 @@ class SyncTest extends NucleusLaunchUtils {
         updateHandler.handleRequest(updateRequest1, "DoAll");
         assertEmptySyncQueue(clazz);
         assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
-        assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(2L)));
+        assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(1L)));
         assertThat("local version", () -> syncInfo.get().get().getLocalVersion(), eventuallyEval(is(2L)));
-        assertLocalShadowEquals(localUpdate1);
-        assertCloudUpdateEquals(localUpdate1);
+        assertLocalShadowEquals(initialLocalState);
 
         updateHandler.handleRequest(updateRequest2, "DoAll");
         assertEmptySyncQueue(clazz);
         assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
-        assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(3L)));
+        assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(2L)));
         assertThat("local version", () -> syncInfo.get().get().getLocalVersion(), eventuallyEval(is(3L)));
-        assertLocalShadowEquals(localUpdate2);
-        assertCloudUpdateEquals(localUpdate2);
-
-        updateHandler.handleRequest(updateRequest3, "DoAll");
-        assertEmptySyncQueue(clazz);
-        assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
-        assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(4L)));
-        assertThat("local version", () -> syncInfo.get().get().getLocalVersion(), eventuallyEval(is(4L)));
         assertLocalShadowEquals(finalLocalState);
         assertCloudUpdateEquals(finalLocalState);
     }
