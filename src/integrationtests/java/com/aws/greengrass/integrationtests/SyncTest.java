@@ -16,6 +16,7 @@ import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
+import com.aws.greengrass.shadowmanager.model.UpdateThingShadowHandlerResponse;
 import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
@@ -1469,20 +1470,32 @@ class SyncTest extends NucleusLaunchUtils {
 
         UpdateThingShadowRequestHandler updateHandler = shadowManager.getUpdateThingShadowRequestHandler();
 
-        updateHandler.handleRequest(updateRequest1, "DoAll");
+        UpdateThingShadowHandlerResponse resp = updateHandler.handleRequest(updateRequest1, "DoAll");
+        assertUpdateThingShadowHandlerResponseStateEquals(localUpdate1, resp);
+
         assertEmptySyncQueue(clazz);
         assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
         assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(1L)));
         assertThat("local version", () -> syncInfo.get().get().getLocalVersion(), eventuallyEval(is(2L)));
         assertLocalShadowEquals(initialLocalState);
 
-        updateHandler.handleRequest(updateRequest2, "DoAll");
+        resp = updateHandler.handleRequest(updateRequest2, "DoAll");
+        assertUpdateThingShadowHandlerResponseStateEquals(localUpdate1, resp); // null is not a valid document, so {} is returned
         assertEmptySyncQueue(clazz);
         assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
         assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(2L)));
         assertThat("local version", () -> syncInfo.get().get().getLocalVersion(), eventuallyEval(is(3L)));
         assertLocalShadowEquals(finalLocalState);
         assertCloudUpdateEquals(finalLocalState);
+    }
+
+    private void assertUpdateThingShadowHandlerResponseStateEquals(String expectedDocument, UpdateThingShadowHandlerResponse resp) throws IOException {
+        JsonNode expectedStateJson = JsonUtil.getPayloadJson(expectedDocument.getBytes(UTF_8)).get();
+        if (expectedStateJson.get("state") != null) {
+            expectedStateJson = expectedStateJson.get("state");
+        }
+        JsonNode actualStateJson = JsonUtil.getPayloadJson(resp.getUpdateThingShadowResponse().getPayload()).get().get("state");
+        assertEquals(expectedStateJson, actualStateJson);
     }
 
     private void assertCloudUpdateEquals(String state) throws IOException {
