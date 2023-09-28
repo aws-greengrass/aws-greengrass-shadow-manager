@@ -241,7 +241,9 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
                             .withVersion(updatedDocument.getVersion())
                             .withClientToken(clientToken)
                             .withTimestamp(Instant.now())
-                            .withState(updateDocumentRequest.get("state"))
+                            // explicitly convert to shadow document to return valid state.
+                            // this is to prevent edge cases like returning null
+                            .withState(new ShadowDocument(updateDocumentRequest, false).getState().toJson())
                             .withMetadata(metadata)
                             .build();
                     byte[] responseNodeBytes = JsonUtil.getPayloadBytes(responseNode);

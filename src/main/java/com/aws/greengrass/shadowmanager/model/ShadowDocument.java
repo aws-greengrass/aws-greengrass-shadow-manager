@@ -69,23 +69,7 @@ public class ShadowDocument {
      */
     public ShadowDocument(byte[] documentBytes, boolean validate)
             throws IOException, InvalidRequestParametersException {
-        if (documentBytes == null || documentBytes.length == 0) {
-            setFields(null, null, null);
-            return;
-        }
-        JsonNode documentJson = JsonUtil.getPayloadJson(documentBytes)
-                .filter(d -> !isNullOrMissing(d))
-                .orElseThrow(() ->
-                        new InvalidRequestParametersException(ErrorMessage
-                                .createInvalidPayloadJsonMessage("")));
-        if (validate) {
-            // Validate the payload schema
-            JsonUtil.validatePayloadSchema(documentJson);
-        }
-
-        ShadowDocument shadowDocument = SerializerFactory.getFailSafeJsonObjectMapper()
-                .convertValue(documentJson, ShadowDocument.class);
-        setFields(shadowDocument.getState(), shadowDocument.getMetadata(), shadowDocument.getVersion());
+        setFields(documentBytes, validate, null);
     }
 
     /**
@@ -96,17 +80,15 @@ public class ShadowDocument {
      * @throws IOException if there was an issue while deserializing the shadow byte array.
      */
     public ShadowDocument(byte[] documentBytes, long version) throws IOException {
-        if (documentBytes == null || documentBytes.length == 0) {
-            setFields(null, null, null);
-            return;
-        }
-        ShadowDocument shadowDocument = SerializerFactory.getFailSafeJsonObjectMapper()
-                .readValue(documentBytes, ShadowDocument.class);
-        setFields(shadowDocument.getState(), shadowDocument.getMetadata(), version);
+        setFields(documentBytes, false, version);
+    }
+
+    public ShadowDocument(JsonNode node, boolean validate) throws IOException {
+        setFields(node, validate, null);
     }
 
     /**
-     * Constructor for creating new shadow document from an existing shadow document.
+     * Copy constructor.
      *
      * @param shadowDocument The shadow document to create from.
      */
@@ -127,6 +109,30 @@ public class ShadowDocument {
         setFields(state, metadata, version);
     }
 
+    private void setFields(byte[] documentBytes, boolean validate, Long versionOverride) throws IOException {
+        if (documentBytes == null || documentBytes.length == 0) {
+            setFields(null, null, null);
+            return;
+        }
+        setFields(JsonUtil.getPayloadJson(documentBytes).orElse(null), validate, versionOverride);
+    }
+
+    private void setFields(JsonNode node, boolean validate, Long versionOverride) {
+        if (isNullOrMissing(node)) {
+            throw new InvalidRequestParametersException(ErrorMessage.createInvalidPayloadJsonMessage(""));
+        }
+        if (validate) {
+            JsonUtil.validatePayloadSchema(node);
+        }
+        setFields(SerializerFactory.getFailSafeJsonObjectMapper().convertValue(node, ShadowDocument.class),
+                versionOverride);
+    }
+
+    private void setFields(ShadowDocument shadowDocument, Long versionOverride) {
+        Long version = versionOverride == null ? shadowDocument.getVersion() : versionOverride;
+        setFields(shadowDocument.getState(), shadowDocument.getMetadata(), version);
+    }
+
     private void setFields(ShadowState state, ShadowStateMetadata metadata, Long version) {
         this.state = state == null ? new ShadowState() : state;
         this.metadata = metadata == null ? new ShadowStateMetadata() : metadata;
@@ -134,7 +140,7 @@ public class ShadowDocument {
     }
 
     /**
-     * Checks whether or not the shadow document is new based on the version.
+     * Checks whether the shadow document is new based on the version.
      *
      * @return true if the version is null; Else false.
      */
