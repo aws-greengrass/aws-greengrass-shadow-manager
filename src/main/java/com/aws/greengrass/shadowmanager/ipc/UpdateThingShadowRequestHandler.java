@@ -94,6 +94,8 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
         return translateExceptions(() -> {
             String thingName = request.getThingName();
             String shadowName = request.getShadowName();
+            ShadowRequest shadowRequest = new ShadowRequest(thingName, shadowName);
+            shadowName = shadowRequest.getShadowName();
             byte[] updatedDocumentRequestBytes = request.getPayload();
             ShadowDocument currentDocument = null;
             Optional<String> clientToken = Optional.empty();
@@ -103,7 +105,6 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
                     .kv(LOG_SHADOW_NAME_KEY, shadowName)
                     .log();
 
-            ShadowRequest shadowRequest = new ShadowRequest(thingName, shadowName);
             try {
                 Validator.validateShadowRequest(shadowRequest);
             } catch (InvalidRequestParametersException e) {

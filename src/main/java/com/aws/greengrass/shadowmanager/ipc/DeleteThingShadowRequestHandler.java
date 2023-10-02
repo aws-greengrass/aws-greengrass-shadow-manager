@@ -90,6 +90,7 @@ public class DeleteThingShadowRequestHandler extends BaseRequestHandler {
             logger.atTrace("ipc-delete-thing-shadow-request").log();
 
             ShadowRequest shadowRequest = new ShadowRequest(thingName, shadowName);
+            shadowName = shadowRequest.getShadowName();
             try {
                 Validator.validateShadowRequest(shadowRequest);
             } catch (InvalidRequestParametersException e) {

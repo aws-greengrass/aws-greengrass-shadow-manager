@@ -75,6 +75,8 @@ public class GetThingShadowRequestHandler extends BaseRequestHandler {
         return translateExceptions(() -> {
             String thingName = request.getThingName();
             String shadowName = request.getShadowName();
+            ShadowRequest shadowRequest = new ShadowRequest(thingName, shadowName);
+            shadowName = shadowRequest.getShadowName();
 
             try {
                 logger.atTrace("ipc-get-thing-shadow-request")
@@ -82,7 +84,6 @@ public class GetThingShadowRequestHandler extends BaseRequestHandler {
                         .kv(LOG_SHADOW_NAME_KEY, shadowName)
                         .log();
 
-                ShadowRequest shadowRequest = new ShadowRequest(thingName, shadowName);
                 Validator.validateShadowRequest(shadowRequest);
                 authorizationHandlerWrapper.doAuthorization(GET_THING_SHADOW, serviceName, shadowRequest);
 
