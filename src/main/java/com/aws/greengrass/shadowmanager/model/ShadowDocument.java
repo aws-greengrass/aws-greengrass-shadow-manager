@@ -11,6 +11,7 @@ import com.aws.greengrass.util.Pair;
 import com.aws.greengrass.util.SerializerFactory;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.node.LongNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.Getter;
@@ -28,6 +29,7 @@ import static com.aws.greengrass.shadowmanager.util.JsonUtil.isNullOrMissing;
  * Class for managing operations on the Shadow Document.
  */
 @Getter
+@JsonDeserialize(using = ShadowDocumentDeserializer.class)
 public class ShadowDocument {
     @JsonProperty(value = SHADOW_DOCUMENT_STATE, required = true)
     private ShadowState state;

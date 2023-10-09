@@ -7,10 +7,12 @@ package com.aws.greengrass.shadowmanager.model;
 
 import com.aws.greengrass.shadowmanager.util.JsonMerger;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.Getter;
+import lombok.Setter;
 
 import java.util.Iterator;
 
@@ -33,6 +35,13 @@ public class ShadowState {
     @JsonProperty(SHADOW_DOCUMENT_STATE_REPORTED)
     private JsonNode reported;
 
+    /**
+     * If true, this {@link ShadowState} represents the {"state": null} document, which resets shadow state.
+     */
+    @Setter
+    @JsonIgnore
+    private boolean clear;
+
     public ShadowState() {
         this(null, null);
     }
@@ -40,6 +49,11 @@ public class ShadowState {
     public ShadowState(final JsonNode desired, final JsonNode reported) {
         this.desired = nullIfEmpty(desired);
         this.reported = nullIfEmpty(reported);
+    }
+
+    private ShadowState(final JsonNode desired, final JsonNode reported, boolean clear) {
+        this(desired, reported);
+        this.clear = clear;
     }
 
     /**
@@ -50,7 +64,8 @@ public class ShadowState {
     public ShadowState deepCopy() {
         return new ShadowState(
                 isNullOrMissing(this.desired) ? this.desired : this.desired.deepCopy(),
-                isNullOrMissing(this.reported) ? this.reported : this.reported.deepCopy());
+                isNullOrMissing(this.reported) ? this.reported : this.reported.deepCopy(),
+                this.clear);
     }
 
     /**
@@ -103,6 +118,9 @@ public class ShadowState {
      * @return a JSON node containing the shadow state.
      */
     public JsonNode toJson() {
+        if (clear) {
+            return JsonUtil.OBJECT_MAPPER.nullNode();
+        }
         final ObjectNode result = JsonUtil.OBJECT_MAPPER.createObjectNode();
         if (this.desired != null) {
             result.set(SHADOW_DOCUMENT_STATE_DESIRED, this.desired);
