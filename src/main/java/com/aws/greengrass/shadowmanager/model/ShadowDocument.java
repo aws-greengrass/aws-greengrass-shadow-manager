@@ -15,6 +15,7 @@ import com.fasterxml.jackson.databind.node.LongNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.Getter;
 
+import javax.annotation.Nullable;
 import java.io.IOException;
 import java.util.Optional;
 
@@ -29,6 +30,7 @@ import static com.aws.greengrass.shadowmanager.util.JsonUtil.isNullOrMissing;
  */
 @Getter
 public class ShadowDocument {
+    @Nullable
     @JsonProperty(SHADOW_DOCUMENT_STATE)
     private ShadowState state;
 
