@@ -184,11 +184,13 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
                     // to avoid double serialization, but DB stores the single document
                     int desiredLength = 0;
                     int reportedLength = 0;
-                    if (!isNullOrMissing(updatedDocument.getState().getDesired())) {
-                        desiredLength = JsonUtil.getPayloadBytes(updatedDocument.getState().getDesired()).length;
-                    }
-                    if (!isNullOrMissing(updatedDocument.getState().getReported())) {
-                        reportedLength = JsonUtil.getPayloadBytes(updatedDocument.getState().getReported()).length;
+                    if (updatedDocument.getState() != null) {
+                        if (!isNullOrMissing(updatedDocument.getState().getDesired())) {
+                            desiredLength = JsonUtil.getPayloadBytes(updatedDocument.getState().getDesired()).length;
+                        }
+                        if (!isNullOrMissing(updatedDocument.getState().getReported())) {
+                            reportedLength = JsonUtil.getPayloadBytes(updatedDocument.getState().getReported()).length;
+                        }
                     }
 
                     // Make sure new document is not too big
