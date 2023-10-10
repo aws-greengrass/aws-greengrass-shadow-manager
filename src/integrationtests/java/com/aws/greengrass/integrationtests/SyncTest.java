@@ -68,7 +68,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
@@ -1496,7 +1495,7 @@ class SyncTest extends NucleusLaunchUtils {
         ignoreExceptionOfType(context, InterruptedException.class);
         ignoreExceptionOfType(context, ResourceNotFoundException.class);
 
-        mockCloudUpdateResponsesWithIncreasingVersions(1);
+        mockCloudUpdateResponsesWithIncreasingVersions();
         setCloudThingShadow("{\"version\":1,\"state\":{\"desired\":{\"SomeKey\":\"foo\"}}}");
 
         startNucleusWithConfig(NucleusLaunchUtilsConfig.builder()
@@ -1517,13 +1516,12 @@ class SyncTest extends NucleusLaunchUtils {
         assertLocalShadowEquals("{\"state\":{}}");
     }
 
-    private void mockCloudUpdateResponsesWithIncreasingVersions(int initialVersion) throws IoTDataPlaneClientCreationException {
-        AtomicInteger version = new AtomicInteger(initialVersion);
+    private void mockCloudUpdateResponsesWithIncreasingVersions() throws IoTDataPlaneClientCreationException {
         when(iotDataPlaneClientFactory.getIotDataPlaneClient()
                 .updateThingShadow(cloudUpdateThingShadowRequestCaptor.capture()))
                 .thenAnswer(invocation -> {
                     UpdateThingShadowResponse response = mock(UpdateThingShadowResponse.class);
-                    String responseDocument = String.format("{\"version\": %d}", version.incrementAndGet());
+                    String responseDocument = String.format("{\"version\": %d}", syncInfo.get().get().getCloudVersion() + 1);
                     when(response.payload()).thenReturn(SdkBytes.fromString(responseDocument, UTF_8));
                     return response;
                 });
