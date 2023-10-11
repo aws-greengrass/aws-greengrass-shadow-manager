@@ -104,7 +104,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@SuppressWarnings("PMD.ExcessiveClassLength")
+@SuppressWarnings({"PMD.ExcessiveClassLength", "PMD.CouplingBetweenObjects"})
 @ExtendWith({MockitoExtension.class, GGExtension.class})
 class SyncTest extends NucleusLaunchUtils {
     public static final String MOCK_THING_NAME_1 = "Thing1";
@@ -1480,13 +1480,75 @@ class SyncTest extends NucleusLaunchUtils {
         assertLocalShadowEquals(initialLocalState);
 
         resp = updateHandler.handleRequest(updateRequest2, "DoAll");
-        assertUpdateThingShadowHandlerResponseStateEquals(localUpdate1, resp); // null is not a valid document, so {} is returned
+        assertUpdateThingShadowHandlerResponseStateEquals(localUpdate2, resp);
         assertEmptySyncQueue(clazz);
         assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
         assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(2L)));
         assertThat("local version", () -> syncInfo.get().get().getLocalVersion(), eventuallyEval(is(3L)));
         assertLocalShadowEquals(finalLocalState);
-        assertCloudUpdateEquals(finalLocalState);
+        assertCloudUpdateEquals("{\"state\":null}"); // verify clear request forwarded to cloud
+    }
+
+    @ParameterizedTest
+    @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
+    void GIVEN_synced_shadow_WHEN_cloud_cleared_THEN_local_cleared(Class<?extends BaseSyncStrategy> clazz, ExtensionContext context) throws IOException, InterruptedException, IoTDataPlaneClientCreationException {
+        ignoreExceptionOfType(context, InterruptedException.class);
+        ignoreExceptionOfType(context, ResourceNotFoundException.class);
+
+        mockCloudUpdateResponsesWithIncreasingVersions();
+        setCloudThingShadow("{\"version\":1,\"state\":{\"desired\":{\"SomeKey\":\"foo\"}}}");
+
+        startNucleusWithConfig(NucleusLaunchUtilsConfig.builder()
+                .configFile(getSyncConfigFile(clazz))
+                .syncClazz(clazz)
+                .mockCloud(true)
+                .build());
+        waitForInitialSync(clazz, 1L, 1L);
+
+        // empty state update does not affect shadow state
+        sendCloudUpdate(MOCK_THING_NAME_1, CLASSIC_SHADOW, "{\"version\":2,\"state\":{}}");
+        assertSyncInfo(2L, 1L);
+        assertLocalShadowEquals("{\"state\":{\"desired\":{\"SomeKey\":\"foo\"}}}");
+
+        // null state update clears the shadow
+        sendCloudUpdate(MOCK_THING_NAME_1, CLASSIC_SHADOW, "{\"version\":3,\"state\":null}");
+        assertSyncInfo(3L, 2L);
+        assertLocalShadowEquals("{\"state\":{}}");
+    }
+
+    private void mockCloudUpdateResponsesWithIncreasingVersions() throws IoTDataPlaneClientCreationException {
+        when(iotDataPlaneClientFactory.getIotDataPlaneClient()
+                .updateThingShadow(cloudUpdateThingShadowRequestCaptor.capture()))
+                .thenAnswer(invocation -> {
+                    UpdateThingShadowResponse response = mock(UpdateThingShadowResponse.class);
+                    String responseDocument = String.format("{\"version\": %d}", syncInfo.get().get().getCloudVersion() + 1);
+                    when(response.payload()).thenReturn(SdkBytes.fromString(responseDocument, UTF_8));
+                    return response;
+                });
+    }
+
+    private void sendCloudUpdate(String thingName, String shadowName, String document) {
+        SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
+        syncHandler.pushLocalUpdateSyncRequest(thingName, shadowName, document.getBytes(UTF_8));
+    }
+
+    private void waitForInitialSync(Class<? extends BaseSyncStrategy> strategy,
+                                    long expectedCloudVersion, long expectedLocalVersion) throws InterruptedException {
+        verify(syncQueue, after(7000).atMost(4)).put(any(FullShadowSyncRequest.class));
+        assertEmptySyncQueue(strategy);
+        assertSyncInfo(expectedCloudVersion, expectedLocalVersion);
+    }
+
+    private void assertSyncInfo(long expectedCloudVersion, long expectedLocalVersion) {
+        assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
+        assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(expectedCloudVersion)));
+        assertThat("local version", syncInfo.get().get().getLocalVersion(), is(expectedLocalVersion));
+    }
+
+    private void setCloudThingShadow(String document) throws IoTDataPlaneClientCreationException {
+        GetThingShadowResponse initialCloudStateShadowResponse = mock(GetThingShadowResponse.class, Answers.RETURNS_DEEP_STUBS);
+        lenient().when(initialCloudStateShadowResponse.payload().asByteArray()).thenReturn(document.getBytes(UTF_8));
+        when(iotDataPlaneClientFactory.getIotDataPlaneClient().getThingShadow(any(GetThingShadowRequest.class))).thenReturn(initialCloudStateShadowResponse);
     }
 
     private void assertUpdateThingShadowHandlerResponseStateEquals(String expectedDocument, UpdateThingShadowHandlerResponse resp) throws IOException {

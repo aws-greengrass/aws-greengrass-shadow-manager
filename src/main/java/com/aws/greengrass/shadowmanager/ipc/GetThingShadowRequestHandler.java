@@ -103,7 +103,8 @@ public class GetThingShadowRequestHandler extends BaseRequestHandler {
                 }
 
                 ObjectNode responseNode = ResponseMessageBuilder.builder()
-                        .withState(currentShadowDocument.get().getState().toJsonWithDelta())
+                        .withState(currentShadowDocument.get().getState() == null ? JsonUtil.createEmptyObject()
+                                : currentShadowDocument.get().getState().toJsonWithDelta())
                         .withMetadata(currentShadowDocument.get().getMetadata().toJson())
                         .withVersion(currentShadowDocument.get().getVersion())
                         .withTimestamp(Instant.now()).build();

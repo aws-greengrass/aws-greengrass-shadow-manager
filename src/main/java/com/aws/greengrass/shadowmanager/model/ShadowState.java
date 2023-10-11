@@ -103,7 +103,7 @@ public class ShadowState {
      * @return a JSON node containing the shadow state.
      */
     public JsonNode toJson() {
-        final ObjectNode result = JsonUtil.OBJECT_MAPPER.createObjectNode();
+        final ObjectNode result = JsonUtil.createEmptyObject();
         if (this.desired != null) {
             result.set(SHADOW_DOCUMENT_STATE_DESIRED, this.desired);
         }

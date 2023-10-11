@@ -184,11 +184,13 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
                     // to avoid double serialization, but DB stores the single document
                     int desiredLength = 0;
                     int reportedLength = 0;
-                    if (!isNullOrMissing(updatedDocument.getState().getDesired())) {
-                        desiredLength = JsonUtil.getPayloadBytes(updatedDocument.getState().getDesired()).length;
-                    }
-                    if (!isNullOrMissing(updatedDocument.getState().getReported())) {
-                        reportedLength = JsonUtil.getPayloadBytes(updatedDocument.getState().getReported()).length;
+                    if (updatedDocument.getState() != null) {
+                        if (!isNullOrMissing(updatedDocument.getState().getDesired())) {
+                            desiredLength = JsonUtil.getPayloadBytes(updatedDocument.getState().getDesired()).length;
+                        }
+                        if (!isNullOrMissing(updatedDocument.getState().getReported())) {
+                            reportedLength = JsonUtil.getPayloadBytes(updatedDocument.getState().getReported()).length;
+                        }
                     }
 
                     // Make sure new document is not too big
@@ -242,9 +244,7 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
                             .withVersion(updatedDocument.getVersion())
                             .withClientToken(clientToken)
                             .withTimestamp(Instant.now())
-                            // explicitly convert to shadow document to return valid state.
-                            // this is to prevent edge cases like returning null
-                            .withState(new ShadowDocument(updateDocumentRequest, false).getState().toJson())
+                            .withState(updateDocumentRequest.get("state"))
                             .withMetadata(metadata)
                             .build();
                     byte[] responseNodeBytes = JsonUtil.getPayloadBytes(responseNode);

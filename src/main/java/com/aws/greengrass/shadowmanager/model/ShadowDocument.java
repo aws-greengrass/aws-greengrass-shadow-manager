@@ -17,6 +17,7 @@ import lombok.Getter;
 
 import java.io.IOException;
 import java.util.Optional;
+import javax.annotation.Nullable;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_METADATA;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE;
@@ -29,7 +30,8 @@ import static com.aws.greengrass.shadowmanager.util.JsonUtil.isNullOrMissing;
  */
 @Getter
 public class ShadowDocument {
-    @JsonProperty(value = SHADOW_DOCUMENT_STATE, required = true)
+    @Nullable
+    @JsonProperty(SHADOW_DOCUMENT_STATE)
     private ShadowState state;
 
     @JsonProperty(SHADOW_DOCUMENT_METADATA)
@@ -134,7 +136,7 @@ public class ShadowDocument {
     }
 
     private void setFields(ShadowState state, ShadowStateMetadata metadata, Long version) {
-        this.state = state == null ? new ShadowState() : state;
+        this.state = state;
         this.metadata = metadata == null ? new ShadowStateMetadata() : metadata;
         this.version = version;
     }
@@ -156,7 +158,9 @@ public class ShadowDocument {
      */
     public JsonNode update(JsonNode updateDocumentRequest) {
         JsonNode updatedStateNode = updateDocumentRequest.get(SHADOW_DOCUMENT_STATE);
-
+        if (this.state == null) {
+            this.state = new ShadowState();
+        }
         this.state.update(updatedStateNode);
         JsonNode patchMetadata = this.metadata.update(updatedStateNode, this.state);
         // Incrementing the version here since we are creating a new version of the shadow document.
@@ -172,8 +176,8 @@ public class ShadowDocument {
      * @return a JSON node containing the shadow document.
      */
     public JsonNode toJson(boolean withVersion) {
-        final ObjectNode result = JsonUtil.OBJECT_MAPPER.createObjectNode();
-        result.set(SHADOW_DOCUMENT_STATE, this.state.toJson());
+        final ObjectNode result = JsonUtil.createEmptyObject();
+        result.set(SHADOW_DOCUMENT_STATE, this.state == null ? JsonUtil.createNull() : this.state.toJson());
         if (this.metadata != null) {
             result.set(SHADOW_DOCUMENT_METADATA, this.metadata.toJson());
         }

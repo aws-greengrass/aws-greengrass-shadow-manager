@@ -98,6 +98,11 @@ public abstract class BaseSyncRequest extends ShadowRequest implements SyncReque
     boolean isUpdateNecessary(JsonNode baseDocument, JsonNode update) {
         JsonNode merged = baseDocument.deepCopy();
         JsonMerger.merge(merged.get(SHADOW_DOCUMENT_STATE), update.get(SHADOW_DOCUMENT_STATE));
+        // explicitly handle case where state is cleared with null,
+        // since resulting merge will have equal documents
+        if (!JsonUtil.isNullStateDocument(baseDocument) && JsonUtil.isNullStateDocument(update)) {
+            return true;
+        }
         return !baseDocument.equals(merged);
     }
 

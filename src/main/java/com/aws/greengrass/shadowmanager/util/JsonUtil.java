@@ -305,4 +305,12 @@ public final class JsonUtil {
     public static long getVersion(JsonNode document) {
         return document.get(SHADOW_DOCUMENT_VERSION).asLong();
     }
+
+    public static ObjectNode createEmptyObject() {
+        return OBJECT_MAPPER.createObjectNode();
+    }
+
+    public static JsonNode createNull() {
+        return OBJECT_MAPPER.nullNode();
+    }
 }
