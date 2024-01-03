@@ -130,7 +130,11 @@ public final class JsonUtil {
     public static boolean isNullStateDocument(JsonNode node) {
         return node != null
                 && (node.isNull()
-                || node.isObject() && isNullStateDocument(node.get(SHADOW_DOCUMENT_STATE)));
+                || node.isObject() && isJsonNull(node.get(SHADOW_DOCUMENT_STATE)));
+    }
+
+    private static boolean isJsonNull(JsonNode node) {
+        return node != null && node.isNull();
     }
 
     /**

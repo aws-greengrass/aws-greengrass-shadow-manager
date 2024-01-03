@@ -55,7 +55,11 @@ class JsonMergerTest {
                 Arguments.of("GIVEN empty state patch, THEN source node is unaffected", SOURCE_STATE_NODE_STRING, EMPTY_STATE_DOCUMENT, SOURCE_STATE_NODE_STRING),
                 Arguments.of("GIVEN null state patch, THEN source node is cleared", SOURCE_STATE_NODE_STRING, NULL_STATE_DOCUMENT, EMPTY_STATE_DOCUMENT),
                 Arguments.of("GIVEN empty source and non-empty state patch, THEN patch is the result", EMPTY_STATE_DOCUMENT, SOURCE_STATE_NODE_STRING, SOURCE_STATE_NODE_STRING),
-                Arguments.of("GIVEN null source and non-empty state patch, THEN patch is the result", NULL_STATE_DOCUMENT, SOURCE_STATE_NODE_STRING, SOURCE_STATE_NODE_STRING));
+                Arguments.of("GIVEN null source and non-empty state patch, THEN patch is the result", NULL_STATE_DOCUMENT, SOURCE_STATE_NODE_STRING, SOURCE_STATE_NODE_STRING),
+                Arguments.of("GIVEN state patch containing null state subkey, THEN state subkey is removed",
+                        "{\"state\":{\"key\":\"v\",\"state\":\"abc\"}}", "{\"state\": {\"state\":null}}",
+                        "{\"state\":{\"key\":\"v\"}}")
+                );
     }
 
 
