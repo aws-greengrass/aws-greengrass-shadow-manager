@@ -131,13 +131,10 @@ public class NucleusLaunchUtils extends GGServiceTestUtil {
                     .maxRetryInterval(Duration.ofSeconds(1))
                     .retryableExceptions(Collections.singletonList(RetryableException.class))
                     .build();
-            Retryer retryer =  (retryConfig1, request, context) ->
-                    RetryUtils.runWithRetry(retryConfig,
-                            () -> {
-                                request.execute(context);
-                                return null;
-                            },
-                            "test-setup", LogManager.getLogger(getClass()));
+            Retryer retryer =  (retryConfig1, request, context) -> RetryUtils.runWithRetry(retryConfig, () -> {
+                    request.execute(context);
+                    return null;
+                }, "test-setup", LogManager.getLogger(getClass()));
             SyncHandler.setRetryer(retryer);
             SyncStrategy syncStrategy;
             if (RealTimeSyncStrategy.class.equals(config.getSyncClazz())) {

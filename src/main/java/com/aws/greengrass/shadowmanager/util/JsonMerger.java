@@ -65,19 +65,6 @@ public final class JsonMerger {
                 + " Json objects whose underlying node are the same type."));
     }
 
-    private static void removeDeletedFields(final ObjectNode source, final ObjectNode patch) {
-        final Iterator<String> fieldNames = source.fieldNames();
-        while (fieldNames.hasNext()) {
-            final String field = fieldNames.next();
-            final JsonNode patchValue = patch.get(field);
-
-            // If the patch value is null then the field has been deleted, remove from source
-            if (isNullOrMissing(patchValue)) {
-                source.remove(field);
-            }
-        }
-    }
-
     private static void merge(final ObjectNode source, final ObjectNode patch) {
         final Iterator<String> fieldNames = patch.fieldNames();
         while (fieldNames.hasNext()) {
@@ -117,6 +104,19 @@ public final class JsonMerger {
             // If sourceValue and patchValue are not objects then we just update the source field
             // to point the new patch value.
             source.set(field, patchValue);
+        }
+    }
+
+    private static void removeDeletedFields(final ObjectNode source, final ObjectNode patch) {
+        final Iterator<String> fieldNames = source.fieldNames();
+        while (fieldNames.hasNext()) {
+            final String field = fieldNames.next();
+            final JsonNode patchValue = patch.get(field);
+
+            // If the patch value is null then the field has been deleted, remove from source
+            if (isNullOrMissing(patchValue)) {
+                source.remove(field);
+            }
         }
     }
 
