@@ -44,6 +44,9 @@ public final class JsonMerger {
             return;
         }
 
+        // If the source node contains keys not present in the patch node, those keys have been deleted
+        removeDeletedFields((ObjectNode) source, (ObjectNode) patch);
+
         // If both nodes are objects then do a recursive patch
         if (source.isObject() && patch.isObject()) {
             merge((ObjectNode) source, (ObjectNode) patch);
@@ -60,6 +63,19 @@ public final class JsonMerger {
         // Both the source and patch node needs to be of the same type inorder to merge.
         throw new InvalidRequestParametersException(ErrorMessage.createInvalidPayloadJsonMessage("Merge only works with"
                 + " Json objects whose underlying node are the same type."));
+    }
+
+    private static void removeDeletedFields(final ObjectNode source, final ObjectNode patch) {
+        final Iterator<String> fieldNames = source.fieldNames();
+        while (fieldNames.hasNext()) {
+            final String field = fieldNames.next();
+            final JsonNode patchValue = patch.get(field);
+
+            // If the patch value is null then the field has been deleted, remove from source
+            if (isNullOrMissing(patchValue)) {
+                source.remove(field);
+            }
+        }
     }
 
     private static void merge(final ObjectNode source, final ObjectNode patch) {
