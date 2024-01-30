@@ -146,7 +146,6 @@ public final class SyncNodeMerger {
             if (mergedResult == null) {
                 visited.add(field);
             }
-            //visited.add(field);
         }
     }
 
