@@ -26,7 +26,7 @@ public final class JsonMerger {
 
     /**
      * Merges the patch JSON node to the existing source JSON node. If the node already exists in the source, then
-     * it replaces it. If the node is an array, then the the source array's contents are overwritten with the contents
+     * it replaces it. If the node is an array, then the source array's contents are overwritten with the contents
      * from the patch.
      *
      * @param source The source JSON to merge.
@@ -43,9 +43,6 @@ public final class JsonMerger {
         if (JsonUtil.isEmptyStateDocument(patch)) {
             return;
         }
-
-        // If the source node contains keys not present in the patch node, those keys have been deleted
-        removeDeletedFields((ObjectNode) source, (ObjectNode) patch);
 
         // If both nodes are objects then do a recursive patch
         if (source.isObject() && patch.isObject()) {
@@ -104,19 +101,6 @@ public final class JsonMerger {
             // If sourceValue and patchValue are not objects then we just update the source field
             // to point the new patch value.
             source.set(field, patchValue);
-        }
-    }
-
-    private static void removeDeletedFields(final ObjectNode source, final ObjectNode patch) {
-        final Iterator<String> fieldNames = source.fieldNames();
-        while (fieldNames.hasNext()) {
-            final String field = fieldNames.next();
-            final JsonNode patchValue = patch.get(field);
-
-            // If the patch value is null then the field has been deleted, remove from source
-            if (isNullOrMissing(patchValue)) {
-                source.remove(field);
-            }
         }
     }
 
