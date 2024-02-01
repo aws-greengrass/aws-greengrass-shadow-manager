@@ -142,10 +142,10 @@ public final class SyncNodeMerger {
             final JsonNode cloudValue = cloud.get(field);
             final JsonNode baseValue = base.get(field);
             JsonNode mergedResult = getMergedNode(localValue, cloudValue, baseValue, owner);
-            if (mergedResult != null) {
-                ((ObjectNode) result).set(field, mergedResult);
+            ((ObjectNode) result).set(field, mergedResult);
+            if (mergedResult == null) {
+                visited.add(field);
             }
-            visited.add(field);
         }
     }
 

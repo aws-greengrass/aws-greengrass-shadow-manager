@@ -172,13 +172,13 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
         long cloudDocumentVersion = cloudShadowDocument.get().getVersion();
 
         // If the cloud document version is different from the last sync, that means the local document needed
-        // some updates. So we go ahead an update the local shadow document.
+        // some updates. So we go ahead and update the local shadow document.
         if (!isDocVersionSame(cloudShadowDocument.get(), syncInformation, DataOwner.CLOUD)) {
             localDocumentVersion = updateLocalDocumentAndGetUpdatedVersion(updateDocument,
                     Optional.of(localDocumentVersion));
         }
         // If the local document version is different from the last sync, that means the cloud document needed
-        // some updates. So we go ahead an update the cloud shadow document.
+        // some updates. So we go ahead and update the cloud shadow document.
         if (!isDocVersionSame(localShadowDocument.get(), syncInformation, DataOwner.LOCAL)) {
             cloudDocumentVersion = updateCloudDocumentAndGetUpdatedVersion(updateDocument,
                     Optional.of(cloudDocumentVersion));

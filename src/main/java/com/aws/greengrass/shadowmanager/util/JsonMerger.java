@@ -26,7 +26,7 @@ public final class JsonMerger {
 
     /**
      * Merges the patch JSON node to the existing source JSON node. If the node already exists in the source, then
-     * it replaces it. If the node is an array, then the the source array's contents are overwritten with the contents
+     * it replaces it. If the node is an array, then the source array's contents are overwritten with the contents
      * from the patch.
      *
      * @param source The source JSON to merge.

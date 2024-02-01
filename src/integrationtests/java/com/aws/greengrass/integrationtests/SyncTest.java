@@ -1516,6 +1516,40 @@ class SyncTest extends NucleusLaunchUtils {
         assertLocalShadowEquals("{\"state\":{}}");
     }
 
+    @ParameterizedTest
+    @ValueSource(classes = {RealTimeSyncStrategy.class, PeriodicSyncStrategy.class})
+    void GIVEN_cloud_shadow_with_deleted_field_and_outdated_local_shadow_WHEN_full_sync_THEN_local_matches_cloud(Class<? extends BaseSyncStrategy> clazz, ExtensionContext context)
+            throws IoTDataPlaneClientCreationException, InterruptedException, IOException {
+        ignoreExceptionOfType(context, InterruptedException.class);
+        ignoreExceptionOfType(context, ConflictError.class);
+
+        String initialLocalState = "{\"state\":{\"desired\":{\"OtherKey\":\"foo\"}}}";
+        String initialCloudState = "{\"version\":1,\"state\":{\"desired\":{\"SomeKey\":\"foo\"}}}}";
+        String expectedLocalShadowState = "{\"state\":{\"desired\":{\"SomeKey\":\"foo\"}}}";
+
+        when(iotDataPlaneClientFactory.getIotDataPlaneClient().updateThingShadow(cloudUpdateThingShadowRequestCaptor.capture()))
+                .thenReturn(mockUpdateThingShadowResponse);
+
+        // setup initial cloud state
+        GetThingShadowResponse initialCloudStateShadowResponse = mock(GetThingShadowResponse.class, Answers.RETURNS_DEEP_STUBS);
+        lenient().when(initialCloudStateShadowResponse.payload().asByteArray()).thenReturn(initialCloudState.getBytes(UTF_8));
+        when(iotDataPlaneClientFactory.getIotDataPlaneClient().getThingShadow(any(GetThingShadowRequest.class))).thenReturn(initialCloudStateShadowResponse);
+
+        // start Nucleus with a local shadow preset
+        NucleusLaunchUtilsConfig config = NucleusLaunchUtilsConfig.builder()
+                .configFile(getSyncConfigFile(clazz))
+                .syncClazz(clazz)
+                .mockCloud(true)
+                .build();
+        startNucleusWithConfigAndLocalShadowState(config, MOCK_THING_NAME_1, CLASSIC_SHADOW, initialLocalState);
+
+        // wait for initial full sync to complete
+        verify(syncQueue, after(7000).atMost(5)).put(any(FullShadowSyncRequest.class));
+        assertEmptySyncQueue(clazz);
+        assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
+        assertLocalShadowEquals(expectedLocalShadowState);
+    }
+
     private void mockCloudUpdateResponsesWithIncreasingVersions() throws IoTDataPlaneClientCreationException {
         when(iotDataPlaneClientFactory.getIotDataPlaneClient()
                 .updateThingShadow(cloudUpdateThingShadowRequestCaptor.capture()))

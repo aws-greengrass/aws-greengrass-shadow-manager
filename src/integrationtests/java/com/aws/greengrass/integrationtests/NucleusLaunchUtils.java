@@ -16,6 +16,7 @@ import com.aws.greengrass.shadowmanager.ShadowManager;
 import com.aws.greengrass.shadowmanager.ShadowManagerDAOImpl;
 import com.aws.greengrass.shadowmanager.ShadowManagerDatabase;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
+import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientFactory;
 import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
 import com.aws.greengrass.shadowmanager.sync.Retryer;
@@ -31,6 +32,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Answers;
 import org.mockito.Mock;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Collections;
@@ -81,7 +83,7 @@ public class NucleusLaunchUtils extends GGServiceTestUtil {
         startNucleusWithConfig(configFile, expectedState, mockDatabase, false, true);
     }
 
-    void startNucleusWithConfig(NucleusLaunchUtilsConfig config) throws InterruptedException {
+    private CountDownLatch setup(NucleusLaunchUtilsConfig config) {
         CountDownLatch shadowManagerRunning = new CountDownLatch(1);
         AtomicBoolean isSyncMocked = new AtomicBoolean(false);
         kernel.parseArgs("-r", rootDir.toAbsolutePath().toString(), "-i",
@@ -129,13 +131,10 @@ public class NucleusLaunchUtils extends GGServiceTestUtil {
                     .maxRetryInterval(Duration.ofSeconds(1))
                     .retryableExceptions(Collections.singletonList(RetryableException.class))
                     .build();
-            Retryer retryer =  (retryConfig1, request, context) ->
-            RetryUtils.runWithRetry(retryConfig,
-                () -> {
+            Retryer retryer =  (retryConfig1, request, context) -> RetryUtils.runWithRetry(retryConfig, () -> {
                     request.execute(context);
                     return null;
-                },
-                "test-setup", LogManager.getLogger(getClass()));
+                }, "test-setup", LogManager.getLogger(getClass()));
             SyncHandler.setRetryer(retryer);
             SyncStrategy syncStrategy;
             if (RealTimeSyncStrategy.class.equals(config.getSyncClazz())) {
@@ -149,6 +148,29 @@ public class NucleusLaunchUtils extends GGServiceTestUtil {
             syncHandler.setOverallSyncStrategy(syncStrategy);
             isSyncMocked.set(true);
         }
+        return shadowManagerRunning;
+    }
+
+    void startNucleusWithConfig(NucleusLaunchUtilsConfig config) throws InterruptedException {
+        CountDownLatch shadowManagerRunning = setup(config);
+        kernel.launch();
+        assertTrue(shadowManagerRunning.await(TEST_TIME_OUT_SEC, TimeUnit.SECONDS));
+    }
+
+    void startNucleusWithConfigAndLocalShadowState(NucleusLaunchUtilsConfig config, String thingName,
+                                                   String shadowName, String localShadowState)
+            throws InterruptedException {
+        CountDownLatch shadowManagerRunning = setup(config);
+
+        kernel.getContext().get(ShadowManagerDatabase.class).install();
+        ShadowManagerDAOImpl dao = kernel.getContext().get(ShadowManagerDAOImpl.class);
+        dao.updateShadowThing(thingName, shadowName, localShadowState.getBytes(StandardCharsets.UTF_8), 0);
+        dao.updateSyncInformation(SyncInformation.builder()
+                .thingName(thingName)
+                .shadowName(shadowName)
+                .lastSyncedDocument(localShadowState.getBytes(StandardCharsets.UTF_8))
+                .localVersion(0)
+                .build());
 
         kernel.launch();
         assertTrue(shadowManagerRunning.await(TEST_TIME_OUT_SEC, TimeUnit.SECONDS));
