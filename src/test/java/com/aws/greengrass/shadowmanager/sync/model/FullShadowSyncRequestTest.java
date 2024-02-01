@@ -93,7 +93,7 @@ class FullShadowSyncRequestTest {
     // TODO: Refactor class so the null "OldField" can be removed from the merged document. This is present because
     //  SyncNodeMerger will set removed fields as null, which are then handled by UpdateThingShadowRequestHandler,
     //  which currently has mocked behavior resulting in null fields not being removed within these tests.
-    private static final byte[] MERGED_DOCUMENT = ("{\"state\": {\"reported\": {\"name\": \"The Beach Boys\", \"NewField\": 100, \"OldField\": null}, \"desired\": {\"name\": \"Backstreet Boys\", \"SomethingNew\": true, \"SomeOtherThingNew\": 100}}}").getBytes();
+    private static final byte[] MERGED_DOCUMENT = "{\"state\": {\"reported\": {\"name\": \"The Beach Boys\", \"NewField\": 100, \"OldField\": null}, \"desired\": {\"name\": \"Backstreet Boys\", \"SomethingNew\": true, \"SomeOtherThingNew\": 100}}}".getBytes();
     private static final byte[] BAD_DOCUMENT = "{\"version\": true}".getBytes();
 
     @Mock
