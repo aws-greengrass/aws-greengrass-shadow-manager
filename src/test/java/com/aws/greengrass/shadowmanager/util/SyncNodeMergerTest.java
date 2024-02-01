@@ -26,7 +26,7 @@ class SyncNodeMergerTest {
     private static final byte[] CLOUD_DOCUMENT = "{\"name\": \"The Beatles\", \"temperature\": 80, \"OldField\": true}".getBytes();
     private static final byte[] CLOUD_DOCUMENT_CHANGED = "{\"name\": \"Pink Floyd\", \"temperature\": 60, \"OldField\": true, \"SomeOtherThingNew\": 100}".getBytes();
     private static final byte[] BASE_DOCUMENT = "{\"name\": \"The Beatles\", \"temperature\": 70, \"OldField\": true}".getBytes();
-    private static final byte[] MERGED_DOCUMENT = ("{\"name\":\"The Beach Boys\", \"temperature\": 80, \"NewField\":100, \"OldField\":null}").getBytes();
+    private static final byte[] MERGED_DOCUMENT = "{\"name\":\"The Beach Boys\", \"temperature\": 80, \"NewField\":100, \"OldField\":null}".getBytes();
     private static final byte[] MERGED_DOCUMENT_WITH_CLOUD_CHANGED_AND_CLOUD_OWNER = "{\"name\":\"Pink Floyd\", \"temperature\": 60,\"NewField\":100,\"OldField\":null,\"SomeOtherThingNew\":100}".getBytes();
     private static final byte[] MERGED_DOCUMENT_WITH_CLOUD_CHANGED_AND_LOCAL_OWNER = "{\"name\":\"The Beach Boys\", \"temperature\": 80,\"NewField\":100,\"OldField\":null,\"SomeOtherThingNew\":100}".getBytes();
 
