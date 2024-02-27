@@ -35,7 +35,10 @@ public final class ShadowDocSizeConfiguration {
     private static int getMaxShadowDocSizeFromConfig(Topics topics) {
         int newMaxShadowSize = Coerce.toInt(
                 topics.findOrDefault(DEFAULT_DOCUMENT_SIZE, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC));
-        if (MAX_SHADOW_DOCUMENT_SIZE < newMaxShadowSize || newMaxShadowSize <= 0) {
+        if (newMaxShadowSize == 0) {
+            return DEFAULT_DOCUMENT_SIZE;
+        }
+        if (MAX_SHADOW_DOCUMENT_SIZE < newMaxShadowSize || newMaxShadowSize < 0) {
             throw new InvalidConfigurationException(String.format(
                     "Maximum shadow size provided %d is either less than 0 "
                             + "or exceeds default maximum shadow size of %d",
