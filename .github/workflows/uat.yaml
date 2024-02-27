@@ -31,6 +31,7 @@ jobs:
           role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
           role-session-name: shadowManagerCI
           aws-region: ${{ env.AWS_REGION }}
+          role-duration-seconds: 7200
       - name: Run UAT on linux
         uses: aws-actions/aws-codebuild-run-build@v1
         with:
