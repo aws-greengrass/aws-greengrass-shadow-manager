@@ -23,9 +23,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import javax.inject.Inject;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_CLOUD_VERSION_KEY;
@@ -55,7 +52,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      * @return The queried shadow from the local shadow store
      */
     @Override
-    public Optional<ShadowDocument> getShadowThing(String thingName, String shadowName) {
+    public synchronized Optional<ShadowDocument> getShadowThing(String thingName, String shadowName) {
         String sql = "SELECT document, version, updateTime FROM documents  WHERE deleted = 0 AND "
                 + "thingName = ? AND shadowName = ?";
 
@@ -92,7 +89,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      * @return The deleted shadow from the local shadow store
      */
     @Override
-    public Optional<ShadowDocument> deleteShadowThing(String thingName, String shadowName) {
+    public synchronized Optional<ShadowDocument> deleteShadowThing(String thingName, String shadowName) {
         // To be consistent with cloud, subsequent updates to the shadow should not start from version 0
         // https://docs.aws.amazon.com/iot/latest/developerguide/device-shadow-data-flow.html
         logger.atDebug()
@@ -103,7 +100,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
                 + " WHERE thingName = ? AND shadowName = ?";
         return getShadowThing(thingName, shadowName)
                 .flatMap(shadowDocument ->
-                        executeWriteOperation(sql,
+                        execute(sql,
                                 preparedStatement -> {
                                     preparedStatement.setLong(1, Instant.now().getEpochSecond());
                                     preparedStatement.setLong(2, shadowDocument.getVersion() + 1);
@@ -134,7 +131,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
                 .log("Updating shadow");
         String sql = "MERGE INTO documents(thingName, shadowName, document, version, deleted, updateTime) "
                 + "KEY (thingName, shadowName) VALUES (?, ?, ?, ?, ?, ?)";
-        return executeWriteOperation(sql,
+        return execute(sql,
                 preparedStatement -> {
                     preparedStatement.setString(1, thingName);
                     preparedStatement.setString(2, shadowName);
@@ -193,7 +190,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
         String sql = "MERGE INTO sync(thingName, shadowName, lastSyncedDocument, cloudVersion, cloudDeleted, "
                 + "cloudUpdateTime, lastSyncTime, localVersion) KEY (thingName, shadowName) "
                 + "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-        return executeWriteOperation(sql,
+        return execute(sql,
                 preparedStatement -> {
                     preparedStatement.setString(1, request.getThingName());
                     preparedStatement.setString(2, request.getShadowName());
@@ -268,7 +265,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      * @return The deleted shadow version if it was deleted or exists; Else an empty optional
      */
     @Override
-    public Optional<Long> getDeletedShadowVersion(String thingName, String shadowName) {
+    public synchronized Optional<Long> getDeletedShadowVersion(String thingName, String shadowName) {
         String sql = "SELECT version FROM documents  WHERE deleted = 1 AND thingName = ? AND shadowName = ?";
 
         try (Connection c = getPool().getConnection();
@@ -300,7 +297,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
                 .kv(LOG_THING_NAME_KEY, thingName)
                 .kv(LOG_SHADOW_NAME_KEY, shadowName)
                 .log("Deleting sync info");
-        return executeWriteOperation("DELETE FROM sync WHERE thingName = ? AND shadowName = ?",
+        return execute("DELETE FROM sync WHERE thingName = ? AND shadowName = ?",
                 preparedStatement -> {
                     preparedStatement.setString(1, thingName);
                     preparedStatement.setString(2, shadowName);
@@ -349,7 +346,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
         String sql = "INSERT INTO sync(thingName, shadowName, lastSyncedDocument, cloudVersion, cloudDeleted, "
                 + "cloudUpdateTime, lastSyncTime, localVersion) SELECT ?, ?, ?, ?, ?, ?, ?, ? "
                 + "WHERE NOT EXISTS(SELECT 1 FROM sync WHERE thingName = ? AND shadowName = ?)";
-        return executeWriteOperation(sql,
+        return execute(sql,
                 preparedStatement -> {
                     preparedStatement.setString(1, request.getThingName());
                     preparedStatement.setString(2, request.getShadowName());
@@ -367,25 +364,12 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
 
     }
 
-    private <T> T execute(String sql, SQLExecution<T> thunk) {
+    private synchronized <T> T execute(String sql, SQLExecution<T> thunk) {
         try (Connection c = getPool().getConnection();
              PreparedStatement statement = c.prepareStatement(sql)) {
             statement.setQueryTimeout(10);
             return thunk.apply(statement);
         } catch (SQLException | IllegalStateException e) {
-            throw new ShadowManagerDataException(e);
-        }
-    }
-
-    private <T> T executeWriteOperation(String sql, SQLExecution<T> thunk) {
-        try {
-            return database.getDbWriteThreadPool().submit(() ->
-                    execute(sql, thunk)).get(15, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            logger.atDebug().log("Interrupted while executing the DB write operation");
-            Thread.currentThread().interrupt();
-            throw new ShadowManagerDataException(e);
-        } catch (ExecutionException | TimeoutException e) {
             throw new ShadowManagerDataException(e);
         }
     }

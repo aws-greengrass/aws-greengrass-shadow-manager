@@ -14,8 +14,6 @@ import com.aws.greengrass.mqttclient.MqttClient;
 import com.aws.greengrass.shadowmanager.ShadowManager;
 import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersException;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientFactory;
-import com.aws.greengrass.shadowmanager.sync.SyncHandler;
-import com.aws.greengrass.shadowmanager.sync.strategy.SyncStrategy;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.aws.greengrass.testcommons.testutilities.UniqueRootPathExtension;
@@ -34,9 +32,8 @@ import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.mockito.Answers;
-import org.mockito.Mock;
 import software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCClient;
+import software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCClientV2;
 import software.amazon.awssdk.aws.greengrass.model.ConflictError;
 import software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowRequest;
 import software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowResponse;
@@ -54,8 +51,10 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
@@ -88,6 +87,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
+import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 @ExtendWith({GGExtension.class, UniqueRootPathExtension.class})
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
@@ -97,23 +99,27 @@ class ShadowIPCTest {
     public static final String MOCK_THING_NAME = "mockThing";
     public static final String SHADOW_NAME_1 = "testShadowName";
     private static Kernel kernel;
-    private static ShadowManager shadowManager;
     private static GlobalStateChangeListener listener;
 
-    @Mock(answer = Answers.RETURNS_DEEP_STUBS)
     private static IotDataPlaneClientFactory iotDataPlaneClientFactory;
-    @Mock
     private static MqttClient mqttClient;
 
     private static final String nullVersionErrorMessage = "Invalid JSON: version: null found, number expected";
-    private static final String expectedShadowDocumentV1Str = "{\"version\":1,\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}}}";
-    private static final String expectedShadowDocumentV2Str = "{\"state\":{\"desired\":{\"color\":{\"r\":0,\"a\":255,\"g\":255},\"NewArray\":[1,2,3,5,8,13]},\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}},\"version\":2}";
-    private static final String expectedShadowDocumentV3Str = "{\"version\":3,\"state\":{\"reported\":{\"color\":{\"r\":0,\"g\":255,\"b\":255,\"a\":255},\"SomeKey\":\"SomeValue\",\"NewArray\": [1,2,3,5,8,13]}}}";
-    private static final String expectedAcceptedMessageV2Str = "{\"version\":2,\"state\":{\"desired\":{\"color\":{\"r\":0,\"a\":255,\"g\":255},\"NewArray\":[1,2,3,5,8,13]}}}";
-    private static final String expectedAcceptedMessageV3Str = "{\"version\":3,\"state\":{\"desired\":null,\"reported\":{\"color\":{\"r\":0,\"a\":255,\"g\":255},\"NewArray\":[1,2,3,5,8,13]}}}";
-    private static final String expectedDeltaMessageV2Str = "{\"version\":2,\"state\":{\"color\":{\"r\":0,\"a\":255},\"NewArray\":[1,2,3,5,8,13]}}";
+    private static final String expectedShadowDocumentV1Str =
+            "{\"version\":1,\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}}}";
+    private static final String expectedShadowDocumentV2Str =
+            "{\"state\":{\"desired\":{\"color\":{\"r\":0,\"a\":255,\"g\":255},\"NewArray\":[1,2,3,5,8,13]},\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}},\"version\":2}";
+    private static final String expectedShadowDocumentV3Str =
+            "{\"version\":3,\"state\":{\"reported\":{\"color\":{\"r\":0,\"g\":255,\"b\":255,\"a\":255},\"SomeKey\":\"SomeValue\",\"NewArray\": [1,2,3,5,8,13]}}}";
+    private static final String expectedAcceptedMessageV2Str =
+            "{\"version\":2,\"state\":{\"desired\":{\"color\":{\"r\":0,\"a\":255,\"g\":255},\"NewArray\":[1,2,3,5,8,13]}}}";
+    private static final String expectedAcceptedMessageV3Str =
+            "{\"version\":3,\"state\":{\"desired\":null,\"reported\":{\"color\":{\"r\":0,\"a\":255,\"g\":255},\"NewArray\":[1,2,3,5,8,13]}}}";
+    private static final String expectedDeltaMessageV2Str =
+            "{\"version\":2,\"state\":{\"color\":{\"r\":0,\"a\":255},\"NewArray\":[1,2,3,5,8,13]}}";
     private static final String invalidVersionMessageStr = "{\"code\":409,\"message\":\"Version conflict\"}";
-    private static final String invalidVersionMessageStr2 = "{\"code\":400,\"message\": \"" + nullVersionErrorMessage +"\"}";
+    private static final String invalidVersionMessageStr2 =
+            "{\"code\":400,\"message\": \"" + nullVersionErrorMessage + "\"}";
     private static JsonNode expectedShadowDocumentV1Json;
     private static JsonNode expectedShadowDocumentV2Json;
     private static JsonNode expectedAcceptedMessageV2Json;
@@ -125,29 +131,18 @@ class ShadowIPCTest {
 
 
     static Stream<Arguments> invalidVersionUpdateTests() {
-        return Stream.of(
-                arguments(0, invalidVersionMessageJson),
-                arguments(4, invalidVersionMessageJson),
-                arguments(null, invalidVersionMessageJson2)
-        );
+        return Stream.of(arguments(0, invalidVersionMessageJson), arguments(4, invalidVersionMessageJson),
+                arguments(null, invalidVersionMessageJson2));
     }
 
     static Stream<Arguments> invalidGetShadowTests() {
-        return Stream.of(
-                arguments("BadThingName", SHADOW_NAME_1),
-                arguments(MOCK_THING_NAME, "BadShadowName"),
-                arguments(MOCK_THING_NAME, null),
-                arguments(null, SHADOW_NAME_1)
-        );
+        return Stream.of(arguments("BadThingName", SHADOW_NAME_1), arguments(MOCK_THING_NAME, "BadShadowName"),
+                arguments(MOCK_THING_NAME, null), arguments(null, SHADOW_NAME_1));
     }
 
     static Stream<Arguments> invalidDeleteShadowTests() {
-        return Stream.of(
-                arguments("BadThingName", SHADOW_NAME_1),
-                arguments(MOCK_THING_NAME, "BadShadowName"),
-                arguments(MOCK_THING_NAME, null),
-                arguments(null, SHADOW_NAME_1)
-        );
+        return Stream.of(arguments("BadThingName", SHADOW_NAME_1), arguments(MOCK_THING_NAME, "BadShadowName"),
+                arguments(MOCK_THING_NAME, null), arguments(null, SHADOW_NAME_1));
     }
 
     @BeforeAll
@@ -160,29 +155,25 @@ class ShadowIPCTest {
         System.setProperty("aws.greengrass.scanSelfClasspath", "true");
         kernel = new Kernel();
         CountDownLatch shadowManagerRunning = new CountDownLatch(1);
-        AtomicBoolean isSyncMocked = new AtomicBoolean(false);
-        ConfigPlatformResolver.initKernelWithMultiPlatformConfig(kernel, ShadowIPCTest.class.getResource("shadow.yaml"));
+
+        mqttClient = mock(MqttClient.class);
+        iotDataPlaneClientFactory = mock(IotDataPlaneClientFactory.class, RETURNS_DEEP_STUBS);
+        kernel.getContext().put(MqttClient.class, mqttClient);
+        kernel.getContext().put(IotDataPlaneClientFactory.class, iotDataPlaneClientFactory);
+        when(mqttClient.connected()).thenReturn(true);
+
+        ConfigPlatformResolver.initKernelWithMultiPlatformConfig(kernel,
+                ShadowIPCTest.class.getResource("shadow.yaml"));
         listener = (GreengrassService service, State was, State newState) -> {
             if (service.getName().equals(ShadowManager.SERVICE_NAME) && service.getState().equals(State.RUNNING)) {
-                shadowManager = (ShadowManager) service;
                 shadowManagerRunning.countDown();
             }
         };
         kernel.getContext().addGlobalStateChangeListener(listener);
-        kernel.getContext().put(MqttClient.class, mqttClient);
 
-        kernel.getContext().put(IotDataPlaneClientFactory.class, iotDataPlaneClientFactory);
-        SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);
-        SyncStrategy realTimeSyncStrategy = syncHandler.getOverallSyncStrategy();
-        // set retry config to only try once so we can test failures earlier
         kernel.launch();
 
         assertTrue(shadowManagerRunning.await(30L, TimeUnit.SECONDS));
-        realTimeSyncStrategy.stop();
-
-        isSyncMocked.set(true);
-        shadowManager.startSyncingShadows(ShadowManager.StartSyncInfo.builder().build());
-
         kernel.getContext().removeGlobalStateChangeListener(listener);
 
         expectedShadowDocumentV1Json = MAPPER.readTree(expectedShadowDocumentV1Str);
@@ -201,10 +192,45 @@ class ShadowIPCTest {
     }
 
     @Test
+    @Order(0)
+    void GIVEN_shadow_manager_running_WHEN_I_stress_shadow_manager_THEN_no_errors_occur() throws Exception {
+        try (EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll");
+             GreengrassCoreIPCClientV2 ipcClient = GreengrassCoreIPCClientV2.builder()
+                     .withClient(new GreengrassCoreIPCClient(connection)).withoutExecutor().build()) {
+            String updateDocumentStr =
+                    "{\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255}," + "\"SomeKey\":\"time\"}}}";
+
+            // Stress test for updating shadow and syncing it to cloud.
+            for (int i = 0; i < 1000; i++) {
+                final long currentEpochSeconds = Instant.now().toEpochMilli();
+
+                UpdateThingShadowRequest updateThingShadowRequest = new UpdateThingShadowRequest();
+                updateThingShadowRequest.setThingName(MOCK_THING_NAME);
+                updateThingShadowRequest.setShadowName(SHADOW_NAME_1);
+                updateThingShadowRequest.setPayload(
+                        updateDocumentStr.replaceAll("time", String.valueOf(currentEpochSeconds)).getBytes(UTF_8));
+
+                CompletableFuture<UpdateThingShadowResponse> fut =
+                        ipcClient.updateThingShadowAsync(updateThingShadowRequest);
+                fut.get(90, TimeUnit.SECONDS);
+            }
+
+            // Wait for any pending operations to complete before shutting down.
+            Thread.sleep(5000);
+
+            ipcClient.deleteThingShadow(new DeleteThingShadowRequest()
+                    .withThingName(MOCK_THING_NAME)
+                    .withShadowName(SHADOW_NAME_1));
+        }
+    }
+
+    @Test
     @Order(1)
-    void GIVEN_shadow_client_WHEN_subscribed_to_accept_and_documents_and_update_shadow_THEN_succeeds_and_receives_correct_message_over_pubsub() throws Exception {
-        try(EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
-            String updateDocumentStr = "{\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}}}";
+    void GIVEN_shadow_client_WHEN_subscribed_to_accept_and_documents_and_update_shadow_THEN_succeeds_and_receives_correct_message_over_pubsub()
+            throws Exception {
+        try (EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
+            String updateDocumentStr =
+                    "{\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}}}";
             GreengrassCoreIPCClient ipcClient = new GreengrassCoreIPCClient(connection);
             final long currentEpochSeconds = Instant.now().getEpochSecond();
 
@@ -212,7 +238,8 @@ class ShadowIPCTest {
                 try {
                     JsonNode receivedShadowDocumentJson = MAPPER.readTree(m);
                     assertTrue(receivedShadowDocumentJson.has(SHADOW_DOCUMENT_TIMESTAMP));
-                    assertThat(receivedShadowDocumentJson.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(greaterThanOrEqualTo(currentEpochSeconds)));
+                    assertThat(receivedShadowDocumentJson.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(),
+                            is(greaterThanOrEqualTo(currentEpochSeconds)));
                     ((ObjectNode) receivedShadowDocumentJson).remove(SHADOW_DOCUMENT_TIMESTAMP);
                     assertTrue(receivedShadowDocumentJson.has(SHADOW_DOCUMENT_METADATA));
                     ((ObjectNode) receivedShadowDocumentJson).remove(SHADOW_DOCUMENT_METADATA);
@@ -228,17 +255,21 @@ class ShadowIPCTest {
                     JsonNode receivedDocumentsJson = MAPPER.readTree(m);
                     assertTrue(JsonUtil.isNullOrMissing(receivedDocumentsJson.get(SHADOW_DOCUMENT_STATE_PREVIOUS)));
                     assertTrue(receivedDocumentsJson.get(SHADOW_DOCUMENT_STATE_CURRENT).has(SHADOW_DOCUMENT_METADATA));
-                    ((ObjectNode) receivedDocumentsJson.get(SHADOW_DOCUMENT_STATE_CURRENT)).remove(SHADOW_DOCUMENT_METADATA);
+                    ((ObjectNode) receivedDocumentsJson.get(SHADOW_DOCUMENT_STATE_CURRENT)).remove(
+                            SHADOW_DOCUMENT_METADATA);
 
-                    assertThat(receivedDocumentsJson.get(SHADOW_DOCUMENT_STATE_CURRENT), is(expectedShadowDocumentV1Json));
+                    assertThat(receivedDocumentsJson.get(SHADOW_DOCUMENT_STATE_CURRENT),
+                            is(expectedShadowDocumentV1Json));
                 } catch (IOException e) {
                     fail("Unable to parse message on documents");
                 }
 
             });
 
-            String acceptedTopic = "$aws/things/" + MOCK_THING_NAME + "/shadow/name/" + SHADOW_NAME_1 + "/update/accepted";
-            String documentsTopic = "$aws/things/" + MOCK_THING_NAME + "/shadow/name/" + SHADOW_NAME_1 + "/update/documents";
+            String acceptedTopic =
+                    "$aws/things/" + MOCK_THING_NAME + "/shadow/name/" + SHADOW_NAME_1 + "/update/accepted";
+            String documentsTopic =
+                    "$aws/things/" + MOCK_THING_NAME + "/shadow/name/" + SHADOW_NAME_1 + "/update/documents";
             subscribeToTopicOveripcForBinaryMessages(ipcClient, acceptedTopic, acceptedConsumer.getRight());
             subscribeToTopicOveripcForBinaryMessages(ipcClient, documentsTopic, documentsConsumer.getRight());
 
@@ -253,7 +284,8 @@ class ShadowIPCTest {
             UpdateThingShadowResponse updateThingShadowResponse = fut.get(90, TimeUnit.SECONDS);
             JsonNode receivedShadowDocumentJson = MAPPER.readTree(updateThingShadowResponse.getPayload());
             assertTrue(receivedShadowDocumentJson.has(SHADOW_DOCUMENT_TIMESTAMP));
-            assertThat(receivedShadowDocumentJson.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(greaterThanOrEqualTo(currentEpochSeconds)));
+            assertThat(receivedShadowDocumentJson.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(),
+                    is(greaterThanOrEqualTo(currentEpochSeconds)));
             ((ObjectNode) receivedShadowDocumentJson).remove(SHADOW_DOCUMENT_TIMESTAMP);
             assertTrue(receivedShadowDocumentJson.has(SHADOW_DOCUMENT_METADATA));
             ((ObjectNode) receivedShadowDocumentJson).remove(SHADOW_DOCUMENT_METADATA);
@@ -266,9 +298,11 @@ class ShadowIPCTest {
 
     @Test
     @Order(2)
-    void GIVEN_shadow_client_WHEN_subscribed_to_accept_delta_and_documents_and_update_shadow_desired_THEN_succeeds_and_receives_correct_message_over_pubsub() throws Exception {
-        try(EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
-            String updateDocumentStr = "{\"state\":{\"desired\":{\"color\":{\"r\":0,\"a\":255,\"g\":255},\"NewArray\": [1,2,3,5,8,13]}}}";
+    void GIVEN_shadow_client_WHEN_subscribed_to_accept_delta_and_documents_and_update_shadow_desired_THEN_succeeds_and_receives_correct_message_over_pubsub()
+            throws Exception {
+        try (EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
+            String updateDocumentStr =
+                    "{\"state\":{\"desired\":{\"color\":{\"r\":0,\"a\":255,\"g\":255},\"NewArray\": [1,2,3,5,8,13]}}}";
             GreengrassCoreIPCClient ipcClient = new GreengrassCoreIPCClient(connection);
             final long currentEpochSeconds = Instant.now().getEpochSecond();
 
@@ -276,7 +310,8 @@ class ShadowIPCTest {
                 try {
                     JsonNode receivedShadowDocumentJson = MAPPER.readTree(m);
                     assertTrue(receivedShadowDocumentJson.has(SHADOW_DOCUMENT_TIMESTAMP));
-                    assertThat(receivedShadowDocumentJson.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(greaterThanOrEqualTo(currentEpochSeconds)));
+                    assertThat(receivedShadowDocumentJson.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(),
+                            is(greaterThanOrEqualTo(currentEpochSeconds)));
                     ((ObjectNode) receivedShadowDocumentJson).remove(SHADOW_DOCUMENT_TIMESTAMP);
                     assertTrue(receivedShadowDocumentJson.has(SHADOW_DOCUMENT_METADATA));
                     ((ObjectNode) receivedShadowDocumentJson).remove(SHADOW_DOCUMENT_METADATA);
@@ -293,11 +328,15 @@ class ShadowIPCTest {
                     assertFalse(JsonUtil.isNullOrMissing(receivedDocumentsJson.get(SHADOW_DOCUMENT_STATE_PREVIOUS)));
                     assertFalse(JsonUtil.isNullOrMissing(receivedDocumentsJson.get(SHADOW_DOCUMENT_STATE_CURRENT)));
                     assertTrue(receivedDocumentsJson.get(SHADOW_DOCUMENT_STATE_PREVIOUS).has(SHADOW_DOCUMENT_METADATA));
-                    ((ObjectNode) receivedDocumentsJson.get(SHADOW_DOCUMENT_STATE_PREVIOUS)).remove(SHADOW_DOCUMENT_METADATA);
-                    assertThat(receivedDocumentsJson.get(SHADOW_DOCUMENT_STATE_PREVIOUS), is(expectedShadowDocumentV1Json));
+                    ((ObjectNode) receivedDocumentsJson.get(SHADOW_DOCUMENT_STATE_PREVIOUS)).remove(
+                            SHADOW_DOCUMENT_METADATA);
+                    assertThat(receivedDocumentsJson.get(SHADOW_DOCUMENT_STATE_PREVIOUS),
+                            is(expectedShadowDocumentV1Json));
                     assertTrue(receivedDocumentsJson.get(SHADOW_DOCUMENT_STATE_CURRENT).has(SHADOW_DOCUMENT_METADATA));
-                    ((ObjectNode) receivedDocumentsJson.get(SHADOW_DOCUMENT_STATE_CURRENT)).remove(SHADOW_DOCUMENT_METADATA);
-                    assertThat(receivedDocumentsJson.get(SHADOW_DOCUMENT_STATE_CURRENT), is(expectedShadowDocumentV2Json));
+                    ((ObjectNode) receivedDocumentsJson.get(SHADOW_DOCUMENT_STATE_CURRENT)).remove(
+                            SHADOW_DOCUMENT_METADATA);
+                    assertThat(receivedDocumentsJson.get(SHADOW_DOCUMENT_STATE_CURRENT),
+                            is(expectedShadowDocumentV2Json));
                 } catch (IOException e) {
                     fail("Unable to parse message on documents");
                 }
@@ -308,7 +347,8 @@ class ShadowIPCTest {
                 try {
                     JsonNode receivedDeltaJson = MAPPER.readTree(m);
                     assertTrue(receivedDeltaJson.has(SHADOW_DOCUMENT_TIMESTAMP));
-                    assertThat(receivedDeltaJson.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(greaterThanOrEqualTo(currentEpochSeconds)));
+                    assertThat(receivedDeltaJson.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(),
+                            is(greaterThanOrEqualTo(currentEpochSeconds)));
                     ((ObjectNode) receivedDeltaJson).remove(SHADOW_DOCUMENT_TIMESTAMP);
                     assertTrue(receivedDeltaJson.has(SHADOW_DOCUMENT_METADATA));
                     ((ObjectNode) receivedDeltaJson).remove(SHADOW_DOCUMENT_METADATA);
@@ -319,8 +359,10 @@ class ShadowIPCTest {
 
             });
 
-            String acceptedTopic = "$aws/things/" + MOCK_THING_NAME + "/shadow/name/" + SHADOW_NAME_1 + "/update/accepted";
-            String documentsTopic = "$aws/things/" + MOCK_THING_NAME + "/shadow/name/" + SHADOW_NAME_1 + "/update/documents";
+            String acceptedTopic =
+                    "$aws/things/" + MOCK_THING_NAME + "/shadow/name/" + SHADOW_NAME_1 + "/update/accepted";
+            String documentsTopic =
+                    "$aws/things/" + MOCK_THING_NAME + "/shadow/name/" + SHADOW_NAME_1 + "/update/documents";
             String deltaTopic = "$aws/things/" + MOCK_THING_NAME + "/shadow/name/" + SHADOW_NAME_1 + "/update/delta";
             subscribeToTopicOveripcForBinaryMessages(ipcClient, acceptedTopic, acceptedConsumer.getRight());
             subscribeToTopicOveripcForBinaryMessages(ipcClient, documentsTopic, documentsConsumer.getRight());
@@ -337,7 +379,8 @@ class ShadowIPCTest {
             UpdateThingShadowResponse updateThingShadowResponse = fut.get(90, TimeUnit.SECONDS);
             JsonNode receivedShadowDocumentJson = MAPPER.readTree(updateThingShadowResponse.getPayload());
             assertTrue(receivedShadowDocumentJson.has(SHADOW_DOCUMENT_TIMESTAMP));
-            assertThat(receivedShadowDocumentJson.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(greaterThanOrEqualTo(currentEpochSeconds)));
+            assertThat(receivedShadowDocumentJson.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(),
+                    is(greaterThanOrEqualTo(currentEpochSeconds)));
             ((ObjectNode) receivedShadowDocumentJson).remove(SHADOW_DOCUMENT_TIMESTAMP);
             assertTrue(receivedShadowDocumentJson.has(SHADOW_DOCUMENT_METADATA));
             ((ObjectNode) receivedShadowDocumentJson).remove(SHADOW_DOCUMENT_METADATA);
@@ -351,9 +394,11 @@ class ShadowIPCTest {
 
     @Test
     @Order(3)
-    void GIVEN_shadow_client_WHEN_subscribed_to_accept_and_documents_reported_and_update_shadow_THEN_succeeds_and_receives_correct_message_over_pubsub() throws Exception {
-        try(EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
-            String updateDocumentStr = "{\"state\":{\"desired\": null,\"reported\":{\"color\":{\"r\":0,\"a\":255,\"g\":255},\"NewArray\": [1,2,3,5,8,13]}}}";
+    void GIVEN_shadow_client_WHEN_subscribed_to_accept_and_documents_reported_and_update_shadow_THEN_succeeds_and_receives_correct_message_over_pubsub()
+            throws Exception {
+        try (EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
+            String updateDocumentStr =
+                    "{\"state\":{\"desired\": null,\"reported\":{\"color\":{\"r\":0,\"a\":255,\"g\":255},\"NewArray\": [1,2,3,5,8,13]}}}";
             GreengrassCoreIPCClient ipcClient = new GreengrassCoreIPCClient(connection);
             final long currentEpochSeconds = Instant.now().getEpochSecond();
 
@@ -361,7 +406,8 @@ class ShadowIPCTest {
                 try {
                     JsonNode receivedShadowDocumentJson = MAPPER.readTree(m);
                     assertTrue(receivedShadowDocumentJson.has(SHADOW_DOCUMENT_TIMESTAMP));
-                    assertThat(receivedShadowDocumentJson.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(greaterThanOrEqualTo(currentEpochSeconds)));
+                    assertThat(receivedShadowDocumentJson.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(),
+                            is(greaterThanOrEqualTo(currentEpochSeconds)));
                     ((ObjectNode) receivedShadowDocumentJson).remove(SHADOW_DOCUMENT_TIMESTAMP);
                     assertTrue(receivedShadowDocumentJson.has(SHADOW_DOCUMENT_METADATA));
                     ((ObjectNode) receivedShadowDocumentJson).remove(SHADOW_DOCUMENT_METADATA);
@@ -378,19 +424,25 @@ class ShadowIPCTest {
                     assertFalse(JsonUtil.isNullOrMissing(receivedDocumentsJson.get(SHADOW_DOCUMENT_STATE_PREVIOUS)));
                     assertFalse(JsonUtil.isNullOrMissing(receivedDocumentsJson.get(SHADOW_DOCUMENT_STATE_CURRENT)));
                     assertTrue(receivedDocumentsJson.get(SHADOW_DOCUMENT_STATE_PREVIOUS).has(SHADOW_DOCUMENT_METADATA));
-                    ((ObjectNode) receivedDocumentsJson.get(SHADOW_DOCUMENT_STATE_PREVIOUS)).remove(SHADOW_DOCUMENT_METADATA);
-                    assertThat(receivedDocumentsJson.get(SHADOW_DOCUMENT_STATE_PREVIOUS), is(expectedShadowDocumentV2Json));
+                    ((ObjectNode) receivedDocumentsJson.get(SHADOW_DOCUMENT_STATE_PREVIOUS)).remove(
+                            SHADOW_DOCUMENT_METADATA);
+                    assertThat(receivedDocumentsJson.get(SHADOW_DOCUMENT_STATE_PREVIOUS),
+                            is(expectedShadowDocumentV2Json));
                     assertTrue(receivedDocumentsJson.get(SHADOW_DOCUMENT_STATE_CURRENT).has(SHADOW_DOCUMENT_METADATA));
-                    ((ObjectNode) receivedDocumentsJson.get(SHADOW_DOCUMENT_STATE_CURRENT)).remove(SHADOW_DOCUMENT_METADATA);
-                    assertThat(receivedDocumentsJson.get(SHADOW_DOCUMENT_STATE_CURRENT), is(expectedShadowDocumentV3Json));
+                    ((ObjectNode) receivedDocumentsJson.get(SHADOW_DOCUMENT_STATE_CURRENT)).remove(
+                            SHADOW_DOCUMENT_METADATA);
+                    assertThat(receivedDocumentsJson.get(SHADOW_DOCUMENT_STATE_CURRENT),
+                            is(expectedShadowDocumentV3Json));
                 } catch (IOException e) {
                     fail("Unable to parse message on documents");
                 }
 
             });
 
-            String acceptedTopic = "$aws/things/" + MOCK_THING_NAME + "/shadow/name/" + SHADOW_NAME_1 + "/update/accepted";
-            String documentsTopic = "$aws/things/" + MOCK_THING_NAME + "/shadow/name/" + SHADOW_NAME_1 + "/update/documents";
+            String acceptedTopic =
+                    "$aws/things/" + MOCK_THING_NAME + "/shadow/name/" + SHADOW_NAME_1 + "/update/accepted";
+            String documentsTopic =
+                    "$aws/things/" + MOCK_THING_NAME + "/shadow/name/" + SHADOW_NAME_1 + "/update/documents";
             subscribeToTopicOveripcForBinaryMessages(ipcClient, acceptedTopic, acceptedConsumer.getRight());
             subscribeToTopicOveripcForBinaryMessages(ipcClient, documentsTopic, documentsConsumer.getRight());
 
@@ -405,7 +457,8 @@ class ShadowIPCTest {
             UpdateThingShadowResponse updateThingShadowResponse = fut.get(90, TimeUnit.SECONDS);
             JsonNode receivedShadowDocumentJson = MAPPER.readTree(updateThingShadowResponse.getPayload());
             assertTrue(receivedShadowDocumentJson.has(SHADOW_DOCUMENT_TIMESTAMP));
-            assertThat(receivedShadowDocumentJson.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(greaterThanOrEqualTo(currentEpochSeconds)));
+            assertThat(receivedShadowDocumentJson.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(),
+                    is(greaterThanOrEqualTo(currentEpochSeconds)));
             ((ObjectNode) receivedShadowDocumentJson).remove(SHADOW_DOCUMENT_TIMESTAMP);
             assertTrue(receivedShadowDocumentJson.has(SHADOW_DOCUMENT_METADATA));
             ((ObjectNode) receivedShadowDocumentJson).remove(SHADOW_DOCUMENT_METADATA);
@@ -419,13 +472,15 @@ class ShadowIPCTest {
     @ParameterizedTest
     @MethodSource("invalidVersionUpdateTests")
     @Order(4)
-    void GIVEN_shadow_client_WHEN_update_shadow_with_bad_version_and_subscribed_to_rejected_THEN_fails_and_receives_correct_message_over_pubsub(Integer version, JsonNode expectedErrorJson, ExtensionContext context) throws Exception {
-        try(EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
+    void GIVEN_shadow_client_WHEN_update_shadow_with_bad_version_and_subscribed_to_rejected_THEN_fails_and_receives_correct_message_over_pubsub(
+            Integer version, JsonNode expectedErrorJson, ExtensionContext context) throws Exception {
+        try (EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
             ignoreExceptionUltimateCauseOfType(context, InvalidRequestParametersException.class);
             ignoreExceptionUltimateCauseOfType(context, InvalidArgumentsError.class);
             ignoreExceptionUltimateCauseOfType(context, ConflictError.class);
 
-            String updateDocumentWithLowerVersionStr = "{\"version\": " + version + ", \"state\":{\"reported\":{\"color\":{\"r\":0,\"a\":255,\"g\":255},\"NewArray\": [1,2,3,5,8,13]}}}";
+            String updateDocumentWithLowerVersionStr = "{\"version\": " + version
+                    + ", \"state\":{\"reported\":{\"color\":{\"r\":0,\"a\":255,\"g\":255},\"NewArray\": [1,2,3,5,8,13]}}}";
             GreengrassCoreIPCClient ipcClient = new GreengrassCoreIPCClient(connection);
             final long currentEpochSeconds = Instant.now().getEpochSecond();
 
@@ -433,7 +488,8 @@ class ShadowIPCTest {
                 try {
                     JsonNode receivedShadowDocumentJson = MAPPER.readTree(m);
                     assertTrue(receivedShadowDocumentJson.has(SHADOW_DOCUMENT_TIMESTAMP));
-                    assertThat(receivedShadowDocumentJson.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(greaterThanOrEqualTo(currentEpochSeconds)));
+                    assertThat(receivedShadowDocumentJson.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(),
+                            is(greaterThanOrEqualTo(currentEpochSeconds)));
                     ((ObjectNode) receivedShadowDocumentJson).remove(SHADOW_DOCUMENT_TIMESTAMP);
                     assertThat(receivedShadowDocumentJson, is(expectedErrorJson));
 
@@ -442,7 +498,8 @@ class ShadowIPCTest {
                 }
             });
 
-            String rejectedTopic = "$aws/things/" + MOCK_THING_NAME + "/shadow/name/" + SHADOW_NAME_1 + "/update/rejected";
+            String rejectedTopic =
+                    "$aws/things/" + MOCK_THING_NAME + "/shadow/name/" + SHADOW_NAME_1 + "/update/rejected";
             subscribeToTopicOveripcForBinaryMessages(ipcClient, rejectedTopic, rejectedConsumer.getRight());
 
             UpdateThingShadowRequest updateThingShadowRequest = new UpdateThingShadowRequest();
@@ -450,11 +507,14 @@ class ShadowIPCTest {
             updateThingShadowRequest.setShadowName(SHADOW_NAME_1);
             updateThingShadowRequest.setPayload(updateDocumentWithLowerVersionStr.getBytes(UTF_8));
 
-            ExecutionException executionException = assertThrows(ExecutionException.class, () -> ipcClient.updateThingShadow(updateThingShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS));
+            ExecutionException executionException = assertThrows(ExecutionException.class,
+                    () -> ipcClient.updateThingShadow(updateThingShadowRequest, Optional.empty()).getResponse()
+                            .get(90, TimeUnit.SECONDS));
             if (version == null) {
                 assertTrue(executionException.getCause() instanceof InvalidArgumentsError);
                 InvalidArgumentsError serviceErrorThrown = (InvalidArgumentsError) executionException.getCause();
-                assertThat(serviceErrorThrown.getMessage(), is(expectedErrorJson.get(ERROR_MESSAGE_FIELD_NAME).asText()));
+                assertThat(serviceErrorThrown.getMessage(),
+                        is(expectedErrorJson.get(ERROR_MESSAGE_FIELD_NAME).asText()));
             } else {
                 assertTrue(executionException.getCause() instanceof ConflictError);
                 ConflictError thrown = (ConflictError) executionException.getCause();
@@ -466,8 +526,9 @@ class ShadowIPCTest {
 
     @Test
     @Order(5)
-    void GIVEN_shadow_client_WHEN_get_shadow_THEN_gets_the_correctly_gets_the_latest_shadow_document() throws Exception {
-        try(EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
+    void GIVEN_shadow_client_WHEN_get_shadow_THEN_gets_the_correctly_gets_the_latest_shadow_document()
+            throws Exception {
+        try (EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
             final long currentEpochSeconds = Instant.now().getEpochSecond();
             GreengrassCoreIPCClient ipcClient = new GreengrassCoreIPCClient(connection);
 
@@ -475,11 +536,14 @@ class ShadowIPCTest {
             getShadowRequest.setThingName(MOCK_THING_NAME);
             getShadowRequest.setShadowName(SHADOW_NAME_1);
 
-            GetThingShadowResponse getThingShadowResponse = ipcClient.getThingShadow(getShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS);
+            GetThingShadowResponse getThingShadowResponse =
+                    ipcClient.getThingShadow(getShadowRequest, Optional.empty()).getResponse()
+                            .get(90, TimeUnit.SECONDS);
             assertThat(getThingShadowResponse.getPayload(), is(notNullValue()));
             JsonNode receivedShadowDocumentJson = MAPPER.readTree(getThingShadowResponse.getPayload());
             assertTrue(receivedShadowDocumentJson.has(SHADOW_DOCUMENT_TIMESTAMP));
-            assertThat(receivedShadowDocumentJson.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(greaterThanOrEqualTo(currentEpochSeconds)));
+            assertThat(receivedShadowDocumentJson.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(),
+                    is(greaterThanOrEqualTo(currentEpochSeconds)));
             ((ObjectNode) receivedShadowDocumentJson).remove(SHADOW_DOCUMENT_TIMESTAMP);
             assertTrue(receivedShadowDocumentJson.has(SHADOW_DOCUMENT_METADATA));
             ((ObjectNode) receivedShadowDocumentJson).remove(SHADOW_DOCUMENT_METADATA);
@@ -490,8 +554,9 @@ class ShadowIPCTest {
     @ParameterizedTest
     @MethodSource("invalidGetShadowTests")
     @Order(6)
-    void GIVEN_shadow_client_WHEN_get_shadow_with_bad_request_parameters_and_subscribed_to_rejected_THEN_fails_and_receives_correct_message_over_pubsub(String thingName, String shadowName, ExtensionContext context) throws Exception {
-        try(EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
+    void GIVEN_shadow_client_WHEN_get_shadow_with_bad_request_parameters_and_subscribed_to_rejected_THEN_fails_and_receives_correct_message_over_pubsub(
+            String thingName, String shadowName, ExtensionContext context) throws Exception {
+        try (EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
             ignoreExceptionUltimateCauseOfType(context, InvalidRequestParametersException.class);
             ignoreExceptionUltimateCauseOfType(context, InvalidArgumentsError.class);
             ignoreExceptionUltimateCauseOfType(context, ResourceNotFoundError.class);
@@ -502,7 +567,9 @@ class ShadowIPCTest {
             getShadowRequest.setThingName(thingName);
             getShadowRequest.setShadowName(shadowName);
 
-            ExecutionException executionException = assertThrows(ExecutionException.class, () -> ipcClient.getThingShadow(getShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS));
+            ExecutionException executionException = assertThrows(ExecutionException.class,
+                    () -> ipcClient.getThingShadow(getShadowRequest, Optional.empty()).getResponse()
+                            .get(90, TimeUnit.SECONDS));
             if (thingName == null) {
                 assertTrue(executionException.getCause() instanceof InvalidArgumentsError);
                 InvalidArgumentsError thrown = (InvalidArgumentsError) executionException.getCause();
@@ -518,8 +585,9 @@ class ShadowIPCTest {
     @ParameterizedTest
     @MethodSource("invalidDeleteShadowTests")
     @Order(7)
-    void GIVEN_shadow_client_WHEN_delete_shadow_with_bad_request_parameters_and_subscribed_to_rejected_THEN_fails_and_receives_correct_message_over_pubsub(String thingName, String shadowName, ExtensionContext context) throws Exception {
-        try(EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
+    void GIVEN_shadow_client_WHEN_delete_shadow_with_bad_request_parameters_and_subscribed_to_rejected_THEN_fails_and_receives_correct_message_over_pubsub(
+            String thingName, String shadowName, ExtensionContext context) throws Exception {
+        try (EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
             final long currentEpochSeconds = Instant.now().getEpochSecond();
             ignoreExceptionUltimateCauseOfType(context, InvalidRequestParametersException.class);
             ignoreExceptionUltimateCauseOfType(context, InvalidArgumentsError.class);
@@ -531,16 +599,19 @@ class ShadowIPCTest {
                 try {
                     JsonNode receivedShadowDocumentJson = MAPPER.readTree(m);
                     assertTrue(receivedShadowDocumentJson.has(SHADOW_DOCUMENT_TIMESTAMP));
-                    assertThat(receivedShadowDocumentJson.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(greaterThanOrEqualTo(currentEpochSeconds)));
+                    assertThat(receivedShadowDocumentJson.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(),
+                            is(greaterThanOrEqualTo(currentEpochSeconds)));
                     ((ObjectNode) receivedShadowDocumentJson).remove(SHADOW_DOCUMENT_TIMESTAMP);
                     if (thingName == null) {
                         assertThat(receivedShadowDocumentJson.get(ERROR_CODE_FIELD_NAME).asInt(), is(400));
-                        assertThat(receivedShadowDocumentJson.get(ERROR_MESSAGE_FIELD_NAME).asText(), is("ThingName is missing"));
+                        assertThat(receivedShadowDocumentJson.get(ERROR_MESSAGE_FIELD_NAME).asText(),
+                                is("ThingName is missing"));
                     } else {
                         assertThat(receivedShadowDocumentJson.get(ERROR_CODE_FIELD_NAME).asInt(), is(404));
-                        assertThat(receivedShadowDocumentJson.get(ERROR_MESSAGE_FIELD_NAME).asText(), anyOf(is("No shadow exists with name: testShadowName"),
-                                is("No shadow exists with name: Unnamed Shadow"),
-                                is("No shadow exists with name: BadShadowName")));
+                        assertThat(receivedShadowDocumentJson.get(ERROR_MESSAGE_FIELD_NAME).asText(),
+                                anyOf(is("No shadow exists with name: testShadowName"),
+                                        is("No shadow exists with name: Unnamed Shadow"),
+                                        is("No shadow exists with name: BadShadowName")));
                     }
                 } catch (IOException e) {
                     fail("Unable to parse message on reject");
@@ -558,7 +629,9 @@ class ShadowIPCTest {
             deleteThingShadowRequest.setThingName(thingName);
             deleteThingShadowRequest.setShadowName(shadowName);
 
-            ExecutionException executionException = assertThrows(ExecutionException.class, () -> ipcClient.deleteThingShadow(deleteThingShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS));
+            ExecutionException executionException = assertThrows(ExecutionException.class,
+                    () -> ipcClient.deleteThingShadow(deleteThingShadowRequest, Optional.empty()).getResponse()
+                            .get(90, TimeUnit.SECONDS));
             if (thingName == null) {
                 assertTrue(executionException.getCause() instanceof InvalidArgumentsError);
                 InvalidArgumentsError thrown = (InvalidArgumentsError) executionException.getCause();
@@ -575,13 +648,15 @@ class ShadowIPCTest {
     @Test
     @Order(8)
     void GIVEN_shadow_client_WHEN_list_thing_shadow_THEN_correctly_gets_shadow() throws Exception {
-        try(EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
+        try (EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
             GreengrassCoreIPCClient ipcClient = new GreengrassCoreIPCClient(connection);
 
             ListNamedShadowsForThingRequest request = new ListNamedShadowsForThingRequest();
             request.setThingName(MOCK_THING_NAME);
 
-            ListNamedShadowsForThingResponse response = ipcClient.listNamedShadowsForThing(request, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS);
+            ListNamedShadowsForThingResponse response =
+                    ipcClient.listNamedShadowsForThing(request, Optional.empty()).getResponse()
+                            .get(90, TimeUnit.SECONDS);
             assertThat(response.getResults().toArray(), arrayContaining(SHADOW_NAME_1));
             assertThat(response.getNextToken(), is(nullValue()));
         }
@@ -589,8 +664,9 @@ class ShadowIPCTest {
 
     @Test
     @Order(9)
-    void GIVEN_shadow_client_list_request_with_page_size_WHEN_list_thing_shadow_THEN_correctly_gets_shadow_with_token() throws Exception {
-        try(EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
+    void GIVEN_shadow_client_list_request_with_page_size_WHEN_list_thing_shadow_THEN_correctly_gets_shadow_with_token()
+            throws Exception {
+        try (EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
             GreengrassCoreIPCClient ipcClient = new GreengrassCoreIPCClient(connection);
             int pageSize = 1;
 
@@ -598,7 +674,9 @@ class ShadowIPCTest {
             request.setThingName(MOCK_THING_NAME);
             request.setPageSize(pageSize);
 
-            ListNamedShadowsForThingResponse response = ipcClient.listNamedShadowsForThing(request, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS);
+            ListNamedShadowsForThingResponse response =
+                    ipcClient.listNamedShadowsForThing(request, Optional.empty()).getResponse()
+                            .get(90, TimeUnit.SECONDS);
             List<String> shadowNameResults = response.getResults();
             assertThat(shadowNameResults.toArray(), arrayContaining(SHADOW_NAME_1));
             assertThat(shadowNameResults.size(), is(equalTo(1)));
@@ -609,15 +687,18 @@ class ShadowIPCTest {
 
     @Test
     @Order(10)
-    void GIVEN_shadow_client_list_request_with_token_and_only_one_shadow_name_WHEN_list_thing_shadow_THEN_return_empty_list() throws Exception {
-        try(EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
+    void GIVEN_shadow_client_list_request_with_token_and_only_one_shadow_name_WHEN_list_thing_shadow_THEN_return_empty_list()
+            throws Exception {
+        try (EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
             GreengrassCoreIPCClient ipcClient = new GreengrassCoreIPCClient(connection);
 
             ListNamedShadowsForThingRequest request = new ListNamedShadowsForThingRequest();
             request.setThingName(MOCK_THING_NAME);
             request.setNextToken("hh5oROXTiAG1Zw1yPAV+gg==");
 
-            ListNamedShadowsForThingResponse response = ipcClient.listNamedShadowsForThing(request, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS);
+            ListNamedShadowsForThingResponse response =
+                    ipcClient.listNamedShadowsForThing(request, Optional.empty()).getResponse()
+                            .get(90, TimeUnit.SECONDS);
             List<String> shadowNameResults = response.getResults();
             assertThat(shadowNameResults.toArray(), is(notNullValue()));
             assertThat(shadowNameResults.size(), is(equalTo(0)));
@@ -626,8 +707,9 @@ class ShadowIPCTest {
 
     @Test
     @Order(11)
-    void GIVEN_shadow_client_WHEN_subscribed_to_accept_and_delete_shadow_THEN_correctly_deletes_shadow() throws Exception {
-        try(EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
+    void GIVEN_shadow_client_WHEN_subscribed_to_accept_and_delete_shadow_THEN_correctly_deletes_shadow()
+            throws Exception {
+        try (EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
             final long currentEpochSeconds = Instant.now().getEpochSecond();
             GreengrassCoreIPCClient ipcClient = new GreengrassCoreIPCClient(connection);
 
@@ -635,7 +717,8 @@ class ShadowIPCTest {
                 try {
                     JsonNode receivedShadowDocumentJson = MAPPER.readTree(m);
                     assertTrue(receivedShadowDocumentJson.has(SHADOW_DOCUMENT_TIMESTAMP));
-                    assertThat(receivedShadowDocumentJson.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(greaterThanOrEqualTo(currentEpochSeconds)));
+                    assertThat(receivedShadowDocumentJson.get(SHADOW_DOCUMENT_TIMESTAMP).asLong(),
+                            is(greaterThanOrEqualTo(currentEpochSeconds)));
                     ((ObjectNode) receivedShadowDocumentJson).remove(SHADOW_DOCUMENT_TIMESTAMP);
                     assertTrue(receivedShadowDocumentJson.has(SHADOW_DOCUMENT_VERSION));
                     assertThat(receivedShadowDocumentJson.get(SHADOW_DOCUMENT_VERSION).asInt(), is(3));
@@ -644,14 +727,17 @@ class ShadowIPCTest {
                 }
             });
 
-            String acceptedTopic = "$aws/things/" + MOCK_THING_NAME + "/shadow/name/" + SHADOW_NAME_1 + "/delete/accepted";
+            String acceptedTopic =
+                    "$aws/things/" + MOCK_THING_NAME + "/shadow/name/" + SHADOW_NAME_1 + "/delete/accepted";
             subscribeToTopicOveripcForBinaryMessages(ipcClient, acceptedTopic, acceptedConsumer.getRight());
 
             DeleteThingShadowRequest deleteThingShadowRequest = new DeleteThingShadowRequest();
             deleteThingShadowRequest.setThingName(MOCK_THING_NAME);
             deleteThingShadowRequest.setShadowName(SHADOW_NAME_1);
 
-            DeleteThingShadowResponse response = ipcClient.deleteThingShadow(deleteThingShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS);
+            DeleteThingShadowResponse response =
+                    ipcClient.deleteThingShadow(deleteThingShadowRequest, Optional.empty()).getResponse()
+                            .get(90, TimeUnit.SECONDS);
             assertEquals(0, response.getPayload().length);
             acceptedConsumer.getLeft().get(TIMEOUT_FOR_PUBSUB_SECONDS, TimeUnit.SECONDS);
         }
@@ -659,8 +745,9 @@ class ShadowIPCTest {
 
     @Test
     @Order(12)
-    void GIVEN_shadow_client_WHEN_get_shadow_with_deleted_shadow_and_subscribed_to_rejected_THEN_fails_and_receives_correct_message_over_pubsub(ExtensionContext context) throws Exception {
-        try(EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
+    void GIVEN_shadow_client_WHEN_get_shadow_with_deleted_shadow_and_subscribed_to_rejected_THEN_fails_and_receives_correct_message_over_pubsub(
+            ExtensionContext context) throws Exception {
+        try (EventStreamRPCConnection connection = IPCTestUtils.getEventStreamRpcConnection(kernel, "DoAll")) {
             ignoreExceptionUltimateCauseOfType(context, InvalidRequestParametersException.class);
             ignoreExceptionUltimateCauseOfType(context, InvalidArgumentsError.class);
             ignoreExceptionUltimateCauseOfType(context, ResourceNotFoundError.class);
@@ -671,10 +758,12 @@ class ShadowIPCTest {
             getShadowRequest.setThingName(MOCK_THING_NAME);
             getShadowRequest.setShadowName(SHADOW_NAME_1);
 
-            ExecutionException executionException = assertThrows(ExecutionException.class, () -> ipcClient.getThingShadow(getShadowRequest, Optional.empty()).getResponse().get(90, TimeUnit.SECONDS));
-                assertTrue(executionException.getCause() instanceof ResourceNotFoundError);
-                ResourceNotFoundError thrown = (ResourceNotFoundError) executionException.getCause();
-                assertThat(thrown.getMessage(), is("No shadow found"));
-            }
+            ExecutionException executionException = assertThrows(ExecutionException.class,
+                    () -> ipcClient.getThingShadow(getShadowRequest, Optional.empty()).getResponse()
+                            .get(90, TimeUnit.SECONDS));
+            assertTrue(executionException.getCause() instanceof ResourceNotFoundError);
+            ResourceNotFoundError thrown = (ResourceNotFoundError) executionException.getCause();
+            assertThat(thrown.getMessage(), is("No shadow found"));
         }
+    }
 }

@@ -6,18 +6,8 @@ services:
         posixUser: nobody
   aws.greengrass.ShadowManager:
     configuration:
-      strategy:
-        type: realTime
-      synchronize:
-        direction: betweenDeviceAndCloud
-        shadowDocuments:
-          - thingName: "mockThing"
-            classic: false
-            namedShadows:
-              - testShadowName
       rateLimits:
-        maxLocalRequestsPerSecondPerThing: 10000
-        maxTotalLocalRequestsRate: 10000
+        maxLocalRequestsPerSecondPerThing: 100
   main:
     dependencies:
       - DoAll
