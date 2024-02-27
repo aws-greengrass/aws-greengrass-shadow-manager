@@ -85,7 +85,7 @@ class UnhappyUpdateIPCTest extends NucleusLaunchUtils {
         ignoreExceptionOfType(context, InterruptedException.class);
         ignoreExceptionOfType(context, InvalidRequestParametersException.class);
 
-        startNucleusWithConfig("shadow.yaml");
+        startNucleusWithConfig("shadowUnhappy.yaml");
 
         int sizeLimit = 20 * 1024;
         shadowManager.getConfig().lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC).withValue(
@@ -112,7 +112,7 @@ class UnhappyUpdateIPCTest extends NucleusLaunchUtils {
         ignoreExceptionOfType(context, InterruptedException.class);
         ignoreExceptionOfType(context, InvalidRequestParametersException.class);
 
-        startNucleusWithConfig("shadow.yaml");
+        startNucleusWithConfig("shadowUnhappy.yaml");
 
         shadowManager.getConfig().lookup(CONFIGURATION_CONFIG_KEY, CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC).withValue(20 * 1024);
         UpdateThingShadowRequestHandler updateHandler = shadowManager.getUpdateThingShadowRequestHandler();
