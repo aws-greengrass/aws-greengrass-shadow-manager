@@ -135,7 +135,7 @@ public abstract class BaseSyncRequest extends ShadowRequest implements SyncReque
     protected Optional<Long> getUpdatedVersion(byte[] payload) {
         try {
             ShadowDocument document = new ShadowDocument(payload, false);
-            return Optional.of(document.getVersion());
+            return Optional.ofNullable(document.getVersion());
         } catch (InvalidRequestParametersException | IOException e) {
             logger.atDebug()
                     .kv(LOG_THING_NAME_KEY, getThingName())
@@ -377,7 +377,9 @@ public abstract class BaseSyncRequest extends ShadowRequest implements SyncReque
         try {
             GetThingShadowResponse getThingShadowResponse = context.getIotDataPlaneClientWrapper()
                     .getThingShadow(getThingName(), getShadowName());
-            if (getThingShadowResponse != null && getThingShadowResponse.payload() != null) {
+            // Check asByteArray for null to account for mocking in tests
+            if (getThingShadowResponse != null && getThingShadowResponse.payload() != null
+                    && getThingShadowResponse.payload().asByteArray() != null) {
                 return Optional.of(new ShadowDocument(getThingShadowResponse.payload().asByteArray()));
             }
         } catch (ResourceNotFoundException e) {

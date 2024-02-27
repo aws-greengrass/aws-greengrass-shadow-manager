@@ -24,8 +24,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.stream.Stream;
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -51,7 +49,6 @@ public class ShadowManagerDatabase implements Closeable {
 
     private static final Logger logger = LogManager.getLogger(ShadowManagerDatabase.class);
     private final Path databasePath;
-    private ExecutorService dbWriteThreadPool;
     @Getter
     private boolean initialized = false;
 
@@ -159,24 +156,9 @@ public class ShadowManagerDatabase implements Closeable {
     @SuppressWarnings("PMD.NullAssignment")
     @SuppressFBWarnings(value = "UWF_FIELD_NOT_INITIALIZED_IN_CONSTRUCTOR", justification = "Field gated by flag")
     public void close() {
-        if (dbWriteThreadPool != null) {
-            dbWriteThreadPool.shutdown();
-        }
         if (pool != null) {
             pool.dispose();
             pool = null;
         }
-    }
-
-    /**
-     * Get the thread pool used for writing to the DB.
-     *
-     * @return a running thread pool
-     */
-    public synchronized ExecutorService getDbWriteThreadPool() {
-        if (dbWriteThreadPool == null || dbWriteThreadPool.isShutdown()) {
-            dbWriteThreadPool = Executors.newCachedThreadPool();
-        }
-        return dbWriteThreadPool;
     }
 }
