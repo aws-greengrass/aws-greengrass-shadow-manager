@@ -12,11 +12,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Set up JDK 1.8
-        uses: actions/setup-java@v1
+        uses: actions/setup-java@v4
         with:
-          java-version: 1.8
+          distribution: corretto
+          java-version: 8
+          cache: maven
       - run: rm -rf /tmp/*
         continue-on-error: true
       - name: Build with Maven
@@ -24,13 +26,13 @@ jobs:
           AWS_REGION: us-west-2
         run: mvn -ntp -U clean verify
       - name: Upload Failed Test Report
-        uses: actions/upload-artifact@v1.0.0
+        uses: actions/upload-artifact@v3
         if: failure()
         with:
           name: Failed Test Report
           path: target/surefire-reports
       - name: Upload Coverage
-        uses: actions/upload-artifact@v1.0.0
+        uses: actions/upload-artifact@v3
         if: always()
         with:
           name: Coverage Report
@@ -40,7 +42,7 @@ jobs:
       - name: Convert Jacoco interation test report to Cobertura
         run: python3 .github/scripts/cover2cover.py target/jacoco-report/jacoco-it/jacoco.xml src/main/java > target/jacoco-report/cobertura-it.xml
       - name: cobertura-report-unit-test
-        uses: shaguptashaikh/cobertura-action@master
+        uses: 5monkeys/cobertura-action@v14
         continue-on-error: true
         with:
           # The GITHUB_TOKEN for this repo
@@ -59,8 +61,9 @@ jobs:
           show_class_names: true
           # Use a unique name for the report and comment
           report_name: Unit Tests Coverage Report
+          only_changed_files: true
       - name: cobertura-report-integration-test
-        uses: shaguptashaikh/cobertura-action@master
+        uses: 5monkeys/cobertura-action@v14
         continue-on-error: true
         with:
           # The GITHUB_TOKEN for this repo
@@ -79,3 +82,4 @@ jobs:
           show_class_names: true
           # Use a unique name for the report and comment
           report_name: Integration Tests Coverage Report
+          only_changed_files: true
