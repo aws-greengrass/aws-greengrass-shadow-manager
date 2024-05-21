@@ -111,17 +111,15 @@ public class ShadowManager extends PluginService {
     public final MqttClientConnectionEvents callbacks = new MqttClientConnectionEvents() {
         @Override
         public void onConnectionInterrupted(int errorCode) {
-            handleAsync(() -> stopSyncingShadows(true));
+            stopSyncingShadows(true);
         }
 
         @Override
         public void onConnectionResumed(boolean sessionPresent) {
-            handleAsync(() -> {
-                if (inState(State.RUNNING)) {
-                    startSyncingShadows(
-                            StartSyncInfo.builder().startSyncStrategy(true).updateCloudSubscriptions(true).build());
-                }
-            });
+            if (inState(State.RUNNING)) {
+                handleAsync(() -> startSyncingShadows(
+                        StartSyncInfo.builder().startSyncStrategy(true).updateCloudSubscriptions(true).build()));
+            }
         }
 
         private void handleAsync(Runnable runnable) {
