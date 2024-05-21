@@ -1,0 +1,16 @@
+{
+  "component": {
+    "aws.greengrass.ShadowManager": {
+      "author": "Me",
+      "version": "NEXT_PATCH",
+      "build": {
+        "build_system": "maven"
+      },
+      "publish": {
+        "bucket": "ggv2componentartifacts",
+        "region": "us-east-1"
+      }
+    }
+  },
+  "gdk_version": "1.0.0"
+}

@@ -63,6 +63,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import javax.inject.Inject;
@@ -101,22 +104,34 @@ public class ShadowManager extends PluginService {
     private final CloudDataClient cloudDataClient;
     private final MqttClient mqttClient;
     private final PubSubIntegrator pubSubIntegrator;
+    private final ExecutorService executorService;
     private final AtomicReference<Strategy> currentStrategy = new AtomicReference<>(DEFAULT_STRATEGY);
+    // This is used from within the mqtt thread only
+    private Future<?> mqttCallbackFuture = new CompletableFuture<>();
     public final MqttClientConnectionEvents callbacks = new MqttClientConnectionEvents() {
         @Override
         public void onConnectionInterrupted(int errorCode) {
-            stopSyncingShadows(true);
+            handleAsync(() -> stopSyncingShadows(true));
         }
 
         @Override
         public void onConnectionResumed(boolean sessionPresent) {
-            if (inState(State.RUNNING)) {
-                startSyncingShadows(StartSyncInfo.builder().startSyncStrategy(true)
-                        .updateCloudSubscriptions(true).build());
+            handleAsync(() -> {
+                if (inState(State.RUNNING)) {
+                    startSyncingShadows(
+                            StartSyncInfo.builder().startSyncStrategy(true).updateCloudSubscriptions(true).build());
+                }
+            });
+        }
 
+        private void handleAsync(Runnable runnable) {
+            if (!mqttCallbackFuture.isDone() && !mqttCallbackFuture.isCancelled()) {
+                mqttCallbackFuture.cancel(true);
             }
+            mqttCallbackFuture = executorService.submit(runnable);
         }
     };
+
     private final CallbackEventManager.OnConnectCallback onConnect = callbacks::onConnectionResumed;
 
     @Getter(AccessLevel.PUBLIC)
@@ -147,23 +162,18 @@ public class ShadowManager extends PluginService {
      * @param cloudDataClient             the data client subscribing to cloud shadow topics
      * @param mqttClient                  the mqtt client connected to IoT Core
      * @param direction                   The sync direction
+     * @param executorService             Executor service
      */
     @SuppressWarnings("PMD.ExcessiveParameterList")
     @Inject
     public ShadowManager(
             Topics topics,
-            ShadowManagerDatabase database,
-            ShadowManagerDAOImpl dao,
-            AuthorizationHandlerWrapper authorizationHandlerWrapper,
-            PubSubClientWrapper pubSubClientWrapper,
-            InboundRateLimiter inboundRateLimiter,
-            DeviceConfiguration deviceConfiguration,
-            ShadowWriteSynchronizeHelper synchronizeHelper,
-            IotDataPlaneClientWrapper iotDataPlaneClientWrapper,
-            SyncHandler syncHandler,
-            CloudDataClient cloudDataClient,
-            MqttClient mqttClient,
-            DirectionWrapper direction) {
+            ShadowManagerDatabase database, ShadowManagerDAOImpl dao,
+            AuthorizationHandlerWrapper authorizationHandlerWrapper, PubSubClientWrapper pubSubClientWrapper,
+            InboundRateLimiter inboundRateLimiter, DeviceConfiguration deviceConfiguration,
+            ShadowWriteSynchronizeHelper synchronizeHelper, IotDataPlaneClientWrapper iotDataPlaneClientWrapper,
+            SyncHandler syncHandler, CloudDataClient cloudDataClient, MqttClient mqttClient, DirectionWrapper direction,
+            ExecutorService executorService) {
         super(topics);
         this.database = database;
         this.authorizationHandlerWrapper = authorizationHandlerWrapper;
@@ -184,6 +194,7 @@ public class ShadowManager extends PluginService {
         this.pubSubIntegrator = new PubSubIntegrator(pubSubClientWrapper, deleteThingShadowRequestHandler,
                 updateThingShadowRequestHandler, getThingShadowRequestHandler);
         this.direction = direction;
+        this.executorService = executorService;
     }
 
     private void registerHandlers() {
