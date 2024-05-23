@@ -145,7 +145,7 @@ public class CloudDataClient {
      * @param updateTopics Set of update shadow topics to subscribe to
      * @param deleteTopics Set of delete shadow topics to subscribe to
      */
-    private synchronized void updateSubscriptions(Set<String> updateTopics, Set<String> deleteTopics) {
+    private void updateSubscriptions(Set<String> updateTopics, Set<String> deleteTopics) {
         if (!mqttClient.connected()) {
             logger.atWarn()
                     .setEventType(LogEvents.CLOUD_DATA_CLIENT_SUBSCRIPTION_ERROR.code())
