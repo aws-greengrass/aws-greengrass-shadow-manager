@@ -62,7 +62,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
@@ -141,8 +140,6 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
     @Mock
     private MqttClient mockMqttClient;
     @Mock
-    private ExecutorService executorService;
-    @Mock
     private GreengrassCoreIPCService mockGreengrassCoreIPCService;
 
     @Captor
@@ -160,8 +157,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         initializeMockedConfig();
         shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper,
                 mockPubSubClientWrapper, mockInboundRateLimiter, mockDeviceConfiguration, mockSynchronizeHelper,
-                mockIotDataPlaneClientWrapper, mockSyncHandler, mockCloudDataClient, mockMqttClient, direction,
-                executorService);
+                mockIotDataPlaneClientWrapper, mockSyncHandler, mockCloudDataClient, mockMqttClient, direction);
         lenient().when(config.lookupTopics(CONFIGURATION_CONFIG_KEY))
                 .thenReturn(Topics.of(context, CONFIGURATION_CONFIG_KEY, null));
         // These are added to not break the existing unit tests. Will be removed later.

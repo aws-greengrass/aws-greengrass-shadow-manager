@@ -290,6 +290,7 @@ class CloudDataClientTest {
         }
 
         cloudDataClient.unsubscribeForAllShadowsTopics();
+        TimeUnit.MILLISECONDS.sleep(5000);
 
         verify(mockMqttClient, times(200)).unsubscribe(any());
         assertThat(cloudDataClient.getSubscribedUpdateShadowTopics().size(), is(0));
