@@ -110,6 +110,7 @@ public class ShadowManager extends PluginService {
 
         @Override
         public void onConnectionResumed(boolean sessionPresent) {
+            // Make sure that it is non-blocking as it is run on mqtt event loop thread.
             if (inState(State.RUNNING)) {
                 startSyncingShadows(StartSyncInfo.builder().startSyncStrategy(true)
                         .updateCloudSubscriptions(true).build());
