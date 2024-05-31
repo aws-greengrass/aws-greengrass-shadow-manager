@@ -230,7 +230,9 @@ class SyncDirectionalityTest extends NucleusLaunchUtils {
     }
 
     @Test
-    void GIVEN_device_sync_not_enabled_WHEN_local_update_THEN_does_not_sync_shadow_to_cloud() throws InterruptedException, IOException, IoTDataPlaneClientCreationException {
+    void GIVEN_device_sync_not_enabled_WHEN_local_update_THEN_does_not_sync_shadow_to_cloud(ExtensionContext context)
+            throws InterruptedException, IOException, IoTDataPlaneClientCreationException {
+        ignoreExceptionOfType(context, InterruptedException.class);
         JsonNode cloudDocument = JsonUtil.getPayloadJson(cloudShadowContentV1.getBytes(UTF_8)).get();
 
         startNucleusWithConfig(NucleusLaunchUtilsConfig.builder()
