@@ -38,7 +38,6 @@ import static org.hamcrest.core.Is.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
-import static org.mockito.Mockito.atMostOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
@@ -121,8 +120,6 @@ class RealTimeSyncStrategyTest extends SyncStrategyTestBase<RealTimeSyncStrategy
         // check that we are interrupted by our "fake" exception. This also clears the thread state so cleanup
         // happens correctly
         assertThat(Thread.interrupted(), is(true));
-
-        verify(mockRequestQueue, atMostOnce()).offer(any());
     }
 
     @Test
@@ -137,11 +134,11 @@ class RealTimeSyncStrategyTest extends SyncStrategyTestBase<RealTimeSyncStrategy
         for (int i = 0; i < numberOfSyncRequests; i++) {
             strategy.putSyncRequest(new FullShadowSyncRequest("foo-" + i, "bar-" + i));
         }
-        assertThat(strategy.getRemainingCapacity(), is(1024 - numberOfSyncRequests));
+        assertThat(strategy.getSyncQueue().size(), is(numberOfSyncRequests));
 
         strategy.clearSyncQueue();
 
-        assertThat(strategy.getRemainingCapacity(), is(1024));
+        assertThat(strategy.getSyncQueue().size(), is(0));
     }
 
     @Test
@@ -176,14 +173,14 @@ class RealTimeSyncStrategyTest extends SyncStrategyTestBase<RealTimeSyncStrategy
             FullShadowSyncRequest request = requests.poll();
             return request == null ? mock(FullShadowSyncRequest.class) : request;
         }).when(mockRequestQueue).take();
-        when(mockRequestQueue.offerAndTake(request1, false)).thenReturn(request1);
+        when(mockRequestQueue.putAndTake(request1, false)).thenReturn(request1);
 
         strategy.start(mockSyncContext, 1);
         strategy.putSyncRequest(new FullShadowSyncRequest("foo", "bar"));
 
         assertThat("executed request", executeLatch.await(5, TimeUnit.SECONDS), is(true));
         assertThat("take all requests", takeLatch.await(5, TimeUnit.SECONDS), is(true));
-        verify(mockRequestQueue, times(1)).offerAndTake(request1, false);
+        verify(mockRequestQueue, times(1)).putAndTake(request1, false);
     }
 
     @Test
@@ -211,7 +208,7 @@ class RealTimeSyncStrategyTest extends SyncStrategyTestBase<RealTimeSyncStrategy
 
         assertThat("executed request", executeLatch.await(5, TimeUnit.SECONDS), is(true));
         verify(mockRequestQueue, atLeastOnce()).take();
-        verify(mockRequestQueue, times(0)).offerAndTake(request1, false);
+        verify(mockRequestQueue, times(0)).putAndTake(request1, false);
     }
 
     @ParameterizedTest
@@ -251,7 +248,7 @@ class RealTimeSyncStrategyTest extends SyncStrategyTestBase<RealTimeSyncStrategy
         }).when(mockRetryer).run(any(), any(expectedSyncRequest), any());
 
         // return the offered request
-        when(mockRequestQueue.offerAndTake(any(expectedSyncRequest), eq(true)))
+        when(mockRequestQueue.putAndTake(any(expectedSyncRequest), eq(true)))
                 .thenAnswer(invocation -> invocation.getArgument(0, expectedSyncRequest));
 
         try {

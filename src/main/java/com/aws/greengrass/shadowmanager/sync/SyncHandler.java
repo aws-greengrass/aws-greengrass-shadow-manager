@@ -162,12 +162,6 @@ public class SyncHandler {
 
         List<Pair<String, String>> shadows = context.getDao().listSyncedShadows();
 
-        if (shadows.size() > overallSyncStrategy.getRemainingCapacity()) {
-            logger.atWarn(SYNC_EVENT_TYPE)
-                    .addKeyValue("syncedShadows", shadows.size())
-                    .addKeyValue("syncQueueCapacity", overallSyncStrategy.getRemainingCapacity())
-                    .log("There are more shadows than space in the sync queue. Syncing will block");
-        }
         Stream<BaseSyncRequest> requestStream = null;
         switch (direction.get()) {
             case BETWEEN_DEVICE_AND_CLOUD:

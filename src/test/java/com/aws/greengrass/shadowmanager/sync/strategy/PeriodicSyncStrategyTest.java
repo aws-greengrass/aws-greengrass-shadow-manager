@@ -116,7 +116,7 @@ class PeriodicSyncStrategyTest extends SyncStrategyTestBase<PeriodicSyncStrategy
         // happens correctly
         assertThat(Thread.interrupted(), is(true));
 
-        verify(mockRequestQueue, atMostOnce()).offer(any());
+        verify(mockRequestQueue, atMostOnce()).put(any());
     }
 
     @Test
@@ -129,11 +129,11 @@ class PeriodicSyncStrategyTest extends SyncStrategyTestBase<PeriodicSyncStrategy
         for (int i = 0; i < randomNumberOfSyncRequests; i++) {
             strategy.putSyncRequest(new FullShadowSyncRequest("foo-" + i, "bar-" + i));
         }
-        assertThat(strategy.getRemainingCapacity(), is(1024 - randomNumberOfSyncRequests));
+        assertThat(strategy.getSyncQueue().size(), is(randomNumberOfSyncRequests));
 
         strategy.clearSyncQueue();
 
-        assertThat(strategy.getRemainingCapacity(), is(1024));
+        assertThat(strategy.getSyncQueue().size(), is(0));
     }
 
     @Test
@@ -168,14 +168,14 @@ class PeriodicSyncStrategyTest extends SyncStrategyTestBase<PeriodicSyncStrategy
             FullShadowSyncRequest request = requests.poll();
             return request == null ? mock(FullShadowSyncRequest.class) : request;
         }).when(mockRequestQueue).poll();
-        when(mockRequestQueue.offerAndTake(request1, false)).thenReturn(request1);
+        when(mockRequestQueue.putAndTake(request1, false)).thenReturn(request1);
 
         strategy.start(mockSyncContext, 1);
         strategy.putSyncRequest(new FullShadowSyncRequest("foo", "bar"));
 
         assertThat("executed request", executeLatch.await(5, TimeUnit.SECONDS), is(true));
         assertThat("take all requests", takeLatch.await(5, TimeUnit.SECONDS), is(true));
-        verify(mockRequestQueue, times(1)).offerAndTake(request1, false);
+        verify(mockRequestQueue, times(1)).putAndTake(request1, false);
     }
 
     @Test
@@ -203,7 +203,7 @@ class PeriodicSyncStrategyTest extends SyncStrategyTestBase<PeriodicSyncStrategy
 
         assertThat("executed request", executeLatch.await(5, TimeUnit.SECONDS), is(true));
         verify(mockRequestQueue, atLeastOnce()).poll();
-        verify(mockRequestQueue, times(0)).offerAndTake(request1, false);
+        verify(mockRequestQueue, times(0)).putAndTake(request1, false);
     }
 
     @Test
@@ -268,7 +268,7 @@ class PeriodicSyncStrategyTest extends SyncStrategyTestBase<PeriodicSyncStrategy
         }).when(mockRetryer).run(any(), any(expectedSyncRequest), any());
 
         // return the offered request
-        when(mockRequestQueue.offerAndTake(any(expectedSyncRequest), eq(true)))
+        when(mockRequestQueue.putAndTake(any(expectedSyncRequest), eq(true)))
                 .thenAnswer(invocation -> invocation.getArgument(0, expectedSyncRequest));
 
         try {

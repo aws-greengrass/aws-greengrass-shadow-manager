@@ -316,16 +316,6 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
     }
 
     /**
-     * Get the remaining capacity in the request blocking sync queue.
-     *
-     * @return The capacity left in the sync queue.
-     */
-    @Override
-    public int getRemainingCapacity() {
-        return syncQueue.remainingCapacity();
-    }
-
-    /**
      * Take and execute items from the sync queue. This is intended to be run in a separate thread.
      * This will work on all the sync requests in the queue until it's empty.
      */
@@ -383,7 +373,7 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
                     SyncRequest failedRequest = request;
 
                     // tell queue this is not a new value so it merges correctly with any update that came in
-                    request = syncQueue.offerAndTake(request, false);
+                    request = syncQueue.putAndTake(request, false);
 
                     // if queue was empty, we are going to immediately retrying the same request. For this case don't
                     // use the default retry configuration - keep from spamming too quickly
@@ -400,7 +390,7 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
                             .addKeyValue(LOG_SHADOW_NAME_KEY, currProcessingShadowName)
                             .log("Received conflict when processing request. Retrying as a full sync");
                     // add back to queue to merge over any shadow request that came in while it was executing
-                    request = syncQueue.offerAndTake(
+                    request = syncQueue.putAndTake(
                             fullSyncRequestBasedOnDirection(currProcessingThingName, currProcessingShadowName),
                             true);
                 } catch (UnknownShadowException e) {
@@ -408,7 +398,7 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
                             .addKeyValue(LOG_SHADOW_NAME_KEY, currProcessingShadowName)
                             .log("Received unknown shadow when processing request. Retrying as a full sync");
                     // add back to queue to merge over any shadow request that came in while it was executing
-                    request = syncQueue.offerAndTake(
+                    request = syncQueue.putAndTake(
                             fullSyncRequestBasedOnDirection(currProcessingThingName, currProcessingShadowName),
                             true);
                 } catch (Exception e) {
@@ -431,7 +421,12 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
                         .addKeyValue(LOG_SHADOW_NAME_KEY, request.getShadowName())
                         .addKeyValue("Type", request.getClass().getSimpleName())
                         .log("Adding request item back to queue");
-                syncQueue.offer(request);
+                try {
+                    syncQueue.put(request);
+                } catch (InterruptedException e) {
+                    // Is swallowing the exception really the right call?
+                    logger.atError(SYNC_EVENT_TYPE).log("Interrupted while adding request item back to queue");
+                }
             }
             logger.atInfo(SYNC_EVENT_TYPE).log("Finished processing sync requests");
         }

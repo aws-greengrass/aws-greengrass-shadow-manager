@@ -86,7 +86,6 @@ class SyncHandlerTest {
 
         List<Pair<String, String>> shadows = Arrays.asList(new Pair<>("a", "1"), new Pair<>("b", "2"));
         when(context.getDao().listSyncedShadows()).thenReturn(shadows);
-        when(mockSyncStrategy.getRemainingCapacity()).thenReturn(1024);
 
         // WHEN
         syncHandler.start(context, numThreads);

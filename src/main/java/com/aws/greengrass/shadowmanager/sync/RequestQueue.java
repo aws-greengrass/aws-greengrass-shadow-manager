@@ -16,23 +16,14 @@ import java.util.function.BooleanSupplier;
 import javax.inject.Inject;
 
 /**
- * Blocking "queue" implementation that keeps a single request per shadow. If a request comes in for a shadow, it is
- * merged together with the existing request.
- * <p/>
- * This class is thread safe and implements the useful methods of the {@link java.util.concurrent.BlockingQueue}
- * interface. However, this class intentionally does not implement the interface as it is not a Collection. It is not
- * iterable as the iterator needs to be synchronized to avoid concurrent modifications. This is not possible with the
- * current implementation (but storing keys in a separate linked list could be used to solve this).
+ * Unbounded "queue" implementation that keeps a single request per shadow. If a request comes in for a shadow, it is
+ * merged together with the existing request. This queue will expand in size to accommodate all shadows sent to it.
  * <p/>
  * For the simplest blocking use case, threads can call {@link #take()} and they will wait until items are available.
- * Threads can call {@link #put(SyncRequest)} and they will wait until space is available to insert.
+ * There are no blocking cases when adding to the queue.
  */
 public class RequestQueue {
 
-    /**
-     * Default maximum number of queued requests.
-     */
-    static final int MAX_CAPACITY = 1024;
     private final RequestMerger merger;
     private final Map<String, SyncRequest> requests;
 
@@ -44,40 +35,21 @@ public class RequestQueue {
      * Condition to signal threads waiting for queue to contain data.
      */
     private final Condition notEmpty = lock.newCondition();
-    /**
-     * Condition to signal threads waiting for queue to have space for more data.
-     */
-    private final Condition notFull = lock.newCondition();
-    /**
-     * Capacity of queue.
-     */
-    private final int capacity;
 
     /**
-     * Create a new instance with a capacity of {@value RequestQueue#MAX_CAPACITY}.
+     * Create a new instance.
      *
      * @param merger a merger
      */
     @Inject
     public RequestQueue(RequestMerger merger) {
-        this(merger, MAX_CAPACITY);
+        this(merger, new LinkedHashMap<>());
     }
 
-    /**
-     * Create a new instance with a capacity.
-     *
-     * @param merger   a merger
-     * @param capacity the max capacity
-     */
-    public RequestQueue(RequestMerger merger, int capacity) {
-        this(merger, capacity, new LinkedHashMap<>());
-    }
-
-    RequestQueue(RequestMerger merger, int capacity, Map<String, SyncRequest> requests) {
+    RequestQueue(RequestMerger merger, Map<String, SyncRequest> requests) {
         super();
         this.merger = merger;
         this.requests = requests;
-        this.capacity = capacity;
     }
 
     /**
@@ -110,29 +82,11 @@ public class RequestQueue {
     }
 
     /**
-     * Tell thread to wait until the thread is not full.
-     */
-    private void waitIfFull() throws InterruptedException {
-        while (isFull()) {
-            notFull.await();
-        }
-    }
-
-    /**
      * Tell thread to wait until the thread is not empty.
      */
     private void waitIfEmpty() throws InterruptedException {
         while (isEmpty()) {
             notEmpty.await();
-        }
-    }
-
-    /**
-     * Signal waiting threads if the queue is not full.
-     */
-    private void signalIfNotFull() {
-        if (!isFull()) {
-            notFull.signal();
         }
     }
 
@@ -199,8 +153,8 @@ public class RequestQueue {
     }
 
     /**
-     * Add an item to the queue. This will wait if the queue is full until there is space. If a request for the
-     * shadow already exists in the queue, it is merged and no extra capacity is consumed.
+     * Add an item to the queue. If a request for the shadow already exists in the queue,
+     * it is merged and no extra capacity is consumed.
      *
      * @param value a value to add
      * @throws InterruptedException if the thread is interrupted while waiting
@@ -214,11 +168,8 @@ public class RequestQueue {
         lock.lockInterruptibly();
         try {
             if (!mergeIfPresent(value)) {
-                waitIfFull();
-
                 enqueue(value);
             }
-            signalIfNotFull();
             signalIfNotEmpty();
         } finally {
             lock.unlock();
@@ -237,7 +188,7 @@ public class RequestQueue {
      * @throws NullPointerException if value is null
      */
     @SuppressWarnings("PMD.AvoidThrowingNullPointerException")
-    public SyncRequest offerAndTake(SyncRequest value, boolean isNewValue) {
+    public SyncRequest putAndTake(SyncRequest value, boolean isNewValue) {
         if (value == null) {
             throw new NullPointerException();
         }
@@ -252,74 +203,10 @@ public class RequestQueue {
                 return head;
             }
             enqueue(value);
-            // no signalling as we are not changing "fullness" of the queue
             return head;
         } finally {
             lock.unlock();
         }
-    }
-
-    /**
-     * Add an item to the queue, with a timeout to wait while the queue is at capacity.  If a request for the
-     * shadow already exists in the queue, it is merged and no extra capacity is consumed.
-     *
-     * @param value   a value to add
-     * @param timeout how long to wait, before giving up, in terms of unit
-     * @param unit    how to interpret the timeout
-     * @return true if the item was added; false if the timeout expired
-     * @throws InterruptedException if the thread is interrupted while waiting
-     * @throws NullPointerException if value is null
-     */
-    @SuppressWarnings("PMD.AvoidThrowingNullPointerException") // BlockingQueue Interface requires NPE on null
-    public boolean offer(SyncRequest value, long timeout, TimeUnit unit) throws InterruptedException {
-        if (value == null) {
-            throw new NullPointerException();
-        }
-
-        lock.lockInterruptibly();
-        try {
-            if (!mergeIfPresent(value)) {
-                if (!await(this::isFull, notFull, timeout, unit)) {
-                    return false;
-                }
-                enqueue(value);
-            }
-            signalIfNotFull();
-            signalIfNotEmpty();
-        } finally {
-            lock.unlock();
-        }
-        return true;
-    }
-
-    /**
-     * Add an item to the queue. If the queue has no space, return immediately.  If a request for the
-     * shadow already exists in the queue, it is merged and no extra capacity is consumed.
-     *
-     * @param value the value to add
-     * @return true if the item is added, otherwise false.
-     * @throws NullPointerException if value is null
-     */
-    @SuppressWarnings("PMD.AvoidThrowingNullPointerException") // BlockingQueue Interface requires NPE on null
-    public boolean offer(SyncRequest value) {
-        if (value == null) {
-            throw new NullPointerException();
-        }
-        lock.lock();
-        try {
-            if (!mergeIfPresent(value)) {
-                if (isFull()) {
-                    return false;
-                } else {
-                    enqueue(value);
-                }
-            }
-            signalIfNotFull();
-            signalIfNotEmpty();
-        } finally {
-            lock.unlock();
-        }
-        return true;
     }
 
     /**
@@ -333,7 +220,6 @@ public class RequestQueue {
         try {
             waitIfEmpty();
             SyncRequest value = dequeue();
-            signalIfNotFull();
             signalIfNotEmpty();
             return value;
         } finally {
@@ -356,7 +242,6 @@ public class RequestQueue {
                 return null;
             }
             SyncRequest value = dequeue();
-            signalIfNotFull();
             signalIfNotEmpty();
             return value;
         } finally {
@@ -377,7 +262,6 @@ public class RequestQueue {
                 return null;
             }
             SyncRequest value = dequeue();
-            signalIfNotFull();
             signalIfNotEmpty();
             return value;
         } finally {
@@ -411,7 +295,6 @@ public class RequestQueue {
         try {
             SyncRequest removed = requests.remove(createKey(value));
             signalIfNotEmpty();
-            signalIfNotFull();
             return removed;
         } finally {
             lock.unlock();
@@ -432,19 +315,6 @@ public class RequestQueue {
         }
     }
 
-    /**
-     * Return true if the queue has no more space.
-     *
-     * @return true if the queue has no more space
-     */
-    public boolean isFull() {
-        lock.lock();
-        try {
-            return capacity == requests.size();
-        } finally {
-            lock.unlock();
-        }
-    }
 
     /**
      * Remove all items from the queue.
@@ -453,7 +323,6 @@ public class RequestQueue {
         lock.lock();
         try {
             requests.clear();
-            signalIfNotFull();
         } finally {
             lock.unlock();
         }
@@ -468,20 +337,6 @@ public class RequestQueue {
         lock.lock();
         try {
             return requests.size();
-        } finally {
-            lock.unlock();
-        }
-    }
-
-    /**
-     * Returns the amount of space left in the queue.
-     *
-     * @return the amount of space left in the queue.
-     */
-    public int remainingCapacity() {
-        lock.lock();
-        try {
-            return capacity - requests.size();
         } finally {
             lock.unlock();
         }

@@ -341,7 +341,7 @@ class ShadowManagerTest extends NucleusLaunchUtils {
 
         // wait for dataplane client creation retries to fail,
         // and the full sync is put back on the queue
-        verify(syncQueue, timeout(30000L).times(1)).offerAndTake(any(FullShadowSyncRequest.class), eq(false));
+        verify(syncQueue, timeout(30000L).times(1)).putAndTake(any(FullShadowSyncRequest.class), eq(false));
 
         BaseSyncStrategy syncStrategy = kernel.getContext().get(RealTimeSyncStrategy.class);
         assertThat("syncing has started", syncStrategy::isSyncing, eventuallyEval(is(true)));
