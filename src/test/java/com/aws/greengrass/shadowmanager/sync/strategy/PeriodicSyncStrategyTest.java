@@ -6,7 +6,7 @@
 package com.aws.greengrass.shadowmanager.sync.strategy;
 
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
-import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
+import com.aws.greengrass.shadowmanager.sync.RequestQueue;
 import com.aws.greengrass.shadowmanager.sync.RequestMerger;
 import com.aws.greengrass.shadowmanager.sync.model.CloudUpdateSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.Direction;
@@ -62,14 +62,14 @@ class PeriodicSyncStrategyTest extends SyncStrategyTestBase<PeriodicSyncStrategy
 
     @Override
     PeriodicSyncStrategy defaultTestInstance() {
-        return new PeriodicSyncStrategy(executorService, mockRetryer, 3, mockRequestBlockingQueue, direction);
+        return new PeriodicSyncStrategy(executorService, mockRetryer, 3, mockRequestQueue, direction);
     }
 
     @Test
     void GIVEN_sync_request_WHEN_putSyncRequest_and_sync_loop_runs_THEN_request_is_executed_successfully()
             throws Exception {
         strategy = new PeriodicSyncStrategy(executorService, mockRetryer, 1,
-                new RequestBlockingQueue(new RequestMerger(direction)), direction);
+                new RequestQueue(new RequestMerger(direction)), direction);
         strategy.start(mockSyncContext, 1);
         strategy.putSyncRequest(new FullShadowSyncRequest("thing", "shadow"));
 
@@ -82,7 +82,7 @@ class PeriodicSyncStrategyTest extends SyncStrategyTestBase<PeriodicSyncStrategy
             throws Exception {
         strategy.putSyncRequest(mock(FullShadowSyncRequest.class));
 
-        verify(mockRequestBlockingQueue, timeout(Duration.ofSeconds(5).toMillis()).times(0)).put(any());
+        verify(mockRequestQueue, timeout(Duration.ofSeconds(5).toMillis()).times(0)).put(any());
         verify(mockRetryer, timeout(Duration.ofSeconds(5).toMillis()).times(0)).run(any(), any(), any());
     }
 
@@ -92,13 +92,13 @@ class PeriodicSyncStrategyTest extends SyncStrategyTestBase<PeriodicSyncStrategy
         doAnswer(i -> {
             strategy.syncing.set(false);
             return null;
-        }).when(mockRequestBlockingQueue).put(any());
+        }).when(mockRequestQueue).put(any());
 
         strategy.start(mockSyncContext, 2);
         strategy.putSyncRequest(mockFullShadowSyncRequest);
 
-        verify(mockRequestBlockingQueue, timeout(Duration.ofSeconds(5).toMillis()).times(1)).put(any());
-        verify(mockRequestBlockingQueue, times(1)).remove(any());
+        verify(mockRequestQueue, timeout(Duration.ofSeconds(5).toMillis()).times(1)).put(any());
+        verify(mockRequestQueue, times(1)).remove(any());
         verify(mockRetryer, timeout(Duration.ofSeconds(5).toMillis()).times(0)).run(any(), any(), any());
     }
 
@@ -106,7 +106,7 @@ class PeriodicSyncStrategyTest extends SyncStrategyTestBase<PeriodicSyncStrategy
     void GIVEN_sync_request_WHEN_queue_throws_interrupted_exception_THEN_sync_request_is_not_added(ExtensionContext extensionContext)
             throws Exception {
         ignoreExceptionOfType(extensionContext, InterruptedException.class);
-        doThrow(InterruptedException.class).when(mockRequestBlockingQueue).put(any());
+        doThrow(InterruptedException.class).when(mockRequestQueue).put(any());
 
         strategy.start(mockSyncContext, 1);
         strategy.putSyncRequest(mockFullShadowSyncRequest);
@@ -116,13 +116,13 @@ class PeriodicSyncStrategyTest extends SyncStrategyTestBase<PeriodicSyncStrategy
         // happens correctly
         assertThat(Thread.interrupted(), is(true));
 
-        verify(mockRequestBlockingQueue, atMostOnce()).offer(any());
+        verify(mockRequestQueue, atMostOnce()).offer(any());
     }
 
     @Test
     void GIVEN_request_queue_WHEN_put_and_clear_THEN_queue_has_correct_number_of_requests() throws InterruptedException {
         strategy = new PeriodicSyncStrategy(executorService, mockRetryer, 3,
-                new RequestBlockingQueue(new RequestMerger(direction)), direction);
+                new RequestQueue(new RequestMerger(direction)), direction);
         strategy.syncing.set(true);
         Random rand = new Random();
         int randomNumberOfSyncRequests = rand.nextInt(1024);
@@ -167,15 +167,15 @@ class PeriodicSyncStrategyTest extends SyncStrategyTestBase<PeriodicSyncStrategy
             takeLatch.countDown();
             FullShadowSyncRequest request = requests.poll();
             return request == null ? mock(FullShadowSyncRequest.class) : request;
-        }).when(mockRequestBlockingQueue).poll();
-        when(mockRequestBlockingQueue.offerAndTake(request1, false)).thenReturn(request1);
+        }).when(mockRequestQueue).poll();
+        when(mockRequestQueue.offerAndTake(request1, false)).thenReturn(request1);
 
         strategy.start(mockSyncContext, 1);
         strategy.putSyncRequest(new FullShadowSyncRequest("foo", "bar"));
 
         assertThat("executed request", executeLatch.await(5, TimeUnit.SECONDS), is(true));
         assertThat("take all requests", takeLatch.await(5, TimeUnit.SECONDS), is(true));
-        verify(mockRequestBlockingQueue, times(1)).offerAndTake(request1, false);
+        verify(mockRequestQueue, times(1)).offerAndTake(request1, false);
     }
 
     @Test
@@ -196,20 +196,20 @@ class PeriodicSyncStrategyTest extends SyncStrategyTestBase<PeriodicSyncStrategy
             return null;
         }).when(mockRetryer).run(any(), any(), any());
 
-        when(mockRequestBlockingQueue.poll()).thenReturn(request1);
+        when(mockRequestQueue.poll()).thenReturn(request1);
 
         strategy.start(mockSyncContext, 1);
         strategy.putSyncRequest(new FullShadowSyncRequest("foo", "bar"));
 
         assertThat("executed request", executeLatch.await(5, TimeUnit.SECONDS), is(true));
-        verify(mockRequestBlockingQueue, atLeastOnce()).poll();
-        verify(mockRequestBlockingQueue, times(0)).offerAndTake(request1, false);
+        verify(mockRequestQueue, atLeastOnce()).poll();
+        verify(mockRequestQueue, times(0)).offerAndTake(request1, false);
     }
 
     @Test
     void GIVEN_no_sync_executing_WHEN_stop_THEN_no_wait(ExtensionContext extensionContext) throws InterruptedException {
         // set large interval so we can stop while the thread is scheduled but not executing
-        strategy = new PeriodicSyncStrategy(executorService, mockRetryer, 300, mockRequestBlockingQueue, direction);
+        strategy = new PeriodicSyncStrategy(executorService, mockRetryer, 300, mockRequestQueue, direction);
         strategy.start(mockSyncContext, 1);
         CountDownLatch done = new CountDownLatch(1);
         Executors.newSingleThreadExecutor().submit(() -> {
@@ -248,7 +248,7 @@ class PeriodicSyncStrategyTest extends SyncStrategyTestBase<PeriodicSyncStrategy
 
         CountDownLatch executeLatch = new CountDownLatch(2); // 1 retry to fail, 1 to succeed
 
-        when(mockRequestBlockingQueue.poll()).thenAnswer(invocation -> {
+        when(mockRequestQueue.poll()).thenAnswer(invocation -> {
             if (executeLatch.getCount() == 2) {
                 return request1;
             }
@@ -268,7 +268,7 @@ class PeriodicSyncStrategyTest extends SyncStrategyTestBase<PeriodicSyncStrategy
         }).when(mockRetryer).run(any(), any(expectedSyncRequest), any());
 
         // return the offered request
-        when(mockRequestBlockingQueue.offerAndTake(any(expectedSyncRequest), eq(true)))
+        when(mockRequestQueue.offerAndTake(any(expectedSyncRequest), eq(true)))
                 .thenAnswer(invocation -> invocation.getArgument(0, expectedSyncRequest));
 
         try {

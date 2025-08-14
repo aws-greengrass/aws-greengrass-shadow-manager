@@ -29,11 +29,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
-class RequestBlockingQueueTest {
+class RequestQueueTest {
 
     private static final long WAIT_SECONDS = 5;
 
-    RequestBlockingQueue queue;
+    RequestQueue queue;
 
     @Mock
     RequestMerger merger;
@@ -53,7 +53,7 @@ class RequestBlockingQueueTest {
 
     @BeforeEach
     void setup() {
-        queue = new RequestBlockingQueue(merger, 3);
+        queue = new RequestQueue(merger, 3);
         setupRequest(thingAShadow1, "A", "1");
         setupRequest(thingAShadow1Again, "A", "1");
         setupRequest(thingAShadow2, "A", "2");
@@ -280,8 +280,8 @@ class RequestBlockingQueueTest {
 
     @Test
     void GIVEN_use_constructor_without_capacity_THEN_default_capacity_used() {
-        RequestBlockingQueue q = new RequestBlockingQueue(merger);
-        assertThat(q.remainingCapacity(), is(RequestBlockingQueue.MAX_CAPACITY));
+        RequestQueue q = new RequestQueue(merger);
+        assertThat(q.remainingCapacity(), is(RequestQueue.MAX_CAPACITY));
     }
 
     @Test

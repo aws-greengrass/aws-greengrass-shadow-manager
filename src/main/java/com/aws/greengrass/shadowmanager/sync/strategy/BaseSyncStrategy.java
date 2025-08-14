@@ -9,7 +9,7 @@ import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
-import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
+import com.aws.greengrass.shadowmanager.sync.RequestQueue;
 import com.aws.greengrass.shadowmanager.sync.Retryer;
 import com.aws.greengrass.shadowmanager.sync.model.DirectionWrapper;
 import com.aws.greengrass.shadowmanager.sync.model.FullShadowSyncRequest;
@@ -58,7 +58,7 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
      * @implNote The Setter is only used in unit tests. The Getter is used in integration tests.
      */
     @Getter
-    final RequestBlockingQueue syncQueue;
+    final RequestQueue syncQueue;
 
     /**
      * Interface for executing sync requests.
@@ -136,7 +136,7 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
         return executing.get();
     }
 
-    protected BaseSyncStrategy(Retryer retryer, RequestBlockingQueue syncQueue, DirectionWrapper syncDirection) {
+    protected BaseSyncStrategy(Retryer retryer, RequestQueue syncQueue, DirectionWrapper syncDirection) {
         this(retryer, DEFAULT_RETRY_CONFIG, syncQueue, syncDirection);
     }
 
@@ -147,7 +147,7 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
      * @param retryConfig The config to be used by the retryer.
      * @param syncQueue   A queue to use for sync requests.
      */
-    protected BaseSyncStrategy(Retryer retryer, RetryUtils.RetryConfig retryConfig, RequestBlockingQueue syncQueue,
+    protected BaseSyncStrategy(Retryer retryer, RetryUtils.RetryConfig retryConfig, RequestQueue syncQueue,
                                DirectionWrapper syncDirection) {
         this.retryer = (config, request, context) -> {
             try {

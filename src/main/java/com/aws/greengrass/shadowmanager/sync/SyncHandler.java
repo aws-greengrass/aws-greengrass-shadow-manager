@@ -88,7 +88,7 @@ public class SyncHandler {
     /**
      * Request queue.
      */
-    private final RequestBlockingQueue syncQueue;
+    private final RequestQueue syncQueue;
     // retry wrapper so that requests can be mocked
     // setter is used in integ tests only
     @Setter
@@ -111,7 +111,7 @@ public class SyncHandler {
      */
     @Inject
     public SyncHandler(ExecutorService executorService, ScheduledExecutorService syncScheduledExecutorService,
-                       RequestBlockingQueue syncQueue, DirectionWrapper direction) {
+                       RequestQueue syncQueue, DirectionWrapper direction) {
         this(executorService, syncScheduledExecutorService, retryer, syncQueue, direction);
     }
 
@@ -125,7 +125,7 @@ public class SyncHandler {
      * @param direction                    The sync direction
      */
     private SyncHandler(ExecutorService executorService, ScheduledExecutorService syncScheduledExecutorService,
-                        Retryer retryer, RequestBlockingQueue syncQueue, DirectionWrapper direction) {
+                        Retryer retryer, RequestQueue syncQueue, DirectionWrapper direction) {
         this(new SyncStrategyFactory(retryer, executorService, syncScheduledExecutorService, direction),
                 syncQueue, direction);
     }
@@ -137,7 +137,7 @@ public class SyncHandler {
      * @param syncQueue           a request queue.
      * @param direction           The sync direction
      */
-    SyncHandler(SyncStrategyFactory syncStrategyFactory, RequestBlockingQueue syncQueue, DirectionWrapper direction) {
+    SyncHandler(SyncStrategyFactory syncStrategyFactory, RequestQueue syncQueue, DirectionWrapper direction) {
         this.syncStrategyFactory = syncStrategyFactory;
         this.syncQueue = syncQueue;
         this.direction = direction;

@@ -27,7 +27,7 @@ import javax.inject.Inject;
  * For the simplest blocking use case, threads can call {@link #take()} and they will wait until items are available.
  * Threads can call {@link #put(SyncRequest)} and they will wait until space is available to insert.
  */
-public class RequestBlockingQueue {
+public class RequestQueue {
 
     /**
      * Default maximum number of queued requests.
@@ -54,12 +54,12 @@ public class RequestBlockingQueue {
     private final int capacity;
 
     /**
-     * Create a new instance with a capacity of {@value RequestBlockingQueue#MAX_CAPACITY}.
+     * Create a new instance with a capacity of {@value RequestQueue#MAX_CAPACITY}.
      *
      * @param merger a merger
      */
     @Inject
-    public RequestBlockingQueue(RequestMerger merger) {
+    public RequestQueue(RequestMerger merger) {
         this(merger, MAX_CAPACITY);
     }
 
@@ -69,11 +69,11 @@ public class RequestBlockingQueue {
      * @param merger   a merger
      * @param capacity the max capacity
      */
-    public RequestBlockingQueue(RequestMerger merger, int capacity) {
+    public RequestQueue(RequestMerger merger, int capacity) {
         this(merger, capacity, new LinkedHashMap<>());
     }
 
-    RequestBlockingQueue(RequestMerger merger, int capacity, Map<String, SyncRequest> requests) {
+    RequestQueue(RequestMerger merger, int capacity, Map<String, SyncRequest> requests) {
         super();
         this.merger = merger;
         this.requests = requests;

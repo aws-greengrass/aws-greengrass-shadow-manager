@@ -7,7 +7,7 @@ package com.aws.greengrass.shadowmanager.sync.strategy;
 
 import com.aws.greengrass.logging.impl.config.LogConfig;
 import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
-import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
+import com.aws.greengrass.shadowmanager.sync.RequestQueue;
 import com.aws.greengrass.shadowmanager.sync.Retryer;
 import com.aws.greengrass.shadowmanager.sync.model.CloudUpdateSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.Direction;
@@ -58,7 +58,7 @@ public abstract class SyncStrategyTestBase<T extends BaseSyncStrategy, S extends
 
     Retryer mockRetryer;
     SyncContext mockSyncContext;
-    RequestBlockingQueue mockRequestBlockingQueue;
+    RequestQueue mockRequestQueue;
     FullShadowSyncRequest mockFullShadowSyncRequest;
     S executorService;
     T strategy;
@@ -74,7 +74,7 @@ public abstract class SyncStrategyTestBase<T extends BaseSyncStrategy, S extends
     @BeforeEach
     void setup() {
         executorService = executorServiceSupplier.get();
-        mockRequestBlockingQueue = mock(RequestBlockingQueue.class);
+        mockRequestQueue = mock(RequestQueue.class);
         mockSyncContext = mock(SyncContext.class);
         mockRetryer = mock(Retryer.class);
         mockFullShadowSyncRequest = mock(FullShadowSyncRequest.class);
@@ -115,7 +115,7 @@ public abstract class SyncStrategyTestBase<T extends BaseSyncStrategy, S extends
         }
 
         verify(mockRetryer, never()).run(any(), any(), any());
-        verify(mockRequestBlockingQueue, timeout(ofSeconds(5).toMillis())).offer(mockFullShadowSyncRequest);
+        verify(mockRequestQueue, timeout(ofSeconds(5).toMillis())).offer(mockFullShadowSyncRequest);
     }
 
     @Test
@@ -138,7 +138,7 @@ public abstract class SyncStrategyTestBase<T extends BaseSyncStrategy, S extends
         }
 
         verify(mockRetryer, times(1)).run(any(), eq(mockFullShadowSyncRequest), any());
-        verify(mockRequestBlockingQueue, timeout(ofSeconds(5).toMillis())).offer(request2);
+        verify(mockRequestQueue, timeout(ofSeconds(5).toMillis())).offer(request2);
     }
 
     @Test
@@ -189,7 +189,7 @@ public abstract class SyncStrategyTestBase<T extends BaseSyncStrategy, S extends
         verify(mockRetryer, times(1)).run(any(), eq(mockFullShadowSyncRequest), any());
         verify(mockRetryer, never()).run(any(), eq(request2), any());
 
-        verify(mockRequestBlockingQueue, timeout(ofSeconds(5).toMillis()).times(1)).offer(request2);
+        verify(mockRequestQueue, timeout(ofSeconds(5).toMillis()).times(1)).offer(request2);
     }
 
     static Stream<Arguments> expectedSyncRequestsOnConflictByDirection() {
