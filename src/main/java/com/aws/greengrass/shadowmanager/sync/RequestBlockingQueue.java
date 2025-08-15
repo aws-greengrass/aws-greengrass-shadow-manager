@@ -15,6 +15,8 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BooleanSupplier;
 import javax.inject.Inject;
 
+import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_SHADOW_DOCUMENTS_SYNCED;
+
 /**
  * Blocking "queue" implementation that keeps a single request per shadow. If a request comes in for a shadow, it is
  * merged together with the existing request.
@@ -32,7 +34,6 @@ public class RequestBlockingQueue {
     /**
      * Default maximum number of queued requests.
      */
-    static final int MAX_CAPACITY = 1024;
     private final RequestMerger merger;
     private final Map<String, SyncRequest> requests;
 
@@ -51,16 +52,16 @@ public class RequestBlockingQueue {
     /**
      * Capacity of queue.
      */
-    private final int capacity;
+    private int capacity;
 
     /**
-     * Create a new instance with a capacity of {@value RequestBlockingQueue#MAX_CAPACITY}.
+     * Create a new instance with a capacity of 1024 (DEFAULT_SHADOW_DOCUMENTS_SYNCED).
      *
      * @param merger a merger
      */
     @Inject
     public RequestBlockingQueue(RequestMerger merger) {
-        this(merger, MAX_CAPACITY);
+        this(merger, DEFAULT_SHADOW_DOCUMENTS_SYNCED);
     }
 
     /**
@@ -468,6 +469,26 @@ public class RequestBlockingQueue {
         lock.lock();
         try {
             return requests.size();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * Returns true if the total capacity of the queue could be updated. Returns false if the capacity is less than
+     * the current number of requests.
+     *
+     * @param newCapacity number of requests to queue.
+     * @return true if the queue capacity could be updated, false if the desired capacity is too small.
+     */
+    public boolean updateCapacity(int newCapacity) {
+        lock.lock();
+        try {
+            if (newCapacity > requests.size()) {
+                this.capacity = newCapacity;
+                return true;
+            }
+            return false;
         } finally {
             lock.unlock();
         }

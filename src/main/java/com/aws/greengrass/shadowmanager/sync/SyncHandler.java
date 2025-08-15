@@ -154,6 +154,21 @@ public class SyncHandler {
     }
 
     /**
+     * Sets the maximum number of shadow requests that can be synchonized at a given time.
+     *
+     * @param maxShadowsSynced The sync limit.
+     */
+    public void setShadowSyncLimit(int maxShadowsSynced) {
+        if (this.syncQueue.updateCapacity(maxShadowsSynced)) {
+            logger.atDebug(SYNC_EVENT_TYPE).log("Shadows sync limit successfully updated to {}",
+                    maxShadowsSynced);
+        } else {
+            logger.atWarn(SYNC_EVENT_TYPE).log("Shadows sync limit failed. "
+                            + "Desired limit of {} is too small for pre-existing requests", maxShadowsSynced);
+        }
+    }
+
+    /**
      * Performs a full sync on all shadows. Clears any existing sync requests and will create full shadow sync requests
      * for all shadows.
      */

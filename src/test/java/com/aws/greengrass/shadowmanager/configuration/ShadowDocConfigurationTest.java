@@ -23,7 +23,9 @@ import java.io.IOException;
 
 import static com.aws.greengrass.componentmanager.KernelConfigResolver.CONFIGURATION_CONFIG_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC;
+import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_SHADOW_DOCS_SYNCED;
 import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_DOCUMENT_SIZE;
+import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_SHADOW_DOCUMENTS_SYNCED;
 import static com.aws.greengrass.shadowmanager.model.Constants.MAX_SHADOW_DOCUMENT_SIZE;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -31,7 +33,7 @@ import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
-class ShadowDocSizeConfigurationTest extends GGServiceTestUtil {
+class ShadowDocConfigurationTest extends GGServiceTestUtil {
     private Topics configurationTopics;
 
     @BeforeEach
@@ -46,16 +48,16 @@ class ShadowDocSizeConfigurationTest extends GGServiceTestUtil {
 
     @Test
     void GIVEN_default_configuration_WHEN_initialize_THEN_update_max_doc_size_to_default() {
-        ShadowDocSizeConfiguration shadowDocSizeConfiguration = ShadowDocSizeConfiguration.from(configurationTopics);
-        assertThat(shadowDocSizeConfiguration.getMaxShadowDocSizeConfiguration(), is(DEFAULT_DOCUMENT_SIZE));
+        ShadowDocConfiguration shadowDocConfiguration = ShadowDocConfiguration.from(configurationTopics);
+        assertThat(shadowDocConfiguration.getMaxShadowDocSizeConfiguration(), is(DEFAULT_DOCUMENT_SIZE));
     }
 
     @ParameterizedTest
     @ValueSource(ints = {DEFAULT_DOCUMENT_SIZE, MAX_SHADOW_DOCUMENT_SIZE})
     void GIVEN_good_max_doc_size_WHEN_initialize_THEN_updates_max_doc_size_correctly(int docSize) {
         configurationTopics.lookup(CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC).withValue(docSize);
-        ShadowDocSizeConfiguration shadowDocSizeConfiguration = ShadowDocSizeConfiguration.from(configurationTopics);
-        assertThat(shadowDocSizeConfiguration.getMaxShadowDocSizeConfiguration(), is(docSize));
+        ShadowDocConfiguration shadowDocConfiguration = ShadowDocConfiguration.from(configurationTopics);
+        assertThat(shadowDocConfiguration.getMaxShadowDocSizeConfiguration(), is(docSize));
     }
 
 
@@ -64,7 +66,22 @@ class ShadowDocSizeConfigurationTest extends GGServiceTestUtil {
     void GIVEN_bad_max_doc_size_WHEN_initialize_THEN_throws_exception(int docSize, ExtensionContext extensionContext) {
         ignoreExceptionOfType(extensionContext, InvalidConfigurationException.class);
         configurationTopics.lookup(CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC).withValue(docSize);
-        assertThrows(InvalidConfigurationException.class, ()-> ShadowDocSizeConfiguration.from(configurationTopics));
+        assertThrows(InvalidConfigurationException.class, ()-> ShadowDocConfiguration.from(configurationTopics));
     }
 
+    @ParameterizedTest
+    @ValueSource(ints = {1, DEFAULT_DOCUMENT_SIZE + 1})
+    void GIVEN_valid_doc_count_WHEN_initialize_THEN_updates_max_doc_count_correctly(int docCount) {
+        configurationTopics.lookup(CONFIGURATION_MAX_SHADOW_DOCS_SYNCED).withValue(docCount);
+        ShadowDocConfiguration shadowDocConfiguration = ShadowDocConfiguration.from(configurationTopics);
+        assertThat(shadowDocConfiguration.getMaxShadowDocumentsConfiguration(), is(docCount));
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {-1, 0})
+    void GIVEN_invalid_doc_count_WHEN_initialize_THEN_updates_max_doc_count_to_default(int docCount) {
+        configurationTopics.lookup(CONFIGURATION_MAX_SHADOW_DOCS_SYNCED).withValue(docCount);
+        ShadowDocConfiguration shadowDocConfiguration = ShadowDocConfiguration.from(configurationTopics);
+        assertThat(shadowDocConfiguration.getMaxShadowDocumentsConfiguration(), is(DEFAULT_SHADOW_DOCUMENTS_SYNCED));
+    }
 }

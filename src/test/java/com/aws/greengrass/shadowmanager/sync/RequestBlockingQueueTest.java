@@ -18,11 +18,14 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_SHADOW_DOCUMENTS_SYNCED;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -281,7 +284,7 @@ class RequestBlockingQueueTest {
     @Test
     void GIVEN_use_constructor_without_capacity_THEN_default_capacity_used() {
         RequestBlockingQueue q = new RequestBlockingQueue(merger);
-        assertThat(q.remainingCapacity(), is(RequestBlockingQueue.MAX_CAPACITY));
+        assertThat(q.remainingCapacity(), is(DEFAULT_SHADOW_DOCUMENTS_SYNCED));
     }
 
     @Test
@@ -332,5 +335,42 @@ class RequestBlockingQueueTest {
         assertThat(queue.offerAndTake(thingAShadow1Again, false), is(thingAShadow2));
         assertThat(queue.poll(), is(thingAShadow1Merged));
         assertThat("queue empty", queue.isEmpty(), is(true));
+    }
+
+    @Test
+    void GIVEN_null_request_WHEN_offerAndTake_THEN_throws_null_pointer_exception() {
+        assertThrows(NullPointerException.class, () -> queue.offerAndTake(null, false));
+        assertThrows(NullPointerException.class, () -> queue.offerAndTake(null, true));
+    }
+
+    @Test
+    void GIVEN_queue_WHEN_updateCapacity_to_smaller_or_equal_valueTHEN_capacity_remains_at_initial() {
+        queue = new RequestBlockingQueue(merger, DEFAULT_SHADOW_DOCUMENTS_SYNCED);
+        assertFalse(queue.updateCapacity(0));
+        assertThat("capacity", queue.remainingCapacity(), is(DEFAULT_SHADOW_DOCUMENTS_SYNCED));
+        assertTrue(queue.updateCapacity(1));
+        assertThat("capacity", queue.remainingCapacity(), is(1));
+    }
+
+    @Test
+    void GIVEN_queue_WHEN_updateCapacity_to_a_value_THEN_capacity_updated() {
+        queue.clear();
+        assertTrue(queue.updateCapacity(DEFAULT_SHADOW_DOCUMENTS_SYNCED));
+        assertThat("capacity", queue.remainingCapacity(), is(DEFAULT_SHADOW_DOCUMENTS_SYNCED));
+        assertTrue(queue.updateCapacity(1000000));
+        assertThat("capacity", queue.remainingCapacity(), is(1000000));
+    }
+
+    @Test
+    void GIVEN_queue_with_two_items_WHEN_updateCapacity_THEN_capacity_updated_if_enough_space() {
+        queue.clear();
+        queue.offer(thingAShadow2);
+        queue.offer(thingAShadow1);
+        assertFalse(queue.updateCapacity(1));
+        assertThat("capacity", queue.remainingCapacity(), is(1));
+        assertFalse(queue.updateCapacity(2));
+        assertThat("capacity", queue.remainingCapacity(), is(1));
+        assertTrue(queue.updateCapacity(4));
+        assertThat("capacity", queue.remainingCapacity(), is(2));
     }
 }

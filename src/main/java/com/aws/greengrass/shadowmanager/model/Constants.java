@@ -37,6 +37,7 @@ public final class Constants {
     public static final int DEFAULT_DOCUMENT_STATE_DEPTH = 6;
     public static final int DEFAULT_DOCUMENT_SIZE = 8 * 1024;
     public static final int MAX_SHADOW_DOCUMENT_SIZE = 30 * 1024;
+    public static final int DEFAULT_SHADOW_DOCUMENTS_SYNCED = 1024;
     // https://docs.aws.amazon.com/general/latest/gr/iot-core.html#device-shadow-limits
     // 400 is max TPS for some regions (account level), others are 4000
     public static final int DEFAULT_MAX_OUTBOUND_SYNC_UPDATES_PS = 100;
@@ -67,6 +68,7 @@ public final class Constants {
     public static final String CONFIGURATION_SHADOW_DOCUMENTS_MAP_TOPIC = "shadowDocumentsMap";
     public static final String CONFIGURATION_THING_NAME_TOPIC = "thingName";
     public static final String CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC = "shadowDocumentSizeLimitBytes";
+    public static final String CONFIGURATION_MAX_SHADOW_DOCS_SYNCED = "shadowDocumentsSyncLimit";
     public static final String CONFIGURATION_RATE_LIMITS_TOPIC = "rateLimits";
     public static final String CONFIGURATION_MAX_OUTBOUND_UPDATES_PS_TOPIC = "maxOutboundSyncUpdatesPerSecond";
     public static final String CONFIGURATION_MAX_TOTAL_LOCAL_REQUESTS_RATE = "maxTotalLocalRequestsRate";

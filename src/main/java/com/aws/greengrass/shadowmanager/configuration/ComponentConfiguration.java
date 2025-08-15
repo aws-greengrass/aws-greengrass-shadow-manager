@@ -14,12 +14,12 @@ public final class ComponentConfiguration {
     @Getter
     private final RateLimitsConfiguration rateLimitsConfiguration;
     @Getter
-    private final ShadowDocSizeConfiguration shadowDocSizeConfiguration;
+    private final ShadowDocConfiguration shadowDocConfiguration;
 
     private ComponentConfiguration(RateLimitsConfiguration rateLimitsConfiguration,
-                                   ShadowDocSizeConfiguration shadowDocSizeConfiguration) {
+                                   ShadowDocConfiguration shadowDocConfiguration) {
         this.rateLimitsConfiguration = rateLimitsConfiguration;
-        this.shadowDocSizeConfiguration = shadowDocSizeConfiguration;
+        this.shadowDocConfiguration = shadowDocConfiguration;
     }
 
     /**
@@ -31,7 +31,7 @@ public final class ComponentConfiguration {
     public static ComponentConfiguration from(ComponentConfiguration oldConfiguration, Topics updatedTopics) {
         Topics serviceTopics = updatedTopics.lookupTopics(CONFIGURATION_CONFIG_KEY);
         RateLimitsConfiguration rateLimitsConfiguration = RateLimitsConfiguration.from(serviceTopics);
-        ShadowDocSizeConfiguration shadowDocSizeConfiguration = ShadowDocSizeConfiguration.from(serviceTopics);
-        return new ComponentConfiguration(rateLimitsConfiguration, shadowDocSizeConfiguration);
+        ShadowDocConfiguration shadowDocConfiguration = ShadowDocConfiguration.from(serviceTopics);
+        return new ComponentConfiguration(rateLimitsConfiguration, shadowDocConfiguration);
     }
 }

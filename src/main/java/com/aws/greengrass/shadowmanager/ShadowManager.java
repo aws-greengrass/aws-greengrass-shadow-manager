@@ -19,7 +19,7 @@ import com.aws.greengrass.mqttclient.CallbackEventManager;
 import com.aws.greengrass.mqttclient.MqttClient;
 import com.aws.greengrass.shadowmanager.configuration.ComponentConfiguration;
 import com.aws.greengrass.shadowmanager.configuration.RateLimitsConfiguration;
-import com.aws.greengrass.shadowmanager.configuration.ShadowDocSizeConfiguration;
+import com.aws.greengrass.shadowmanager.configuration.ShadowDocConfiguration;
 import com.aws.greengrass.shadowmanager.exception.InvalidConfigurationException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowIPCHandler;
@@ -264,7 +264,8 @@ public class ShadowManager extends PluginService {
         try {
             componentConfiguration = ComponentConfiguration.from(componentConfiguration, getConfig());
             configureRateLimits(componentConfiguration.getRateLimitsConfiguration());
-            configureShadowDocSize(componentConfiguration.getShadowDocSizeConfiguration());
+            configureShadowDocSize(componentConfiguration.getShadowDocConfiguration());
+            configureShadowsSynced(componentConfiguration.getShadowDocConfiguration());
         } catch (InvalidConfigurationException e) {
             serviceErrored(e);
         }
@@ -323,8 +324,12 @@ public class ShadowManager extends PluginService {
         }
     }
 
-    private void configureShadowDocSize(ShadowDocSizeConfiguration shadowDocSizeConfiguration) {
-        Validator.setMaxShadowDocumentSize(shadowDocSizeConfiguration.getMaxShadowDocSizeConfiguration());
+    private void configureShadowDocSize(ShadowDocConfiguration shadowDocConfiguration) {
+        Validator.setMaxShadowDocumentSize(shadowDocConfiguration.getMaxShadowDocSizeConfiguration());
+    }
+
+    private void configureShadowsSynced(ShadowDocConfiguration shadowDocConfiguration) {
+        syncHandler.setShadowSyncLimit(shadowDocConfiguration.getMaxShadowDocSizeConfiguration());
     }
 
     private void configureSyncDirection(Node newv) {

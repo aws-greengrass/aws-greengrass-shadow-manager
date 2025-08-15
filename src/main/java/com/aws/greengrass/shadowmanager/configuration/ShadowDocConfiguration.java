@@ -11,15 +11,20 @@ import com.aws.greengrass.util.Coerce;
 import lombok.Getter;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_DOC_SIZE_LIMIT_B_TOPIC;
+import static com.aws.greengrass.shadowmanager.model.Constants.CONFIGURATION_MAX_SHADOW_DOCS_SYNCED;
 import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_DOCUMENT_SIZE;
+import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_SHADOW_DOCUMENTS_SYNCED;
 import static com.aws.greengrass.shadowmanager.model.Constants.MAX_SHADOW_DOCUMENT_SIZE;
 
-public final class ShadowDocSizeConfiguration {
+public final class ShadowDocConfiguration {
     @Getter
     private final int maxShadowDocSizeConfiguration;
+    @Getter
+    private final int maxShadowDocumentsConfiguration;
 
-    private ShadowDocSizeConfiguration(int maxShadowDocSizeConfiguration) {
+    private ShadowDocConfiguration(int maxShadowDocSizeConfiguration, int maxShadowDocumentsConfiguration) {
         this.maxShadowDocSizeConfiguration = maxShadowDocSizeConfiguration;
+        this.maxShadowDocumentsConfiguration = maxShadowDocumentsConfiguration;
     }
 
     /**
@@ -28,8 +33,9 @@ public final class ShadowDocSizeConfiguration {
      * @param serviceTopics    current configuration topics
      * @return rate limits configuration objects
      */
-    public static ShadowDocSizeConfiguration from(Topics serviceTopics) {
-        return new ShadowDocSizeConfiguration(getMaxShadowDocSizeFromConfig(serviceTopics));
+    public static ShadowDocConfiguration from(Topics serviceTopics) {
+        return new ShadowDocConfiguration(getMaxShadowDocSizeFromConfig(serviceTopics),
+                getMaxShadowDocumentSyncLimitFromConfig(serviceTopics));
     }
 
     private static int getMaxShadowDocSizeFromConfig(Topics topics) {
@@ -46,5 +52,11 @@ public final class ShadowDocSizeConfiguration {
                     MAX_SHADOW_DOCUMENT_SIZE));
         }
         return newMaxShadowSize;
+    }
+
+    private static int getMaxShadowDocumentSyncLimitFromConfig(Topics topics) {
+        int newMaxShadowDocuments = Coerce.toInt(topics.findOrDefault(DEFAULT_SHADOW_DOCUMENTS_SYNCED,
+                CONFIGURATION_MAX_SHADOW_DOCS_SYNCED));
+        return newMaxShadowDocuments <= 0 ? DEFAULT_SHADOW_DOCUMENTS_SYNCED : newMaxShadowDocuments;
     }
 }
