@@ -192,6 +192,27 @@ public abstract class SyncStrategyTestBase<T extends BaseSyncStrategy, S extends
         verify(mockRequestBlockingQueue, timeout(ofSeconds(5).toMillis()).times(1)).offer(request2);
     }
 
+    @Test
+    void GIVEN_full_request_queue_WHEN_tryPutSyncRequest_THEN_drops_over_capacity_requests() throws InterruptedException {
+        when(mockRequestBlockingQueue.isFull()).thenReturn(true);
+
+        strategy.tryPutSyncRequest(new FullShadowSyncRequest("thingName", "shadowName"));
+
+        verify(mockRequestBlockingQueue, never()).put(any());
+    }
+
+    @Test
+    void GIVEN_queue_with_space_WHEN_tryPutSyncRequest_THEN_puts_queue() throws InterruptedException {
+        SyncRequest request = new FullShadowSyncRequest("thingName", "shadowName");
+        when(mockRequestBlockingQueue.isFull()).thenReturn(false);
+        strategy.syncing.set(true);
+
+        strategy.tryPutSyncRequest(request);
+
+        verify(mockRequestBlockingQueue, times(1)).put(request);
+        verify(mockRequestBlockingQueue, never()).remove(any());
+    }
+
     static Stream<Arguments> expectedSyncRequestsOnConflictByDirection() {
         return Stream.of(
                 arguments(Direction.CLOUD_TO_DEVICE, ConflictException.class, OverwriteLocalShadowRequest.class),

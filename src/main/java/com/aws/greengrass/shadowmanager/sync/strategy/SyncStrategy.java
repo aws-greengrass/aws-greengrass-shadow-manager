@@ -41,6 +41,20 @@ public interface SyncStrategy {
     void putSyncRequest(SyncRequest request);
 
     /**
+     * Try to put a sync request into the queue if syncing is started.
+     * <p/>
+     * This will drop the request if the queue is full. This is intentional as blocking can cause MQTT backpressure
+     * resulting in dropped connections and subscriptions
+     * <p/>
+     * We cannot support an unbounded queue as that will lead to memory pressure - instead requests need to be
+     * throttled.
+     * <p/>
+     *
+     * @param request request the request to add.
+     */
+    void tryPutSyncRequest(SyncRequest request);
+
+    /**
      * Clear all the sync requests in the request blocking queue.
      */
     void clearSyncQueue();

@@ -306,6 +306,20 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
         }
     }
 
+    @Override
+    public void tryPutSyncRequest(SyncRequest request) {
+        if (syncQueue.isFull()) {
+            // Prevent a full sync queue from causing consumer threads to block
+            logger.atWarn(SYNC_EVENT_TYPE)
+                    .addKeyValue(LOG_THING_NAME_KEY, request.getThingName())
+                    .addKeyValue(LOG_SHADOW_NAME_KEY, request.getShadowName())
+                    .addKeyValue("type", request.getClass())
+                    .log("Dropping sync request as the request queue is full");
+            return;
+        }
+        putSyncRequest(request);
+    }
+
     /**
      * Clear all the sync requests in the request blocking queue.
      */

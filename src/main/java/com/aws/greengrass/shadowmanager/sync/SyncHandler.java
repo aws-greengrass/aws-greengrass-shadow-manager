@@ -181,7 +181,7 @@ public class SyncHandler {
             logger.atWarn(SYNC_EVENT_TYPE)
                     .addKeyValue("syncedShadows", shadows.size())
                     .addKeyValue("syncQueueCapacity", overallSyncStrategy.getRemainingCapacity())
-                    .log("There are more shadows than space in the sync queue. Syncing will block");
+                    .log("There are more shadows than space in the sync queue. Some shadows will not be synced");
         }
         Stream<BaseSyncRequest> requestStream = null;
         switch (direction.get()) {
@@ -200,7 +200,7 @@ public class SyncHandler {
         if (requestStream != null && !requestStream.equals(Stream.empty())) {
             Iterator<BaseSyncRequest> it = requestStream.iterator();
             while (it.hasNext() && !Thread.currentThread().isInterrupted()) {
-                overallSyncStrategy.putSyncRequest(it.next());
+                overallSyncStrategy.tryPutSyncRequest(it.next());
             }
         }
     }

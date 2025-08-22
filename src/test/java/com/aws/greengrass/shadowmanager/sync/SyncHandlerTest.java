@@ -94,7 +94,7 @@ class SyncHandlerTest {
         // THEN
         verify(mockSyncStrategy, times(1)).start(eq(context), eq(numThreads));
         verify(mockSyncStrategy, times(1)).clearSyncQueue();
-        verify(mockSyncStrategy, times(shadows.size())).putSyncRequest(any());
+        verify(mockSyncStrategy, times(shadows.size())).tryPutSyncRequest(any());
     }
 
     @Test
