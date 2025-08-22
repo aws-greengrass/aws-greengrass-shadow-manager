@@ -16,10 +16,9 @@ import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_DOCUMENT_
 import static com.aws.greengrass.shadowmanager.model.Constants.DEFAULT_SHADOW_DOCUMENTS_SYNCED;
 import static com.aws.greengrass.shadowmanager.model.Constants.MAX_SHADOW_DOCUMENT_SIZE;
 
+@Getter
 public final class ShadowDocConfiguration {
-    @Getter
     private final int maxShadowDocSizeConfiguration;
-    @Getter
     private final int maxShadowDocumentsConfiguration;
 
     private ShadowDocConfiguration(int maxShadowDocSizeConfiguration, int maxShadowDocumentsConfiguration) {

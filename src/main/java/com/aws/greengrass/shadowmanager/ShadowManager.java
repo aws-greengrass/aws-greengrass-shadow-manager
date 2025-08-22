@@ -262,7 +262,7 @@ public class ShadowManager extends PluginService {
 
     private void onConfigurationUpdate() {
         try {
-            componentConfiguration = ComponentConfiguration.from(componentConfiguration, getConfig());
+            componentConfiguration = ComponentConfiguration.from(getConfig());
             configureRateLimits(componentConfiguration.getRateLimitsConfiguration());
             configureShadowDocSize(componentConfiguration.getShadowDocConfiguration());
             configureShadowsSynced(componentConfiguration.getShadowDocConfiguration());
