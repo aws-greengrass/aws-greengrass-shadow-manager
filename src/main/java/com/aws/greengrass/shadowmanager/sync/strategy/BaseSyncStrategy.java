@@ -424,7 +424,6 @@ public abstract class BaseSyncStrategy implements SyncStrategy {
                 try {
                     syncQueue.put(request);
                 } catch (InterruptedException e) {
-                    // Is swallowing the exception really the right call?
                     logger.atError(SYNC_EVENT_TYPE).log("Interrupted while adding request item back to queue");
                 }
             }
