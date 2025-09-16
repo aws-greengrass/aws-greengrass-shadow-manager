@@ -7,7 +7,7 @@ package com.aws.greengrass.shadowmanager.sync.strategy;
 
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
-import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
+import com.aws.greengrass.shadowmanager.sync.RequestQueue;
 import com.aws.greengrass.shadowmanager.sync.Retryer;
 import com.aws.greengrass.shadowmanager.sync.model.DirectionWrapper;
 import com.aws.greengrass.shadowmanager.sync.model.SyncContext;
@@ -39,7 +39,7 @@ public class RealTimeSyncStrategy extends BaseSyncStrategy {
      * @param syncQueue       The sync queue from the previous strategy if any.
      * @param direction       The sync direction
      */
-    public RealTimeSyncStrategy(ExecutorService executorService, Retryer retryer, RequestBlockingQueue syncQueue,
+    public RealTimeSyncStrategy(ExecutorService executorService, Retryer retryer, RequestQueue syncQueue,
                                 DirectionWrapper direction) {
         super(retryer, syncQueue, direction);
         this.syncExecutorService = executorService;
@@ -56,7 +56,7 @@ public class RealTimeSyncStrategy extends BaseSyncStrategy {
      * @param direction       The sync direction
      */
     public RealTimeSyncStrategy(ExecutorService executorService, Retryer retryer,
-                                RetryUtils.RetryConfig retryConfig, RequestBlockingQueue syncQueue,
+                                RetryUtils.RetryConfig retryConfig, RequestQueue syncQueue,
                                 DirectionWrapper direction) {
         super(retryer, retryConfig, syncQueue, direction);
         this.syncExecutorService = executorService;

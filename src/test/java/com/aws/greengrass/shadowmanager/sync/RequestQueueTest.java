@@ -10,7 +10,6 @@ import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.api.function.Executable;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -29,11 +28,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @ExtendWith({MockitoExtension.class, GGExtension.class})
-class RequestBlockingQueueTest {
+class RequestQueueTest {
 
     private static final long WAIT_SECONDS = 5;
 
-    RequestBlockingQueue queue;
+    RequestQueue queue;
 
     @Mock
     RequestMerger merger;
@@ -53,7 +52,7 @@ class RequestBlockingQueueTest {
 
     @BeforeEach
     void setup() {
-        queue = new RequestBlockingQueue(merger, 3);
+        queue = new RequestQueue(merger);
         setupRequest(thingAShadow1, "A", "1");
         setupRequest(thingAShadow1Again, "A", "1");
         setupRequest(thingAShadow2, "A", "2");
@@ -76,32 +75,24 @@ class RequestBlockingQueueTest {
     void GIVEN_empty_queue_THEN_queue_is_empty() {
         assertThat(queue.size(), is(0));
         assertThat("isEmpty", queue.isEmpty(), is(true));
-        assertThat("isFull", queue.isFull(), is(false));
     }
 
     @Test
-    void GIVEN_empty_queue_WHEN_add_items_THEN_queue_fills() {
+    void GIVEN_empty_queue_WHEN_add_items_THEN_queue_fills() throws InterruptedException {
         assertThat("isEmpty", queue.isEmpty(), is(true));
-        assertThat("isFull", queue.isFull(), is(false));
-        assertThat("capacity", queue.remainingCapacity(), is(3));
 
-        assertThat(queue.offer(thingAShadow1), is(true));
+        queue.put(thingAShadow1);
         assertThat(queue.size(), is(1));
         assertThat("isEmpty", queue.isEmpty(), is(false));
-        assertThat("isFull", queue.isFull(), is(false));
-        assertThat("capacity", queue.remainingCapacity(), is(2));
 
-        assertThat(queue.offer(thingAShadow2), is(true));
+
+        queue.put(thingAShadow2);
         assertThat(queue.size(), is(2));
         assertThat("isEmpty", queue.isEmpty(), is(false));
-        assertThat("isFull", queue.isFull(), is(false));
-        assertThat("capacity", queue.remainingCapacity(), is(1));
 
-        assertThat(queue.offer(thingBShadow1), is(true));
+        queue.put(thingBShadow1);
         assertThat(queue.size(), is(3));
         assertThat("isEmpty", queue.isEmpty(), is(false));
-        assertThat("isFull", queue.isFull(), is(true));
-        assertThat("capacity", queue.remainingCapacity(), is(0));
     }
 
     @Test
@@ -117,9 +108,9 @@ class RequestBlockingQueueTest {
 
     @Test
     void GIVEN_non_empty_queue_WHEN_poll_THEN_returns_values_in_order() throws InterruptedException {
-        queue.offer(thingAShadow1);
-        queue.offer(thingAShadow2);
-        queue.offer(thingBShadow1);
+        queue.put(thingAShadow1);
+        queue.put(thingAShadow2);
+        queue.put(thingBShadow1);
         assertThat(queue.poll(), is(thingAShadow1));
         assertThat(queue.poll(), is(thingAShadow2));
         assertThat(queue.poll(), is(thingBShadow1));
@@ -128,9 +119,9 @@ class RequestBlockingQueueTest {
 
     @Test
     void GIVEN_non_empty_queue_WHEN_poll_with_timeout_THEN_returns_values_in_order() throws InterruptedException {
-        assertThat(queue.offer(thingAShadow1, WAIT_SECONDS, TimeUnit.SECONDS), is(true));
-        assertThat(queue.offer(thingAShadow2, WAIT_SECONDS, TimeUnit.SECONDS), is(true));
-        assertThat(queue.offer(thingBShadow1, WAIT_SECONDS, TimeUnit.SECONDS), is(true));
+        queue.put(thingAShadow1);
+        queue.put(thingAShadow2);
+        queue.put(thingBShadow1);
         assertThat(queue.poll(WAIT_SECONDS, TimeUnit.SECONDS), is(thingAShadow1));
         assertThat(queue.poll(WAIT_SECONDS, TimeUnit.SECONDS), is(thingAShadow2));
         assertThat(queue.poll(WAIT_SECONDS, TimeUnit.SECONDS), is(thingBShadow1));
@@ -140,19 +131,20 @@ class RequestBlockingQueueTest {
     @Test
     void GIVEN_items_added_to_queue_WHEN_peek_THEN_does_not_remove_value() throws InterruptedException {
         assertThat(queue.peek(), is(nullValue()));
-        queue.offer(thingAShadow1);
+        queue.put(thingAShadow1);
         assertThat(queue.peek(), is(thingAShadow1));
-        queue.offer(thingAShadow2);
+        queue.put(thingAShadow2);
         assertThat(queue.peek(), is(thingAShadow1));
 
         queue.poll();
 
         assertThat(queue.peek(), is(thingAShadow2));
-        queue.offer(thingBShadow1);
+        queue.put(thingBShadow1);
         assertThat(queue.peek(), is(thingAShadow2));
     }
+
     @Test
-    void GIVEN_consumer_thread_taking_from_queue_WHEN_producer_thread_offers_item_THEN_consumer_receives_it() {
+    void GIVEN_consumer_thread_taking_from_queue_WHEN_producer_adds_item_THEN_consumer_receives_it() {
         AtomicReference<SyncRequest> received = new AtomicReference<>();
         CountDownLatch consumerLatch = new CountDownLatch(1);
         CountDownLatch producerLatch = new CountDownLatch(1);
@@ -166,8 +158,7 @@ class RequestBlockingQueueTest {
 
         Thread producer = new Thread(() -> {
             // wait for consumer to start
-            assertDoesNotThrow((Executable) consumerStartedLatch::await);
-            queue.offer(thingAShadow1);
+            assertDoesNotThrow(() -> queue.put(thingAShadow1));
             producerLatch.countDown();
         });
 
@@ -180,20 +171,8 @@ class RequestBlockingQueueTest {
     }
 
     @Test
-    void GIVEN_full_queue_WHEN_add_THEN_item_not_added() {
-        queue.offer(thingAShadow1);
-        queue.offer(thingAShadow2);
-        queue.offer(thingBShadow1);
-        assertThat("queue full", queue.isFull(), is(true));
-
-        assertThat("item added to full queue", queue.offer(thingCShadow1), is(false)) ;
-        assertThat("item added to full queue with timeout",
-                assertDoesNotThrow(() -> queue.offer(thingCShadow1, WAIT_SECONDS, TimeUnit.SECONDS)), is(false));
-    }
-
-    @Test
     void GIVEN_request_exists_in_queue_WHEN_add_request_for_same_shadow_THEN_item_merged() throws InterruptedException {
-        queue.offer(thingAShadow1);
+        queue.put(thingAShadow1);
         assertThat(queue.size(), is(1));
 
         SyncRequest req = mock(SyncRequest.class);
@@ -202,7 +181,7 @@ class RequestBlockingQueueTest {
         SyncRequest merged = mock(SyncRequest.class);
         when(merger.merge(any(), any())).thenReturn(merged);
 
-        queue.offer(req);
+        queue.put(req);
         assertThat(queue.size(), is(1));
 
 
@@ -211,9 +190,9 @@ class RequestBlockingQueueTest {
     }
 
     @Test
-    void GIVEN_non_empty_queue_WHEN_clear_THEN_queue_empty() {
-        queue.offer(thingAShadow1);
-        queue.offer(thingAShadow2);
+    void GIVEN_non_empty_queue_WHEN_clear_THEN_queue_empty() throws InterruptedException {
+        queue.put(thingAShadow1);
+        queue.put(thingAShadow2);
         assertThat("queue empty", queue.isEmpty(), is(false));
 
         queue.clear();
@@ -221,7 +200,7 @@ class RequestBlockingQueueTest {
     }
 
     @Test
-    void GIVEN_put_WHEN_not_full_THEN_returns_immediately() throws InterruptedException {
+    void GIVEN_put_THEN_returns_immediately() {
         CountDownLatch latch = new CountDownLatch(1);
         Thread runner = new Thread(() -> {
             assertDoesNotThrow(() -> queue.put(thingAShadow1));
@@ -236,57 +215,15 @@ class RequestBlockingQueueTest {
         assertThat(queue.poll(), is(thingAShadow1));
     }
 
-    @Test
-    void GIVEN_put_WHEN_full_THEN_waits_until_has_space() throws InterruptedException {
-        assertThat("request added", queue.offer(thingAShadow1), is(true));
-        assertThat("request added", queue.offer(thingAShadow2), is(true));
-        assertThat("request added", queue.offer(thingBShadow1), is(true));
-        assertThat("is full", queue.isFull(), is(true));
-
-        CountDownLatch producerLatch = new CountDownLatch(1);
-        Thread producer = new Thread(() -> {
-            assertDoesNotThrow(() -> queue.put(thingCShadow1));
-            producerLatch.countDown();
-        });
-
-        producer.start();
-
-        CountDownLatch consumerLatch = new CountDownLatch(1);
-        AtomicReference<SyncRequest> request = new AtomicReference<>();
-        Thread consumer = new Thread(() -> {
-            SyncRequest r = assertDoesNotThrow(() -> queue.take());
-            request.set(r);
-            consumerLatch.countDown();
-        });
-
-        consumer.start();
-
-        waitLatch(producerLatch);
-        waitLatch(consumerLatch);
-
-        assertThat("is full", queue.isFull(), is(true));
-        assertThat(request.get(), is(thingAShadow1));
-        assertThat(queue.poll(), is(thingAShadow2));
-        assertThat(queue.poll(), is(thingBShadow1));
-        assertThat(queue.poll(), is(thingCShadow1));
-    }
 
     @Test
     void GIVEN_null_request_WHEN_added_THEN_throws() {
         assertThrows(NullPointerException.class, () -> queue.put(null));
-        assertThrows(NullPointerException.class, () -> queue.offer(null));
-        assertThrows(NullPointerException.class, () -> queue.offer(null, WAIT_SECONDS, TimeUnit.SECONDS));
     }
 
     @Test
-    void GIVEN_use_constructor_without_capacity_THEN_default_capacity_used() {
-        RequestBlockingQueue q = new RequestBlockingQueue(merger);
-        assertThat(q.remainingCapacity(), is(RequestBlockingQueue.MAX_CAPACITY));
-    }
-
-    @Test
-    void GIVEN_item_WHEN_remove_THEN_item_removed() {
-        queue.offer(thingAShadow1);
+    void GIVEN_item_WHEN_remove_THEN_item_removed() throws InterruptedException {
+        queue.put(thingAShadow1);
         assertThat("queue empty", queue.isEmpty(), is(false));
 
         queue.remove(thingAShadow2);
@@ -297,39 +234,45 @@ class RequestBlockingQueueTest {
     }
 
     @Test
-    void GIVEN_empty_queue_WHEN_offerAndTake_THEN_return_offered() {
-        assertThat(queue.offerAndTake(thingAShadow1, true), is(thingAShadow1));
+    void GIVEN_null_request_WHEN_putAndTake_THEN_throws_null_pointer_exception() {
+        assertThrows(NullPointerException.class, () -> queue.putAndTake(null, false));
+        assertThrows(NullPointerException.class, () -> queue.putAndTake(null, true));
     }
 
     @Test
-    void GIVEN_non_empty_queue_WHEN_offerAndTake_THEN_return_head() throws InterruptedException {
-        queue.offer(thingAShadow2);
-        assertThat(queue.offerAndTake(thingAShadow1, true), is(thingAShadow2));
+    void GIVEN_empty_queue_WHEN_putAndTake_THEN_return_offered() {
+        assertThat(queue.putAndTake(thingAShadow1, true), is(thingAShadow1));
+    }
+
+    @Test
+    void GIVEN_non_empty_queue_WHEN_putAndTake_THEN_return_head() throws InterruptedException {
+        queue.put(thingAShadow2);
+        assertThat(queue.putAndTake(thingAShadow1, true), is(thingAShadow2));
         assertThat(queue.poll(), is(thingAShadow1));
     }
 
     @Test
-    void GIVEN_non_empty_queue_WHEN_offerAndTake_same_shadow_new_THEN_return_merged() {
-        queue.offer(thingAShadow1);
+    void GIVEN_non_empty_queue_WHEN_putAndTake_same_shadow_new_THEN_return_merged() throws InterruptedException {
+        queue.put(thingAShadow1);
         when(merger.merge(thingAShadow1, thingAShadow1Again)).thenReturn(thingAShadow1Merged);
-        assertThat(queue.offerAndTake(thingAShadow1Again, true), is(thingAShadow1Merged));
+        assertThat(queue.putAndTake(thingAShadow1Again, true), is(thingAShadow1Merged));
         assertThat("queue empty", queue.isEmpty(), is(true));
     }
 
     @Test
-    void GIVEN_non_empty_queue_WHEN_offerAndTake_same_shadow_old_THEN_return_merged() {
-        queue.offer(thingAShadow1);
+    void GIVEN_non_empty_queue_WHEN_putAndTake_same_shadow_old_THEN_return_merged() throws InterruptedException {
+        queue.put(thingAShadow1);
         when(merger.merge(thingAShadow1Again, thingAShadow1)).thenReturn(thingAShadow1Merged);
-        assertThat(queue.offerAndTake(thingAShadow1Again, false), is(thingAShadow1Merged));
+        assertThat(queue.putAndTake(thingAShadow1Again, false), is(thingAShadow1Merged));
         assertThat("queue empty", queue.isEmpty(), is(true));
     }
 
     @Test
-    void GIVEN_non_empty_queue_WHEN_offerAndTake_same_shadow_THEN_merge_and_return_head() throws InterruptedException {
-        queue.offer(thingAShadow2);
-        queue.offer(thingAShadow1);
+    void GIVEN_non_empty_queue_WHEN_putAndTake_same_shadow_THEN_merge_and_return_head() throws InterruptedException {
+        queue.put(thingAShadow2);
+        queue.put(thingAShadow1);
         when(merger.merge(thingAShadow1Again, thingAShadow1)).thenReturn(thingAShadow1Merged);
-        assertThat(queue.offerAndTake(thingAShadow1Again, false), is(thingAShadow2));
+        assertThat(queue.putAndTake(thingAShadow1Again, false), is(thingAShadow2));
         assertThat(queue.poll(), is(thingAShadow1Merged));
         assertThat("queue empty", queue.isEmpty(), is(true));
     }

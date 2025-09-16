@@ -21,7 +21,7 @@ import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfi
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientFactory;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientWrapper;
-import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
+import com.aws.greengrass.shadowmanager.sync.RequestQueue;
 import com.aws.greengrass.shadowmanager.sync.RequestMerger;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
 import com.aws.greengrass.shadowmanager.sync.model.Direction;
@@ -315,8 +315,8 @@ class ShadowManagerTest extends NucleusLaunchUtils {
         ignoreExceptionOfType(context, TLSAuthException.class);
         ignoreExceptionOfType(context, RetryableException.class);
 
-        RequestBlockingQueue syncQueue = spy(new RequestBlockingQueue(new RequestMerger(new DirectionWrapper())));
-        kernel.getContext().put(RequestBlockingQueue.class, syncQueue);
+        RequestQueue syncQueue = spy(new RequestQueue(new RequestMerger(new DirectionWrapper())));
+        kernel.getContext().put(RequestQueue.class, syncQueue);
 
         SecurityService securityService = mock(SecurityService.class);
         when(securityService.getDeviceIdentityKeyManagers()).thenThrow(TLSAuthException.class);
@@ -341,7 +341,7 @@ class ShadowManagerTest extends NucleusLaunchUtils {
 
         // wait for dataplane client creation retries to fail,
         // and the full sync is put back on the queue
-        verify(syncQueue, timeout(30000L).times(1)).offerAndTake(any(FullShadowSyncRequest.class), eq(false));
+        verify(syncQueue, timeout(30000L).times(1)).putAndTake(any(FullShadowSyncRequest.class), eq(false));
 
         BaseSyncStrategy syncStrategy = kernel.getContext().get(RealTimeSyncStrategy.class);
         assertThat("syncing has started", syncStrategy::isSyncing, eventuallyEval(is(true)));

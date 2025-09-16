@@ -44,11 +44,4 @@ public interface SyncStrategy {
      * Clear all the sync requests in the request blocking queue.
      */
     void clearSyncQueue();
-
-    /**
-     * Get the remaining capacity in the request blocking sync queue.
-     *
-     * @return The capacity left in the sync queue.
-     */
-    int getRemainingCapacity();
 }

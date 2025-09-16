@@ -75,7 +75,7 @@ class SyncHandlerTest {
 
     @BeforeEach
     void setup() {
-        syncHandler = new SyncHandler(executorService, scheduledExecutorService, mock(RequestBlockingQueue.class), direction);
+        syncHandler = new SyncHandler(executorService, scheduledExecutorService, mock(RequestQueue.class), direction);
         syncHandler.setOverallSyncStrategy(mockSyncStrategy);
     }
 
@@ -86,7 +86,6 @@ class SyncHandlerTest {
 
         List<Pair<String, String>> shadows = Arrays.asList(new Pair<>("a", "1"), new Pair<>("b", "2"));
         when(context.getDao().listSyncedShadows()).thenReturn(shadows);
-        when(mockSyncStrategy.getRemainingCapacity()).thenReturn(1024);
 
         // WHEN
         syncHandler.start(context, numThreads);
@@ -117,7 +116,7 @@ class SyncHandlerTest {
     @Test
     void GIVEN_sync_strategy_WHEN_setSyncStrategy_THEN_calls_sync_factory() {
         // GIVEN
-        syncHandler = new SyncHandler(mockSyncStrategyFactory, mock(RequestBlockingQueue.class), direction);
+        syncHandler = new SyncHandler(mockSyncStrategyFactory, mock(RequestQueue.class), direction);
 
         // WHEN
         syncHandler.setSyncStrategy(mock(Strategy.class));

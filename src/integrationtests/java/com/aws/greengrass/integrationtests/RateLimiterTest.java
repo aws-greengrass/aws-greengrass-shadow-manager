@@ -12,7 +12,7 @@ import com.aws.greengrass.shadowmanager.exception.IoTDataPlaneClientCreationExce
 import com.aws.greengrass.shadowmanager.exception.ThrottledRequestException;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
-import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
+import com.aws.greengrass.shadowmanager.sync.RequestQueue;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
 import com.aws.greengrass.shadowmanager.sync.strategy.RealTimeSyncStrategy;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
@@ -106,8 +106,8 @@ class RateLimiterTest extends NucleusLaunchUtils {
                         .lastSyncedDocument(lastSyncedDocument.getBytes())
                         .cloudVersion(0).build()));
         lenient().when(dao.updateSyncInformation(any(SyncInformation.class))).thenReturn(true);
-        RequestBlockingQueue queue = spy(kernel.getContext().get(RequestBlockingQueue.class));
-        kernel.getContext().put(RequestBlockingQueue.class, queue);
+        RequestQueue queue = spy(kernel.getContext().get(RequestQueue.class));
+        kernel.getContext().put(RequestQueue.class, queue);
 
         startNucleusWithConfig(NucleusLaunchUtilsConfig.builder().configFile("rateLimits.yaml").mockCloud(true).mockDao(true).build());
         SyncHandler syncHandler = kernel.getContext().get(SyncHandler.class);

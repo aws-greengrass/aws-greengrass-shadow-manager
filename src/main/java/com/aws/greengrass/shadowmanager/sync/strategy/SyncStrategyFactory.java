@@ -5,7 +5,7 @@
 
 package com.aws.greengrass.shadowmanager.sync.strategy;
 
-import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
+import com.aws.greengrass.shadowmanager.sync.RequestQueue;
 import com.aws.greengrass.shadowmanager.sync.Retryer;
 import com.aws.greengrass.shadowmanager.sync.model.DirectionWrapper;
 import com.aws.greengrass.shadowmanager.sync.strategy.model.Strategy;
@@ -49,7 +49,7 @@ public class SyncStrategyFactory {
      * @return The sync strategy client to handle syncing of shadows.
      */
     @SuppressWarnings("PMD.MissingBreakInSwitch")
-    public SyncStrategy createSyncStrategy(Strategy syncStrategy, RequestBlockingQueue syncQueue) {
+    public SyncStrategy createSyncStrategy(Strategy syncStrategy, RequestQueue syncQueue) {
         switch (syncStrategy.getType()) {
             case PERIODIC:
                 return new PeriodicSyncStrategy(syncScheduledExecutorService, retryer, syncStrategy.getDelay(),
