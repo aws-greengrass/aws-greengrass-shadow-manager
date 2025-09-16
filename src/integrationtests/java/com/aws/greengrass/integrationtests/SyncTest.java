@@ -19,7 +19,7 @@ import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.UpdateThingShadowHandlerResponse;
 import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
-import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
+import com.aws.greengrass.shadowmanager.sync.RequestQueue;
 import com.aws.greengrass.shadowmanager.sync.RequestMerger;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
 import com.aws.greengrass.shadowmanager.sync.model.CloudUpdateSyncRequest;
@@ -135,7 +135,7 @@ class SyncTest extends NucleusLaunchUtils {
     @Mock
     UpdateThingShadowResponse mockUpdateThingShadowResponse;
 
-    RequestBlockingQueue syncQueue;
+    RequestQueue syncQueue;
 
     @Captor
     private ArgumentCaptor<SyncInformation> syncInformationCaptor;
@@ -152,8 +152,8 @@ class SyncTest extends NucleusLaunchUtils {
         // Set this property for kernel to scan its own classpath to find plugins
         System.setProperty("aws.greengrass.scanSelfClasspath", "true");
         kernel = new Kernel();
-        syncQueue = spy(new RequestBlockingQueue(new RequestMerger(new DirectionWrapper())));
-        kernel.getContext().put(RequestBlockingQueue.class, syncQueue);
+        syncQueue = spy(new RequestQueue(new RequestMerger(new DirectionWrapper())));
+        kernel.getContext().put(RequestQueue.class, syncQueue);
         syncInfo = () -> kernel.getContext().get(ShadowManagerDAOImpl.class).getShadowSyncInformation(MOCK_THING_NAME_1,
                 CLASSIC_SHADOW);
         localShadow = () -> kernel.getContext().get(ShadowManagerDAOImpl.class).getShadowThing(MOCK_THING_NAME_1,

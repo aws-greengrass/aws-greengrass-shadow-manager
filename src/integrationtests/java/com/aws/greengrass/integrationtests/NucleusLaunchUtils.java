@@ -18,7 +18,7 @@ import com.aws.greengrass.shadowmanager.ShadowManagerDatabase;
 import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientFactory;
-import com.aws.greengrass.shadowmanager.sync.RequestBlockingQueue;
+import com.aws.greengrass.shadowmanager.sync.RequestQueue;
 import com.aws.greengrass.shadowmanager.sync.Retryer;
 import com.aws.greengrass.shadowmanager.sync.SyncHandler;
 import com.aws.greengrass.shadowmanager.sync.model.DirectionWrapper;
@@ -121,7 +121,7 @@ public class NucleusLaunchUtils extends GGServiceTestUtil {
         kernel.getContext().put(RealTimeSyncStrategy.class, (RealTimeSyncStrategy) realTimeSyncStrategy);
         ExecutorService es = kernel.getContext().get(ExecutorService.class);
         ScheduledExecutorService ses = kernel.getContext().get(ScheduledExecutorService.class);
-        RequestBlockingQueue queue = kernel.getContext().get(RequestBlockingQueue.class);
+        RequestQueue queue = kernel.getContext().get(RequestQueue.class);
         // set retry config to only try once so we can test failures earlier
 
         if (config.isResetRetryConfig()) {
@@ -216,7 +216,7 @@ public class NucleusLaunchUtils extends GGServiceTestUtil {
 
     protected void assertEmptySyncQueue(Class<? extends BaseSyncStrategy> clazz) {
         BaseSyncStrategy s = kernel.getContext().get(clazz);
-        RequestBlockingQueue q = s.getSyncQueue();
+        RequestQueue q = s.getSyncQueue();
         // queue is eventually empty (full syncs are added and then eventually removed)
         assertThat("sync queue is eventually empty", () -> q.isEmpty() && !s.isExecuting(),
                 eventuallyEval(is(true), Duration.ofSeconds(10)));
