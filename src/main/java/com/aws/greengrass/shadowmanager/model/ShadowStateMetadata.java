@@ -71,31 +71,32 @@ public class ShadowStateMetadata {
     @SuppressWarnings("PMD.NullAssignment")
     public JsonNode update(JsonNode patch, ShadowState state) {
         // Create the patch metadata tree. This will transform nulls to metadata nodes.
-        final JsonNode metadataPatch = createMetadataPatch(patch);
+        final JsonNode metadataPatchWithRemovedFields = createMetadataPatch(patch, false);
+        final JsonNode metadataPatchWithoutRemovedFields = createMetadataPatch(patch, true);
 
         // If the thing now has null state after the update then the metadata should also be null
         if (state.isEmpty()) {
             desired = null;
             reported = null;
-            return metadataPatch;
+            return metadataPatchWithoutRemovedFields;
         }
 
         // Merge in the desired metadata
-        final JsonNode patchDesired = metadataPatch.get(SHADOW_DOCUMENT_STATE_DESIRED);
+        final JsonNode patchDesired = metadataPatchWithRemovedFields.get(SHADOW_DOCUMENT_STATE_DESIRED);
         if (!isNullOrMissing(patchDesired)) {
             desired = nullIfEmpty(merge(state.getDesired(), desired, patchDesired));
         }
 
         // Merge in the reported metadata
-        final JsonNode patchReported = metadataPatch.get(SHADOW_DOCUMENT_STATE_REPORTED);
+        final JsonNode patchReported = metadataPatchWithRemovedFields.get(SHADOW_DOCUMENT_STATE_REPORTED);
         if (!isNullOrMissing(patchReported)) {
             reported = nullIfEmpty(merge(state.getReported(), reported, patchReported));
         }
 
-        return metadataPatch;
+        return metadataPatchWithoutRemovedFields;
     }
 
-    private JsonNode createMetadataPatch(final JsonNode source) {
+    private JsonNode createMetadataPatch(final JsonNode source, boolean removeFields) {
         // If the JsonNode is a NullNode then this field should be removed from the metadata
         if (source.isNull()) {
             return null;
@@ -110,7 +111,7 @@ public class ShadowStateMetadata {
         if (source.isArray()) {
             final ArrayNode result = JsonUtil.OBJECT_MAPPER.createArrayNode();
             for (final JsonNode node : source) {
-                result.add(createMetadataPatch(node));
+                result.add(createMetadataPatch(node, removeFields));
             }
             return result;
         }
@@ -122,10 +123,10 @@ public class ShadowStateMetadata {
         while (fieldIter.hasNext()) {
             final String fieldName = fieldIter.next();
             final JsonNode node = sourceObject.get(fieldName);
-            JsonNode nodeMetadataPatch = createMetadataPatch(node);
+            JsonNode nodeMetadataPatch = createMetadataPatch(node, !removeFields);
 
             // If the field isn't being removed then recurse
-            if (nodeMetadataPatch != null) {
+            if (!removeFields || nodeMetadataPatch != null) {
                 result.set(fieldName, nodeMetadataPatch);
             }
         }

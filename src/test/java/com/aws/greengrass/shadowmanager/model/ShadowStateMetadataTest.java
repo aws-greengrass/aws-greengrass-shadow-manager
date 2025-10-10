@@ -266,9 +266,9 @@ class ShadowStateMetadataTest {
 
     @Test
     void GIVEN_non_empty_state_with_nested_object_and_nested_field_removed_WHEN_update_THEN_metadata_is_correctly_updated() throws IOException {
-        String stateString = "{\"SomeObject\": {\"SomeVal\": \"123\", \"AnotherVal\": \"testingValue\"}}";
+        String stateString = "{\"SomeObject\": {\"SomeVal\": \"123\", \"AnotherVal\": \"4567\"}}";
         JsonNode stateJson = JsonUtil.getPayloadJson(stateString.getBytes()).get();
-        String patchString = "{\"desired\": {\"SomeObject\": {\"SomeVal\": null, \"AnotherVal\": \"testingValue\"}}}";
+        String patchString = "{\"desired\": {\"SomeObject\": {\"SomeVal\": null, \"AnotherVal\": \"4567\"}}}";
         Optional<JsonNode> patchJson = JsonUtil.getPayloadJson(patchString.getBytes());
         String patchMetadataString = "{\"SomeObject\": {\"SomeVal\": \"123\", \"AnotherVal\": \"4567\"}}";
         Optional<JsonNode> patchMetadataJson = JsonUtil.getPayloadJson(patchMetadataString.getBytes());
@@ -302,7 +302,7 @@ class ShadowStateMetadataTest {
         String patchString = "{\"desired\": {\"SomeObject\": {\"SomeVal\": \"456\", \"AnotherVal\": " +
                 "\"testingValue\"}}}";
         Optional<JsonNode> patchJson = JsonUtil.getPayloadJson(patchString.getBytes());
-        String patchMetadataString = "{\"SomeObject\": {\"SomeVal\": \"456\", \"AnotherVal\": \"testingValue\"}}";
+        String patchMetadataString = "{\"SomeObject\": {\"SomeVal\": \"123\", \"AnotherVal\": \"testingValue\"}}";
         Optional<JsonNode> patchMetadataJson = JsonUtil.getPayloadJson(patchMetadataString.getBytes());
 
         ShadowStateMetadata shadowStateMetadata = new ShadowStateMetadata(patchMetadataJson.get(), null, mockClock);
@@ -324,6 +324,39 @@ class ShadowStateMetadataTest {
         assertTrue(patchMetadata.has(SHADOW_DOCUMENT_STATE_DESIRED));
         assertTrue(patchMetadata.get(SHADOW_DOCUMENT_STATE_DESIRED).has("SomeObject"));
         assertThat(patchMetadata.get(SHADOW_DOCUMENT_STATE_DESIRED).get("SomeObject").get("SomeVal").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(timestamp));
+        assertThat(patchMetadata.get(SHADOW_DOCUMENT_STATE_DESIRED).get("SomeObject").get("AnotherVal").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(timestamp));
+    }
+
+    @Test
+    void GIVEN_non_empty_state_with_nested_object_and_nested_field_exchanged_WHEN_update_THEN_metadata_is_correctly_updated() throws IOException {
+        String stateString = "{\"SomeObject\": {\"SomeVal\": \"123\"}}";
+        JsonNode stateJson = JsonUtil.getPayloadJson(stateString.getBytes()).get();
+        String patchString = "{\"desired\": {\"SomeObject\": {\"SomeVal\": null, \"AnotherVal\": " +
+                "\"testingValue\"}}}";
+        Optional<JsonNode> patchJson = JsonUtil.getPayloadJson(patchString.getBytes());
+        String patchMetadataString = "{\"SomeObject\": {\"SomeVal\": \"123\", \"AnotherVal\": \"testingValue\"}}";
+        Optional<JsonNode> patchMetadataJson = JsonUtil.getPayloadJson(patchMetadataString.getBytes());
+
+        ShadowStateMetadata shadowStateMetadata = new ShadowStateMetadata(patchMetadataJson.get(), null, mockClock);
+        ShadowState state = new ShadowState(stateJson, null);
+
+        JsonNode patchMetadata = shadowStateMetadata.update(patchJson.get(), state);
+
+        // The desired field will be present because of the nested object but the object will be empty
+        assertFalse(JsonUtil.isNullOrMissing(shadowStateMetadata.getDesired()));
+        assertTrue(shadowStateMetadata.getDesired().has("SomeObject"));
+        assertFalse(shadowStateMetadata.getDesired().get("SomeObject").has("SomeVal"));
+        assertTrue(shadowStateMetadata.getDesired().get("SomeObject").has("AnotherVal"));
+        assertTrue(shadowStateMetadata.getDesired().get("SomeObject").get("AnotherVal").has(SHADOW_DOCUMENT_TIMESTAMP));
+        assertThat(shadowStateMetadata.getDesired().get("SomeObject").get("AnotherVal").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(),
+                is(timestamp));
+
+        assertTrue(JsonUtil.isNullOrMissing(shadowStateMetadata.getReported()));
+
+        assertFalse(JsonUtil.isNullOrMissing(patchMetadata));
+        assertTrue(patchMetadata.has(SHADOW_DOCUMENT_STATE_DESIRED));
+        assertTrue(patchMetadata.get(SHADOW_DOCUMENT_STATE_DESIRED).has("SomeObject"));
+        assertFalse(patchMetadata.get(SHADOW_DOCUMENT_STATE_DESIRED).get("SomeObject").has("SomeVal"));
         assertThat(patchMetadata.get(SHADOW_DOCUMENT_STATE_DESIRED).get("SomeObject").get("AnotherVal").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(timestamp));
     }
 
