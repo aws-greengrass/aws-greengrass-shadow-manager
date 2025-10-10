@@ -70,8 +70,7 @@ public class ShadowStateMetadata {
      */
     @SuppressWarnings("PMD.NullAssignment")
     public JsonNode update(JsonNode patch, ShadowState state) {
-        // Create the patch metadata tree. This will transform nulls to metadata nodes.
-        final JsonNode metadataPatchWithRemovedFields = createMetadataPatch(patch, false);
+        // The persisted metadata should have all removed fields (aka value null) actually removed
         final JsonNode metadataPatchWithoutRemovedFields = createMetadataPatch(patch, true);
 
         // If the thing now has null state after the update then the metadata should also be null
@@ -80,6 +79,9 @@ public class ShadowStateMetadata {
             reported = null;
             return metadataPatchWithoutRemovedFields;
         }
+
+        // Removed field null values need to be kept when merging so that the field is removed from metadata
+        final JsonNode metadataPatchWithRemovedFields = createMetadataPatch(patch, false);
 
         // Merge in the desired metadata
         final JsonNode patchDesired = metadataPatchWithRemovedFields.get(SHADOW_DOCUMENT_STATE_DESIRED);
