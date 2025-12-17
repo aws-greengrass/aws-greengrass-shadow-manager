@@ -532,7 +532,7 @@ class SyncTest extends NucleusLaunchUtils {
 
         assertEmptySyncQueue(clazz);
         verify(syncHandler, after(10000).atLeast(4))
-                .pushCloudUpdateSyncRequest(anyString(), anyString(), any(JsonNode.class));
+                .pushCloudUpdateSyncRequest(anyString(), anyString(), any(JsonNode.class), any(ShadowDocument.class));
         assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
         assertThat("local shadow exists", localShadow.get().isPresent(), is(true));
         ShadowDocument shadowDocument = localShadow.get().get();
@@ -607,7 +607,7 @@ class SyncTest extends NucleusLaunchUtils {
 
         assertEmptySyncQueue(clazz);
         verify(syncHandler, after(10000).times(4))
-                .pushCloudUpdateSyncRequest(anyString(), anyString(), any(JsonNode.class));
+                .pushCloudUpdateSyncRequest(anyString(), anyString(), any(JsonNode.class), any(ShadowDocument.class));
         assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
         assertThat("local shadow exists", localShadow.get().isPresent(), is(true));
         ShadowDocument shadowDocument = localShadow.get().get();
@@ -890,7 +890,7 @@ class SyncTest extends NucleusLaunchUtils {
         request.setPayload(localShadowContentV1.getBytes(UTF_8));
         updateHandler.handleRequest(request, "DoAll");
         verify(syncHandler, timeout(Duration.ofSeconds(10).toMillis()).times(1))
-                .pushCloudUpdateSyncRequest(any(), any(), any());
+                .pushCloudUpdateSyncRequest(any(), any(), any(), any());
         verify(iotDataPlaneClientFactory.getIotDataPlaneClient(), after(Duration.ofSeconds(5).toMillis()).never())
                 .updateThingShadow(any(software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowRequest.class));
     }

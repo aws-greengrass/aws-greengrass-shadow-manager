@@ -745,7 +745,7 @@ class UpdateThingShadowRequestHandlerTest {
                 getJsonFromResource(RESOURCE_DIRECTORY_NAME + BAD_UPDATE_DOCUMENT_WITH_DELTA_FILE_NAME);
         UpdateThingShadowRequestHandler updateThingShadowIPCHandler = new UpdateThingShadowRequestHandler(mockDao, mockAuthorizationHandlerWrapper, mockPubSubClientWrapper, mockSynchronizeHelper, mockSyncHandler);
         ArgumentCaptor<JsonNode> documentCaptor = ArgumentCaptor.forClass(JsonNode.class);
-        doNothing().when(mockSyncHandler).pushCloudUpdateSyncRequest(any(), any(), documentCaptor.capture());
+        doNothing().when(mockSyncHandler).pushCloudUpdateSyncRequest(any(), any(), documentCaptor.capture(), any());
         when(mockDao.updateShadowThing(any(), any(), any(), anyLong()))
                 .thenReturn(Optional.of(new byte[]{}));
 

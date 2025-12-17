@@ -263,7 +263,8 @@ public class UpdateThingShadowRequestHandler extends BaseRequestHandler {
                             .kv("service-name", serviceName)
                             .log("Successfully updated shadow");
                     removeMetadataNode(updateDocumentRequest);
-                    this.syncHandler.pushCloudUpdateSyncRequest(thingName, shadowName, updateDocumentRequest);
+                    this.syncHandler.pushCloudUpdateSyncRequest(thingName, shadowName, updateDocumentRequest,
+                            updatedDocument);
 
                     return new UpdateThingShadowHandlerResponse(updateThingShadowResponse, updateDocumentBytes);
                 } catch (InvalidRequestParametersException e) {

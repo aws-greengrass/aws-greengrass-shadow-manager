@@ -7,6 +7,7 @@ package com.aws.greengrass.shadowmanager.sync;
 
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
+import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.sync.model.BaseSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.CloudDeleteSyncRequest;
@@ -224,10 +225,13 @@ public class SyncHandler {
      * @param thingName      The thing name associated with the sync shadow update
      * @param shadowName     The shadow name associated with the sync shadow update
      * @param updateDocument The update shadow request
+     * @param localShadowDocument The local shadow document state at the time of the update
      */
-    public void pushCloudUpdateSyncRequest(String thingName, String shadowName, JsonNode updateDocument) {
+    public void pushCloudUpdateSyncRequest(String thingName, String shadowName, JsonNode updateDocument,
+                                           ShadowDocument localShadowDocument) {
         if (isShadowSynced(thingName, shadowName) && !Direction.CLOUD_TO_DEVICE.equals(direction.get())) {
-            overallSyncStrategy.putSyncRequest(new CloudUpdateSyncRequest(thingName, shadowName, updateDocument));
+            overallSyncStrategy.putSyncRequest(new CloudUpdateSyncRequest(thingName, shadowName, updateDocument,
+                    localShadowDocument));
         }
     }
 
