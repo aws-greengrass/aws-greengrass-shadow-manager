@@ -32,6 +32,7 @@ import software.amazon.awssdk.services.iotdataplane.model.ThrottlingException;
 import software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowResponse;
 
 import java.io.IOException;
+import java.util.Objects;
 import java.util.Optional;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_CLOUD_VERSION_KEY;
@@ -90,15 +91,12 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
     @Override
     public void execute(SyncContext context) throws RetryableException, SkipSyncRequestException,
             ConflictException, UnknownShadowException, InterruptedException {
-        Optional<ShadowDocument> currentLocalShadowDocument = context.getDao().getShadowThing(getThingName(),
-                getShadowName());
-
         //TODO: store this information in a return object to avoid unnecessary calls to DAO.
         SyncInformation currentSyncInformation = context.getDao()
                 .getShadowSyncInformation(getThingName(), getShadowName())
                 .orElseThrow(() -> new UnknownShadowException("Shadow not found in sync table"));
 
-        if (!isUpdateNecessary(currentLocalShadowDocument, currentSyncInformation, context)) {
+        if (!isUpdateNecessary(currentSyncInformation, context)) {
             return;
         }
 
@@ -184,20 +182,18 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
      */
     @Override
     boolean isUpdateNecessary(SyncContext context) throws SkipSyncRequestException, UnknownShadowException {
-        Optional<ShadowDocument> shadowDocument = context.getDao().getShadowThing(getThingName(), getShadowName());
-
         //TODO: store this information in a return object to avoid unnecessary calls to DAO.
         SyncInformation currentSyncInformation = context.getDao()
                 .getShadowSyncInformation(getThingName(), getShadowName())
                 .orElseThrow(() -> new UnknownShadowException("Shadow not found in sync table"));
 
-        return isUpdateNecessary(shadowDocument, currentSyncInformation, context);
+        return isUpdateNecessary(currentSyncInformation, context);
     }
 
-    private boolean isUpdateNecessary(Optional<ShadowDocument> shadowDocument, SyncInformation currentSyncInformation,
+    private boolean isUpdateNecessary(SyncInformation currentSyncInformation,
                                       SyncContext context)
             throws SkipSyncRequestException {
-        if (!shadowDocument.isPresent()) {
+        if (Objects.isNull(localShadowDocument)) {
             logger.atDebug()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
