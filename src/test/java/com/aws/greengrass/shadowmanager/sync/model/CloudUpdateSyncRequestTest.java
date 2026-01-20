@@ -103,7 +103,6 @@ class CloudUpdateSyncRequestTest {
         long epochSeconds = Instant.now().getEpochSecond();
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
         ShadowDocument shadowDocument = new ShadowDocument(BASE_DOCUMENT);
-        when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.of(shadowDocument));
         when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder()
                 .cloudUpdateTime(epochSecondsMinus60)
                 .thingName(THING_NAME)
@@ -116,11 +115,10 @@ class CloudUpdateSyncRequestTest {
         when(mockIotDataPlaneClientWrapper.updateThingShadow(anyString(), anyString(), any(byte[].class)))
                 .thenReturn(UpdateThingShadowResponse.builder().payload(SdkBytes.fromString("{\"version\": 6}", UTF_8)).build());
 
-        CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, baseDocumentJson);
-
+        CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, baseDocumentJson,
+                shadowDocument);
         request.execute(mockContext);
 
-        verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
         verify(mockDao, times(1)).updateSyncInformation(any());
         verify(mockIotDataPlaneClientWrapper, times(1)).updateThingShadow(anyString(), anyString(), any(byte[].class));
 
@@ -134,31 +132,17 @@ class CloudUpdateSyncRequestTest {
         assertThat(syncInformationCaptor.getValue().isCloudDeleted(), is(false));
     }
 
-    @Test
-    void GIVEN_cloud_update_request_for_non_existent_shadow_WHEN_execute_THEN_does_not_update_cloud_shadow_and_sync_information() throws Exception {
-        when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.empty());
-        CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, baseDocumentJson);
-
-        request.execute(mockContext);
-
-        verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
-        verify(mockDao, times(0)).updateSyncInformation(any());
-        verify(mockIotDataPlaneClientWrapper, times(0)).updateThingShadow(anyString(), anyString(), any(byte[].class));
-    }
-
     @ParameterizedTest
     @ValueSource(classes = {ThrottlingException.class, ServiceUnavailableException.class, InternalFailureException.class})
     void GIVEN_bad_cloud_update_request_WHEN_execute_and_updateShadow_throws_retryable_error_THEN_does_not_update_cloud_shadow_and_sync_information(Class clazz, ExtensionContext context) throws IOException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, clazz);
         ShadowDocument shadowDocument = new ShadowDocument(BASE_DOCUMENT);
-        when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.of(shadowDocument));
         doThrow(clazz).when(mockIotDataPlaneClientWrapper).updateThingShadow(anyString(), anyString(), any(byte[].class));
-        CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, baseDocumentJson);
+        CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, baseDocumentJson, shadowDocument);
 
         RetryableException thrown = assertThrows(RetryableException.class, () -> request.execute(mockContext));
         assertThat(thrown.getCause(), is(instanceOf(clazz)));
 
-        verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
         verify(mockDao, times(0)).updateSyncInformation(any());
         verify(mockIotDataPlaneClientWrapper, times(1)).updateThingShadow(anyString(), anyString(), any(byte[].class));
     }
@@ -167,16 +151,14 @@ class CloudUpdateSyncRequestTest {
     void GIVEN_bad_cloud_update_request_WHEN_execute_and_updateShadow_throws_conflict_exception_THEN_does_not_update_cloud_shadow_and_sync_information(ExtensionContext context) throws IOException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, ConflictException.class);
         ShadowDocument shadowDocument = new ShadowDocument(BASE_DOCUMENT);
-        when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.of(shadowDocument));
         doThrow(ConflictException.builder().message(SAMPLE_EXCEPTION_MESSAGE).build())
                 .when(mockIotDataPlaneClientWrapper).updateThingShadow(anyString(), anyString(), any(byte[].class));
 
-        CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, baseDocumentJson);
+        CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, baseDocumentJson, shadowDocument);
 
         ConflictException thrown = assertThrows(ConflictException.class, () -> request.execute(mockContext));
         assertThat(thrown.getMessage(), is(equalTo(SAMPLE_EXCEPTION_MESSAGE)));
 
-        verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
         verify(mockDao, times(0)).updateSyncInformation(any());
         verify(mockIotDataPlaneClientWrapper, times(1)).updateThingShadow(anyString(), anyString(), any(byte[].class));
     }
@@ -187,15 +169,13 @@ class CloudUpdateSyncRequestTest {
     void GIVEN_bad_cloud_update_request_WHEN_execute_and_updateShadow_throws_skipable_error_THEN_does_not_update_cloud_shadow_and_sync_information(Class clazz, ExtensionContext context) throws IOException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, clazz);
         ShadowDocument shadowDocument = new ShadowDocument(BASE_DOCUMENT);
-        when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.of(shadowDocument));
         doThrow(clazz).when(mockIotDataPlaneClientWrapper).updateThingShadow(anyString(), anyString(), any(byte[].class));
-        CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, baseDocumentJson);
+        CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, baseDocumentJson, shadowDocument);
 
         SkipSyncRequestException thrown = assertThrows(SkipSyncRequestException.class,
                 () -> request.execute(mockContext));
         assertThat(thrown.getCause(), is(instanceOf(clazz)));
 
-        verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
         verify(mockDao, times(0)).updateSyncInformation(any());
         verify(mockIotDataPlaneClientWrapper, times(1)).updateThingShadow(anyString(), anyString(), any(byte[].class));
     }
@@ -203,9 +183,9 @@ class CloudUpdateSyncRequestTest {
     @Test
     void GIVEN_new_values_WHEN_merge_THEN_document_merged() throws IOException {
 
-        CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, baseDocumentJson);
+        CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, baseDocumentJson, null);
         JsonNode updateDocument = JsonUtil.getPayloadJson(UPDATE_DOCUMENT).get();
-        CloudUpdateSyncRequest other = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, updateDocument);
+        CloudUpdateSyncRequest other = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, updateDocument, null);
         request.merge(other);
 
         assertThat(request.updateDocument, is(updateDocument));
@@ -215,7 +195,6 @@ class CloudUpdateSyncRequestTest {
     void GIVEN_no_change_to_shadow_content_but_version_change_WHEN_isUpdateNecessary_THEN_returns_false_and_updates_sync_info() throws IOException, SkipSyncRequestException, UnknownShadowException {
         when(mockDao.updateSyncInformation(syncInformationCaptor.capture())).thenReturn(true);
         ShadowDocument shadowDocument = new ShadowDocument(BASE_DOCUMENT);
-        when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.of(shadowDocument));
 
         long epochSeconds = Instant.now().getEpochSecond();
         when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder()
@@ -228,7 +207,8 @@ class CloudUpdateSyncRequestTest {
                 .localVersion(0L)
                 .lastSyncTime(epochSeconds)
                 .build()));
-        CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, baseDocumentJson);
+        CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, baseDocumentJson,
+                shadowDocument);
 
         assertFalse(request.isUpdateNecessary(mockContext));
         verify(mockDao, atMostOnce()).updateSyncInformation(any());
@@ -247,7 +227,6 @@ class CloudUpdateSyncRequestTest {
     @Test
     void GIVEN_no_change_to_shadow_content_and_no_version_change_WHEN_isUpdateNecessary_THEN_returns_false_and_does_not_update_sync_info() throws IOException, SkipSyncRequestException, UnknownShadowException {
         ShadowDocument shadowDocument = new ShadowDocument(BASE_DOCUMENT);
-        when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.of(shadowDocument));
 
         long epochSeconds = Instant.now().getEpochSecond();
         when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder()
@@ -260,7 +239,7 @@ class CloudUpdateSyncRequestTest {
                 .localVersion(1L)
                 .lastSyncTime(epochSeconds)
                 .build()));
-        CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, baseDocumentJson);
+        CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, baseDocumentJson, shadowDocument);
 
         assertFalse(request.isUpdateNecessary(mockContext));
         verify(mockDao, never()).updateSyncInformation(any());
@@ -269,13 +248,12 @@ class CloudUpdateSyncRequestTest {
     @Test
     void GIVEN_new_shadow_WHEN_isUpdateNecessary_THEN_returns_true() throws IOException, UnknownShadowException, SkipSyncRequestException {
         ShadowDocument shadowDocument = new ShadowDocument(BASE_DOCUMENT);
-        when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.of(shadowDocument));
 
         when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(
                 SyncInformation.builder()
                         .lastSyncedDocument(null)
                         .build()));
-        CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, baseDocumentJson);
+        CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, baseDocumentJson, shadowDocument);
 
         assertTrue(request.isUpdateNecessary(mockContext));
     }
@@ -284,7 +262,8 @@ class CloudUpdateSyncRequestTest {
     void GIVEN_different_cloud_update_WHEN_isUpdateNecessary_THEN_returns_true() throws IOException {
         JsonNode j1 = JsonUtil.getPayloadJson("{\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":0,\"b\":0},\"SomeKey\":\"SomeValue\"}},\"metadata\":{\"reported\":{\"color\":{\"r\":{\"timestamp\":1619722006},\"g\":{\"timestamp\":1619722006},\"b\":{\"timestamp\":1619722006}},\"SomeKey\":{\"timestamp\":1619722006}}},\"version\":1,\"timestamp\":1619722006}".getBytes()).get();
         JsonNode j2 = JsonUtil.getPayloadJson("{\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}},\"metadata\":{\"reported\":{\"color\":{\"r\":{\"timestamp\":1619722006},\"g\":{\"timestamp\":1619722006},\"b\":{\"timestamp\":1619722006}},\"SomeKey\":{\"timestamp\":1619722006}}},\"version\":1,\"timestamp\":1619722006}".getBytes()).get();
-        CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, baseDocumentJson);
+        CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, baseDocumentJson,
+                new ShadowDocument(BASE_DOCUMENT));
         assertTrue(request.isUpdateNecessary(j1, j2));
     }
 
@@ -292,7 +271,7 @@ class CloudUpdateSyncRequestTest {
     void GIVEN_same_cloud_update_WHEN_isUpdateNecessary_THEN_returns_false() throws IOException {
         JsonNode j1 = JsonUtil.getPayloadJson("{\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}},\"metadata\":{\"reported\":{\"color\":{\"r\":{\"timestamp\":1619722006},\"g\":{\"timestamp\":1619722006},\"b\":{\"timestamp\":1619722006}},\"SomeKey\":{\"timestamp\":1619722006}}},\"version\":1,\"timestamp\":1619722006}".getBytes()).get();
         JsonNode j2 = JsonUtil.getPayloadJson("{\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}},\"metadata\":{\"reported\":{\"color\":{\"r\":{\"timestamp\":1619722006},\"g\":{\"timestamp\":1619722006},\"b\":{\"timestamp\":1619722006}},\"SomeKey\":{\"timestamp\":1619722006}}},\"version\":1,\"timestamp\":1619722006}".getBytes()).get();
-        CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, baseDocumentJson);
+        CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, baseDocumentJson, new ShadowDocument(BASE_DOCUMENT));
         assertFalse(request.isUpdateNecessary(j1, j2));
     }
 }

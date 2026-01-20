@@ -32,6 +32,7 @@ import software.amazon.awssdk.services.iotdataplane.model.ThrottlingException;
 import software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowResponse;
 
 import java.io.IOException;
+import java.util.Objects;
 import java.util.Optional;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_CLOUD_VERSION_KEY;
@@ -46,6 +47,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_V
  */
 public class CloudUpdateSyncRequest extends BaseSyncRequest {
     private static final Logger logger = LogManager.getLogger(CloudUpdateSyncRequest.class);
+    private ShadowDocument localShadowDocument;
 
     @NonNull
     JsonNode updateDocument;
@@ -56,21 +58,25 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
      * @param thingName      The thing name associated with the sync shadow update
      * @param shadowName     The shadow name associated with the sync shadow update
      * @param updateDocument The update request bytes.
+     * @param localShadowDocument The local shadow document state after the local update was made
      */
     public CloudUpdateSyncRequest(String thingName,
                                   String shadowName,
-                                  JsonNode updateDocument) {
+                                  JsonNode updateDocument,
+                                  ShadowDocument localShadowDocument) {
         super(thingName, shadowName);
         this.updateDocument = updateDocument;
+        this.localShadowDocument = localShadowDocument;
     }
 
     /**
      * Merge the sync requests together.
      *
-     * @param other the newer request to merge
+     * @param nextRequest the newer request to merge
      */
-    public void merge(CloudUpdateSyncRequest other) {
-        JsonMerger.merge(updateDocument, other.updateDocument);
+    public void merge(CloudUpdateSyncRequest nextRequest) {
+        JsonMerger.merge(updateDocument, nextRequest.updateDocument);
+        this.localShadowDocument = nextRequest.localShadowDocument;
     }
 
     /**
@@ -85,14 +91,12 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
     @Override
     public void execute(SyncContext context) throws RetryableException, SkipSyncRequestException,
             ConflictException, UnknownShadowException, InterruptedException {
-        Optional<ShadowDocument> shadowDocument = context.getDao().getShadowThing(getThingName(), getShadowName());
-
         //TODO: store this information in a return object to avoid unnecessary calls to DAO.
         SyncInformation currentSyncInformation = context.getDao()
                 .getShadowSyncInformation(getThingName(), getShadowName())
                 .orElseThrow(() -> new UnknownShadowException("Shadow not found in sync table"));
 
-        if (!isUpdateNecessary(shadowDocument, currentSyncInformation, context)) {
+        if (!isUpdateNecessary(currentSyncInformation, context)) {
             return;
         }
 
@@ -150,13 +154,13 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
 
         try {
             context.getDao().updateSyncInformation(SyncInformation.builder()
-                    .lastSyncedDocument(JsonUtil.getPayloadBytes(shadowDocument.get().toJson(false)))
+                    .lastSyncedDocument(JsonUtil.getPayloadBytes(localShadowDocument.toJson(false)))
                     .cloudVersion(cloudUpdatedVersion)
                     .cloudDeleted(false)
                     .shadowName(getShadowName())
                     .thingName(getThingName())
-                    .cloudUpdateTime(shadowDocument.get().getMetadata().getLatestUpdatedTimestamp())
-                    .localVersion(shadowDocument.get().getVersion())
+                    .cloudUpdateTime(localShadowDocument.getMetadata().getLatestUpdatedTimestamp())
+                    .localVersion(localShadowDocument.getVersion())
                     .build());
         } catch (JsonProcessingException | ShadowManagerDataException e) {
             logger.atError()
@@ -178,20 +182,18 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
      */
     @Override
     boolean isUpdateNecessary(SyncContext context) throws SkipSyncRequestException, UnknownShadowException {
-        Optional<ShadowDocument> shadowDocument = context.getDao().getShadowThing(getThingName(), getShadowName());
-
         //TODO: store this information in a return object to avoid unnecessary calls to DAO.
         SyncInformation currentSyncInformation = context.getDao()
                 .getShadowSyncInformation(getThingName(), getShadowName())
                 .orElseThrow(() -> new UnknownShadowException("Shadow not found in sync table"));
 
-        return isUpdateNecessary(shadowDocument, currentSyncInformation, context);
+        return isUpdateNecessary(currentSyncInformation, context);
     }
 
-    private boolean isUpdateNecessary(Optional<ShadowDocument> shadowDocument, SyncInformation currentSyncInformation,
+    private boolean isUpdateNecessary(SyncInformation currentSyncInformation,
                                       SyncContext context)
             throws SkipSyncRequestException {
-        if (!shadowDocument.isPresent()) {
+        if (Objects.isNull(localShadowDocument)) {
             logger.atDebug()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
@@ -208,7 +210,7 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
                     .kv(LOG_LOCAL_VERSION_KEY, currentSyncInformation.getLocalVersion())
                     .kv(LOG_CLOUD_VERSION_KEY, currentSyncInformation.getCloudVersion())
                     .log("Cloud shadow already contains update payload. No sync is necessary");
-            updateSyncInformationVersion(shadowDocument, currentSyncInformation, context);
+            updateSyncInformationVersion(Optional.of(localShadowDocument), currentSyncInformation, context);
             return false;
         }
 
