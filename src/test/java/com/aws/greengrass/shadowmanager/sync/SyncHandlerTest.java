@@ -6,6 +6,7 @@
 package com.aws.greengrass.shadowmanager.sync;
 
 
+import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.configuration.ThingShadowSyncConfiguration;
 import com.aws.greengrass.shadowmanager.sync.model.BaseSyncRequest;
 import com.aws.greengrass.shadowmanager.sync.model.CloudDeleteSyncRequest;
@@ -137,7 +138,7 @@ class SyncHandlerTest {
         syncHandler.setSyncConfigurations(syncConfigurations);
 
         // WHEN
-        syncHandler.pushCloudUpdateSyncRequest("a", "1", mock(JsonNode.class));
+        syncHandler.pushCloudUpdateSyncRequest("a", "1", mock(JsonNode.class), mock(ShadowDocument.class));
 
         // THEN
         verify(mockSyncStrategy, times(1)).putSyncRequest(any());

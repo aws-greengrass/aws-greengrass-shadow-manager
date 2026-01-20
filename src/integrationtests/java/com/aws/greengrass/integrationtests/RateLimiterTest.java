@@ -98,9 +98,10 @@ class RateLimiterTest extends NucleusLaunchUtils {
         when(mockUpdateThingShadowResponse.payload()).thenReturn(SdkBytes.fromString("{\"version\": 1}", UTF_8));
         when(iotDataPlaneClientFactory.getIotDataPlaneClient().updateThingShadow(any(software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowRequest.class)))
                 .thenReturn(mockUpdateThingShadowResponse);
+        ShadowDocument shadowDocument = new ShadowDocument(localShadowContentV1.getBytes());
 
         // mock dao calls in cloud update
-        when(dao.getShadowThing(anyString(), anyString())).thenReturn(Optional.of(new ShadowDocument(localShadowContentV1.getBytes())));
+        when(dao.getShadowThing(anyString(), anyString())).thenReturn(Optional.of(shadowDocument));
         when(dao.getShadowSyncInformation(anyString(), anyString())).thenReturn(
                 Optional.of(SyncInformation.builder()
                         .lastSyncedDocument(lastSyncedDocument.getBytes())
@@ -118,7 +119,7 @@ class RateLimiterTest extends NucleusLaunchUtils {
         // thingName has to be unique to prevent requests from being merged
         final int totalRequestCalls = 10;
         for (int i = 0; i < totalRequestCalls; i++) {
-            syncHandler.pushCloudUpdateSyncRequest(String.valueOf(i), CLASSIC_SHADOW_IDENTIFIER, updateDocument);
+            syncHandler.pushCloudUpdateSyncRequest(String.valueOf(i), CLASSIC_SHADOW_IDENTIFIER, updateDocument, shadowDocument);
         }
 
         // verify that some requests have been throttled
