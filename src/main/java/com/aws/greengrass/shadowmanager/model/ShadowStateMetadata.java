@@ -70,32 +70,40 @@ public class ShadowStateMetadata {
      */
     @SuppressWarnings("PMD.NullAssignment")
     public JsonNode update(JsonNode patch, ShadowState state) {
-        // Create the patch metadata tree. This will transform nulls to metadata nodes.
-        final JsonNode metadataPatch = createMetadataPatch(patch);
+        // The persisted metadata should have all removed fields (aka value null) actually removed
+        final JsonNode metadataPatchWithoutRemovedFields = createMetadataPatch(patch, true);
 
         // If the thing now has null state after the update then the metadata should also be null
         if (state.isEmpty()) {
             desired = null;
             reported = null;
-            return metadataPatch;
+            return metadataPatchWithoutRemovedFields;
         }
 
+        // Removed field null values need to be kept when merging so that the field is removed from metadata
+        final JsonNode metadataPatchWithRemovedFields = createMetadataPatch(patch, false);
+
         // Merge in the desired metadata
-        final JsonNode patchDesired = metadataPatch.get(SHADOW_DOCUMENT_STATE_DESIRED);
+        final JsonNode patchDesired = metadataPatchWithRemovedFields.get(SHADOW_DOCUMENT_STATE_DESIRED);
         if (!isNullOrMissing(patchDesired)) {
             desired = nullIfEmpty(merge(state.getDesired(), desired, patchDesired));
         }
 
         // Merge in the reported metadata
-        final JsonNode patchReported = metadataPatch.get(SHADOW_DOCUMENT_STATE_REPORTED);
+        final JsonNode patchReported = metadataPatchWithRemovedFields.get(SHADOW_DOCUMENT_STATE_REPORTED);
         if (!isNullOrMissing(patchReported)) {
             reported = nullIfEmpty(merge(state.getReported(), reported, patchReported));
         }
 
-        return metadataPatch;
+        return metadataPatchWithoutRemovedFields;
     }
 
-    private JsonNode createMetadataPatch(final JsonNode source) {
+    private JsonNode createMetadataPatch(final JsonNode source, boolean removeFields) {
+        // If the JsonNode is a NullNode then this field should be removed from the metadata
+        if (source.isNull()) {
+            return null;
+        }
+
         if (source.isValueNode()) {
             ObjectNode node = JsonUtil.OBJECT_MAPPER.createObjectNode();
             node.set(SHADOW_DOCUMENT_TIMESTAMP, new LongNode(this.clock.instant().getEpochSecond()));
@@ -105,7 +113,7 @@ public class ShadowStateMetadata {
         if (source.isArray()) {
             final ArrayNode result = JsonUtil.OBJECT_MAPPER.createArrayNode();
             for (final JsonNode node : source) {
-                result.add(createMetadataPatch(node));
+                result.add(createMetadataPatch(node, removeFields));
             }
             return result;
         }
@@ -117,7 +125,12 @@ public class ShadowStateMetadata {
         while (fieldIter.hasNext()) {
             final String fieldName = fieldIter.next();
             final JsonNode node = sourceObject.get(fieldName);
-            result.set(fieldName, createMetadataPatch(node));
+            JsonNode nodeMetadataPatch = createMetadataPatch(node, !removeFields);
+
+            // If the field isn't being removed then recurse
+            if (!removeFields || nodeMetadataPatch != null) {
+                result.set(fieldName, nodeMetadataPatch);
+            }
         }
         return result;
     }
@@ -145,9 +158,9 @@ public class ShadowStateMetadata {
             JsonNode metadataFieldNode = metadata.get(patchFieldName);
             final JsonNode stateFieldNode = state.get(patchFieldName);
 
-            // If the state doesn't have the node then it was remove from state and should be
-            // removed from metadata if present.
-            if (isNullOrMissing(stateFieldNode)) {
+            // If the state doesn't have the node then it was removed from state and should be
+            // removed from metadata if present. If it's an object then leave it as empty.
+            if (patchFieldNode == null || patchFieldNode.isNull()) {
                 metadata.remove(patchFieldName);
                 continue;
             }
@@ -196,9 +209,14 @@ public class ShadowStateMetadata {
             }
 
             // Now we have gotten to the case where the original and patch nodes are the same type and are not
-            // metadata nodes, recurse.
+            // metadata nodes, recurse if not an empty object.
             if (patchFieldNode.isObject()) {
-                merge((ObjectNode) stateFieldNode, (ObjectNode) metadataFieldNode, (ObjectNode) patchFieldNode);
+                // If the patch is an empty object, then the metadata should be set to an empty object.
+                if (patchFieldNode.isEmpty()) {
+                    metadata.set(patchFieldName, patchFieldNode);
+                } else {
+                    merge((ObjectNode) stateFieldNode, (ObjectNode) metadataFieldNode, (ObjectNode) patchFieldNode);
+                }
             }
         }
     }
