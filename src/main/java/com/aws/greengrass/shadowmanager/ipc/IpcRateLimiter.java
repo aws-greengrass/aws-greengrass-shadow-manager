@@ -9,13 +9,11 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Synchronized;
 
-import java.time.Instant;
-
 @Getter(AccessLevel.PACKAGE)
 public class IpcRateLimiter {
     private int count = 0;
     private int rate;
-    private long timestamp = Instant.now().toEpochMilli();
+    private long timestamp = System.nanoTime() / 1_000_000;
 
     /**
      * Constructor.
@@ -42,11 +40,11 @@ public class IpcRateLimiter {
      */
     @Synchronized
     public boolean tryAcquire() {
-        long currentTime = Instant.now().toEpochMilli();
+        long currentTime = System.nanoTime() / 1_000_000;
 
-        if (currentTime >= timestamp + 1000) {
+        if (currentTime - timestamp >= 1000) {
             count = 1;
-            timestamp = Instant.now().toEpochMilli();
+            timestamp = currentTime;
             return true;
         }
 
