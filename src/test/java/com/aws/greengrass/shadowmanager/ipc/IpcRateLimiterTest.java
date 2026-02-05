@@ -62,6 +62,6 @@ public class IpcRateLimiterTest {
 
         assertThat("lock acquired", ipcRateLimiter.tryAcquire(), is(true));
         assertThat("count reset", ipcRateLimiter.getCount(), is(1));
-        assertThat(ipcRateLimiter.getTimestamp(), greaterThanOrEqualTo(initialTimestamp + 1000));
+        assertThat(ipcRateLimiter.getTimestamp(), greaterThanOrEqualTo(initialTimestamp + 1_000_000_000));
     }
 }
