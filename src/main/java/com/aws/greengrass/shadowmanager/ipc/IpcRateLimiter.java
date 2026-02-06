@@ -11,9 +11,11 @@ import lombok.Synchronized;
 
 @Getter(AccessLevel.PACKAGE)
 public class IpcRateLimiter {
+    private static final long RATE_LIMIT_WINDOW_NANOS = 1_000_000_000;
+    
     private int count = 0;
     private int rate;
-    private long timestamp = System.nanoTime() / 1_000_000;
+    private long timestamp = System.nanoTime();
 
     /**
      * Constructor.
@@ -40,9 +42,9 @@ public class IpcRateLimiter {
      */
     @Synchronized
     public boolean tryAcquire() {
-        long currentTime = System.nanoTime() / 1_000_000;
+        long currentTime = System.nanoTime();
 
-        if (currentTime - timestamp >= 1000) {
+        if (currentTime - timestamp >= RATE_LIMIT_WINDOW_NANOS) {
             count = 1;
             timestamp = currentTime;
             return true;
