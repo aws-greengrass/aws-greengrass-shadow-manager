@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
+import java.sql.Statement;
 import java.util.stream.Stream;
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -117,7 +118,10 @@ public class ShadowManagerDatabase implements Closeable {
         // Validate that after migration we're actually able to open and connect to the DB.
         // This may fail if closing the DB after migration failed for some reason.
         try {
-            try (Connection p = getPool().getConnection()) {}
+            try (Connection p = getPool().getConnection(); Statement st = p.createStatement()) {
+                st.execute("SELECT 1");
+                st.execute("CHECKPOINT");
+            }
             return true;
         } catch (Exception e) {
             logger.atError().cause(e).log("Shadow manager DB could not be opened. Deleting and recreating it");
