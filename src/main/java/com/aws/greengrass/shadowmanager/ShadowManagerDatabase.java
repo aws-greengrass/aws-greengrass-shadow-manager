@@ -25,6 +25,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.Statement;
+import java.sql.SQLException;
 import java.util.stream.Stream;
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -123,8 +124,12 @@ public class ShadowManagerDatabase implements Closeable {
                 st.execute("CHECKPOINT");
             }
             return true;
-        } catch (Exception e) {
+        } catch (SQLException e) {
             logger.atError().cause(e).log("Shadow manager DB could not be opened. Deleting and recreating it");
+            close();
+            return false;
+        } catch (Exception e) {
+            logger.atError().cause(e).log("Shadow manager DB could not be opened (generic exception): " + e.getMessage());
             close();
             return false;
         }
