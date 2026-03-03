@@ -129,7 +129,9 @@ public class ShadowManagerDatabase implements Closeable {
             close();
             return false;
         } catch (Exception e) {
-            logger.atError().cause(e).log("Shadow manager DB could not be opened (generic exception): " + e.getMessage());
+            logger.atError().cause(e).log(
+                "Shadow manager DB could not be opened (generic exception): " + e.getMessage()
+            );
             close();
             return false;
         }
