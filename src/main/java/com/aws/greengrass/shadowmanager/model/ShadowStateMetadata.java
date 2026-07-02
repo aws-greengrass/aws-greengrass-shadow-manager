@@ -268,6 +268,13 @@ public class ShadowStateMetadata {
             return metadataNode;
         }
 
+        // If there is no metadata for this subtree, there is nothing to build. This can happen when the delta and the
+        // desired metadata are structurally inconsistent (e.g. a delta node exists at a path where the desired metadata
+        // is null/missing). Guard against it here instead of dereferencing null in the array/object handling below.
+        if (isNullOrMissing(metadataNode)) {
+            return null;
+        }
+
         // If the deltaNode is an array then recurse on each index
         if (deltaNode.isArray()) {
             final ArrayNode result = JsonUtil.OBJECT_MAPPER.createArrayNode();
