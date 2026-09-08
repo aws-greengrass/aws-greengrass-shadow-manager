@@ -26,6 +26,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_S
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_TIMESTAMP;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -440,6 +441,29 @@ class ShadowStateMetadataTest {
 
     }
 
+
+    @Test
+    void GIVEN_delta_field_missing_from_metadata_WHEN_getDeltaMetadata_THEN_does_not_throw() throws IOException {
+        // Regression test: the delta contains an array field ("SomeArray") for which the desired metadata has no
+        // corresponding node. buildMetadata must not dereference the null metadata node. Previously this threw a
+        // NullPointerException at ShadowStateMetadata.buildMetadata when casting/indexing the null metadata array.
+        final String deltaString = "{\"id\": 100, \"SomeArray\": [100, 200]}";
+        final String patchMetadataString = "{\"id\": {\"timestamp\": 12345}}";
+        Optional<JsonNode> patchMetadataJson = JsonUtil.getPayloadJson(patchMetadataString.getBytes());
+        assertTrue(patchMetadataJson.isPresent());
+        Optional<JsonNode> deltaJson = JsonUtil.getPayloadJson(deltaString.getBytes());
+        assertTrue(deltaJson.isPresent());
+        ShadowStateMetadata shadowStateMetadata = new ShadowStateMetadata(patchMetadataJson.get(), null, mockClock);
+
+        JsonNode deltaMetadata = assertDoesNotThrow(() -> shadowStateMetadata.getDeltaMetadata(deltaJson.get()));
+
+        assertFalse(JsonUtil.isNullOrMissing(deltaMetadata));
+        // The field that had corresponding metadata is still present.
+        assertTrue(deltaMetadata.has("id"));
+        assertThat(deltaMetadata.get("id").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(12345L));
+        // The field with no corresponding metadata is handled gracefully instead of throwing.
+        assertTrue(JsonUtil.isNullOrMissing(deltaMetadata.get("SomeArray")));
+    }
 
     @Test
     void GIVEN_metadata_WHEN_deepCopy_THEN_gets_new_instance_of_metadata() throws IOException {
