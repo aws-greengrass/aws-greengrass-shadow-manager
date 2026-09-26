@@ -63,6 +63,14 @@ public class OverwriteCloudShadowRequest extends BaseSyncRequest {
                 updateSyncInformation(updateDocument, localShadowDocument.get().getVersion(), cloudDocumentVersion,
                         Instant.now().getEpochSecond());
             }
+        } else if (syncInformation.getCloudVersion() == 0) {
+            // The local shadow is missing, but this device has never synced this cloud shadow (e.g. the local
+            // database was recreated empty, or the shadow was just added to the sync configuration). Nothing was
+            // deleted locally, so preserve the cloud shadow instead of deleting it.
+            logger.atDebug()
+                    .kv(LOG_THING_NAME_KEY, getThingName())
+                    .kv(LOG_SHADOW_NAME_KEY, getShadowName())
+                    .log("Not deleting cloud shadow since it has never been synced from this device");
         } else {
             // If the local shadow is not present, then go ahead and delete the cloud shadow.
             handleCloudDelete(syncInformation.getCloudVersion(), syncInformation);
