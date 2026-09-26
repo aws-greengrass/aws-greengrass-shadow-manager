@@ -45,6 +45,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.mockito.InOrder;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
@@ -53,6 +54,7 @@ import software.amazon.awssdk.aws.greengrass.GreengrassCoreIPCService;
 import software.amazon.awssdk.crt.mqtt.MqttClientConnectionEvents;
 
 import java.io.IOException;
+import java.util.concurrent.ExecutorService;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -95,6 +97,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atMostOnce;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
@@ -119,6 +122,8 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
 
     @Mock
     private ShadowManagerDatabase mockDatabase;
+    @Mock
+    private ExecutorService mockExecutorService;
     @Mock
     private ShadowManagerDAOImpl mockDao;
     @Mock
@@ -157,7 +162,7 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         initializeMockedConfig();
         shadowManager = new ShadowManager(config, mockDatabase, mockDao, mockAuthorizationHandlerWrapper,
                 mockPubSubClientWrapper, mockInboundRateLimiter, mockDeviceConfiguration, mockSynchronizeHelper,
-                mockIotDataPlaneClientWrapper, mockSyncHandler, mockCloudDataClient, mockMqttClient, direction);
+                mockIotDataPlaneClientWrapper, mockSyncHandler, mockCloudDataClient, mockMqttClient, mockExecutorService, direction);
         lenient().when(config.lookupTopics(CONFIGURATION_CONFIG_KEY))
                 .thenReturn(Topics.of(context, CONFIGURATION_CONFIG_KEY, null));
         // These are added to not break the existing unit tests. Will be removed later.
@@ -795,5 +800,58 @@ class ShadowManagerUnitTest extends GGServiceTestUtil {
         assertThat(ret, equalTo(Strategy.DEFAULT_STRATEGY));
         verify(mockSyncHandler, never()).stop();
         verify(mockSyncHandler, never()).start(any(), anyInt());
+    }
+
+    // ---- Runtime self-heal: rebuild orchestration (owned by ShadowManager) ----
+
+    @Test
+    void GIVEN_running_WHEN_rebuildDatabase_THEN_quiesce_before_rebuild_then_resume() {
+        ShadowManager s = spy(shadowManager);
+        lenient().doReturn(true).when(s).inState(eq(State.RUNNING));
+        s.setSyncConfiguration(ShadowSyncConfiguration.builder().syncConfigurations(new HashSet<>()).build());
+        runExecutorTaskSynchronously();
+
+        s.rebuildDatabase();
+
+        // sync is stopped (quiesce) before the destructive rebuild
+        InOrder order = inOrder(mockCloudDataClient, mockSyncHandler, mockDatabase);
+        order.verify(mockCloudDataClient).stopSubscribing();
+        order.verify(mockSyncHandler).stop();
+        order.verify(mockDatabase).rebuild();
+    }
+
+    @Test
+    void GIVEN_not_running_WHEN_rebuildDatabase_THEN_rebuild_is_skipped() {
+        ShadowManager s = spy(shadowManager);
+        doReturn(false).when(s).inState(eq(State.RUNNING));
+        runExecutorTaskSynchronously();
+
+        s.rebuildDatabase();
+
+        // not RUNNING (startup/teardown) -> destructive rebuild must not happen
+        verify(mockDatabase, never()).rebuild();
+        verify(mockSyncHandler, never()).stop();
+    }
+
+    @Test
+    void GIVEN_rebuild_already_in_progress_WHEN_rebuildDatabase_again_THEN_only_one_rebuild() {
+        ShadowManager s = spy(shadowManager);
+        lenient().doReturn(true).when(s).inState(eq(State.RUNNING));
+        // Do NOT run the submitted task, so the single-flight latch stays claimed across both calls.
+        doNothing().when(mockExecutorService).execute(any(Runnable.class));
+
+        s.rebuildDatabase();
+        s.rebuildDatabase();
+
+        // second call must not submit another rebuild while the first is still in progress
+        verify(mockExecutorService, times(1)).execute(any(Runnable.class));
+    }
+
+    // Run the task submitted to the executor on the calling thread so we can assert its side effects.
+    private void runExecutorTaskSynchronously() {
+        doAnswer(inv -> {
+            ((Runnable) inv.getArgument(0)).run();
+            return null;
+        }).when(mockExecutorService).execute(any(Runnable.class));
     }
 }
