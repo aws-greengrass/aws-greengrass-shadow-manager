@@ -9,6 +9,7 @@ package com.aws.greengrass.shadowmanager;
 import com.aws.greengrass.logging.api.Logger;
 import com.aws.greengrass.logging.impl.LogManager;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
+import com.aws.greengrass.shadowmanager.exception.ShadowManagerDatabaseRecoveryException;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.util.Pair;
@@ -33,15 +34,63 @@ import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KE
 public class ShadowManagerDAOImpl implements ShadowManagerDAO {
     private static final Logger logger = LogManager.getLogger(ShadowManagerDAOImpl.class);
     private final ShadowManagerDatabase database;
+    // Notified when a data-access operation fails because the local database is corrupted, so the owner
+    // (ShadowManager) can orchestrate a rebuild. The DAO only detects corruption; it does not recover.
+    private Runnable onDatabaseCorrupted;
+    // True while recoverDatabase() runs; new data-access calls fail fast instead of blocking.
+    private volatile boolean recoveryInProgress;
 
     @FunctionalInterface
     private interface SQLExecution<T> {
         T apply(PreparedStatement statement) throws SQLException;
     }
 
+    /**
+     * Creates the local shadow DAO.
+     *
+     * @param database the local shadow database
+     */
     @Inject
     public ShadowManagerDAOImpl(final ShadowManagerDatabase database) {
         this.database = database;
+    }
+
+    /**
+     * Register the callback invoked when a data-access operation detects the local database is corrupted.
+     * The owner uses this to orchestrate a rebuild (quiesce, recreate, resync).
+     *
+     * @param onDatabaseCorrupted callback run when local-database corruption is detected
+     */
+    @Override
+    public void setOnDatabaseCorrupted(Runnable onDatabaseCorrupted) {
+        this.onDatabaseCorrupted = onDatabaseCorrupted;
+    }
+
+    @Override
+    public void recoverDatabase(DatabaseRecovery recovery) throws ShadowManagerDatabaseRecoveryException {
+        recoveryInProgress = true;
+        try {
+            // Held on the DAO monitor: any in-flight data-access call finishes and releases its connection
+            // before recovery's destructive step runs. H2's pool.dispose() won't close an active connection,
+            // so draining them here is what keeps a rebuild from racing a live connection.
+            synchronized (this) {
+                recovery.run();
+            }
+        } finally {
+            recoveryInProgress = false;
+        }
+    }
+
+    /**
+     * Fail a new data-access call while the database is being recovered, instead of blocking on the DAO
+     * monitor for the whole recovery (shadow IPC requests run on CRT event-loop threads). The caller's
+     * existing ShadowManagerDataException handling returns an error. Calls already inside a locked DAO
+     * operation are not affected.
+     */
+    private void failIfRecoveryInProgress() {
+        if (recoveryInProgress && !Thread.holdsLock(this)) {
+            throw new ShadowManagerDataException("Local shadow database is being recovered. Retry the request later.");
+        }
     }
 
     /**
@@ -52,7 +101,12 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      * @return The queried shadow from the local shadow store
      */
     @Override
-    public synchronized Optional<ShadowDocument> getShadowThing(String thingName, String shadowName) {
+    public Optional<ShadowDocument> getShadowThing(String thingName, String shadowName) {
+        failIfRecoveryInProgress();
+        return getShadowThingLocked(thingName, shadowName);
+    }
+
+    private synchronized Optional<ShadowDocument> getShadowThingLocked(String thingName, String shadowName) {
         String sql = "SELECT document, version, updateTime FROM documents  WHERE deleted = 0 AND "
                 + "thingName = ? AND shadowName = ?";
 
@@ -69,7 +123,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
                 return Optional.empty();
             }
         } catch (SQLException | IOException | IllegalStateException e) {
-            throw new ShadowManagerDataException(e);
+            throw fail(e);
         }
     }
 
@@ -89,7 +143,12 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      * @return The deleted shadow from the local shadow store
      */
     @Override
-    public synchronized Optional<ShadowDocument> deleteShadowThing(String thingName, String shadowName) {
+    public Optional<ShadowDocument> deleteShadowThing(String thingName, String shadowName) {
+        failIfRecoveryInProgress();
+        return deleteShadowThingLocked(thingName, shadowName);
+    }
+
+    private synchronized Optional<ShadowDocument> deleteShadowThingLocked(String thingName, String shadowName) {
         // To be consistent with cloud, subsequent updates to the shadow should not start from version 0
         // https://docs.aws.amazon.com/iot/latest/developerguide/device-shadow-data-flow.html
         logger.atDebug()
@@ -265,7 +324,12 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
      * @return The deleted shadow version if it was deleted or exists; Else an empty optional
      */
     @Override
-    public synchronized Optional<Long> getDeletedShadowVersion(String thingName, String shadowName) {
+    public Optional<Long> getDeletedShadowVersion(String thingName, String shadowName) {
+        failIfRecoveryInProgress();
+        return getDeletedShadowVersionLocked(thingName, shadowName);
+    }
+
+    private synchronized Optional<Long> getDeletedShadowVersionLocked(String thingName, String shadowName) {
         String sql = "SELECT version FROM documents  WHERE deleted = 1 AND thingName = ? AND shadowName = ?";
 
         try (Connection c = getPool().getConnection();
@@ -279,7 +343,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
                 return Optional.empty();
             }
         } catch (SQLException | IllegalStateException e) {
-            throw new ShadowManagerDataException(e);
+            throw fail(e);
         }
     }
 
@@ -364,14 +428,33 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
 
     }
 
-    private synchronized <T> T execute(String sql, SQLExecution<T> thunk) {
+    private <T> T execute(String sql, SQLExecution<T> thunk) {
+        failIfRecoveryInProgress();
+        return executeLocked(sql, thunk);
+    }
+
+    private synchronized <T> T executeLocked(String sql, SQLExecution<T> thunk) {
         try (Connection c = getPool().getConnection();
              PreparedStatement statement = c.prepareStatement(sql)) {
             statement.setQueryTimeout(10);
             return thunk.apply(statement);
         } catch (SQLException | IllegalStateException e) {
-            throw new ShadowManagerDataException(e);
+            throw fail(e);
         }
+    }
+
+    /**
+     * Wrap a shadow database failure as a {@link ShadowManagerDataException}. If the failure indicates the
+     * local database is corrupted/unusable, notify the owner so it can orchestrate a rebuild.
+     *
+     * @param e the failure observed while accessing the shadow database
+     * @return the exception to throw to the caller
+     */
+    private ShadowManagerDataException fail(Exception e) {
+        if (ShadowManagerDatabase.isDatabaseCorrupted(e) && onDatabaseCorrupted != null) {
+            onDatabaseCorrupted.run();
+        }
+        return new ShadowManagerDataException(e);
     }
 }
 

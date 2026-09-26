@@ -5,6 +5,7 @@
 
 package com.aws.greengrass.shadowmanager;
 
+import com.aws.greengrass.shadowmanager.exception.ShadowManagerDatabaseRecoveryException;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.util.Pair;
@@ -13,6 +14,32 @@ import java.util.List;
 import java.util.Optional;
 
 public interface ShadowManagerDAO {
+    /**
+     * Register the callback invoked when a data-access operation detects the local database is corrupted,
+     * so the owner can orchestrate a rebuild (quiesce, recreate, resync).
+     *
+     * @param onDatabaseCorrupted callback run when local-database corruption is detected
+     */
+    void setOnDatabaseCorrupted(Runnable onDatabaseCorrupted);
+
+    /**
+     * A database recovery action.
+     */
+    @FunctionalInterface
+    interface DatabaseRecovery {
+        void run() throws ShadowManagerDatabaseRecoveryException;
+    }
+
+    /**
+     * Run a database recovery action while holding the DAO lock, so no data-access operation holds an
+     * open connection while the database is verified/recreated. Data-access calls made while it runs fail
+     * fast with a {@link com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException}.
+     *
+     * @param recovery the recovery action (verify, and recreate only if needed)
+     * @throws ShadowManagerDatabaseRecoveryException if the database could not be recovered
+     */
+    void recoverDatabase(DatabaseRecovery recovery) throws ShadowManagerDatabaseRecoveryException;
+
     /**
      * Attempts to obtain a shadow document from the local shadow storage.
      *

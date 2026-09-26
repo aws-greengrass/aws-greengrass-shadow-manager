@@ -28,12 +28,20 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.arrayContaining;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.hamcrest.Matchers.not;
@@ -56,7 +64,6 @@ class ShadowManagerDAOImplTest {
 
     @Mock
     private ShadowManagerDatabase mockDatabase;
-
     @Mock
     private JdbcConnectionPool mockPool;
 
@@ -731,4 +738,92 @@ class ShadowManagerDAOImplTest {
         assertThat(stringArgumentCaptor.getAllValues().get(0), is(THING_NAME));
         assertThat(stringArgumentCaptor.getAllValues().get(1), is(SHADOW_NAME));
     }
+
+    // ---- Runtime self-heal: corruption DETECTION (local database corruption, incl. H2 MVStore
+    // chunk-id wraparound). The DAO only detects corruption and notifies the owner; the rebuild
+    // itself is orchestrated by ShadowManager and covered in ShadowManagerUnitTest. ----
+
+    private static SQLException corruptionFailure(int errorCode) {
+        // H2 surfaces corruption as a SQLException carrying a corruption/IO error code; the wraparound
+        // is GENERAL_ERROR_1 (50000) with an ArrayIndexOutOfBoundsException beneath it.
+        return new SQLException("db error", "HY000", errorCode, new ArrayIndexOutOfBoundsException("0"));
+    }
+
+    private static SQLException wraparoundFailure() {
+        return corruptionFailure(50000); // ErrorCode.GENERAL_ERROR_1
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(ints = {50000, 90030, 90028, 90031, 90048})
+    void GIVEN_corruption_error_code_WHEN_dao_operation_fails_THEN_owner_is_notified(int code)
+            throws SQLException {
+        when(mockPreparedStatement.executeQuery()).thenThrow(corruptionFailure(code));
+
+        AtomicInteger notified = new AtomicInteger(0);
+        ShadowManagerDAOImpl impl = new ShadowManagerDAOImpl(mockDatabase);
+        impl.setOnDatabaseCorrupted(notified::incrementAndGet);
+
+        // the original failure is still surfaced to the caller
+        assertThrows(ShadowManagerDataException.class, () -> impl.getShadowThing(THING_NAME, SHADOW_NAME));
+
+        // and the owner was notified exactly once so it can orchestrate the rebuild
+        assertThat(notified.get(), is(1));
+    }
+
+    @Test
+    void GIVEN_ordinary_sql_failure_WHEN_dao_operation_fails_THEN_owner_is_not_notified() throws SQLException {
+        // an ordinary SQL error (e.g. syntax, error code 42000) is not corruption
+        when(mockPreparedStatement.executeQuery())
+                .thenThrow(new SQLException("syntax error", "42000", 42000));
+
+        AtomicInteger notified = new AtomicInteger(0);
+        ShadowManagerDAOImpl impl = new ShadowManagerDAOImpl(mockDatabase);
+        impl.setOnDatabaseCorrupted(notified::incrementAndGet);
+
+        assertThrows(ShadowManagerDataException.class, () -> impl.getShadowThing(THING_NAME, SHADOW_NAME));
+
+        assertThat(notified.get(), is(0));
+    }
+
+    @Test
+    void GIVEN_no_corruption_callback_WHEN_wraparound_failure_THEN_no_error() throws SQLException {
+        when(mockPreparedStatement.executeQuery()).thenThrow(wraparoundFailure());
+
+        // setOnDatabaseCorrupted() never called -> callback is null; detection must still be null-safe
+        ShadowManagerDAOImpl impl = new ShadowManagerDAOImpl(mockDatabase);
+        assertThrows(ShadowManagerDataException.class, () -> impl.getShadowThing(THING_NAME, SHADOW_NAME));
+    }
+
+    @Test
+    void GIVEN_recovery_in_progress_WHEN_called_from_another_thread_THEN_fails_fast() throws Exception {
+        when(mockResultSet.next()).thenReturn(false);
+        when(mockPreparedStatement.executeQuery()).thenReturn(mockResultSet);
+        AtomicInteger notified = new AtomicInteger(0);
+        ShadowManagerDAOImpl impl = new ShadowManagerDAOImpl(mockDatabase);
+        impl.setOnDatabaseCorrupted(notified::incrementAndGet);
+        ExecutorService otherThread = Executors.newSingleThreadExecutor();
+        AtomicReference<Throwable> duringRecovery = new AtomicReference<>();
+        try {
+            impl.recoverDatabase(() -> {
+                // a request arriving while recovery holds the DAO monitor must fail, not block on it
+                Future<?> request = otherThread.submit(() -> impl.getShadowThing(THING_NAME, SHADOW_NAME));
+                try {
+                    request.get(5, TimeUnit.SECONDS);
+                } catch (ExecutionException e) {
+                    duringRecovery.set(e.getCause());
+                } catch (InterruptedException | TimeoutException e) {
+                    duringRecovery.set(e);
+                }
+            });
+        } finally {
+            otherThread.shutdownNow();
+        }
+
+        assertThat(duringRecovery.get(), is(instanceOf(ShadowManagerDataException.class)));
+        // failing fast is not a corruption signal
+        assertThat(notified.get(), is(0));
+        // once recovery is done, calls go through again
+        assertThat(impl.getShadowThing(THING_NAME, SHADOW_NAME).isPresent(), is(false));
+    }
 }
+

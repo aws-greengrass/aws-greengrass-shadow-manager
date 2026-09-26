@@ -47,16 +47,19 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atMostOnce;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -359,4 +362,33 @@ class PubSubIntegratorTest {
         assertDoesNotThrow(() -> integrator.extractShadowFromTopic("$aws/things/" + MOCK_THING + "/shadow" + shadowPrefix + "/delete"));
         assertDoesNotThrow(() -> integrator.extractShadowFromTopic("$aws/things/" + MOCK_THING + "/shadow" + shadowPrefix + "/update"));
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void GIVEN_subscribed_WHEN_unsubscribe_THEN_same_listener_instance_is_passed() {
+        PubSubIntegrator integrator = new PubSubIntegrator(mockPubSubClientWrapper, mockDeleteThingShadowRequestHandler,
+                mockUpdateThingShadowRequestHandler, mockGetThingShadowRequestHandler);
+        integrator.subscribe();
+        integrator.unsubscribe();
+
+        // Nucleus removes a listener by equality, so unsubscribe must pass the very object subscribe registered
+        ArgumentCaptor<Consumer<PublishEvent>> subscribed = ArgumentCaptor.forClass(Consumer.class);
+        ArgumentCaptor<Consumer<PublishEvent>> unsubscribed = ArgumentCaptor.forClass(Consumer.class);
+        verify(mockPubSubClientWrapper).subscribe(subscribed.capture());
+        verify(mockPubSubClientWrapper).unsubscribe(unsubscribed.capture());
+        assertSame(subscribed.getValue(), unsubscribed.getValue());
+    }
+
+    @Test
+    void GIVEN_subscribe_fails_WHEN_subscribe_again_THEN_it_is_retried() {
+        PubSubIntegrator integrator = new PubSubIntegrator(mockPubSubClientWrapper, mockDeleteThingShadowRequestHandler,
+                mockUpdateThingShadowRequestHandler, mockGetThingShadowRequestHandler);
+        doThrow(new IllegalStateException("simulated")).doNothing().when(mockPubSubClientWrapper).subscribe(any());
+
+        assertThrows(IllegalStateException.class, integrator::subscribe);
+        integrator.subscribe();
+
+        verify(mockPubSubClientWrapper, times(2)).subscribe(any());
+    }
 }
+
