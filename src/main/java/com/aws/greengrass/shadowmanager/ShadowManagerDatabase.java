@@ -15,7 +15,7 @@ import lombok.Synchronized;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.FlywayException;
 import org.flywaydb.core.internal.exception.FlywaySqlException;
-import org.h2.jdbc.JdbcSQLNonTransientException;
+import org.h2.api.ErrorCode;
 import org.h2.jdbcx.JdbcConnectionPool;
 import org.h2.jdbcx.JdbcDataSource;
 
@@ -26,6 +26,9 @@ import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.stream.Stream;
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -50,9 +53,35 @@ public class ShadowManagerDatabase implements Closeable {
     private JdbcConnectionPool pool;
 
     private static final Logger logger = LogManager.getLogger(ShadowManagerDatabase.class);
+    // H2 error codes indicating the local database is corrupted or otherwise unusable (vs. an ordinary
+    // SQL error). GENERAL_ERROR_1 covers MVStore-internal failures, including the chunk-id wraparound.
+    private static final Set<Integer> CORRUPTION_ERROR_CODES = new HashSet<>(Arrays.asList(
+            ErrorCode.GENERAL_ERROR_1,
+            ErrorCode.FILE_CORRUPTED_1,
+            ErrorCode.IO_EXCEPTION_1,
+            ErrorCode.IO_EXCEPTION_2,
+            ErrorCode.FILE_VERSION_ERROR_1));
     private final Path databasePath;
     @Getter
     private boolean initialized = false;
+
+    /**
+     * Whether the failure indicates the local shadow database is corrupted/unusable and must be recreated.
+     * Scans the cause chain for an H2 {@link SQLException} carrying a corruption or I/O error code (which
+     * covers the MVStore chunk-id wraparound, reported as {@link ErrorCode#GENERAL_ERROR_1}). Narrow by
+     * design: ordinary SQL errors (syntax, constraint, etc.) carry other codes and are not corruption.
+     *
+     * @param failure the failure observed while accessing the shadow database
+     * @return true if the local database is corrupted and should be recreated
+     */
+    public static boolean isDatabaseCorrupted(Throwable failure) {
+        for (Throwable t = failure; t != null; t = t.getCause()) {
+            if (t instanceof SQLException && CORRUPTION_ERROR_CODES.contains(((SQLException) t).getErrorCode())) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     /**
      * Creates a database with a {@link javax.sql.DataSource} using the kernel config.
@@ -81,14 +110,30 @@ public class ShadowManagerDatabase implements Closeable {
      */
     @Synchronized
     public void install() throws ShadowManagerDataException {
+        if (initializeAndVerify()) {
+            initialized = true;
+        } else {
+            logger.atWarn().log("Failed to migrate the existing shadow manager DB. "
+                    + "Removing it and creating a new one.");
+            rebuild();
+        }
+    }
+
+    /**
+     * Delete and recreate the local shadow database in place: dispose the connection pool, delete the
+     * on-disk db files, and re-run the Flyway migration to create an empty schema. Used to recover from
+     * an unusable database (e.g. the H2 MVStore chunk-id wraparound). Orchestration (when to call this,
+     * off which thread, and any follow-up resync) is the caller's responsibility.
+     *
+     * @throws ShadowManagerDataException if the database could not be rebuilt
+     */
+    @Synchronized
+    public void rebuild() throws ShadowManagerDataException {
         try {
-            boolean isMigrationSuccessful = migrateAndGetResult();
-            if (!isMigrationSuccessful) {
-                logger.atWarn().log("Failed to migrate the existing shadow manager DB. "
-                        + "Removing it and creating a new one.");
-                deleteDB(databasePath);
-                migrateDB();
-            }
+            initialized = false;
+            close();
+            deleteDB(databasePath);
+            migrateDB();
             initialized = true;
         } catch (FlywayException | IOException e) {
             throw new ShadowManagerDataException(e);
@@ -103,13 +148,11 @@ public class ShadowManagerDatabase implements Closeable {
         flyway.migrate();
     }
 
-    @SuppressWarnings({"checkstyle:EmptyBlock", "checkstyle:WhitespaceAround", "PMD.AvoidCatchingGenericException"})
-    private boolean migrateAndGetResult() {
+    private boolean initializeAndVerify() {
         try {
             migrateDB();
         } catch (FlywaySqlException flywaySqlException) {
-            if (flywaySqlException.getCause() instanceof JdbcSQLNonTransientException
-                    && flywaySqlException.getCause().getCause() instanceof IllegalStateException) {
+            if (isDatabaseCorrupted(flywaySqlException)) {
                 logger.atError().cause(flywaySqlException).log("Shadow manager DB is corrupted");
                 return false;
             }
@@ -117,7 +160,7 @@ public class ShadowManagerDatabase implements Closeable {
         }
 
         // Validate that after migration we're actually able to open and connect to the DB.
-        // This may fail if closing the DB after migration failed for some reason.
+        // A DB we cannot open/checkpoint is unusable, so recreate it.
         try {
             try (Connection p = getPool().getConnection(); Statement st = p.createStatement()) {
                 st.execute("SELECT 1");
@@ -125,13 +168,7 @@ public class ShadowManagerDatabase implements Closeable {
             }
             return true;
         } catch (SQLException e) {
-            logger.atError().cause(e).log("Shadow manager DB could not be opened. Deleting and recreating it");
-            close();
-            return false;
-        } catch (Exception e) {
-            logger.atError().cause(e).log(
-                "Shadow manager DB could not be opened (generic exception): " + e.getMessage()
-            );
+            logger.atError().cause(e).log("Shadow manager DB could not be opened; deleting and recreating it");
             close();
             return false;
         }

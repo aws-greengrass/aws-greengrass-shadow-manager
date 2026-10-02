@@ -33,15 +33,34 @@ import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KE
 public class ShadowManagerDAOImpl implements ShadowManagerDAO {
     private static final Logger logger = LogManager.getLogger(ShadowManagerDAOImpl.class);
     private final ShadowManagerDatabase database;
+    // Notified when a data-access operation fails because the local database is corrupted, so the owner
+    // (ShadowManager) can orchestrate a rebuild. The DAO only detects corruption; it does not recover.
+    private Runnable onDatabaseCorrupted;
 
     @FunctionalInterface
     private interface SQLExecution<T> {
         T apply(PreparedStatement statement) throws SQLException;
     }
 
+    /**
+     * Creates the local shadow DAO.
+     *
+     * @param database the local shadow database
+     */
     @Inject
     public ShadowManagerDAOImpl(final ShadowManagerDatabase database) {
         this.database = database;
+    }
+
+    /**
+     * Register the callback invoked when a data-access operation detects the local database is corrupted.
+     * The owner uses this to orchestrate a rebuild (quiesce, recreate, resync).
+     *
+     * @param onDatabaseCorrupted callback run when local-database corruption is detected
+     */
+    @Override
+    public void setOnDatabaseCorrupted(Runnable onDatabaseCorrupted) {
+        this.onDatabaseCorrupted = onDatabaseCorrupted;
     }
 
     /**
@@ -69,7 +88,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
                 return Optional.empty();
             }
         } catch (SQLException | IOException | IllegalStateException e) {
-            throw new ShadowManagerDataException(e);
+            throw fail(e);
         }
     }
 
@@ -279,7 +298,7 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
                 return Optional.empty();
             }
         } catch (SQLException | IllegalStateException e) {
-            throw new ShadowManagerDataException(e);
+            throw fail(e);
         }
     }
 
@@ -370,8 +389,22 @@ public class ShadowManagerDAOImpl implements ShadowManagerDAO {
             statement.setQueryTimeout(10);
             return thunk.apply(statement);
         } catch (SQLException | IllegalStateException e) {
-            throw new ShadowManagerDataException(e);
+            throw fail(e);
         }
+    }
+
+    /**
+     * Wrap a shadow database failure as a {@link ShadowManagerDataException}. If the failure indicates the
+     * local database is corrupted/unusable, notify the owner so it can orchestrate a rebuild.
+     *
+     * @param e the failure observed while accessing the shadow database
+     * @return the exception to throw to the caller
+     */
+    private ShadowManagerDataException fail(Exception e) {
+        if (ShadowManagerDatabase.isDatabaseCorrupted(e) && onDatabaseCorrupted != null) {
+            onDatabaseCorrupted.run();
+        }
+        return new ShadowManagerDataException(e);
     }
 }
 
