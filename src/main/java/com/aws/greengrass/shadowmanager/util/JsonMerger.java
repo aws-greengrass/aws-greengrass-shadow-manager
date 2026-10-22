@@ -148,6 +148,87 @@ public final class JsonMerger {
         return result;
     }
 
+    /**
+     * Merges the desired or reported node of an update request into the current one, like IoT Device Shadow. Unlike
+     * {@link #merge(JsonNode, JsonNode)}, an empty object is a value, not null, and a key named "state" is an ordinary
+     * key.
+     * <ul>
+     *     <li>a null removes the field; a null already stored is left as is.</li>
+     *     <li>an object is merged into an existing object; an empty object changes nothing.</li>
+     *     <li>an object for a missing or null field is added without its null leaves, and is skipped if nothing is
+     *     left; empty objects in it are kept.</li>
+     *     <li>an object replacing a value or an array, and any value or array, replaces the field as is.</li>
+     * </ul>
+     * Objects left empty after their fields are removed are kept.
+     *
+     * @param current the current desired or reported node; may be null.
+     * @param patch   the desired or reported node in the update request; null removes the node.
+     * @return the merged node, or null if it is empty.
+     */
+    @SuppressFBWarnings(value = "BC_UNCONFIRMED_CAST", justification = "The update schema only allows objects.")
+    public static JsonNode mergeShadowState(final JsonNode current, final JsonNode patch) {
+        if (patch == null || patch.isNull()) {
+            return null;
+        }
+        final ObjectNode merged = current != null && current.isObject()
+                ? (ObjectNode) current : JsonUtil.OBJECT_MAPPER.createObjectNode();
+        mergeShadowState(merged, (ObjectNode) patch);
+        return JsonUtil.nullIfEmpty(merged);
+    }
+
+    private static void mergeShadowState(final ObjectNode source, final ObjectNode patch) {
+        final Iterator<String> fieldNames = patch.fieldNames();
+        while (fieldNames.hasNext()) {
+            final String field = fieldNames.next();
+            final JsonNode sourceValue = source.get(field);
+            final JsonNode patchValue = patch.get(field);
+
+            if (patchValue.isNull()) {
+                if (sourceValue != null && !sourceValue.isNull()) {
+                    source.remove(field);
+                }
+                continue;
+            }
+            if (patchValue.isObject()) {
+                if (sourceValue != null && sourceValue.isObject()) {
+                    mergeShadowState((ObjectNode) sourceValue, (ObjectNode) patchValue);
+                } else if (sourceValue == null || sourceValue.isNull()) {
+                    final ObjectNode added = withoutNulls((ObjectNode) patchValue);
+                    if (added != null) {
+                        source.set(field, added);
+                    }
+                } else {
+                    source.set(field, patchValue.deepCopy());
+                }
+                continue;
+            }
+            source.set(field, patchValue.deepCopy());
+        }
+    }
+
+    /**
+     * Copies the object without its null leaves. Objects emptied by the removal are dropped; empty objects in the
+     * input are kept.
+     *
+     * @return the copy, or null if every leaf was null.
+     */
+    private static ObjectNode withoutNulls(final ObjectNode node) {
+        final ObjectNode result = JsonUtil.OBJECT_MAPPER.createObjectNode();
+        boolean removed = false;
+        final Iterator<String> fieldNames = node.fieldNames();
+        while (fieldNames.hasNext()) {
+            final String field = fieldNames.next();
+            final JsonNode value = node.get(field);
+            final JsonNode copy = value.isObject() ? withoutNulls((ObjectNode) value) : value.deepCopy();
+            if (copy == null || copy.isNull()) {
+                removed = true;
+            } else {
+                result.set(field, copy);
+            }
+        }
+        return removed && result.isEmpty() ? null : result;
+    }
+
     private static void clearState(JsonNode node) {
         if (!node.isObject()) {
             return;
