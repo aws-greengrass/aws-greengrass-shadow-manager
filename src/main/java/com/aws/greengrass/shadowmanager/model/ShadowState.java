@@ -73,26 +73,12 @@ public class ShadowState {
             final JsonNode value = updatedStateNode.get(field);
 
             if (SHADOW_DOCUMENT_STATE_DESIRED.equals(field)) {
-                if (isNullOrMissing(value)) {
-                    this.desired = null;
-                } else if (this.desired == null) {
-                    this.desired = nullIfEmpty(value);
-                } else {
-                    JsonMerger.merge(this.desired, value);
-                    this.desired = nullIfEmpty(this.desired);
-                }
+                this.desired = JsonMerger.mergeShadowState(this.desired, value);
                 continue;
             }
 
             if (SHADOW_DOCUMENT_STATE_REPORTED.equals(field)) {
-                if (isNullOrMissing(value)) {
-                    this.reported = null;
-                } else if (this.reported == null) {
-                    this.reported = nullIfEmpty(value);
-                } else {
-                    JsonMerger.merge(this.reported, value);
-                    this.reported = nullIfEmpty(reported);
-                }
+                this.reported = JsonMerger.mergeShadowState(this.reported, value);
             }
         }
     }
