@@ -630,6 +630,31 @@ class ShadowStateMetadataTest {
         assertThat(shape(document.getMetadata().getReported()), is(json("{\"q\":\"old\"}")));
     }
 
+    // Row 8 in the PR description.
+    @Test
+    void GIVEN_untouched_array_with_malformed_metadata_WHEN_section_updated_THEN_array_metadata_repaired() throws IOException {
+        ShadowDocument document = new ShadowDocument(new ShadowState(json("{\"a\":[1,null,{\"x\":1}],\"b\":1}"), null),
+                new ShadowStateMetadata(json("{\"a\":[{\"timestamp\":1},null,{}],\"b\":{\"timestamp\":1}}"), null,
+                        mockClock), 1L);
+
+        document.update(json("{\"state\":{\"desired\":{\"b\":2}}}"));
+
+        assertThat(shape(document.getMetadata().getDesired()),
+                is(json("{\"a\":[\"old\",\"ts\",{\"x\":\"ts\"}],\"b\":\"ts\"}")));
+    }
+
+    // See the PR description: removing a field doesn't advance the latest updated timestamp.
+    @Test
+    void GIVEN_field_removed_WHEN_get_latest_updated_timestamp_THEN_removed_field_not_counted() throws IOException {
+        ShadowDocument document = new ShadowDocument(new ShadowState(json("{\"a\":1,\"b\":1}"), null),
+                new ShadowStateMetadata(json("{\"a\":{\"timestamp\":50},\"b\":{\"timestamp\":1}}"), null,
+                        mockClock), 1L);
+
+        document.update(json("{\"state\":{\"desired\":{\"a\":null}}}"));
+
+        assertThat(document.getMetadata().getLatestUpdatedTimestamp(), is(OLD_TIMESTAMP));
+    }
+
     // Row 9 in the PR description.
     @Test
     void GIVEN_update_with_null_leaves_WHEN_update_THEN_response_has_timestamps_for_nulls() throws IOException {

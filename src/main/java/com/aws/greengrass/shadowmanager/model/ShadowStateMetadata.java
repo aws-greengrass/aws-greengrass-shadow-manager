@@ -112,29 +112,30 @@ public class ShadowStateMetadata {
 
     // Metadata has the shape of the updated state; see the PR description.
     private JsonNode buildStateMetadata(final JsonNode state, final JsonNode metadata, final JsonNode patch) {
+        final boolean touched = patch != null;
         if (state.isObject()) {
             final boolean hasChildMetadata = metadata != null && metadata.isObject() && !isMetadataNode(metadata);
             final ObjectNode result = JsonUtil.OBJECT_MAPPER.createObjectNode();
             final Iterator<Map.Entry<String, JsonNode>> fieldIter = state.fields();
             while (fieldIter.hasNext()) {
                 final Map.Entry<String, JsonNode> field = fieldIter.next();
-                final JsonNode childPatch = patch == null || !patch.isObject() ? patch : patch.get(field.getKey());
+                final JsonNode childPatch = touched && patch.isObject() ? patch.get(field.getKey()) : patch;
                 final JsonNode childMetadata = hasChildMetadata ? metadata.get(field.getKey()) : null;
                 result.set(field.getKey(), buildStateMetadata(field.getValue(), childMetadata, childPatch));
             }
             return result;
         }
         if (state.isArray()) {
-            if (patch == null && metadata != null && metadata.isArray() && metadata.size() == state.size()) {
-                return metadata;
+            if (touched || metadata == null || !metadata.isArray() || metadata.size() != state.size()) {
+                return createPatchMetadata(state);
             }
             final ArrayNode result = JsonUtil.OBJECT_MAPPER.createArrayNode();
-            for (final JsonNode node : state) {
-                result.add(buildStateMetadata(node, null, node));
+            for (int i = 0; i < state.size(); i++) {
+                result.add(buildStateMetadata(state.get(i), metadata.get(i), null));
             }
             return result;
         }
-        if (patch == null && metadata != null && isMetadataNode(metadata)) {
+        if (!touched && metadata != null && isMetadataNode(metadata)) {
             return metadata;
         }
         return timestampNode();
