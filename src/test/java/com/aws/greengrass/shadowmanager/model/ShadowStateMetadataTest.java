@@ -8,7 +8,9 @@ package com.aws.greengrass.shadowmanager.model;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.TextNode;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,6 +46,7 @@ class ShadowStateMetadataTest {
     private final static String reportedPatchString = "{\"reported\": {\"id\": 100, \"SomeObject\": {\"SomeChild1\": \"SomeValue\", \"SomeChild2\": {\"SomeChild3\": true}}}}";
     private final static String patchMetadataString = "{\"id\": 12345, \"SomeObject\": {\"SomeChild1\": 12345, \"SomeChild2\": {\"SomeChild3\": 12345}}}";
     private final static long timestamp = 1617731792L;
+    private static final long OLD_TIMESTAMP = 1L;
 
     @BeforeEach
     void setup() {
@@ -240,7 +243,7 @@ class ShadowStateMetadataTest {
 
     @Test
     void GIVEN_non_empty_state_with_nested_empty_object_and_non_empty_patch_WHEN_update_THEN_metadata_is_correctly_updated() throws IOException {
-        String stateString = "{\"SomeObject\": {\"SomeVal\": \"123\"}}";
+        String stateString = "{\"SomeObject\": {}}";
         JsonNode stateJson = JsonUtil.getPayloadJson(stateString.getBytes()).get();
         String patchString = "{\"desired\": {\"SomeObject\": {\"SomeVal\": null}}}";
         Optional<JsonNode> patchJson = JsonUtil.getPayloadJson(patchString.getBytes());
@@ -262,12 +265,12 @@ class ShadowStateMetadataTest {
         assertFalse(JsonUtil.isNullOrMissing(patchMetadata));
         assertTrue(patchMetadata.has(SHADOW_DOCUMENT_STATE_DESIRED));
         assertTrue(patchMetadata.get(SHADOW_DOCUMENT_STATE_DESIRED).has("SomeObject"));
-        assertThat(patchMetadata.get(SHADOW_DOCUMENT_STATE_DESIRED).get("SomeObject"), is(JsonUtil.OBJECT_MAPPER.createObjectNode()));
+        assertThat(patchMetadata.get(SHADOW_DOCUMENT_STATE_DESIRED).get("SomeObject").get("SomeVal").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(timestamp));
     }
 
     @Test
     void GIVEN_non_empty_state_with_nested_object_and_nested_field_removed_WHEN_update_THEN_metadata_is_correctly_updated() throws IOException {
-        String stateString = "{\"SomeObject\": {\"SomeVal\": \"123\", \"AnotherVal\": \"4567\"}}";
+        String stateString = "{\"SomeObject\": {\"AnotherVal\": \"4567\"}}";
         JsonNode stateJson = JsonUtil.getPayloadJson(stateString.getBytes()).get();
         String patchString = "{\"desired\": {\"SomeObject\": {\"SomeVal\": null, \"AnotherVal\": \"4567\"}}}";
         Optional<JsonNode> patchJson = JsonUtil.getPayloadJson(patchString.getBytes());
@@ -293,12 +296,12 @@ class ShadowStateMetadataTest {
         assertTrue(patchMetadata.has(SHADOW_DOCUMENT_STATE_DESIRED));
         assertTrue(patchMetadata.get(SHADOW_DOCUMENT_STATE_DESIRED).has("SomeObject"));
         assertThat(patchMetadata.get(SHADOW_DOCUMENT_STATE_DESIRED).get("SomeObject").get("AnotherVal").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(timestamp));
-        assertFalse(patchMetadata.get(SHADOW_DOCUMENT_STATE_DESIRED).get("SomeObject").has("SomeVal"));
+        assertThat(patchMetadata.get(SHADOW_DOCUMENT_STATE_DESIRED).get("SomeObject").get("SomeVal").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(timestamp));
     }
 
     @Test
     void GIVEN_non_empty_state_with_nested_object_and_nested_field_added_WHEN_update_THEN_metadata_is_correctly_updated() throws IOException {
-        String stateString = "{\"SomeObject\": {\"SomeVal\": \"123\"}}";
+        String stateString = "{\"SomeObject\": {\"SomeVal\": \"456\", \"AnotherVal\": \"testingValue\"}}";
         JsonNode stateJson = JsonUtil.getPayloadJson(stateString.getBytes()).get();
         String patchString = "{\"desired\": {\"SomeObject\": {\"SomeVal\": \"456\", \"AnotherVal\": " +
                 "\"testingValue\"}}}";
@@ -330,7 +333,7 @@ class ShadowStateMetadataTest {
 
     @Test
     void GIVEN_non_empty_state_with_nested_object_and_nested_field_exchanged_WHEN_update_THEN_metadata_is_correctly_updated() throws IOException {
-        String stateString = "{\"SomeObject\": {\"SomeVal\": \"123\"}}";
+        String stateString = "{\"SomeObject\": {\"AnotherVal\": \"testingValue\"}}";
         JsonNode stateJson = JsonUtil.getPayloadJson(stateString.getBytes()).get();
         String patchString = "{\"desired\": {\"SomeObject\": {\"SomeVal\": null, \"AnotherVal\": " +
                 "\"testingValue\"}}}";
@@ -357,7 +360,7 @@ class ShadowStateMetadataTest {
         assertFalse(JsonUtil.isNullOrMissing(patchMetadata));
         assertTrue(patchMetadata.has(SHADOW_DOCUMENT_STATE_DESIRED));
         assertTrue(patchMetadata.get(SHADOW_DOCUMENT_STATE_DESIRED).has("SomeObject"));
-        assertFalse(patchMetadata.get(SHADOW_DOCUMENT_STATE_DESIRED).get("SomeObject").has("SomeVal"));
+        assertThat(patchMetadata.get(SHADOW_DOCUMENT_STATE_DESIRED).get("SomeObject").get("SomeVal").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(timestamp));
         assertThat(patchMetadata.get(SHADOW_DOCUMENT_STATE_DESIRED).get("SomeObject").get("AnotherVal").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(timestamp));
     }
 
@@ -484,5 +487,224 @@ class ShadowStateMetadataTest {
         Optional<JsonNode> reportedJson = JsonUtil.getPayloadJson(reported.getBytes());
         ShadowStateMetadata shadowStateMetadata = new ShadowStateMetadata(desiredJson.get(), reportedJson.get(), mockClock);
         assertThat(shadowStateMetadata.getLatestUpdatedTimestamp(), is(1620163568L));
+    }
+
+    // Expected values below were recorded from IoT Device Shadow.
+
+    private static JsonNode json(String s) throws IOException {
+        return s == null ? null : JsonUtil.OBJECT_MAPPER.readTree(s);
+    }
+
+    private static JsonNode shape(JsonNode node) {
+        if (node == null) {
+            return null;
+        }
+        if (ShadowStateMetadata.isMetadataNode(node)) {
+            long t = node.get(SHADOW_DOCUMENT_TIMESTAMP).asLong();
+            return new TextNode(t == timestamp ? "ts" : t == OLD_TIMESTAMP ? "old" : String.valueOf(t));
+        }
+        if (node.isArray()) {
+            ArrayNode result = JsonUtil.OBJECT_MAPPER.createArrayNode();
+            node.forEach(n -> result.add(shape(n)));
+            return result;
+        }
+        if (node.isObject()) {
+            ObjectNode result = JsonUtil.OBJECT_MAPPER.createObjectNode();
+            node.fields().forEachRemaining(e -> result.set(e.getKey(), shape(e.getValue())));
+            return result;
+        }
+        return node;
+    }
+
+    private static JsonNode oldMetadata(JsonNode state) {
+        if (state == null) {
+            return null;
+        }
+        if (state.isArray()) {
+            ArrayNode result = JsonUtil.OBJECT_MAPPER.createArrayNode();
+            state.forEach(n -> result.add(oldMetadata(n)));
+            return result;
+        }
+        if (state.isObject()) {
+            ObjectNode result = JsonUtil.OBJECT_MAPPER.createObjectNode();
+            state.fields().forEachRemaining(e -> result.set(e.getKey(), oldMetadata(e.getValue())));
+            return result;
+        }
+        return JsonUtil.OBJECT_MAPPER.createObjectNode().put(SHADOW_DOCUMENT_TIMESTAMP, OLD_TIMESTAMP);
+    }
+
+    private ShadowDocument document(String desired, String reported) throws IOException {
+        return new ShadowDocument(new ShadowState(json(desired), json(reported)),
+                new ShadowStateMetadata(oldMetadata(json(desired)), oldMetadata(json(reported)), mockClock), 1L);
+    }
+
+    @Test
+    void GIVEN_value_and_object_WHEN_replaced_by_arrays_THEN_metadata_has_timestamp_per_element() throws IOException {
+        ShadowDocument document = document("{\"a\":1,\"b\":{\"x\":1}}", null);
+
+        assertDoesNotThrow(() -> document.update(json("{\"state\":{\"desired\":{\"a\":[1,2],\"b\":[3]}}}")));
+
+        assertThat(document.getState().getDesired(), is(json("{\"a\":[1,2],\"b\":[3]}")));
+        assertThat(shape(document.getMetadata().getDesired()), is(json("{\"a\":[\"ts\",\"ts\"],\"b\":[\"ts\"]}")));
+    }
+
+    @Test
+    void GIVEN_desired_WHEN_nested_object_adds_nothing_THEN_update_succeeds() throws IOException {
+        ShadowDocument document = document("{\"z\":1}", null);
+
+        JsonNode response = document.update(json("{\"state\":{\"desired\":{\"a\":{\"x\":null}}}}"));
+
+        assertThat(document.getState().getDesired(), is(json("{\"z\":1}")));
+        assertThat(shape(document.getMetadata().getDesired()), is(json("{\"z\":\"old\"}")));
+        assertThat(shape(response), is(json("{\"desired\":{\"a\":{\"x\":\"ts\"}}}")));
+    }
+
+    @Test
+    void GIVEN_desired_WHEN_top_level_field_removed_THEN_its_metadata_removed() throws IOException {
+        ShadowDocument document = document("{\"a\":1,\"b\":1}", null);
+
+        document.update(json("{\"state\":{\"desired\":{\"a\":null}}}"));
+
+        assertThat(document.getState().getDesired(), is(json("{\"b\":1}")));
+        assertThat(shape(document.getMetadata().getDesired()), is(json("{\"b\":\"old\"}")));
+    }
+
+    @Test
+    void GIVEN_desired_and_reported_WHEN_desired_set_to_null_THEN_desired_metadata_removed() throws IOException {
+        ShadowDocument document = document("{\"a\":1}", "{\"a\":2}");
+
+        JsonNode response = document.update(json("{\"state\":{\"desired\":null}}"));
+
+        assertThat(document.getState().getDesired(), is(Matchers.nullValue()));
+        assertThat(document.getMetadata().getDesired(), is(Matchers.nullValue()));
+        assertThat(shape(document.getMetadata().getReported()), is(json("{\"a\":\"old\"}")));
+        assertThat(shape(response), is(json("{\"desired\":\"ts\"}")));
+    }
+
+    @Test
+    void GIVEN_desired_and_reported_WHEN_reported_set_to_null_THEN_reported_metadata_removed() throws IOException {
+        ShadowDocument document = document("{\"a\":1}", "{\"a\":2}");
+
+        JsonNode response = document.update(json("{\"state\":{\"reported\":null}}"));
+
+        assertThat(document.getState().getReported(), is(Matchers.nullValue()));
+        assertThat(document.getMetadata().getReported(), is(Matchers.nullValue()));
+        assertThat(shape(document.getMetadata().getDesired()), is(json("{\"a\":\"old\"}")));
+        assertThat(shape(response), is(json("{\"reported\":\"ts\"}")));
+    }
+
+    @Test
+    void GIVEN_nested_object_WHEN_nested_field_removed_THEN_sibling_timestamps_kept() throws IOException {
+        ShadowDocument document = document("{\"a\":{\"b\":{\"c\":1,\"d\":2}}}", null);
+
+        document.update(json("{\"state\":{\"desired\":{\"a\":{\"b\":{\"c\":null}}}}}"));
+
+        assertThat(document.getState().getDesired(), is(json("{\"a\":{\"b\":{\"d\":2}}}")));
+        assertThat(shape(document.getMetadata().getDesired()), is(json("{\"a\":{\"b\":{\"d\":\"old\"}}}")));
+    }
+
+    @Test
+    void GIVEN_value_WHEN_replaced_by_object_with_nulls_THEN_stored_nulls_have_timestamps() throws IOException {
+        ShadowDocument document = document("{\"a\":1}", null);
+
+        document.update(json("{\"state\":{\"desired\":{\"a\":{\"x\":{\"y\":null},\"w\":{},\"v\":null}}}}"));
+
+        assertThat(document.getState().getDesired(), is(json("{\"a\":{\"x\":{\"y\":null},\"w\":{},\"v\":null}}")));
+        assertThat(shape(document.getMetadata().getDesired()),
+                is(json("{\"a\":{\"x\":{\"y\":\"ts\"},\"w\":{},\"v\":\"ts\"}}")));
+    }
+
+    @Test
+    void GIVEN_desired_absent_WHEN_array_with_null_stored_THEN_null_element_has_timestamp() throws IOException {
+        ShadowDocument document = document(null, "{\"o\":1}");
+
+        document.update(json("{\"state\":{\"desired\":{\"a\":[1,null]}}}"));
+
+        assertThat(shape(document.getMetadata().getDesired()), is(json("{\"a\":[\"ts\",\"ts\"]}")));
+    }
+
+    @Test
+    void GIVEN_metadata_out_of_shape_WHEN_section_updated_THEN_metadata_matches_state() throws IOException {
+        ShadowDocument document = new ShadowDocument(new ShadowState(json("{\"a\":1,\"b\":1}"), json("{\"r\":1}")),
+                new ShadowStateMetadata(json("{\"a\":{\"timestamp\":1},\"c\":{\"timestamp\":1}}"),
+                        json("{\"q\":{\"timestamp\":1}}"), mockClock), 1L);
+
+        document.update(json("{\"state\":{\"desired\":{\"a\":2}}}"));
+
+        assertThat(shape(document.getMetadata().getDesired()), is(json("{\"a\":\"ts\",\"b\":\"ts\"}")));
+        assertThat(shape(document.getMetadata().getReported()), is(json("{\"q\":\"old\"}")));
+    }
+
+    @Test
+    void GIVEN_untouched_array_with_malformed_metadata_WHEN_section_updated_THEN_array_metadata_repaired() throws IOException {
+        ShadowDocument document = new ShadowDocument(new ShadowState(json("{\"a\":[1,null,{\"x\":1}],\"b\":1}"), null),
+                new ShadowStateMetadata(json("{\"a\":[{\"timestamp\":1},null,{}],\"b\":{\"timestamp\":1}}"), null,
+                        mockClock), 1L);
+
+        document.update(json("{\"state\":{\"desired\":{\"b\":2}}}"));
+
+        assertThat(shape(document.getMetadata().getDesired()),
+                is(json("{\"a\":[\"old\",\"ts\",{\"x\":\"ts\"}],\"b\":\"ts\"}")));
+    }
+
+    @Test
+    void GIVEN_field_removed_WHEN_get_latest_updated_timestamp_THEN_removed_field_not_counted() throws IOException {
+        ShadowDocument document = new ShadowDocument(new ShadowState(json("{\"a\":1,\"b\":1}"), null),
+                new ShadowStateMetadata(json("{\"a\":{\"timestamp\":50},\"b\":{\"timestamp\":1}}"), null,
+                        mockClock), 1L);
+
+        document.update(json("{\"state\":{\"desired\":{\"a\":null}}}"));
+
+        assertThat(document.getMetadata().getLatestUpdatedTimestamp(), is(OLD_TIMESTAMP));
+    }
+
+    @Test
+    void GIVEN_update_with_null_leaves_WHEN_update_THEN_response_has_timestamps_for_nulls() throws IOException {
+        ShadowDocument document = document("{\"a\":1}", null);
+
+        JsonNode response = document.update(json("{\"state\":{\"desired\":{\"a\":null,\"b\":2,\"c\":{\"x\":null}}}}"));
+
+        assertThat(shape(response), is(json("{\"desired\":{\"a\":\"ts\",\"b\":\"ts\",\"c\":{\"x\":\"ts\"}}}")));
+    }
+
+    @Test
+    void GIVEN_update_with_null_array_element_WHEN_update_THEN_response_has_timestamp_per_element() throws IOException {
+        ShadowDocument document = document(null, null);
+
+        JsonNode response = document.update(json("{\"state\":{\"desired\":{\"a\":[1,null]}}}"));
+
+        assertThat(shape(response), is(json("{\"desired\":{\"a\":[\"ts\",\"ts\"]}}")));
+    }
+
+    @Test
+    void GIVEN_document_WHEN_state_set_to_null_THEN_response_is_timestamp_and_metadata_removed() throws IOException {
+        ShadowDocument document = document("{\"a\":1}", "{\"a\":2}");
+
+        JsonNode response = document.update(json("{\"state\":null}"));
+
+        assertThat(shape(response), is(json("\"ts\"")));
+        assertThat(document.getMetadata().getDesired(), is(Matchers.nullValue()));
+        assertThat(document.getMetadata().getReported(), is(Matchers.nullValue()));
+    }
+
+    @Test
+    void GIVEN_document_WHEN_one_field_updated_THEN_other_timestamps_and_sections_kept() throws IOException {
+        ShadowDocument document = document("{\"a\":{\"x\":1,\"y\":[1,2]},\"b\":1}", "{\"r\":1}");
+
+        document.update(json("{\"state\":{\"desired\":{\"a\":{\"x\":2}}}}"));
+
+        assertThat(shape(document.getMetadata().getDesired()),
+                is(json("{\"a\":{\"x\":\"ts\",\"y\":[\"old\",\"old\"]},\"b\":\"old\"}")));
+        assertThat(shape(document.getMetadata().getReported()), is(json("{\"r\":\"old\"}")));
+    }
+
+    @Test
+    void GIVEN_object_WHEN_last_child_removed_THEN_empty_object_kept_in_metadata() throws IOException {
+        ShadowDocument document = document("{\"a\":{\"x\":1},\"b\":1}", null);
+
+        document.update(json("{\"state\":{\"desired\":{\"a\":{\"x\":null}}}}"));
+
+        assertThat(document.getState().getDesired(), is(json("{\"a\":{},\"b\":1}")));
+        assertThat(shape(document.getMetadata().getDesired()), is(json("{\"a\":{},\"b\":\"old\"}")));
     }
 }
