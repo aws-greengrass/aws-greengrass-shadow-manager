@@ -65,7 +65,7 @@ public class ShadowStateMetadata {
      * request state node.
      *
      * @param patch The update request patch.
-     * @param state The state node in the shadow document.
+     * @param state The state node in the shadow document after the update request patch has been applied to it.
      * @return The updated metadata node for the patch.
      */
     @SuppressWarnings("PMD.NullAssignment")
@@ -79,7 +79,14 @@ public class ShadowStateMetadata {
         return patchMetadata;
     }
 
-    // https://docs.aws.amazon.com/iot/latest/developerguide/device-shadow-document.html
+    /**
+     * Creates the metadata returned for an update request: a timestamp for every leaf of the request, including nulls,
+     * one entry per array element, and {} for an empty object. A null section or state gets a single timestamp. See
+     * https://docs.aws.amazon.com/iot/latest/developerguide/device-shadow-document.html
+     *
+     * @param source the update request state node, or a node in it.
+     * @return the metadata node with the same shape as the request.
+     */
     private JsonNode createPatchMetadata(final JsonNode source) {
         if (source.isArray()) {
             final ArrayNode result = JsonUtil.OBJECT_MAPPER.createArrayNode();
@@ -100,6 +107,16 @@ public class ShadowStateMetadata {
         return timestampNode();
     }
 
+    /**
+     * Creates the stored metadata of the desired or reported section. A section removed from the state has no
+     * metadata, a section the request doesn't contain keeps its metadata, and an updated section is rebuilt from the
+     * state with {@link #buildStateMetadata(JsonNode, JsonNode, JsonNode)}.
+     *
+     * @param state    the section after the update request patch has been applied; may be null.
+     * @param metadata the metadata of the section before the update; may be null.
+     * @param patch    the section in the update request; null if the request doesn't contain it.
+     * @return the metadata of the section, or null if it has none.
+     */
     private JsonNode sectionMetadata(final JsonNode state, final JsonNode metadata, final JsonNode patch) {
         if (isNullOrMissing(state)) {
             return null;
@@ -110,7 +127,22 @@ public class ShadowStateMetadata {
         return nullIfEmpty(buildStateMetadata(state, metadata, patch));
     }
 
-    // Metadata has the shape of the updated state; see the PR description.
+    /**
+     * Builds the metadata of a state node, with the same shape as the state.
+     * <ul>
+     *     <li>an object gets one entry per field in the state, so a removed field has no metadata, and an empty object
+     *     gets {}.</li>
+     *     <li>an array the request touched gets a new timestamp for every element, because arrays are replaced whole.
+     *     An array the request didn't touch is walked element by element.</li>
+     *     <li>a value, including a null stored in the state, keeps its timestamp unless the request touched it or it
+     *     has none, in which case it gets a new timestamp.</li>
+     * </ul>
+     *
+     * @param state    the node after the update request patch has been applied.
+     * @param metadata the metadata of the node before the update; may be null.
+     * @param patch    the node at the same path in the update request; null if the request didn't touch it.
+     * @return the metadata of the node.
+     */
     private JsonNode buildStateMetadata(final JsonNode state, final JsonNode metadata, final JsonNode patch) {
         final boolean touched = patch != null;
         if (state.isObject()) {

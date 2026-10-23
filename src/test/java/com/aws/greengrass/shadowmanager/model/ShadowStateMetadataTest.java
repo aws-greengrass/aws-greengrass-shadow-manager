@@ -489,7 +489,7 @@ class ShadowStateMetadataTest {
         assertThat(shadowStateMetadata.getLatestUpdatedTimestamp(), is(1620163568L));
     }
 
-    // Expected values below were recorded from IoT Device Shadow; see the PR description.
+    // Expected values below were recorded from IoT Device Shadow.
 
     private static JsonNode json(String s) throws IOException {
         return s == null ? null : JsonUtil.OBJECT_MAPPER.readTree(s);
@@ -538,7 +538,6 @@ class ShadowStateMetadataTest {
                 new ShadowStateMetadata(oldMetadata(json(desired)), oldMetadata(json(reported)), mockClock), 1L);
     }
 
-    // Row 1 in the PR description.
     @Test
     void GIVEN_value_and_object_WHEN_replaced_by_arrays_THEN_metadata_has_timestamp_per_element() throws IOException {
         ShadowDocument document = document("{\"a\":1,\"b\":{\"x\":1}}", null);
@@ -549,7 +548,6 @@ class ShadowStateMetadataTest {
         assertThat(shape(document.getMetadata().getDesired()), is(json("{\"a\":[\"ts\",\"ts\"],\"b\":[\"ts\"]}")));
     }
 
-    // Row 2 in the PR description.
     @Test
     void GIVEN_desired_WHEN_nested_object_adds_nothing_THEN_update_succeeds() throws IOException {
         ShadowDocument document = document("{\"z\":1}", null);
@@ -561,7 +559,6 @@ class ShadowStateMetadataTest {
         assertThat(shape(response), is(json("{\"desired\":{\"a\":{\"x\":\"ts\"}}}")));
     }
 
-    // Row 3 in the PR description.
     @Test
     void GIVEN_desired_WHEN_top_level_field_removed_THEN_its_metadata_removed() throws IOException {
         ShadowDocument document = document("{\"a\":1,\"b\":1}", null);
@@ -572,19 +569,30 @@ class ShadowStateMetadataTest {
         assertThat(shape(document.getMetadata().getDesired()), is(json("{\"b\":\"old\"}")));
     }
 
-    // Row 4 in the PR description.
     @Test
     void GIVEN_desired_and_reported_WHEN_desired_set_to_null_THEN_desired_metadata_removed() throws IOException {
         ShadowDocument document = document("{\"a\":1}", "{\"a\":2}");
 
-        document.update(json("{\"state\":{\"desired\":null}}"));
+        JsonNode response = document.update(json("{\"state\":{\"desired\":null}}"));
 
         assertThat(document.getState().getDesired(), is(Matchers.nullValue()));
         assertThat(document.getMetadata().getDesired(), is(Matchers.nullValue()));
         assertThat(shape(document.getMetadata().getReported()), is(json("{\"a\":\"old\"}")));
+        assertThat(shape(response), is(json("{\"desired\":\"ts\"}")));
     }
 
-    // Row 5 in the PR description.
+    @Test
+    void GIVEN_desired_and_reported_WHEN_reported_set_to_null_THEN_reported_metadata_removed() throws IOException {
+        ShadowDocument document = document("{\"a\":1}", "{\"a\":2}");
+
+        JsonNode response = document.update(json("{\"state\":{\"reported\":null}}"));
+
+        assertThat(document.getState().getReported(), is(Matchers.nullValue()));
+        assertThat(document.getMetadata().getReported(), is(Matchers.nullValue()));
+        assertThat(shape(document.getMetadata().getDesired()), is(json("{\"a\":\"old\"}")));
+        assertThat(shape(response), is(json("{\"reported\":\"ts\"}")));
+    }
+
     @Test
     void GIVEN_nested_object_WHEN_nested_field_removed_THEN_sibling_timestamps_kept() throws IOException {
         ShadowDocument document = document("{\"a\":{\"b\":{\"c\":1,\"d\":2}}}", null);
@@ -595,7 +603,6 @@ class ShadowStateMetadataTest {
         assertThat(shape(document.getMetadata().getDesired()), is(json("{\"a\":{\"b\":{\"d\":\"old\"}}}")));
     }
 
-    // Row 6 in the PR description.
     @Test
     void GIVEN_value_WHEN_replaced_by_object_with_nulls_THEN_stored_nulls_have_timestamps() throws IOException {
         ShadowDocument document = document("{\"a\":1}", null);
@@ -607,7 +614,6 @@ class ShadowStateMetadataTest {
                 is(json("{\"a\":{\"x\":{\"y\":\"ts\"},\"w\":{},\"v\":\"ts\"}}")));
     }
 
-    // Row 7 in the PR description.
     @Test
     void GIVEN_desired_absent_WHEN_array_with_null_stored_THEN_null_element_has_timestamp() throws IOException {
         ShadowDocument document = document(null, "{\"o\":1}");
@@ -617,7 +623,6 @@ class ShadowStateMetadataTest {
         assertThat(shape(document.getMetadata().getDesired()), is(json("{\"a\":[\"ts\",\"ts\"]}")));
     }
 
-    // Row 8 in the PR description.
     @Test
     void GIVEN_metadata_out_of_shape_WHEN_section_updated_THEN_metadata_matches_state() throws IOException {
         ShadowDocument document = new ShadowDocument(new ShadowState(json("{\"a\":1,\"b\":1}"), json("{\"r\":1}")),
@@ -630,7 +635,6 @@ class ShadowStateMetadataTest {
         assertThat(shape(document.getMetadata().getReported()), is(json("{\"q\":\"old\"}")));
     }
 
-    // Row 8 in the PR description.
     @Test
     void GIVEN_untouched_array_with_malformed_metadata_WHEN_section_updated_THEN_array_metadata_repaired() throws IOException {
         ShadowDocument document = new ShadowDocument(new ShadowState(json("{\"a\":[1,null,{\"x\":1}],\"b\":1}"), null),
@@ -643,7 +647,6 @@ class ShadowStateMetadataTest {
                 is(json("{\"a\":[\"old\",\"ts\",{\"x\":\"ts\"}],\"b\":\"ts\"}")));
     }
 
-    // See the PR description: removing a field doesn't advance the latest updated timestamp.
     @Test
     void GIVEN_field_removed_WHEN_get_latest_updated_timestamp_THEN_removed_field_not_counted() throws IOException {
         ShadowDocument document = new ShadowDocument(new ShadowState(json("{\"a\":1,\"b\":1}"), null),
@@ -655,7 +658,6 @@ class ShadowStateMetadataTest {
         assertThat(document.getMetadata().getLatestUpdatedTimestamp(), is(OLD_TIMESTAMP));
     }
 
-    // Row 9 in the PR description.
     @Test
     void GIVEN_update_with_null_leaves_WHEN_update_THEN_response_has_timestamps_for_nulls() throws IOException {
         ShadowDocument document = document("{\"a\":1}", null);
@@ -665,7 +667,6 @@ class ShadowStateMetadataTest {
         assertThat(shape(response), is(json("{\"desired\":{\"a\":\"ts\",\"b\":\"ts\",\"c\":{\"x\":\"ts\"}}}")));
     }
 
-    // Row 10 in the PR description.
     @Test
     void GIVEN_update_with_null_array_element_WHEN_update_THEN_response_has_timestamp_per_element() throws IOException {
         ShadowDocument document = document(null, null);
@@ -675,7 +676,6 @@ class ShadowStateMetadataTest {
         assertThat(shape(response), is(json("{\"desired\":{\"a\":[\"ts\",\"ts\"]}}")));
     }
 
-    // Row 11 in the PR description.
     @Test
     void GIVEN_document_WHEN_state_set_to_null_THEN_response_is_timestamp_and_metadata_removed() throws IOException {
         ShadowDocument document = document("{\"a\":1}", "{\"a\":2}");
@@ -687,7 +687,6 @@ class ShadowStateMetadataTest {
         assertThat(document.getMetadata().getReported(), is(Matchers.nullValue()));
     }
 
-    // Unchanged behavior; see the PR description.
     @Test
     void GIVEN_document_WHEN_one_field_updated_THEN_other_timestamps_and_sections_kept() throws IOException {
         ShadowDocument document = document("{\"a\":{\"x\":1,\"y\":[1,2]},\"b\":1}", "{\"r\":1}");
@@ -699,7 +698,6 @@ class ShadowStateMetadataTest {
         assertThat(shape(document.getMetadata().getReported()), is(json("{\"r\":\"old\"}")));
     }
 
-    // Unchanged behavior; see the PR description.
     @Test
     void GIVEN_object_WHEN_last_child_removed_THEN_empty_object_kept_in_metadata() throws IOException {
         ShadowDocument document = document("{\"a\":{\"x\":1},\"b\":1}", null);
