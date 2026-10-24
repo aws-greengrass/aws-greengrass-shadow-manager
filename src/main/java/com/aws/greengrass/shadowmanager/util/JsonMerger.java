@@ -9,18 +9,26 @@ import com.aws.greengrass.shadowmanager.exception.InvalidRequestParametersExcept
 import com.aws.greengrass.shadowmanager.model.ErrorMessage;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.MissingNode;
+import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 import java.util.Iterator;
+import java.util.Optional;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE;
+import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE_DESIRED;
+import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE_REPORTED;
 import static com.aws.greengrass.shadowmanager.util.JsonUtil.isNullOrMissing;
 
 /**
  * Handles merge of two JsonNode objects.
  */
 public final class JsonMerger {
+    // Marks a change that a patch can't express; tested with isMissingNode().
+    private static final JsonNode INEXPRESSIBLE = MissingNode.getInstance();
+
     private JsonMerger() {
     }
 
@@ -146,6 +154,207 @@ public final class JsonMerger {
         }
 
         return result;
+    }
+
+    /**
+     * Merges the desired or reported node of an update request into the current one, like IoT Device Shadow. Unlike
+     * {@link #merge(JsonNode, JsonNode)}, an empty object is a value, not null, and a key named "state" is an ordinary
+     * key.
+     * <ul>
+     *     <li>a null removes the field; a null already stored is left as is.</li>
+     *     <li>an object is merged into an existing object; an empty object changes nothing.</li>
+     *     <li>an object for a missing or null field is added without its null leaves, and is skipped if nothing is
+     *     left; empty objects in it are kept.</li>
+     *     <li>an object replacing a value or an array, and any value or array, replaces the field as is.</li>
+     * </ul>
+     * Objects left empty after their fields are removed are kept.
+     *
+     * @param current the current desired or reported node; may be null.
+     * @param patch   the desired or reported node in the update request; null removes the node.
+     * @return the merged node, or null if it is empty.
+     */
+    @SuppressFBWarnings(value = "BC_UNCONFIRMED_CAST", justification = "The update schema only allows objects.")
+    public static JsonNode mergeShadowState(final JsonNode current, final JsonNode patch) {
+        if (patch == null || patch.isNull()) {
+            return null;
+        }
+        final ObjectNode merged = current != null && current.isObject()
+                ? (ObjectNode) current : JsonUtil.OBJECT_MAPPER.createObjectNode();
+        mergeShadowState(merged, (ObjectNode) patch);
+        return JsonUtil.nullIfEmpty(merged);
+    }
+
+    private static void mergeShadowState(final ObjectNode source, final ObjectNode patch) {
+        final Iterator<String> fieldNames = patch.fieldNames();
+        while (fieldNames.hasNext()) {
+            final String field = fieldNames.next();
+            final JsonNode sourceValue = source.get(field);
+            final JsonNode patchValue = patch.get(field);
+
+            if (patchValue.isNull()) {
+                if (sourceValue != null && !sourceValue.isNull()) {
+                    source.remove(field);
+                }
+                continue;
+            }
+            if (patchValue.isObject()) {
+                if (sourceValue != null && sourceValue.isObject()) {
+                    mergeShadowState((ObjectNode) sourceValue, (ObjectNode) patchValue);
+                } else if (sourceValue == null || sourceValue.isNull()) {
+                    final ObjectNode added = withoutNulls((ObjectNode) patchValue);
+                    if (added != null) {
+                        source.set(field, added);
+                    }
+                } else {
+                    source.set(field, patchValue.deepCopy());
+                }
+                continue;
+            }
+            source.set(field, patchValue.deepCopy());
+        }
+    }
+
+    /**
+     * Copies the object without its null leaves. Objects emptied by the removal are dropped; empty objects in the
+     * input are kept.
+     *
+     * @return the copy, or null if every leaf was null.
+     */
+    private static ObjectNode withoutNulls(final ObjectNode node) {
+        final ObjectNode result = JsonUtil.OBJECT_MAPPER.createObjectNode();
+        boolean removed = false;
+        final Iterator<String> fieldNames = node.fieldNames();
+        while (fieldNames.hasNext()) {
+            final String field = fieldNames.next();
+            final JsonNode value = node.get(field);
+            final JsonNode copy = value.isObject() ? withoutNulls((ObjectNode) value) : value.deepCopy();
+            if (copy == null || copy.isNull()) {
+                removed = true;
+            } else {
+                result.set(field, copy);
+            }
+        }
+        return removed && result.isEmpty() ? null : result;
+    }
+
+    /**
+     * Applies the state node of an update request to a state node like IoT Device Shadow: a null state clears both
+     * sections, and each section in the update is merged with {@link #mergeShadowState(JsonNode, JsonNode)}.
+     *
+     * @param state  the current state node, with desired and reported; may be null. It isn't modified.
+     * @param update the state node of the update request.
+     * @return the state node after the update, without empty sections.
+     */
+    public static ObjectNode applyShadowStateUpdate(final JsonNode state, final JsonNode update) {
+        final ObjectNode result = JsonUtil.OBJECT_MAPPER.createObjectNode();
+        if (update == null || update.isNull()) {
+            return result;
+        }
+        for (String section : new String[]{SHADOW_DOCUMENT_STATE_DESIRED, SHADOW_DOCUMENT_STATE_REPORTED}) {
+            JsonNode current = section(state, section);
+            current = current == null ? null : current.deepCopy();
+            final JsonNode merged = update.has(section) ? mergeShadowState(current, update.get(section)) : current;
+            if (merged != null) {
+                result.set(section, merged);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Computes the update that turns one shadow state into another when applied with
+     * {@link #mergeShadowState(JsonNode, JsonNode)}: changed values and objects are set, removed fields are set to
+     * null, a removed section is set to null, and objects are diffed field by field.
+     *
+     * <p>A patch can't add or remove a null stored inside an object, or add an object with nulls to a missing field.
+     * If the change needs that, no update is returned.
+     *
+     * @param from the current state node, with desired and reported; may be null.
+     * @param to   the state node to reach; may be null.
+     * @return the state node of the update, empty if nothing changed, or no value if a patch can't express it.
+     */
+    public static Optional<ObjectNode> diffShadowState(final JsonNode from, final JsonNode to) {
+        final ObjectNode patch = JsonUtil.OBJECT_MAPPER.createObjectNode();
+        for (String section : new String[]{SHADOW_DOCUMENT_STATE_DESIRED, SHADOW_DOCUMENT_STATE_REPORTED}) {
+            final JsonNode diff = diffSection(section(from, section), section(to, section));
+            if (diff != null && diff.isMissingNode()) {
+                return Optional.empty();
+            }
+            if (diff != null) {
+                patch.set(section, diff);
+            }
+        }
+        return Optional.of(patch);
+    }
+
+    private static JsonNode section(final JsonNode state, final String section) {
+        if (state == null || !state.isObject()) {
+            return null;
+        }
+        return JsonUtil.nullIfEmpty(state.get(section));
+    }
+
+    private static JsonNode diffSection(final JsonNode from, final JsonNode to) {
+        if (to == null) {
+            return from == null ? null : NullNode.getInstance();
+        }
+        if (from == null) {
+            return hasNullLeaf(to) ? INEXPRESSIBLE : to.deepCopy();
+        }
+        final JsonNode diff = diffObject((ObjectNode) from, (ObjectNode) to);
+        return !diff.isMissingNode() && diff.isEmpty() ? null : diff;
+    }
+
+    private static JsonNode diffObject(final ObjectNode from, final ObjectNode to) {
+        final ObjectNode patch = JsonUtil.OBJECT_MAPPER.createObjectNode();
+        final Iterator<String> removed = from.fieldNames();
+        while (removed.hasNext()) {
+            final String field = removed.next();
+            if (!to.has(field)) {
+                if (from.get(field).isNull()) {
+                    return INEXPRESSIBLE;
+                }
+                patch.set(field, NullNode.getInstance());
+            }
+        }
+        final Iterator<String> fields = to.fieldNames();
+        while (fields.hasNext()) {
+            final String field = fields.next();
+            final JsonNode fromValue = from.get(field);
+            final JsonNode toValue = to.get(field);
+            if (toValue.equals(fromValue)) {
+                continue;
+            }
+            if (toValue.isNull() || (fromValue == null || fromValue.isNull()) && hasNullLeaf(toValue)) {
+                return INEXPRESSIBLE;
+            }
+            if (fromValue != null && fromValue.isObject() && toValue.isObject()) {
+                final JsonNode diff = diffObject((ObjectNode) fromValue, (ObjectNode) toValue);
+                if (diff.isMissingNode()) {
+                    return INEXPRESSIBLE;
+                }
+                if (!diff.isEmpty()) {
+                    patch.set(field, diff);
+                }
+                continue;
+            }
+            patch.set(field, toValue.deepCopy());
+        }
+        return patch;
+    }
+
+    private static boolean hasNullLeaf(final JsonNode node) {
+        if (!node.isObject()) {
+            return false;
+        }
+        final Iterator<JsonNode> values = node.elements();
+        while (values.hasNext()) {
+            final JsonNode value = values.next();
+            if (value.isNull() || hasNullLeaf(value)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void clearState(JsonNode node) {
