@@ -13,6 +13,7 @@ import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientWrapper;
+import com.aws.greengrass.shadowmanager.util.JsonMerger;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -22,6 +23,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
@@ -42,6 +45,7 @@ import software.amazon.awssdk.services.iotdataplane.model.UnsupportedDocumentEnc
 import software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowResponse;
 
 import java.io.IOException;
+import java.util.stream.Stream;
 import java.time.Instant;
 import java.util.Optional;
 
@@ -273,5 +277,94 @@ class CloudUpdateSyncRequestTest {
         JsonNode j2 = JsonUtil.getPayloadJson("{\"state\":{\"reported\":{\"color\":{\"r\":255,\"g\":255,\"b\":255},\"SomeKey\":\"SomeValue\"}},\"metadata\":{\"reported\":{\"color\":{\"r\":{\"timestamp\":1619722006},\"g\":{\"timestamp\":1619722006},\"b\":{\"timestamp\":1619722006}},\"SomeKey\":{\"timestamp\":1619722006}}},\"version\":1,\"timestamp\":1619722006}".getBytes()).get();
         CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, baseDocumentJson, new ShadowDocument(BASE_DOCUMENT));
         assertFalse(request.isUpdateNecessary(j1, j2));
+    }
+
+    static Stream<Arguments> updateNecessaryInput() {
+        return Stream.of(
+                // base state, update state, whether the update changes the shadow
+                Arguments.of("{\"desired\":{\"z\":1}}", "{\"desired\":{\"a\":{}}}", true),
+                Arguments.of("{\"desired\":{\"z\":{\"k\":1}}}", "{\"desired\":{\"z\":{\"e\":{}}}}", true),
+                Arguments.of("{\"desired\":{\"z\":1}}", "{\"desired\":{\"state\":{}}}", true),
+                Arguments.of("{\"desired\":{\"a\":1}}", "{\"desired\":{\"a\":{}}}", true),
+                Arguments.of("{\"desired\":{\"a\":{\"x\":1}}}", "{\"desired\":{\"a\":{}}}", false),
+                Arguments.of("{\"desired\":{\"z\":1}}", "{\"desired\":{}}", false),
+                Arguments.of("{\"desired\":{\"z\":1}}", "{\"desired\":{\"a\":null}}", false),
+                Arguments.of("{\"desired\":{\"z\":1}}", "{\"desired\":{\"z\":null}}", true),
+                Arguments.of("{\"desired\":{\"z\":1}}", "{\"desired\":{\"z\":1}}", false),
+                Arguments.of("{\"reported\":{\"r\":1}}", "{\"desired\":{\"a\":null}}", false),
+                Arguments.of("{\"desired\":{\"z\":1}}", "{\"desired\":null}", true),
+                Arguments.of("{\"desired\":{\"z\":1}}", "null", true)
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("updateNecessaryInput")
+    void GIVEN_base_and_update_WHEN_isUpdateNecessary_THEN_matches_shadow_merge(String base, String update,
+            boolean expected) throws IOException {
+        JsonNode baseDocument = JsonUtil.getPayloadJson(("{\"state\":" + base + ",\"version\":1}").getBytes()).get();
+        JsonNode updateDocument = JsonUtil.getPayloadJson(("{\"state\":" + update + "}").getBytes()).get();
+        CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, baseDocumentJson,
+                new ShadowDocument(BASE_DOCUMENT));
+
+        assertThat(request.isUpdateNecessary(baseDocument, updateDocument), is(expected));
+    }
+
+    static Stream<Arguments> mergedUpdatesInput() {
+        return Stream.of(
+                // last synced state, first local update, second local update
+                Arguments.of("{\"desired\":{\"a\":5}}", "{\"desired\":{\"a\":1}}",
+                        "{\"desired\":{\"a\":null}}"),
+                Arguments.of("{\"desired\":{\"a\":5}}", "{\"desired\":{\"b\":1}}",
+                        "{\"desired\":{\"a\":null}}"),
+                Arguments.of("{\"desired\":{\"a\":{\"x\":5}}}", "{\"desired\":{\"b\":1}}",
+                        "{\"desired\":{\"a\":{\"x\":null}}}"),
+                Arguments.of("{\"desired\":{\"a\":5}}", "{\"desired\":{\"b\":1}}",
+                        "{\"desired\":null}"),
+                Arguments.of("{\"desired\":{\"a\":5},\"reported\":{\"r\":1}}", "{\"desired\":{\"b\":1}}",
+                        "null"),
+                Arguments.of("{\"desired\":{\"a\":{\"x\":5,\"y\":6}}}", "{\"desired\":{\"a\":null}}",
+                        "{\"desired\":{\"a\":{\"x\":1}}}"),
+                Arguments.of("{\"reported\":{\"c\":{\"a\":1,\"b\":1}}}", "{\"reported\":{\"c\":2}}",
+                        "{\"reported\":{\"c\":{\"b\":0}}}"),
+                Arguments.of("{\"desired\":{\"z\":1}}", "{\"desired\":{\"a\":{\"x\":1}}}",
+                        "{\"desired\":{\"a\":{}}}"),
+                Arguments.of("{\"desired\":{\"z\":1}}", "{\"desired\":{\"a\":1}}",
+                        "{\"desired\":{}}"),
+                Arguments.of("{\"desired\":{\"z\":1}}", "{\"desired\":{\"a\":1}}",
+                        "{\"desired\":{\"b\":{}}}")
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("mergedUpdatesInput")
+    void GIVEN_two_merged_local_updates_WHEN_execute_THEN_cloud_gets_the_change_since_last_sync(String synced,
+            String first, String second) throws Exception {
+        byte[] lastSynced = ("{\"state\":" + synced + ",\"version\":1}").getBytes();
+        JsonNode firstUpdate = JsonUtil.getPayloadJson(("{\"state\":" + first + "}").getBytes()).get();
+        JsonNode secondUpdate = JsonUtil.getPayloadJson(("{\"state\":" + second + "}").getBytes()).get();
+        ShadowDocument afterFirst = new ShadowDocument(new ShadowDocument(lastSynced));
+        afterFirst.update(firstUpdate);
+        ShadowDocument afterSecond = new ShadowDocument(afterFirst);
+        afterSecond.update(secondUpdate);
+        when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder()
+                .thingName(THING_NAME).shadowName(SHADOW_NAME).lastSyncedDocument(lastSynced)
+                .cloudVersion(5L).localVersion(1L).build()));
+        ArgumentCaptor<byte[]> payloadCaptor = ArgumentCaptor.forClass(byte[].class);
+        lenient().when(mockIotDataPlaneClientWrapper.updateThingShadow(anyString(), anyString(), payloadCaptor.capture()))
+                .thenReturn(UpdateThingShadowResponse.builder().payload(SdkBytes.fromString("{\"version\": 6}", UTF_8)).build());
+
+        CloudUpdateSyncRequest request = new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, firstUpdate, afterFirst);
+        request.merge(new CloudUpdateSyncRequest(THING_NAME, SHADOW_NAME, secondUpdate, afterSecond));
+        request.execute(mockContext);
+
+        // the cloud applies the update like IoT Device Shadow and ends with the local state
+        JsonNode cloudState = JsonUtil.getPayloadJson(lastSynced).get().get("state");
+        if (!payloadCaptor.getAllValues().isEmpty()) {
+            JsonNode sent = JsonUtil.getPayloadJson(payloadCaptor.getValue()).get();
+            assertThat(sent.get("version").asLong(), is(5L));
+            cloudState = JsonMerger.applyShadowStateUpdate(cloudState, sent.get("state"));
+        }
+        assertThat(JsonMerger.applyShadowStateUpdate(cloudState, JsonUtil.OBJECT_MAPPER.createObjectNode()),
+                is(afterSecond.getState().toJson()));
     }
 }

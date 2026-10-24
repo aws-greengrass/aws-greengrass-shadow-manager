@@ -11,6 +11,7 @@ import com.aws.greengrass.shadowmanager.exception.RetryableException;
 import com.aws.greengrass.shadowmanager.exception.SkipSyncRequestException;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.ipc.UpdateThingShadowRequestHandler;
+import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.UpdateThingShadowHandlerResponse;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.sync.IotDataPlaneClientWrapper;
@@ -113,7 +114,7 @@ class OverwriteLocalShadowRequestTest {
         request.execute(syncContext);
 
         verify(mockIotDataPlaneClientWrapper, times(1)).getThingShadow(anyString(), anyString());
-        verify(mockDao, never()).getShadowThing(anyString(), anyString());
+        verify(mockDao, times(1)).getShadowThing(anyString(), anyString());
         verify(mockDao, times(1)).updateSyncInformation(syncInformationCaptor.capture());
         verify(mockUpdateThingShadowRequestHandler, times(1)).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest.class), anyString());
         verify(mockDeleteThingShadowRequestHandler, never()).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowRequest.class), anyString());
@@ -219,5 +220,27 @@ class OverwriteLocalShadowRequestTest {
         verify(mockDeleteThingShadowRequestHandler, never()).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowRequest.class), anyString());
         verify(mockIotDataPlaneClientWrapper, never()).updateThingShadow(anyString(), anyString(), any(byte[].class));
         verify(mockIotDataPlaneClientWrapper, never()).deleteThingShadow(anyString(), anyString());
+    }
+
+    @Test
+    void GIVEN_local_field_not_in_cloud_WHEN_execute_THEN_local_shadow_becomes_the_cloud_shadow() throws Exception {
+        byte[] localDocument = "{\"version\": 3, \"state\": {\"desired\": {\"a\": {\"x\": 1, \"y\": 2}, \"local\": 1}}}".getBytes(UTF_8);
+        byte[] cloudDocument = "{\"version\": 7, \"state\": {\"desired\": {\"a\": {\"x\": 1}}}}".getBytes(UTF_8);
+        when(mockIotDataPlaneClientWrapper.getThingShadow(anyString(), anyString())).thenReturn(
+                GetThingShadowResponse.builder().payload(SdkBytes.fromByteArray(cloudDocument)).build());
+        when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder()
+                .thingName(THING_NAME).shadowName(SHADOW_NAME).cloudVersion(1L).localVersion(1L).build()));
+        when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.of(new ShadowDocument(localDocument)));
+        when(mockUpdateThingShadowHandlerResponse.getUpdateThingShadowResponse().getPayload()).thenReturn("{\"version\": 4}".getBytes(UTF_8));
+        when(mockUpdateThingShadowRequestHandler.handleRequest(localUpdateThingShadowRequestCaptor.capture(), anyString()))
+                .thenReturn(mockUpdateThingShadowHandlerResponse);
+
+        new OverwriteLocalShadowRequest(THING_NAME, SHADOW_NAME).execute(syncContext);
+
+        JsonNode update = JsonUtil.getPayloadJson(localUpdateThingShadowRequestCaptor.getValue().getPayload()).get();
+        ShadowDocument local = new ShadowDocument(localDocument);
+        local.update(update);
+        assertThat(local.getState().toJson(), is(new ShadowDocument(cloudDocument).getState().toJson()));
+        assertThat(update.get("version").asLong(), is(3L));
     }
 }

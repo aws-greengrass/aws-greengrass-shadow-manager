@@ -16,7 +16,6 @@ import java.util.Iterator;
 import java.util.Set;
 
 import static com.aws.greengrass.shadowmanager.util.JsonUtil.OBJECT_MAPPER;
-import static com.aws.greengrass.shadowmanager.util.JsonUtil.isNullOrMissing;
 
 /**
  * Class to merge the current local shadow, current cloud shadow and the last synced shadow.
@@ -40,16 +39,16 @@ public final class SyncNodeMerger {
     @SuppressFBWarnings(value = "BC_UNCONFIRMED_CAST", justification = "We do check the type before cast.")
     public static JsonNode getMergedNode(JsonNode local, JsonNode cloud, JsonNode base, DataOwner owner) {
 
-        // If both the local and cloud are null, return null since they are the same.
-        if (isNullOrMissing(local) && isNullOrMissing(cloud)) {
+        // If both the local and cloud are null, return null since they are the same. An empty object is a value.
+        if (isNull(local) && isNull(cloud)) {
             return null;
         }
 
         // Check if all the 3 versions are objects. If so, iterate over them and figure out the exact merged value
         // for the object node.
         if (areNodesObjects(local, cloud, base)) {
-            final ObjectNode result = getMergedNode((ObjectNode)local, (ObjectNode)cloud, (ObjectNode)base, owner);
-            return result.size() > 0 ? result : null;
+            // An object whose fields were all removed is kept as {}, like a shadow update does.
+            return getMergedNode((ObjectNode)local, (ObjectNode)cloud, (ObjectNode)base, owner);
         } else {
             // Check if the local value has changed since the last sync.
             boolean hasLocalChanged = compare(local, base);
@@ -91,6 +90,10 @@ public final class SyncNodeMerger {
         iterateOverAllUnvisitedFields(local, cloud, base, owner, result, visited, local.fieldNames());
         iterateOverAllUnvisitedFields(local, cloud, base, owner, result, visited, cloud.fieldNames());
         return result;
+    }
+
+    private static boolean isNull(JsonNode node) {
+        return node == null || node.isNull() || node.isMissingNode();
     }
 
     private static boolean areNodesObjects(JsonNode local, JsonNode cloud, JsonNode base) {

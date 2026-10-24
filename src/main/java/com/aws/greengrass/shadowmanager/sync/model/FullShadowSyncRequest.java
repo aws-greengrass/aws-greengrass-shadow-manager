@@ -15,6 +15,7 @@ import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.ShadowState;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
 import com.aws.greengrass.shadowmanager.util.DataOwner;
+import com.aws.greengrass.shadowmanager.util.JsonMerger;
 import com.aws.greengrass.shadowmanager.util.SyncNodeMerger;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -168,25 +169,36 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
         ObjectNode updateDocument = OBJECT_MAPPER.createObjectNode();
         updateDocument.set(SHADOW_DOCUMENT_STATE, updatedStateJson);
 
+        // The merged nodes mark removed fields with null. The synced state is the merged state without them.
+        ObjectNode syncedDocument = OBJECT_MAPPER.createObjectNode();
+        syncedDocument.set(SHADOW_DOCUMENT_STATE, new ShadowState(withoutRemovedFields(mergedDesiredNode),
+                withoutRemovedFields(mergedReportedNode)).toJson());
+
         long localDocumentVersion = localShadowDocument.get().getVersion();
         long cloudDocumentVersion = cloudShadowDocument.get().getVersion();
 
         // If the cloud document version is different from the last sync, that means the local document needed
         // some updates. So we go ahead and update the local shadow document.
         if (!isDocVersionSame(cloudShadowDocument.get(), syncInformation, DataOwner.CLOUD)) {
-            localDocumentVersion = updateLocalDocumentAndGetUpdatedVersion(updateDocument,
-                    Optional.of(localDocumentVersion));
+            ObjectNode localUpdate = getUpdate(localShadowDocument.get(), syncedDocument, updateDocument);
+            if (localUpdate != null) {
+                localDocumentVersion = updateLocalDocumentAndGetUpdatedVersion(localUpdate,
+                        Optional.of(localDocumentVersion));
+            }
         }
         // If the local document version is different from the last sync, that means the cloud document needed
         // some updates. So we go ahead and update the cloud shadow document.
         if (!isDocVersionSame(localShadowDocument.get(), syncInformation, DataOwner.LOCAL)) {
-            cloudDocumentVersion = updateCloudDocumentAndGetUpdatedVersion(updateDocument,
-                    Optional.of(cloudDocumentVersion));
+            ObjectNode cloudUpdate = getUpdate(cloudShadowDocument.get(), syncedDocument, updateDocument);
+            if (cloudUpdate != null) {
+                cloudDocumentVersion = updateCloudDocumentAndGetUpdatedVersion(cloudUpdate,
+                        Optional.of(cloudDocumentVersion));
+            }
         }
 
         if (!isDocVersionSame(localShadowDocument.get(), syncInformation, DataOwner.LOCAL)
                 || !isDocVersionSame(cloudShadowDocument.get(), syncInformation, DataOwner.CLOUD)) {
-            updateSyncInformation(updateDocument, localDocumentVersion, cloudDocumentVersion, cloudUpdateTime);
+            updateSyncInformation(syncedDocument, localDocumentVersion, cloudDocumentVersion, cloudUpdateTime);
         }
         logger.atTrace()
                 .kv(LOG_THING_NAME_KEY, getThingName())
@@ -248,6 +260,41 @@ public class FullShadowSyncRequest extends BaseSyncRequest {
         long cloudDocumentVersion = updateCloudDocumentAndGetUpdatedVersion(updateDocument, Optional.empty());
         updateSyncInformation(updateDocument, localShadowDocument.getVersion(), cloudDocumentVersion,
                 Instant.now().getEpochSecond());
+    }
+
+    /**
+     * Gets the update that turns a shadow document into the synced document. Sending the merged document as an update
+     * would keep fields that only that side has, so the change is computed with JsonMerger.diffShadowState. If the
+     * change can't be written as an update, the merged update document is used.
+     *
+     * @return the update, or null if the document already has the synced state.
+     */
+    @SuppressWarnings("PMD.ReturnEmptyCollectionRatherThanNull")
+    static ObjectNode getUpdate(ShadowDocument document, ObjectNode syncedDocument, ObjectNode mergedUpdate) {
+        Optional<ObjectNode> diff = JsonMerger.diffShadowState(document.toJson(false).get(SHADOW_DOCUMENT_STATE),
+                syncedDocument.get(SHADOW_DOCUMENT_STATE));
+        if (!diff.isPresent()) {
+            return mergedUpdate.deepCopy();
+        }
+        if (diff.get().isEmpty()) {
+            return null;
+        }
+        ObjectNode update = OBJECT_MAPPER.createObjectNode();
+        update.set(SHADOW_DOCUMENT_STATE, diff.get());
+        return update;
+    }
+
+    private static JsonNode withoutRemovedFields(JsonNode node) {
+        if (node == null || !node.isObject()) {
+            return node;
+        }
+        ObjectNode result = OBJECT_MAPPER.createObjectNode();
+        node.fields().forEachRemaining(field -> {
+            if (!field.getValue().isNull()) {
+                result.set(field.getKey(), withoutRemovedFields(field.getValue()));
+            }
+        });
+        return result;
     }
 
     /**

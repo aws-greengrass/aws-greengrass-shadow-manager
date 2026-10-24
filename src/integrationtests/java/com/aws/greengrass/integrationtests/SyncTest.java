@@ -1217,7 +1217,6 @@ class SyncTest extends NucleusLaunchUtils {
         lenient().when(finalCloudStateShadowResponse.payload().asByteArray()).thenReturn(finalCloudState.getBytes(UTF_8));
 
         CountDownLatch bidirectionalRequestsHaveBeenQueued = new CountDownLatch(1);
-        CountDownLatch finalCloudRequestProcessed = new CountDownLatch(1);
         CountDownLatch executingBlockingCloudUpdate = new CountDownLatch(1);
         when(iotDataPlaneClientFactory.getIotDataPlaneClient()
                 .getThingShadow(any(GetThingShadowRequest.class)))
@@ -1230,11 +1229,7 @@ class SyncTest extends NucleusLaunchUtils {
                 .thenAnswer(unused -> {
                     byte[] payload = cloudUpdateThingShadowRequestCaptor.getValue().payload().asByteArray();
                     ShadowDocument doc = new ShadowDocument(payload);
-                    ShadowDocument finalCloudStateDoc = new ShadowDocument(finalCloudState.getBytes(UTF_8));
                     ShadowDocument blockingCloudUpdateDoc = new ShadowDocument(blockingCloudUpdate.getBytes(UTF_8));
-                    if (doc.getState().toJson().equals(finalCloudStateDoc.getState().toJson())) {
-                        finalCloudRequestProcessed.countDown();
-                    }
                     if (doc.getState().toJson().equals(blockingCloudUpdateDoc.getState().toJson())) {
                         executingBlockingCloudUpdate.countDown();
                         assertTrue(bidirectionalRequestsHaveBeenQueued.await(5000L, TimeUnit.SECONDS));
@@ -1281,11 +1276,12 @@ class SyncTest extends NucleusLaunchUtils {
         // make sure that the requests merge as expected
         verify(syncQueue, timeout(7000).atLeast(1)).put(any(FullShadowSyncRequest.class));
         bidirectionalRequestsHaveBeenQueued.countDown();
-        assertThat("all requests processed", finalCloudRequestProcessed.await(10, TimeUnit.SECONDS));
+        assertEmptySyncQueue(clazz);
         assertLocalShadowEquals(expectedLocalShadowState);
 
         assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));
-        assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(4L)));
+        // the cloud already has the merged state (version 3), so the full sync only updates the local shadow
+        assertThat("cloud version", () -> syncInfo.get().get().getCloudVersion(), eventuallyEval(is(3L)));
         assertThat("local version", () -> syncInfo.get().get().getLocalVersion(), eventuallyEval(is(4L)));
     }
 
@@ -1379,7 +1375,7 @@ class SyncTest extends NucleusLaunchUtils {
         // make sure that the requests merge as expected
         verify(syncQueue, timeout(7000).atLeast(1)).put(any(FullShadowSyncRequest.class));
         bidirectionalRequestsHaveBeenQueued.countDown();
-        assertThat("all requests processed", finalCloudRequestProcessed.await(10, TimeUnit.SECONDS));
+        assertEmptySyncQueue(clazz);
         assertLocalShadowEquals(expectedLocalShadowState);
 
         assertThat("sync info exists", () -> syncInfo.get().isPresent(), eventuallyEval(is(true)));

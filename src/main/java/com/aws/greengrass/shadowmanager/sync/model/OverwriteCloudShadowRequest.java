@@ -59,7 +59,7 @@ public class OverwriteCloudShadowRequest extends BaseSyncRequest {
                 // If the local shadow version is not the same as the last synced local shadow version, go ahead and
                 // update the cloud shadow with the entire local shadow,
                 ObjectNode updateDocument = (ObjectNode) localShadowDocument.get().toJson(false);
-                long cloudDocumentVersion = updateCloudDocumentAndGetUpdatedVersion(updateDocument, Optional.empty());
+                long cloudDocumentVersion = updateCloudDocument(updateDocument);
                 updateSyncInformation(updateDocument, localShadowDocument.get().getVersion(), cloudDocumentVersion,
                         Instant.now().getEpochSecond());
             }
@@ -67,6 +67,24 @@ public class OverwriteCloudShadowRequest extends BaseSyncRequest {
             // If the local shadow is not present, then go ahead and delete the cloud shadow.
             handleCloudDelete(syncInformation.getCloudVersion(), syncInformation);
         }
+    }
+
+    /**
+     * Updates the cloud shadow to the local document. An existing cloud shadow gets only the change, so fields that
+     * the device doesn't have are removed; the update carries the cloud version, so a concurrent cloud update makes
+     * the sync run again.
+     */
+    private long updateCloudDocument(ObjectNode localDocument)
+            throws RetryableException, SkipSyncRequestException, InterruptedException {
+        Optional<ShadowDocument> cloudShadowDocument = getCloudShadowDocument();
+        if (!cloudShadowDocument.isPresent()) {
+            return updateCloudDocumentAndGetUpdatedVersion(localDocument.deepCopy(), Optional.empty());
+        }
+        ObjectNode update = FullShadowSyncRequest.getUpdate(cloudShadowDocument.get(), localDocument, localDocument);
+        if (update == null) {
+            return cloudShadowDocument.get().getVersion();
+        }
+        return updateCloudDocumentAndGetUpdatedVersion(update, Optional.of(cloudShadowDocument.get().getVersion()));
     }
 
     /**

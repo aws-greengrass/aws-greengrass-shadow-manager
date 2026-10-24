@@ -27,6 +27,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.services.iotdataplane.model.DeleteThingShadowResponse;
+import software.amazon.awssdk.services.iotdataplane.model.GetThingShadowResponse;
 import software.amazon.awssdk.services.iotdataplane.model.UpdateThingShadowResponse;
 
 import java.io.IOException;
@@ -196,5 +197,27 @@ class OverwriteCloudShadowRequestTest {
         verify(mockDeleteThingShadowRequestHandler, never()).handleRequest(any(software.amazon.awssdk.aws.greengrass.model.DeleteThingShadowRequest.class), anyString());
         verify(mockIotDataPlaneClientWrapper, never()).updateThingShadow(anyString(), anyString(), any(byte[].class));
         verify(mockIotDataPlaneClientWrapper, never()).deleteThingShadow(anyString(), anyString());
+    }
+
+    @Test
+    void GIVEN_cloud_field_not_on_device_WHEN_execute_THEN_cloud_shadow_becomes_the_local_shadow() throws Exception {
+        byte[] localDocument = "{\"version\": 3, \"state\": {\"reported\": {\"a\": {\"x\": 1}}}}".getBytes(UTF_8);
+        byte[] cloudDocument = "{\"version\": 7, \"state\": {\"reported\": {\"a\": {\"x\": 1, \"y\": 2}, \"cloud\": 1}}}".getBytes(UTF_8);
+        when(mockIotDataPlaneClientWrapper.getThingShadow(anyString(), anyString())).thenReturn(
+                GetThingShadowResponse.builder().payload(SdkBytes.fromByteArray(cloudDocument)).build());
+        when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder()
+                .thingName(THING_NAME).shadowName(SHADOW_NAME).cloudVersion(1L).localVersion(1L).build()));
+        when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.of(new ShadowDocument(localDocument)));
+        ArgumentCaptor<byte[]> payload = ArgumentCaptor.forClass(byte[].class);
+        when(mockIotDataPlaneClientWrapper.updateThingShadow(anyString(), anyString(), payload.capture()))
+                .thenReturn(UpdateThingShadowResponse.builder().payload(SdkBytes.fromString("{\"version\": 8}", UTF_8)).build());
+
+        new OverwriteCloudShadowRequest(THING_NAME, SHADOW_NAME).execute(syncContext);
+
+        JsonNode update = JsonUtil.getPayloadJson(payload.getValue()).get();
+        ShadowDocument cloud = new ShadowDocument(cloudDocument);
+        cloud.update(update);
+        assertThat(cloud.getState().toJson(), is(new ShadowDocument(localDocument).getState().toJson()));
+        assertThat(update.get("version").asLong(), is(7L));
     }
 }

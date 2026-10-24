@@ -14,12 +14,9 @@ import com.aws.greengrass.shadowmanager.exception.UnknownShadowException;
 import com.aws.greengrass.shadowmanager.model.ShadowDocument;
 import com.aws.greengrass.shadowmanager.model.UpdateThingShadowHandlerResponse;
 import com.aws.greengrass.shadowmanager.model.dao.SyncInformation;
-import com.aws.greengrass.shadowmanager.util.JsonMerger;
 import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.LongNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import lombok.Getter;
 import software.amazon.awssdk.aws.greengrass.model.ConflictError;
 import software.amazon.awssdk.aws.greengrass.model.InvalidArgumentsError;
 import software.amazon.awssdk.aws.greengrass.model.ServiceError;
@@ -28,6 +25,12 @@ import software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_CLOUD_VERSION_KEY;
@@ -35,7 +38,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.LOG_LOCAL_VERSION
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_UPDATED_CLOUD_VERSION_KEY;
-import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_VERSION;
+import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_MANAGER_NAME;
 
 /**
@@ -44,8 +47,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_MANAGER_NA
 public class LocalUpdateSyncRequest extends BaseSyncRequest {
     private static final Logger logger = LogManager.getLogger(LocalUpdateSyncRequest.class);
 
-    @Getter
-    private byte[] updateDocument;
+    private final List<byte[]> updateDocuments = new ArrayList<>();
 
     /**
      * Ctr for LocalUpdateSyncRequest.
@@ -58,53 +60,48 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
                                   String shadowName,
                                   byte[] updateDocument) {
         super(thingName, shadowName);
-        this.updateDocument = updateDocument;
+        if (updateDocument != null) {
+            this.updateDocuments.add(updateDocument);
+        }
     }
 
     /**
-     * Merge the sync requests together.
+     * Gets the cloud updates of this request, in version order.
+     *
+     * @return the update documents.
+     */
+    public List<byte[]> getUpdateDocuments() {
+        return Collections.unmodifiableList(updateDocuments);
+    }
+
+    /**
+     * Merge the sync requests together. The cloud updates are kept in version order and applied one by one, because
+     * two updates can't always be written as one.
      *
      * @param other the newer request to merge
-     * @throws IOException if unable to serialize the update document payload bytes.
+     * @throws IOException if unable to read the version of an update document.
      */
     public void merge(LocalUpdateSyncRequest other) throws IOException {
-        Optional<JsonNode> currDocJson = JsonUtil.getPayloadJson(updateDocument);
-        Optional<JsonNode> updateDocJson = JsonUtil.getPayloadJson(other.getUpdateDocument());
-
-        if (!currDocJson.isPresent() && updateDocJson.isPresent()) {
-            updateDocument = other.getUpdateDocument();
-            return;
+        updateDocuments.addAll(other.updateDocuments);
+        final Map<byte[], Long> versions = new IdentityHashMap<>();
+        for (byte[] document : updateDocuments) {
+            final Optional<JsonNode> json = JsonUtil.getPayloadJson(document);
+            versions.put(document, json.filter(JsonUtil::hasVersion).map(JsonUtil::getVersion).orElse(Long.MAX_VALUE));
         }
-        if (!updateDocJson.isPresent()) {
-            return;
-        }
-
-        JsonNode oldValueJson = currDocJson.get();
-        JsonNode newValueJson = updateDocJson.get();
-
-        if (JsonUtil.hasVersion(oldValueJson) && JsonUtil.hasVersion(newValueJson)
-                && JsonUtil.getVersion(oldValueJson) > JsonUtil.getVersion(newValueJson)) {
-            oldValueJson = updateDocJson.get();
-            newValueJson = currDocJson.get();
-            logger.atDebug()
-                    .log("Version {} received after version {}. Merging version {} into version {}",
-                            JsonUtil.getVersion(oldValueJson), JsonUtil.getVersion(newValueJson),
-                            JsonUtil.getVersion(newValueJson), JsonUtil.getVersion(oldValueJson));
-        }
-
-        JsonMerger.merge(oldValueJson, newValueJson);
-        updateDocument = JsonUtil.getPayloadBytes(oldValueJson);
+        updateDocuments.sort(Comparator.comparing(versions::get));
     }
 
     @Override
     public void execute(SyncContext context) throws SkipSyncRequestException, ConflictError,
             UnknownShadowException {
-        ShadowDocument shadowDocument;
-        try {
-            shadowDocument = new ShadowDocument(updateDocument);
-        } catch (IOException | InvalidRequestParametersException e) {
-            throw new SkipSyncRequestException(e);
+        for (byte[] updateDocument : updateDocuments) {
+            execute(context, updateDocument);
         }
+    }
+
+    private void execute(SyncContext context, byte[] updateDocument) throws SkipSyncRequestException, ConflictError,
+            UnknownShadowException {
+        ShadowDocument shadowDocument = parse(updateDocument);
 
         SyncInformation currentSyncInformation = context.getDao()
                 .getShadowSyncInformation(getThingName(), getShadowName())
@@ -125,8 +122,6 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
         // Expected sequential cloud update, routing update to local shadow
         if (cloudUpdateVersion == currentCloudVersion + 1) {
             try {
-                updateRequestWithLocalVersion(currentLocalVersion);
-
                 UpdateThingShadowRequest request = new UpdateThingShadowRequest();
                 request.setThingName(getThingName());
                 request.setShadowName(getShadowName());
@@ -135,14 +130,14 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
                 UpdateThingShadowHandlerResponse response =
                         context.getUpdateHandler().handleRequest(request, SHADOW_MANAGER_NAME);
 
-                byte[] updatedDocument = response.getCurrentDocument();
                 long updateTime = Instant.now().getEpochSecond();
                 long localUpdatedVersion = getUpdatedVersion(response.getUpdateThingShadowResponse().getPayload())
                         .orElse(currentLocalVersion + 1);
                 context.getDao().updateSyncInformation(SyncInformation.builder()
                         .thingName(getThingName())
                         .shadowName(getShadowName())
-                        .lastSyncedDocument(updatedDocument)
+                        .lastSyncedDocument(getCloudDocument(currentSyncInformation.getLastSyncedDocument(),
+                                shadowDocument, response.getCurrentDocument()))
                         .cloudUpdateTime(updateTime)
                         .localVersion(localUpdatedVersion)
                         .cloudVersion(cloudUpdateVersion)
@@ -180,6 +175,30 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
     }
 
     /**
+     * Gets the cloud document after the update: the last synced document with the update applied. The local document
+     * can have changes that aren't in the cloud yet, so it is only used when there is no last synced document.
+     */
+    private static byte[] getCloudDocument(byte[] lastSyncedDocument, ShadowDocument update, byte[] localDocument)
+            throws IOException {
+        if (lastSyncedDocument == null) {
+            return localDocument;
+        }
+        final ShadowDocument cloud = new ShadowDocument(lastSyncedDocument, false);
+        cloud.update(update.toJson(false));
+        final ObjectNode document = JsonUtil.OBJECT_MAPPER.createObjectNode();
+        document.set(SHADOW_DOCUMENT_STATE, cloud.getState().toJson());
+        return JsonUtil.getPayloadBytes(document);
+    }
+
+    private static ShadowDocument parse(byte[] updateDocument) throws SkipSyncRequestException {
+        try {
+            return new ShadowDocument(updateDocument);
+        } catch (IOException | InvalidRequestParametersException e) {
+            throw new SkipSyncRequestException(e);
+        }
+    }
+
+    /**
      * Checks if it is necessary to perform an update to the local shadow.
      *
      * @param context the execution context.
@@ -188,19 +207,17 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
      */
     @Override
     boolean isUpdateNecessary(SyncContext context) throws SkipSyncRequestException, UnknownShadowException {
-        //TODO: store this information in a return object to avoid unnecessary calls to DAO.
-        ShadowDocument shadowDocument;
-        try {
-            shadowDocument = new ShadowDocument(updateDocument);
-        } catch (IOException | InvalidRequestParametersException e) {
-            throw new SkipSyncRequestException(e);
+        for (byte[] updateDocument : updateDocuments) {
+            ShadowDocument shadowDocument = parse(updateDocument);
+            //TODO: store this information in a return object to avoid unnecessary calls to DAO.
+            SyncInformation currentSyncInformation = context.getDao()
+                    .getShadowSyncInformation(getThingName(), getShadowName())
+                    .orElseThrow(() -> new UnknownShadowException("Shadow not found in sync table"));
+            if (isUpdateNecessary(context, shadowDocument, currentSyncInformation)) {
+                return true;
+            }
         }
-
-        SyncInformation currentSyncInformation = context.getDao()
-                .getShadowSyncInformation(getThingName(), getShadowName())
-                .orElseThrow(() -> new UnknownShadowException("Shadow not found in sync table"));
-
-        return isUpdateNecessary(context, shadowDocument, currentSyncInformation);
+        return false;
     }
 
     private boolean isUpdateNecessary(SyncContext context, ShadowDocument shadowDocument,
@@ -244,14 +261,4 @@ public class LocalUpdateSyncRequest extends BaseSyncRequest {
             }
         }
     }
-
-    private void updateRequestWithLocalVersion(long updatedLocalVersion) throws IOException {
-        Optional<JsonNode> updateDocumentRequest = JsonUtil.getPayloadJson(updateDocument);
-        if (updateDocumentRequest.isPresent()) {
-            ((ObjectNode) updateDocumentRequest.get()).set(SHADOW_DOCUMENT_VERSION,
-                    new LongNode(updatedLocalVersion));
-            this.updateDocument = JsonUtil.getPayloadBytes(updateDocumentRequest.get());
-        }
-    }
-
 }
