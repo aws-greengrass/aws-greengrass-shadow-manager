@@ -23,6 +23,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -58,10 +60,12 @@ import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import static com.aws.greengrass.shadowmanager.TestUtils.SHADOW_NAME;
 import static com.aws.greengrass.shadowmanager.TestUtils.THING_NAME;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_METADATA;
+import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_VERSION;
 import static com.aws.greengrass.testcommons.testutilities.ExceptionLogProtector.ignoreExceptionOfType;
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -90,11 +94,10 @@ class FullShadowSyncRequestTest {
     private static final byte[] CLOUD_DOCUMENT_WITH_METADATA = "{\"version\": 5, \"state\": {\"reported\": {\"name\": \"The Beatles\", \"OldField\": true}, \"desired\": {\"name\": \"Backstreet Boys\", \"SomeOtherThingNew\": 100}}, \"metadata\": {\"reported\": {\"name\": {\"timestamp\": 100}, \"OldField\": {\"timestamp\": 100}}, \"desired\": {\"name\": {\"timestamp\": 100}, \"SomeOtherThingNew\": {\"timestamp\": 100}}}}".getBytes();
     private static final byte[] CLOUD_DOCUMENT_WITH_DELTA = "{\"version\": 5, \"state\": {\"reported\": {\"name\": \"The Beatles\", \"OldField\": true}, \"desired\": {\"name\": \"Backstreet Boys\", \"SomeOtherThingNew\": 100}, \"delta\": {\"name\": \"The Beatles\", \"OldField\": true}}}".getBytes();
     private static final byte[] BASE_DOCUMENT = "{\"version\": 1, \"state\": {\"reported\": {\"name\": \"The Beatles\", \"OldField\": true}, \"desired\": {\"name\": \"The Beatles\"}}}".getBytes();
-    // TODO: Refactor class so the null "OldField" can be removed from the merged document. This is present because
-    //  SyncNodeMerger will set removed fields as null, which are then handled by UpdateThingShadowRequestHandler,
-    //  which currently has mocked behavior resulting in null fields not being removed within these tests.
-    private static final byte[] MERGED_DOCUMENT = "{\"state\": {\"reported\": {\"name\": \"The Beach Boys\", \"NewField\": 100, \"OldField\": null}, \"desired\": {\"name\": \"Backstreet Boys\", \"SomethingNew\": true, \"SomeOtherThingNew\": 100}}}".getBytes();
     private static final byte[] BAD_DOCUMENT = "{\"version\": true}".getBytes();
+    private static final String SYNCED_STATE_STRING = "{\"reported\": {\"name\": \"The Beach Boys\", \"NewField\": 100}, \"desired\": {\"name\": \"Backstreet Boys\", \"SomethingNew\": true, \"SomeOtherThingNew\": 100}}";
+    private static JsonNode SYNCED_STATE;
+    private static JsonNode SYNCED_DOCUMENT;
 
     @Mock
     private ShadowManagerDAO mockDao;
@@ -122,8 +125,16 @@ class FullShadowSyncRequestTest {
 
     private SyncContext syncContext;
 
+    private static JsonNode stateAfter(byte[] document, JsonNode update) throws IOException {
+        ShadowDocument shadowDocument = new ShadowDocument(document);
+        shadowDocument.update(update);
+        return shadowDocument.getState().toJson();
+    }
+
     @BeforeEach
     void setup() throws IOException {
+        SYNCED_STATE = JsonUtil.getPayloadJson(SYNCED_STATE_STRING.getBytes()).get();
+        SYNCED_DOCUMENT = JsonUtil.getPayloadJson(("{\"state\": " + SYNCED_STATE_STRING + "}").getBytes()).get();
         lenient().when(mockDao.updateSyncInformation(syncInformationCaptor.capture())).thenReturn(true);
         syncContext = new SyncContext(mockDao, mockUpdateThingShadowRequestHandler, mockDeleteThingShadowRequestHandler,
                 mockIotDataPlaneClientWrapper);
@@ -134,7 +145,6 @@ class FullShadowSyncRequestTest {
     void GIVEN_updated_local_and_cloud_document_WHEN_execute_THEN_updates_local_and_cloud_document() throws Exception {
         long epochSeconds = Instant.now().getEpochSecond();
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
-        JsonNode expectedMergedDocument = JsonUtil.getPayloadJson(MERGED_DOCUMENT).get();
         ShadowDocument shadowDocument = new ShadowDocument(LOCAL_DOCUMENT);
         when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.of(shadowDocument));
         GetThingShadowResponse response = GetThingShadowResponse.builder()
@@ -171,17 +181,17 @@ class FullShadowSyncRequestTest {
         JsonNode actualLocalUpdateDocument = JsonUtil.getPayloadJson(localDocumentUpdateRequest.getPayload()).get();
         assertThat(actualLocalUpdateDocument.get(SHADOW_DOCUMENT_VERSION).asLong(), is(10L));
         ((ObjectNode) actualLocalUpdateDocument).remove(SHADOW_DOCUMENT_VERSION);
-        assertThat(actualLocalUpdateDocument, is(expectedMergedDocument));
+        assertThat(stateAfter(LOCAL_DOCUMENT, actualLocalUpdateDocument), is(SYNCED_STATE));
 
         assertThat(thingNameCaptor.getValue(), is(THING_NAME));
         assertThat(shadowNameCaptor.getValue(), is(SHADOW_NAME));
         JsonNode actualCloudUpdateDocument = JsonUtil.getPayloadJson(payloadCaptor.getValue()).get();
         assertThat(actualCloudUpdateDocument.get(SHADOW_DOCUMENT_VERSION).asLong(), is(5L));
         ((ObjectNode) actualCloudUpdateDocument).remove(SHADOW_DOCUMENT_VERSION);
-        assertThat(actualCloudUpdateDocument, is(expectedMergedDocument));
+        assertThat(stateAfter(CLOUD_DOCUMENT, actualCloudUpdateDocument), is(SYNCED_STATE));
 
         assertThat(syncInformationCaptor.getValue(), is(notNullValue()));
-        assertThat(JsonUtil.getPayloadJson(syncInformationCaptor.getValue().getLastSyncedDocument()).get(), is(expectedMergedDocument));
+        assertThat(JsonUtil.getPayloadJson(syncInformationCaptor.getValue().getLastSyncedDocument()).get(), is(SYNCED_DOCUMENT));
         assertThat(syncInformationCaptor.getValue().getCloudVersion(), is(6L));
         assertThat(syncInformationCaptor.getValue().getLocalVersion(), is(11L));
         assertThat(syncInformationCaptor.getValue().getCloudUpdateTime(), is(greaterThanOrEqualTo(epochSeconds)));
@@ -721,7 +731,6 @@ class FullShadowSyncRequestTest {
     void GIVEN_updated_cloud_document_and_no_local_document_WHEN_execute_and_updateThingShadow_throws_retryable_error_THEN_does_not_update_cloud_shadow_and_sync_information(Class clazz, ExtensionContext context) throws RetryableException, SkipSyncRequestException, IOException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, clazz);
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
-        JsonNode expectedMergedDocument = JsonUtil.getPayloadJson(MERGED_DOCUMENT).get();
         ShadowDocument shadowDocument = new ShadowDocument(LOCAL_DOCUMENT);
         when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.of(shadowDocument));
         GetThingShadowResponse response = GetThingShadowResponse.builder()
@@ -758,21 +767,20 @@ class FullShadowSyncRequestTest {
         JsonNode actualLocalUpdateDocument = JsonUtil.getPayloadJson(localDocumentUpdateRequest.getPayload()).get();
         assertThat(actualLocalUpdateDocument.get(SHADOW_DOCUMENT_VERSION).asLong(), is(10L));
         ((ObjectNode) actualLocalUpdateDocument).remove(SHADOW_DOCUMENT_VERSION);
-        assertThat(actualLocalUpdateDocument, is(expectedMergedDocument));
+        assertThat(stateAfter(LOCAL_DOCUMENT, actualLocalUpdateDocument), is(SYNCED_STATE));
 
         assertThat(thingNameCaptor.getValue(), is(THING_NAME));
         assertThat(shadowNameCaptor.getValue(), is(SHADOW_NAME));
         JsonNode actualCloudUpdateDocument = JsonUtil.getPayloadJson(payloadCaptor.getValue()).get();
         assertThat(actualCloudUpdateDocument.get(SHADOW_DOCUMENT_VERSION).asLong(), is(5L));
         ((ObjectNode) actualCloudUpdateDocument).remove(SHADOW_DOCUMENT_VERSION);
-        assertThat(actualCloudUpdateDocument, is(expectedMergedDocument));
+        assertThat(stateAfter(CLOUD_DOCUMENT, actualCloudUpdateDocument), is(SYNCED_STATE));
     }
 
     @Test
     void GIVEN_updated_cloud_document_and_local_document_WHEN_execute_and_updateThingShadow_throws_ConflictException_THEN_does_not_update_cloud_shadow_and_sync_information(ExtensionContext context) throws IOException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, ConflictException.class);
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
-        JsonNode expectedMergedDocument = JsonUtil.getPayloadJson(MERGED_DOCUMENT).get();
         ShadowDocument shadowDocument = new ShadowDocument(LOCAL_DOCUMENT);
         when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.of(shadowDocument));
         GetThingShadowResponse response = GetThingShadowResponse.builder()
@@ -809,21 +817,20 @@ class FullShadowSyncRequestTest {
         JsonNode actualLocalUpdateDocument = JsonUtil.getPayloadJson(localDocumentUpdateRequest.getPayload()).get();
         assertThat(actualLocalUpdateDocument.get(SHADOW_DOCUMENT_VERSION).asLong(), is(10L));
         ((ObjectNode) actualLocalUpdateDocument).remove(SHADOW_DOCUMENT_VERSION);
-        assertThat(actualLocalUpdateDocument, is(expectedMergedDocument));
+        assertThat(stateAfter(LOCAL_DOCUMENT, actualLocalUpdateDocument), is(SYNCED_STATE));
 
         assertThat(thingNameCaptor.getValue(), is(THING_NAME));
         assertThat(shadowNameCaptor.getValue(), is(SHADOW_NAME));
         JsonNode actualCloudUpdateDocument = JsonUtil.getPayloadJson(payloadCaptor.getValue()).get();
         assertThat(actualCloudUpdateDocument.get(SHADOW_DOCUMENT_VERSION).asLong(), is(5L));
         ((ObjectNode) actualCloudUpdateDocument).remove(SHADOW_DOCUMENT_VERSION);
-        assertThat(actualCloudUpdateDocument, is(expectedMergedDocument));
+        assertThat(stateAfter(CLOUD_DOCUMENT, actualCloudUpdateDocument), is(SYNCED_STATE));
     }
 
     @Test
     void GIVEN_updated_local_document_and_cloud_document_WHEN_execute_and_updateThingShadow_throws_ConflictError_THEN_does_not_update_local_shadow_and_sync_information(ExtensionContext context) throws IOException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, ConflictError.class);
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
-        JsonNode expectedMergedDocument = JsonUtil.getPayloadJson(MERGED_DOCUMENT).get();
         ShadowDocument shadowDocument = new ShadowDocument(LOCAL_DOCUMENT);
         when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.of(shadowDocument));
         GetThingShadowResponse response = GetThingShadowResponse.builder()
@@ -857,7 +864,7 @@ class FullShadowSyncRequestTest {
         JsonNode actualLocalUpdateDocument = JsonUtil.getPayloadJson(localDocumentUpdateRequest.getPayload()).get();
         assertThat(actualLocalUpdateDocument.get(SHADOW_DOCUMENT_VERSION).asLong(), is(10L));
         ((ObjectNode) actualLocalUpdateDocument).remove(SHADOW_DOCUMENT_VERSION);
-        assertThat(actualLocalUpdateDocument, is(expectedMergedDocument));
+        assertThat(stateAfter(LOCAL_DOCUMENT, actualLocalUpdateDocument), is(SYNCED_STATE));
     }
 
     @ParameterizedTest
@@ -867,7 +874,6 @@ class FullShadowSyncRequestTest {
     void GIVEN_updated_cloud_document_and_local_document_WHEN_execute_and_updateThingShadow_throws_skipable_error_THEN_does_not_update_cloud_shadow_and_sync_information(Class clazz, ExtensionContext context) throws IOException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, clazz);
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
-        JsonNode expectedMergedDocument = JsonUtil.getPayloadJson(MERGED_DOCUMENT).get();
         ShadowDocument shadowDocument = new ShadowDocument(LOCAL_DOCUMENT);
         when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.of(shadowDocument));
         GetThingShadowResponse response = GetThingShadowResponse.builder()
@@ -905,21 +911,20 @@ class FullShadowSyncRequestTest {
         JsonNode actualLocalUpdateDocument = JsonUtil.getPayloadJson(localDocumentUpdateRequest.getPayload()).get();
         assertThat(actualLocalUpdateDocument.get(SHADOW_DOCUMENT_VERSION).asLong(), is(10L));
         ((ObjectNode) actualLocalUpdateDocument).remove(SHADOW_DOCUMENT_VERSION);
-        assertThat(actualLocalUpdateDocument, is(expectedMergedDocument));
+        assertThat(stateAfter(LOCAL_DOCUMENT, actualLocalUpdateDocument), is(SYNCED_STATE));
 
         assertThat(thingNameCaptor.getValue(), is(THING_NAME));
         assertThat(shadowNameCaptor.getValue(), is(SHADOW_NAME));
         JsonNode actualCloudUpdateDocument = JsonUtil.getPayloadJson(payloadCaptor.getValue()).get();
         assertThat(actualCloudUpdateDocument.get(SHADOW_DOCUMENT_VERSION).asLong(), is(5L));
         ((ObjectNode) actualCloudUpdateDocument).remove(SHADOW_DOCUMENT_VERSION);
-        assertThat(actualCloudUpdateDocument, is(expectedMergedDocument));
+        assertThat(stateAfter(CLOUD_DOCUMENT, actualCloudUpdateDocument), is(SYNCED_STATE));
     }
 
     @Test
     void GIVEN_updated_cloud_document_and_local_document_WHEN_execute_and_updateThingShadow_throws_skipable_error_THEN_does_not_update_cloud_shadow_and_sync_information(ExtensionContext context) throws IOException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, InterruptedException.class);
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
-        JsonNode expectedMergedDocument = JsonUtil.getPayloadJson(MERGED_DOCUMENT).get();
         ShadowDocument shadowDocument = new ShadowDocument(LOCAL_DOCUMENT);
         when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.of(shadowDocument));
         GetThingShadowResponse response = GetThingShadowResponse.builder()
@@ -957,14 +962,14 @@ class FullShadowSyncRequestTest {
         JsonNode actualLocalUpdateDocument = JsonUtil.getPayloadJson(localDocumentUpdateRequest.getPayload()).get();
         assertThat(actualLocalUpdateDocument.get(SHADOW_DOCUMENT_VERSION).asLong(), is(10L));
         ((ObjectNode) actualLocalUpdateDocument).remove(SHADOW_DOCUMENT_VERSION);
-        assertThat(actualLocalUpdateDocument, is(expectedMergedDocument));
+        assertThat(stateAfter(LOCAL_DOCUMENT, actualLocalUpdateDocument), is(SYNCED_STATE));
 
         assertThat(thingNameCaptor.getValue(), is(THING_NAME));
         assertThat(shadowNameCaptor.getValue(), is(SHADOW_NAME));
         JsonNode actualCloudUpdateDocument = JsonUtil.getPayloadJson(payloadCaptor.getValue()).get();
         assertThat(actualCloudUpdateDocument.get(SHADOW_DOCUMENT_VERSION).asLong(), is(5L));
         ((ObjectNode) actualCloudUpdateDocument).remove(SHADOW_DOCUMENT_VERSION);
-        assertThat(actualCloudUpdateDocument, is(expectedMergedDocument));
+        assertThat(stateAfter(CLOUD_DOCUMENT, actualCloudUpdateDocument), is(SYNCED_STATE));
     }
 
     @ParameterizedTest
@@ -972,7 +977,6 @@ class FullShadowSyncRequestTest {
     void GIVEN_updated_local_document_and_cloud_document_WHEN_execute_and_updateThingShadow_throws_skipable_error_THEN_does_not_update_cloud_shadow_and_sync_information(Class<Throwable> clazz, ExtensionContext context) throws IOException, NoSuchMethodException, IllegalAccessException, InvocationTargetException, InstantiationException, IoTDataPlaneClientCreationException {
         ignoreExceptionOfType(context, clazz);
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
-        JsonNode expectedMergedDocument = JsonUtil.getPayloadJson(MERGED_DOCUMENT).get();
         ShadowDocument shadowDocument = new ShadowDocument(LOCAL_DOCUMENT);
         when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.of(shadowDocument));
         GetThingShadowResponse response = GetThingShadowResponse.builder()
@@ -1006,7 +1010,7 @@ class FullShadowSyncRequestTest {
         JsonNode actualLocalUpdateDocument = JsonUtil.getPayloadJson(localDocumentUpdateRequest.getPayload()).get();
         assertThat(actualLocalUpdateDocument.get(SHADOW_DOCUMENT_VERSION).asLong(), is(10L));
         ((ObjectNode) actualLocalUpdateDocument).remove(SHADOW_DOCUMENT_VERSION);
-        assertThat(actualLocalUpdateDocument, is(expectedMergedDocument));
+        assertThat(stateAfter(LOCAL_DOCUMENT, actualLocalUpdateDocument), is(SYNCED_STATE));
     }
 
     @Test
@@ -1045,7 +1049,6 @@ class FullShadowSyncRequestTest {
     void GIVEN_updated_local_and_cloud_with_delta_document_WHEN_execute_THEN_updates_local_and_cloud_document() throws Exception {
         long epochSeconds = Instant.now().getEpochSecond();
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
-        JsonNode expectedMergedDocument = JsonUtil.getPayloadJson(MERGED_DOCUMENT).get();
         ShadowDocument shadowDocument = new ShadowDocument(LOCAL_DOCUMENT);
         when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.of(shadowDocument));
         GetThingShadowResponse response = GetThingShadowResponse.builder()
@@ -1082,17 +1085,17 @@ class FullShadowSyncRequestTest {
         JsonNode actualLocalUpdateDocument = JsonUtil.getPayloadJson(localDocumentUpdateRequest.getPayload()).get();
         assertThat(actualLocalUpdateDocument.get(SHADOW_DOCUMENT_VERSION).asLong(), is(10L));
         ((ObjectNode) actualLocalUpdateDocument).remove(SHADOW_DOCUMENT_VERSION);
-        assertThat(actualLocalUpdateDocument, is(expectedMergedDocument));
+        assertThat(stateAfter(LOCAL_DOCUMENT, actualLocalUpdateDocument), is(SYNCED_STATE));
 
         assertThat(thingNameCaptor.getValue(), is(THING_NAME));
         assertThat(shadowNameCaptor.getValue(), is(SHADOW_NAME));
         JsonNode actualCloudUpdateDocument = JsonUtil.getPayloadJson(payloadCaptor.getValue()).get();
         assertThat(actualCloudUpdateDocument.get(SHADOW_DOCUMENT_VERSION).asLong(), is(5L));
         ((ObjectNode) actualCloudUpdateDocument).remove(SHADOW_DOCUMENT_VERSION);
-        assertThat(actualCloudUpdateDocument, is(expectedMergedDocument));
+        assertThat(stateAfter(CLOUD_DOCUMENT_WITH_DELTA, actualCloudUpdateDocument), is(SYNCED_STATE));
 
         assertThat(syncInformationCaptor.getValue(), is(notNullValue()));
-        assertThat(JsonUtil.getPayloadJson(syncInformationCaptor.getValue().getLastSyncedDocument()).get(), is(expectedMergedDocument));
+        assertThat(JsonUtil.getPayloadJson(syncInformationCaptor.getValue().getLastSyncedDocument()).get(), is(SYNCED_DOCUMENT));
         assertThat(syncInformationCaptor.getValue().getCloudVersion(), is(6L));
         assertThat(syncInformationCaptor.getValue().getLocalVersion(), is(11L));
         assertThat(syncInformationCaptor.getValue().getCloudUpdateTime(), is(greaterThanOrEqualTo(epochSeconds)));
@@ -1221,5 +1224,56 @@ class FullShadowSyncRequestTest {
         assertThat(syncInformationCaptor.getValue().getShadowName(), is(SHADOW_NAME));
         assertThat(syncInformationCaptor.getValue().getThingName(), is(THING_NAME));
         assertThat(syncInformationCaptor.getValue().isCloudDeleted(), is(false));
+    }
+
+    static Stream<Arguments> fullSyncInput() {
+        return Stream.of(
+                // local state, cloud state, last synced state, state on both sides after the sync
+                // both sides add the same object: the cloud's desired wins and local keeps none of its own fields
+                Arguments.of("{\"desired\":{\"z\":1,\"a\":{\"y\":2}}}", "{\"desired\":{\"z\":1,\"a\":{\"x\":1}}}",
+                        "{\"desired\":{\"z\":1}}", "{\"desired\":{\"z\":1,\"a\":{\"x\":1}}}"),
+                // both sides add the same object: the local reported wins and the cloud keeps none of its own fields
+                Arguments.of("{\"reported\":{\"z\":1,\"a\":{\"b\":{\"c\":0}}}}", "{\"reported\":{\"z\":1,\"a\":{\"c\":0}}}",
+                        "{\"reported\":{\"z\":1}}", "{\"reported\":{\"z\":1,\"a\":{\"b\":{\"c\":0}}}}"),
+                // desired removed locally is removed in the cloud
+                Arguments.of("{\"reported\":{\"r\":1}}", "{\"desired\":{\"a\":1},\"reported\":{\"r\":2}}",
+                        "{\"desired\":{\"a\":1},\"reported\":{\"r\":1}}", "{\"reported\":{\"r\":2}}"),
+                // empty objects are kept
+                Arguments.of("{\"desired\":{\"a\":{},\"b\":{\"c\":{}}}}", "{\"desired\":{\"a\":{},\"b\":{\"c\":{}}},\"reported\":{\"r\":1}}",
+                        "{\"desired\":{\"a\":{},\"b\":{\"c\":{}}}}", "{\"desired\":{\"a\":{},\"b\":{\"c\":{}}},\"reported\":{\"r\":1}}")
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("fullSyncInput")
+    void GIVEN_local_and_cloud_changes_WHEN_full_sync_THEN_both_sides_have_the_merged_state(String local, String cloud,
+            String synced, String expected) throws Exception {
+        byte[] localDocument = ("{\"version\": 10, \"state\": " + local + "}").getBytes(UTF_8);
+        byte[] cloudDocument = ("{\"version\": 5, \"state\": " + cloud + "}").getBytes(UTF_8);
+        when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.of(new ShadowDocument(localDocument)));
+        when(mockIotDataPlaneClientWrapper.getThingShadow(anyString(), anyString())).thenReturn(
+                GetThingShadowResponse.builder().payload(SdkBytes.fromByteArray(cloudDocument)).build());
+        when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder()
+                .thingName(THING_NAME).shadowName(SHADOW_NAME).cloudVersion(1L).localVersion(1L)
+                .lastSyncedDocument(("{\"state\": " + synced + "}").getBytes(UTF_8)).build()));
+        lenient().when(mockUpdateThingShadowHandlerResponse.getUpdateThingShadowResponse().getPayload())
+                .thenReturn("{\"version\": 11}".getBytes(UTF_8));
+        lenient().when(mockUpdateThingShadowRequestHandler.handleRequest(localUpdateThingShadowRequestCaptor.capture(),
+                anyString())).thenReturn(mockUpdateThingShadowHandlerResponse);
+        lenient().when(mockIotDataPlaneClientWrapper.updateThingShadow(anyString(), anyString(), payloadCaptor.capture()))
+                .thenReturn(UpdateThingShadowResponse.builder().payload(SdkBytes.fromString("{\"version\": 6}", UTF_8)).build());
+
+        new FullShadowSyncRequest(THING_NAME, SHADOW_NAME).execute(syncContext);
+
+        JsonNode noChange = JsonUtil.getPayloadJson("{\"state\": {}}".getBytes(UTF_8)).get();
+        JsonNode localUpdate = localUpdateThingShadowRequestCaptor.getAllValues().isEmpty() ? noChange
+                : JsonUtil.getPayloadJson(localUpdateThingShadowRequestCaptor.getValue().getPayload()).get();
+        JsonNode cloudUpdate = payloadCaptor.getAllValues().isEmpty() ? noChange
+                : JsonUtil.getPayloadJson(payloadCaptor.getValue()).get();
+        JsonNode expectedState = JsonUtil.getPayloadJson(expected.getBytes(UTF_8)).get();
+        assertThat(stateAfter(localDocument, localUpdate), is(expectedState));
+        assertThat(stateAfter(cloudDocument, cloudUpdate), is(expectedState));
+        assertThat(JsonUtil.getPayloadJson(syncInformationCaptor.getValue().getLastSyncedDocument()).get()
+                .get(SHADOW_DOCUMENT_STATE), is(expectedState));
     }
 }

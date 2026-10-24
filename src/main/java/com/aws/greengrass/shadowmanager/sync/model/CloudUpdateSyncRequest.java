@@ -20,6 +20,7 @@ import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.LongNode;
+import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.NonNull;
 import software.amazon.awssdk.core.exception.AbortedException;
@@ -40,6 +41,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.LOG_LOCAL_VERSION
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_SHADOW_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_THING_NAME_KEY;
 import static com.aws.greengrass.shadowmanager.model.Constants.LOG_UPDATED_CLOUD_VERSION_KEY;
+import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_STATE;
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_VERSION;
 
 /**
@@ -70,7 +72,8 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
     }
 
     /**
-     * Merge the sync requests together.
+     * Merge the sync requests together. The cloud is sent the change from the last synced document to the newest local
+     * document, so the merged update request is only used when that change can't be computed.
      *
      * @param nextRequest the newer request to merge
      */
@@ -96,11 +99,12 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
                 .getShadowSyncInformation(getThingName(), getShadowName())
                 .orElseThrow(() -> new UnknownShadowException("Shadow not found in sync table"));
 
-        if (!isUpdateNecessary(currentSyncInformation, context)) {
+        final ObjectNode payload = getPayloadIfNecessary(currentSyncInformation, context);
+        if (payload == null) {
             return;
         }
 
-        long cloudVersion = getAndUpdateCloudVersionInRequest(currentSyncInformation);
+        long cloudVersion = getAndUpdateCloudVersionInRequest(payload, currentSyncInformation);
         long cloudUpdatedVersion;
         UpdateThingShadowResponse response;
         try {
@@ -111,7 +115,7 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
                     .kv(LOG_CLOUD_VERSION_KEY, currentSyncInformation.getCloudVersion())
                     .log("Updating cloud shadow document");
             response = context.getIotDataPlaneClientWrapper().updateThingShadow(getThingName(), getShadowName(),
-                    JsonUtil.getPayloadBytes(updateDocument));
+                    JsonUtil.getPayloadBytes(payload));
             cloudUpdatedVersion = getUpdatedVersion(response.payload().asByteArray()).orElse(cloudVersion + 1);
             logger.atDebug()
                     .kv(LOG_THING_NAME_KEY, getThingName())
@@ -187,11 +191,20 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
                 .getShadowSyncInformation(getThingName(), getShadowName())
                 .orElseThrow(() -> new UnknownShadowException("Shadow not found in sync table"));
 
-        return isUpdateNecessary(currentSyncInformation, context);
+        return getPayloadIfNecessary(currentSyncInformation, context) != null;
     }
 
-    private boolean isUpdateNecessary(SyncInformation currentSyncInformation,
-                                      SyncContext context)
+    /**
+     * Gets the update to send to the cloud: the change from the last synced document to the local document. The
+     * cloud has the last synced document, or the update is rejected for its version and a full sync runs instead.
+     * If there is no last synced document or the change can't be written as an update, the merged update request is
+     * used.
+     *
+     * @return the update payload, or null if the cloud shadow doesn't need an update.
+     */
+    @SuppressWarnings("PMD.ReturnEmptyCollectionRatherThanNull")
+    private ObjectNode getPayloadIfNecessary(SyncInformation currentSyncInformation,
+                                             SyncContext context)
             throws SkipSyncRequestException {
         if (Objects.isNull(localShadowDocument)) {
             logger.atDebug()
@@ -200,10 +213,11 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
                     .kv(LOG_LOCAL_VERSION_KEY, currentSyncInformation.getLocalVersion())
                     .kv(LOG_CLOUD_VERSION_KEY, currentSyncInformation.getCloudVersion())
                     .log("Unable to sync shadow since shadow does not exist");
-            return false;
+            return null;
         }
 
-        if (!isUpdateNecessary(currentSyncInformation.getLastSyncedDocument(), updateDocument)) {
+        final ObjectNode payload = getPayload(currentSyncInformation.getLastSyncedDocument());
+        if (payload == null) {
             logger.atDebug()
                     .kv(LOG_THING_NAME_KEY, getThingName())
                     .kv(LOG_SHADOW_NAME_KEY, getShadowName())
@@ -211,10 +225,33 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
                     .kv(LOG_CLOUD_VERSION_KEY, currentSyncInformation.getCloudVersion())
                     .log("Cloud shadow already contains update payload. No sync is necessary");
             updateSyncInformationVersion(Optional.of(localShadowDocument), currentSyncInformation, context);
-            return false;
+            return null;
         }
 
-        return true;
+        return payload;
+    }
+
+    @SuppressWarnings("PMD.ReturnEmptyCollectionRatherThanNull")
+    private ObjectNode getPayload(byte[] lastSyncedDocument) throws SkipSyncRequestException {
+        final Optional<JsonNode> lastSynced;
+        try {
+            lastSynced = JsonUtil.getPayloadJson(lastSyncedDocument);
+        } catch (IOException e) {
+            throw new SkipSyncRequestException(e);
+        }
+        final JsonNode localState = localShadowDocument.toJson(false).get(SHADOW_DOCUMENT_STATE);
+        final Optional<ObjectNode> diff = lastSynced.flatMap(base -> JsonMerger.diffShadowState(
+                base.get(SHADOW_DOCUMENT_STATE), localState));
+        if (!diff.isPresent()) {
+            return isUpdateNecessary(lastSyncedDocument, updateDocument) ? (ObjectNode) updateDocument : null;
+        }
+        if (diff.get().isEmpty()) {
+            return null;
+        }
+        final ObjectNode payload = JsonUtil.OBJECT_MAPPER.createObjectNode();
+        // The local shadow has no state left: clear the cloud state like the local update did.
+        payload.set(SHADOW_DOCUMENT_STATE, JsonUtil.isNullOrMissing(localState) ? NullNode.getInstance() : diff.get());
+        return payload;
     }
 
     private void updateSyncInformationVersion(Optional<ShadowDocument> shadowDocument,
@@ -243,10 +280,10 @@ public class CloudUpdateSyncRequest extends BaseSyncRequest {
         }
     }
 
-    private long getAndUpdateCloudVersionInRequest(SyncInformation syncInformation) {
+    private long getAndUpdateCloudVersionInRequest(ObjectNode payload, SyncInformation syncInformation) {
         long cloudVersion = syncInformation.getCloudVersion();
         if (cloudVersion != 0) {
-            ((ObjectNode) updateDocument).set(SHADOW_DOCUMENT_VERSION, new LongNode(cloudVersion));
+            payload.set(SHADOW_DOCUMENT_VERSION, new LongNode(cloudVersion));
         }
 
         return cloudVersion;

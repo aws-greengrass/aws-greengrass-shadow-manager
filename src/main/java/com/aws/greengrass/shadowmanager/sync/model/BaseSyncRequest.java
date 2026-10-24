@@ -89,21 +89,26 @@ public abstract class BaseSyncRequest extends ShadowRequest implements SyncReque
             UnknownShadowException;
 
     /**
-     * Answer whether the update is already part of the shadow.
+     * Answer whether the update changes the shadow. The update is applied to the base document's state like IoT
+     * Device Shadow ({@link JsonMerger#applyShadowStateUpdate(JsonNode, JsonNode)}), and the states before and after
+     * are compared.
      *
      * @param baseDocument the shadow to compare against
      * @param update       the partial update to check
      * @return true if an update to the shadow is needed, otherwise false
      */
     boolean isUpdateNecessary(JsonNode baseDocument, JsonNode update) {
-        JsonNode merged = baseDocument.deepCopy();
-        JsonMerger.merge(merged.get(SHADOW_DOCUMENT_STATE), update.get(SHADOW_DOCUMENT_STATE));
-        // explicitly handle case where state is cleared with null,
-        // since resulting merge will have equal documents
+        // explicitly handle case where state is cleared with null
         if (!JsonUtil.isNullStateDocument(baseDocument) && JsonUtil.isNullStateDocument(update)) {
             return true;
         }
-        return !baseDocument.equals(merged);
+        final JsonNode updateState = update.get(SHADOW_DOCUMENT_STATE);
+        if (updateState == null) {
+            return false;
+        }
+        final JsonNode before = JsonMerger.applyShadowStateUpdate(baseDocument.get(SHADOW_DOCUMENT_STATE),
+                JsonUtil.OBJECT_MAPPER.createObjectNode());
+        return !before.equals(JsonMerger.applyShadowStateUpdate(baseDocument.get(SHADOW_DOCUMENT_STATE), updateState));
     }
 
     /**

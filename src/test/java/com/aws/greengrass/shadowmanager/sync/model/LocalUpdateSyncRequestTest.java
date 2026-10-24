@@ -20,6 +20,7 @@ import com.aws.greengrass.shadowmanager.util.JsonUtil;
 import com.aws.greengrass.testcommons.testutilities.GGExtension;
 import com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException;
 import org.hamcrest.Matchers;
+import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -87,6 +88,9 @@ class LocalUpdateSyncRequestTest {
     private ArgumentCaptor<SyncInformation> syncInformationCaptor;
 
     SyncContext syncContext;
+
+    private ShadowDocument localDocument;
+    private SyncInformation syncInformation;
 
     @BeforeEach
     void setup() throws IOException {
@@ -418,7 +422,8 @@ class LocalUpdateSyncRequestTest {
         LocalUpdateSyncRequest request1 = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, updatePayload1);
         LocalUpdateSyncRequest request2 = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, "{\"version\": 7, \"state\": {\"reported\": {\"name\": \"Pink Floyd\"}}}".getBytes());
         request1.merge(request2);
-        assertThat(JsonUtil.getPayloadJson(request1.getUpdateDocument()), is(JsonUtil.getPayloadJson(request2.getUpdateDocument())));
+        assertThat(request1.getUpdateDocuments().get(request1.getUpdateDocuments().size() - 1),
+                is(request2.getUpdateDocuments().get(0)));
     }
 
     @ParameterizedTest
@@ -427,6 +432,85 @@ class LocalUpdateSyncRequestTest {
         LocalUpdateSyncRequest request1 = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, UPDATE_DOCUMENT);
         LocalUpdateSyncRequest request2 = new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME, updatePayload);
         request1.merge(request2);
-        assertThat(JsonUtil.getPayloadJson(request1.getUpdateDocument()), is(JsonUtil.getPayloadJson(request1.getUpdateDocument())));
+        assertThat(request1.getUpdateDocuments().size(), is(1));
+    }
+
+    private static JsonNode json(String s) throws IOException {
+        return JsonUtil.getPayloadJson(s.getBytes(UTF_8)).get();
+    }
+
+    private void fakeLocalShadow(String localState, String lastSyncedState, long cloudVersion) throws IOException {
+        localDocument = new ShadowDocument(("{\"state\":" + localState + ",\"version\":3}").getBytes(UTF_8));
+        syncInformation = SyncInformation.builder().thingName(THING_NAME).shadowName(SHADOW_NAME)
+                .cloudVersion(cloudVersion).localVersion(3)
+                .lastSyncedDocument(("{\"state\":" + lastSyncedState + "}").getBytes(UTF_8)).build();
+        lenient().when(mockDao.getShadowSyncInformation(anyString(), anyString()))
+                .thenAnswer(invocation -> Optional.of(syncInformation));
+        lenient().when(mockDao.updateSyncInformation(any())).thenAnswer(invocation -> {
+            syncInformation = invocation.getArgument(0);
+            return true;
+        });
+        lenient().when(mockDao.getShadowThing(anyString(), anyString()))
+                .thenAnswer(invocation -> Optional.of(new ShadowDocument(localDocument)));
+        lenient().when(mockUpdateThingShadowRequestHandler.handleRequest(any(UpdateThingShadowRequest.class), anyString()))
+                .thenAnswer(invocation -> {
+                    UpdateThingShadowRequest request = invocation.getArgument(0);
+                    localDocument.update(JsonUtil.getPayloadJson(request.getPayload()).get());
+                    UpdateThingShadowResponse response = new UpdateThingShadowResponse();
+                    response.setPayload(("{\"version\": " + localDocument.getVersion() + "}").getBytes(UTF_8));
+                    return new UpdateThingShadowHandlerResponse(response,
+                            JsonUtil.getPayloadBytes(localDocument.toJson(false)));
+                });
+    }
+
+    private static LocalUpdateSyncRequest cloudUpdate(long version, String state) {
+        return new LocalUpdateSyncRequest(THING_NAME, SHADOW_NAME,
+                ("{\"version\": " + version + ", \"state\": " + state + "}").getBytes(UTF_8));
+    }
+
+    @Test
+    void GIVEN_merged_cloud_updates_WHEN_execute_THEN_applied_one_by_one_in_version_order() throws Exception {
+        fakeLocalShadow("{\"desired\":{\"z\":1}}", "{\"desired\":{\"z\":1}}", 5);
+        LocalUpdateSyncRequest request = cloudUpdate(7, "{\"desired\":{\"a\":{}}}");
+        request.merge(cloudUpdate(6, "{\"desired\":{\"a\":{\"x\":1}}}"));
+
+        request.execute(syncContext);
+
+        assertThat(localDocument.getState().toJson(), is(json("{\"desired\":{\"z\":1,\"a\":{\"x\":1}}}")));
+        assertThat(syncInformation.getCloudVersion(), is(7L));
+    }
+
+    @Test
+    void GIVEN_merged_cloud_deletes_WHEN_execute_THEN_deletes_are_applied() throws Exception {
+        fakeLocalShadow("{\"desired\":{\"z\":1,\"a\":5}}", "{\"desired\":{\"z\":1,\"a\":5}}", 5);
+        LocalUpdateSyncRequest request = cloudUpdate(6, "{\"desired\":{\"b\":1}}");
+        request.merge(cloudUpdate(7, "{\"desired\":{\"a\":null}}"));
+
+        request.execute(syncContext);
+
+        assertThat(localDocument.getState().toJson(), is(json("{\"desired\":{\"z\":1,\"b\":1}}")));
+    }
+
+    @Test
+    void GIVEN_stale_cloud_update_merged_with_newer_one_WHEN_execute_THEN_stale_update_is_skipped() throws Exception {
+        fakeLocalShadow("{\"desired\":{\"z\":1}}", "{\"desired\":{\"z\":1}}", 6);
+        LocalUpdateSyncRequest request = cloudUpdate(5, "{\"desired\":{\"z\":2}}");
+        request.merge(cloudUpdate(7, "{\"desired\":{\"b\":1}}"));
+
+        request.execute(syncContext);
+
+        assertThat(localDocument.getState().toJson(), is(json("{\"desired\":{\"z\":1,\"b\":1}}")));
+        assertThat(syncInformation.getCloudVersion(), is(7L));
+    }
+
+    @Test
+    void GIVEN_local_change_not_synced_yet_WHEN_execute_THEN_last_synced_document_is_the_cloud_document() throws Exception {
+        fakeLocalShadow("{\"desired\":{\"z\":1,\"local\":1}}", "{\"desired\":{\"z\":1}}", 5);
+
+        cloudUpdate(6, "{\"desired\":{\"c\":1}}").execute(syncContext);
+
+        assertThat(localDocument.getState().toJson(), is(json("{\"desired\":{\"z\":1,\"local\":1,\"c\":1}}")));
+        assertThat(json(new String(syncInformation.getLastSyncedDocument(), UTF_8)),
+                is(json("{\"state\":{\"desired\":{\"z\":1,\"c\":1}}}")));
     }
 }

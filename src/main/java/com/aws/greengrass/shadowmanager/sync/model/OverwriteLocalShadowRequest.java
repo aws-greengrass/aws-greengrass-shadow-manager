@@ -59,7 +59,7 @@ public class OverwriteLocalShadowRequest extends BaseSyncRequest {
                 // update the local shadow with the entire cloud shadow,
                 long cloudUpdateTime = getCloudUpdateTime(cloudShadowDocument.get());
                 ObjectNode updateDocument = (ObjectNode) cloudShadowDocument.get().toJson(false);
-                long localDocumentVersion = updateLocalDocumentAndGetUpdatedVersion(updateDocument, Optional.empty());
+                long localDocumentVersion = updateLocalDocument(context, updateDocument);
                 updateSyncInformation(updateDocument, localDocumentVersion, cloudShadowDocument.get().getVersion(),
                         cloudUpdateTime);
             }
@@ -67,6 +67,24 @@ public class OverwriteLocalShadowRequest extends BaseSyncRequest {
             // If the cloud shadow is not present, then go ahead and delete the local shadow.
             handleLocalDelete(syncInformation);
         }
+    }
+
+    /**
+     * Updates the local shadow to the cloud document. An existing local shadow gets only the change, so fields that
+     * the cloud doesn't have are removed; the update carries the local version, so a concurrent local update makes
+     * the sync run again.
+     */
+    private long updateLocalDocument(SyncContext context, ObjectNode cloudDocument) throws SkipSyncRequestException {
+        Optional<ShadowDocument> localShadowDocument = context.getDao().getShadowThing(getThingName(),
+                getShadowName());
+        if (!localShadowDocument.isPresent()) {
+            return updateLocalDocumentAndGetUpdatedVersion(cloudDocument.deepCopy(), Optional.empty());
+        }
+        ObjectNode update = FullShadowSyncRequest.getUpdate(localShadowDocument.get(), cloudDocument, cloudDocument);
+        if (update == null) {
+            return localShadowDocument.get().getVersion();
+        }
+        return updateLocalDocumentAndGetUpdatedVersion(update, Optional.of(localShadowDocument.get().getVersion()));
     }
 
     /**
