@@ -172,6 +172,30 @@ class OverwriteCloudShadowRequestTest {
     }
 
     @Test
+    void GIVEN_missing_local_shadow_never_synced_WHEN_execute_THEN_does_not_delete_cloud_shadow() throws RetryableException, SkipSyncRequestException, IOException, InterruptedException, IoTDataPlaneClientCreationException {
+        // e.g. the local database was recreated empty: the sync row is freshly initialized (never synced)
+        when(mockDao.getShadowThing(anyString(), anyString())).thenReturn(Optional.empty());
+        when(mockDao.getShadowSyncInformation(anyString(), anyString())).thenReturn(Optional.of(SyncInformation.builder()
+                .cloudUpdateTime(Instant.EPOCH.getEpochSecond())
+                .thingName(THING_NAME)
+                .shadowName(SHADOW_NAME)
+                .cloudDeleted(false)
+                .lastSyncedDocument(null)
+                .cloudVersion(0L)
+                .localVersion(0L)
+                .lastSyncTime(Instant.EPOCH.getEpochSecond())
+                .build()));
+
+        OverwriteCloudShadowRequest request = new OverwriteCloudShadowRequest(THING_NAME, SHADOW_NAME);
+        request.execute(syncContext);
+
+        // the cloud shadow is preserved and the sync row is left as never-synced
+        verify(mockIotDataPlaneClientWrapper, never()).deleteThingShadow(anyString(), anyString());
+        verify(mockIotDataPlaneClientWrapper, never()).updateThingShadow(anyString(), anyString(), any(byte[].class));
+        verify(mockDao, never()).updateSyncInformation(any());
+    }
+
+    @Test
     void GIVEN_same_local_shadow_WHEN_execute_THEN_does_not_update_cloud_shadow() throws RetryableException, SkipSyncRequestException, IOException, InterruptedException, IoTDataPlaneClientCreationException {
         long epochSecondsMinus60 = Instant.now().minusSeconds(60).getEpochSecond();
         ShadowDocument shadowDocument = new ShadowDocument(LOCAL_DOCUMENT);

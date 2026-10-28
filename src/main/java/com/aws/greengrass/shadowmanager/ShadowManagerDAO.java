@@ -14,6 +14,22 @@ import java.util.Optional;
 
 public interface ShadowManagerDAO {
     /**
+     * Register the callback invoked when a data-access operation detects the local database is corrupted,
+     * so the owner can orchestrate a rebuild (quiesce, recreate, resync).
+     *
+     * @param onDatabaseCorrupted callback run when local-database corruption is detected
+     */
+    void setOnDatabaseCorrupted(Runnable onDatabaseCorrupted);
+
+    /**
+     * Run a database recovery action while holding the DAO lock, so no data-access operation holds an
+     * open connection while the database is verified/recreated, and new calls block until it completes.
+     *
+     * @param recovery the recovery action (verify, and recreate only if needed)
+     */
+    void recoverDatabase(Runnable recovery);
+
+    /**
      * Attempts to obtain a shadow document from the local shadow storage.
      *
      * @param thingName  Name of the Thing for the shadow topic prefix.
