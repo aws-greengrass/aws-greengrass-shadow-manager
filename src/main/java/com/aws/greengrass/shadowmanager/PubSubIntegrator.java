@@ -20,6 +20,7 @@ import software.amazon.awssdk.aws.greengrass.model.GreengrassCoreIPCError;
 import software.amazon.awssdk.aws.greengrass.model.UpdateThingShadowRequest;
 
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -45,6 +46,8 @@ public class PubSubIntegrator {
     private final Pattern shadowResponsePattern = Pattern.compile("\\$aws\\/things\\/(.*)\\/shadow(\\/name\\/(.*))"
             + "?\\/(update|delete|get)\\/(accepted|rejected|delta|documents)$");
     private final AtomicBoolean subscribed = new AtomicBoolean(false);
+    // Created once, so subscribe() and unsubscribe() pass the same object and Nucleus can remove it.
+    private final Consumer<PublishEvent> publishListener = this::handlePublishedMessage;
 
     /**
      * Constructor for PubSubIntegrator.
@@ -69,7 +72,16 @@ public class PubSubIntegrator {
      */
     public void subscribe() {
         if (this.subscribed.compareAndSet(false, true)) {
-            this.pubSubClientWrapper.subscribe(this::handlePublishedMessage);
+            boolean subscribedOk = false;
+            try {
+                this.pubSubClientWrapper.subscribe(publishListener);
+                subscribedOk = true;
+            } finally {
+                // keep the flag true only if the subscription actually exists, so a later call can retry
+                if (!subscribedOk) {
+                    this.subscribed.set(false);
+                }
+            }
         }
     }
 
@@ -78,7 +90,7 @@ public class PubSubIntegrator {
      */
     public void unsubscribe() {
         if (this.subscribed.compareAndSet(true, false)) {
-            this.pubSubClientWrapper.unsubscribe(this::handlePublishedMessage);
+            this.pubSubClientWrapper.unsubscribe(publishListener);
         }
 
     }

@@ -22,6 +22,7 @@ import com.aws.greengrass.shadowmanager.configuration.RateLimitsConfiguration;
 import com.aws.greengrass.shadowmanager.configuration.ShadowDocSizeConfiguration;
 import com.aws.greengrass.shadowmanager.exception.InvalidConfigurationException;
 import com.aws.greengrass.shadowmanager.exception.ShadowManagerDataException;
+import com.aws.greengrass.shadowmanager.exception.ShadowManagerDatabaseRecoveryException;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowIPCHandler;
 import com.aws.greengrass.shadowmanager.ipc.DeleteThingShadowRequestHandler;
 import com.aws.greengrass.shadowmanager.ipc.GetThingShadowIPCHandler;
@@ -63,6 +64,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import javax.inject.Inject;
@@ -101,6 +104,9 @@ public class ShadowManager extends PluginService {
     private final CloudDataClient cloudDataClient;
     private final MqttClient mqttClient;
     private final PubSubIntegrator pubSubIntegrator;
+    private final ExecutorService executorService;
+    // Single-flight guard: true while a local database rebuild is running.
+    private final AtomicBoolean rebuildInProgress = new AtomicBoolean(false);
     private final AtomicReference<Strategy> currentStrategy = new AtomicReference<>(DEFAULT_STRATEGY);
     public final MqttClientConnectionEvents callbacks = new MqttClientConnectionEvents() {
         @Override
@@ -147,6 +153,7 @@ public class ShadowManager extends PluginService {
      * @param syncHandler                 a synchronization handler
      * @param cloudDataClient             the data client subscribing to cloud shadow topics
      * @param mqttClient                  the mqtt client connected to IoT Core
+     * @param executorService            the shared executor used to rebuild the database off-thread
      * @param direction                   The sync direction
      */
     @SuppressWarnings("PMD.ExcessiveParameterList")
@@ -164,6 +171,7 @@ public class ShadowManager extends PluginService {
             SyncHandler syncHandler,
             CloudDataClient cloudDataClient,
             MqttClient mqttClient,
+            ExecutorService executorService,
             DirectionWrapper direction) {
         super(topics);
         this.database = database;
@@ -175,6 +183,7 @@ public class ShadowManager extends PluginService {
         this.syncHandler = syncHandler;
         this.cloudDataClient = cloudDataClient;
         this.mqttClient = mqttClient;
+        this.executorService = executorService;
         this.deleteThingShadowRequestHandler = new DeleteThingShadowRequestHandler(dao, authorizationHandlerWrapper,
                 pubSubClientWrapper, synchronizeHelper, this.syncHandler);
         this.updateThingShadowRequestHandler = new UpdateThingShadowRequestHandler(dao, authorizationHandlerWrapper,
@@ -461,7 +470,9 @@ public class ShadowManager extends PluginService {
         // Register IPC and Authorization
         registerHandlers();
 
-        pubSubIntegrator.subscribe();
+        // Runtime self-heal: when the DAO detects the local shadow database is corrupted, rebuild it.
+        dao.setOnDatabaseCorrupted(this::rebuildDatabase);
+
         if (!deviceConfiguration.isDeviceConfiguredToTalkToCloud()) {
             logger.atWarn().log("Device not configured to talk to AWS Iot cloud. Not syncing shadows to the cloud");
             // Right now the connection cannot be brought online without a restart.
@@ -475,6 +486,8 @@ public class ShadowManager extends PluginService {
     @SuppressWarnings({"PMD.AvoidCatchingGenericException"})
     public void startup() {
         try {
+            // Subscribe on every start; shutdown() unsubscribes, so a restart or reinstall re-subscribes once.
+            pubSubIntegrator.subscribe();
             reportState(State.RUNNING);
             setupSync();
         } catch (Exception e) {
@@ -511,6 +524,55 @@ public class ShadowManager extends PluginService {
             cloudDataClient.stopSubscribing();
         }
         syncHandler.stop();
+    }
+
+    /**
+     * Rebuild the local shadow database after the DAO detects it is corrupted (e.g. the H2 MVStore
+     * chunk-id wraparound). Runs off the failing request thread. Quiesces the component first (stops sync
+     * and local pub/sub) so nothing races the destructive recreate, then rebuilds and resumes. The rebuild
+     * deletes the database, including stored sync info, so sync info is reinitialized on resume.
+     * Single-flight, and skipped unless the component is RUNNING so a destructive rebuild never runs during
+     * startup or teardown.
+     */
+    void rebuildDatabase() {
+        if (!rebuildInProgress.compareAndSet(false, true)) {
+            return;
+        }
+        executorService.execute(() -> {
+            boolean completed = false;
+            try {
+                if (!inState(State.RUNNING)) {
+                    return;
+                }
+                logger.atWarn().log("Local shadow database is unusable; rebuilding it");
+                stopSyncingShadows(true);
+                // Recover under the DAO lock so no in-flight data-access call (IPC, local pub/sub or sync)
+                // holds an open connection while the database is verified/recreated. Calls made meanwhile
+                // fail fast with an error. Local pub/sub stays subscribed (re-subscribing would add a second
+                // listener, since unsubscribe() never removes the original one).
+                dao.recoverDatabase(database::recover);
+                // Re-check: shutdown() may have run during the recovery above. Don't restart sync on a
+                // component that has already left RUNNING.
+                if (inState(State.RUNNING)) {
+                    startSyncingShadows(StartSyncInfo.builder()
+                            .reInitializeSyncInfo(true).startSyncStrategy(true).build());
+                }
+                completed = true;
+                logger.atInfo().log("Local shadow database rebuilt");
+            } catch (ShadowManagerDatabaseRecoveryException e) {
+                logger.atWarn().cause(e).log("Failed to recover local shadow database");
+            } finally {
+                rebuildInProgress.set(false);
+                // Any failure after this point (recovery failed above, or resuming sync threw) would leave the
+                // component RUNNING with sync stopped. Request a reinstall instead: Nucleus shuts the component
+                // down and re-runs install()/startup(). Only while still RUNNING, so a failure during shutdown
+                // does not revive the component.
+                if (!completed && inState(State.RUNNING)) {
+                    logger.atWarn().log("Local shadow database rebuild did not complete; requesting reinstall");
+                    requestReinstall();
+                }
+            }
+        });
     }
 
     /**
