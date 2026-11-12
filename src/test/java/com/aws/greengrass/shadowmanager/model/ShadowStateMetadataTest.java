@@ -26,6 +26,7 @@ import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_S
 import static com.aws.greengrass.shadowmanager.model.Constants.SHADOW_DOCUMENT_TIMESTAMP;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -228,13 +229,136 @@ class ShadowStateMetadataTest {
 
         JsonNode patchMetadata = shadowStateMetadata.update(patchJson.get(), state);
 
-        assertTrue(JsonUtil.isNullOrMissing(shadowStateMetadata.getDesired()));
+        assertFalse(JsonUtil.isNullOrMissing(shadowStateMetadata.getDesired()));
         assertTrue(JsonUtil.isNullOrMissing(shadowStateMetadata.getReported()));
 
         assertFalse(JsonUtil.isNullOrMissing(patchMetadata));
         assertTrue(patchMetadata.has(SHADOW_DOCUMENT_STATE_DESIRED));
         assertTrue(patchMetadata.get(SHADOW_DOCUMENT_STATE_DESIRED).has("SomObject"));
         assertThat(patchMetadata.get(SHADOW_DOCUMENT_STATE_DESIRED).get("SomObject").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(timestamp));
+    }
+
+    @Test
+    void GIVEN_non_empty_state_with_nested_empty_object_and_non_empty_patch_WHEN_update_THEN_metadata_is_correctly_updated() throws IOException {
+        String stateString = "{\"SomeObject\": {\"SomeVal\": \"123\"}}";
+        JsonNode stateJson = JsonUtil.getPayloadJson(stateString.getBytes()).get();
+        String patchString = "{\"desired\": {\"SomeObject\": {\"SomeVal\": null}}}";
+        Optional<JsonNode> patchJson = JsonUtil.getPayloadJson(patchString.getBytes());
+        String patchMetadataString = "{\"SomeObject\": {\"SomeVal\": \"123\"}}";
+        Optional<JsonNode> patchMetadataJson = JsonUtil.getPayloadJson(patchMetadataString.getBytes());
+
+        ShadowStateMetadata shadowStateMetadata = new ShadowStateMetadata(patchMetadataJson.get(), null, mockClock);
+        ShadowState state = new ShadowState(stateJson, null);
+
+        JsonNode patchMetadata = shadowStateMetadata.update(patchJson.get(), state);
+
+        // The desired field will be present because of the nested object but the object will be empty
+        assertFalse(JsonUtil.isNullOrMissing(shadowStateMetadata.getDesired()));
+        String expectedDesired = "{\"SomeObject\": {}}";
+        assertThat(shadowStateMetadata.getDesired(), is(JsonUtil.getPayloadJson(expectedDesired.getBytes()).get()));
+
+        assertTrue(JsonUtil.isNullOrMissing(shadowStateMetadata.getReported()));
+
+        assertFalse(JsonUtil.isNullOrMissing(patchMetadata));
+        assertTrue(patchMetadata.has(SHADOW_DOCUMENT_STATE_DESIRED));
+        assertTrue(patchMetadata.get(SHADOW_DOCUMENT_STATE_DESIRED).has("SomeObject"));
+        assertThat(patchMetadata.get(SHADOW_DOCUMENT_STATE_DESIRED).get("SomeObject"), is(JsonUtil.OBJECT_MAPPER.createObjectNode()));
+    }
+
+    @Test
+    void GIVEN_non_empty_state_with_nested_object_and_nested_field_removed_WHEN_update_THEN_metadata_is_correctly_updated() throws IOException {
+        String stateString = "{\"SomeObject\": {\"SomeVal\": \"123\", \"AnotherVal\": \"4567\"}}";
+        JsonNode stateJson = JsonUtil.getPayloadJson(stateString.getBytes()).get();
+        String patchString = "{\"desired\": {\"SomeObject\": {\"SomeVal\": null, \"AnotherVal\": \"4567\"}}}";
+        Optional<JsonNode> patchJson = JsonUtil.getPayloadJson(patchString.getBytes());
+        String patchMetadataString = "{\"SomeObject\": {\"SomeVal\": \"123\", \"AnotherVal\": \"4567\"}}";
+        Optional<JsonNode> patchMetadataJson = JsonUtil.getPayloadJson(patchMetadataString.getBytes());
+
+        ShadowStateMetadata shadowStateMetadata = new ShadowStateMetadata(patchMetadataJson.get(), null, mockClock);
+        ShadowState state = new ShadowState(stateJson, null);
+
+        JsonNode patchMetadata = shadowStateMetadata.update(patchJson.get(), state);
+
+        // The desired field will be present because of the nested object but the object will be empty
+        assertFalse(JsonUtil.isNullOrMissing(shadowStateMetadata.getDesired()));
+        assertTrue(shadowStateMetadata.getDesired().has("SomeObject"));
+        assertTrue(shadowStateMetadata.getDesired().get("SomeObject").has("AnotherVal"));
+        assertTrue(shadowStateMetadata.getDesired().get("SomeObject").get("AnotherVal").has(SHADOW_DOCUMENT_TIMESTAMP));
+        assertThat(shadowStateMetadata.getDesired().get("SomeObject").get("AnotherVal").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(),
+                is(timestamp));
+
+        assertTrue(JsonUtil.isNullOrMissing(shadowStateMetadata.getReported()));
+
+        assertFalse(JsonUtil.isNullOrMissing(patchMetadata));
+        assertTrue(patchMetadata.has(SHADOW_DOCUMENT_STATE_DESIRED));
+        assertTrue(patchMetadata.get(SHADOW_DOCUMENT_STATE_DESIRED).has("SomeObject"));
+        assertThat(patchMetadata.get(SHADOW_DOCUMENT_STATE_DESIRED).get("SomeObject").get("AnotherVal").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(timestamp));
+        assertFalse(patchMetadata.get(SHADOW_DOCUMENT_STATE_DESIRED).get("SomeObject").has("SomeVal"));
+    }
+
+    @Test
+    void GIVEN_non_empty_state_with_nested_object_and_nested_field_added_WHEN_update_THEN_metadata_is_correctly_updated() throws IOException {
+        String stateString = "{\"SomeObject\": {\"SomeVal\": \"123\"}}";
+        JsonNode stateJson = JsonUtil.getPayloadJson(stateString.getBytes()).get();
+        String patchString = "{\"desired\": {\"SomeObject\": {\"SomeVal\": \"456\", \"AnotherVal\": " +
+                "\"testingValue\"}}}";
+        Optional<JsonNode> patchJson = JsonUtil.getPayloadJson(patchString.getBytes());
+        String patchMetadataString = "{\"SomeObject\": {\"SomeVal\": \"123\", \"AnotherVal\": \"testingValue\"}}";
+        Optional<JsonNode> patchMetadataJson = JsonUtil.getPayloadJson(patchMetadataString.getBytes());
+
+        ShadowStateMetadata shadowStateMetadata = new ShadowStateMetadata(patchMetadataJson.get(), null, mockClock);
+        ShadowState state = new ShadowState(stateJson, null);
+
+        JsonNode patchMetadata = shadowStateMetadata.update(patchJson.get(), state);
+
+        // The desired field will be present because of the nested object but the object will be empty
+        assertFalse(JsonUtil.isNullOrMissing(shadowStateMetadata.getDesired()));
+        assertTrue(shadowStateMetadata.getDesired().has("SomeObject"));
+        assertTrue(shadowStateMetadata.getDesired().get("SomeObject").has("AnotherVal"));
+        assertTrue(shadowStateMetadata.getDesired().get("SomeObject").get("AnotherVal").has(SHADOW_DOCUMENT_TIMESTAMP));
+        assertThat(shadowStateMetadata.getDesired().get("SomeObject").get("AnotherVal").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(),
+                is(timestamp));
+
+        assertTrue(JsonUtil.isNullOrMissing(shadowStateMetadata.getReported()));
+
+        assertFalse(JsonUtil.isNullOrMissing(patchMetadata));
+        assertTrue(patchMetadata.has(SHADOW_DOCUMENT_STATE_DESIRED));
+        assertTrue(patchMetadata.get(SHADOW_DOCUMENT_STATE_DESIRED).has("SomeObject"));
+        assertThat(patchMetadata.get(SHADOW_DOCUMENT_STATE_DESIRED).get("SomeObject").get("SomeVal").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(timestamp));
+        assertThat(patchMetadata.get(SHADOW_DOCUMENT_STATE_DESIRED).get("SomeObject").get("AnotherVal").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(timestamp));
+    }
+
+    @Test
+    void GIVEN_non_empty_state_with_nested_object_and_nested_field_exchanged_WHEN_update_THEN_metadata_is_correctly_updated() throws IOException {
+        String stateString = "{\"SomeObject\": {\"SomeVal\": \"123\"}}";
+        JsonNode stateJson = JsonUtil.getPayloadJson(stateString.getBytes()).get();
+        String patchString = "{\"desired\": {\"SomeObject\": {\"SomeVal\": null, \"AnotherVal\": " +
+                "\"testingValue\"}}}";
+        Optional<JsonNode> patchJson = JsonUtil.getPayloadJson(patchString.getBytes());
+        String patchMetadataString = "{\"SomeObject\": {\"SomeVal\": \"123\", \"AnotherVal\": \"testingValue\"}}";
+        Optional<JsonNode> patchMetadataJson = JsonUtil.getPayloadJson(patchMetadataString.getBytes());
+
+        ShadowStateMetadata shadowStateMetadata = new ShadowStateMetadata(patchMetadataJson.get(), null, mockClock);
+        ShadowState state = new ShadowState(stateJson, null);
+
+        JsonNode patchMetadata = shadowStateMetadata.update(patchJson.get(), state);
+
+        // The desired field will be present because of the nested object but the object will be empty
+        assertFalse(JsonUtil.isNullOrMissing(shadowStateMetadata.getDesired()));
+        assertTrue(shadowStateMetadata.getDesired().has("SomeObject"));
+        assertFalse(shadowStateMetadata.getDesired().get("SomeObject").has("SomeVal"));
+        assertTrue(shadowStateMetadata.getDesired().get("SomeObject").has("AnotherVal"));
+        assertTrue(shadowStateMetadata.getDesired().get("SomeObject").get("AnotherVal").has(SHADOW_DOCUMENT_TIMESTAMP));
+        assertThat(shadowStateMetadata.getDesired().get("SomeObject").get("AnotherVal").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(),
+                is(timestamp));
+
+        assertTrue(JsonUtil.isNullOrMissing(shadowStateMetadata.getReported()));
+
+        assertFalse(JsonUtil.isNullOrMissing(patchMetadata));
+        assertTrue(patchMetadata.has(SHADOW_DOCUMENT_STATE_DESIRED));
+        assertTrue(patchMetadata.get(SHADOW_DOCUMENT_STATE_DESIRED).has("SomeObject"));
+        assertFalse(patchMetadata.get(SHADOW_DOCUMENT_STATE_DESIRED).get("SomeObject").has("SomeVal"));
+        assertThat(patchMetadata.get(SHADOW_DOCUMENT_STATE_DESIRED).get("SomeObject").get("AnotherVal").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(timestamp));
     }
 
     @Test
@@ -317,6 +441,29 @@ class ShadowStateMetadataTest {
 
     }
 
+
+    @Test
+    void GIVEN_delta_field_missing_from_metadata_WHEN_getDeltaMetadata_THEN_does_not_throw() throws IOException {
+        // Regression test: the delta contains an array field ("SomeArray") for which the desired metadata has no
+        // corresponding node. buildMetadata must not dereference the null metadata node. Previously this threw a
+        // NullPointerException at ShadowStateMetadata.buildMetadata when casting/indexing the null metadata array.
+        final String deltaString = "{\"id\": 100, \"SomeArray\": [100, 200]}";
+        final String patchMetadataString = "{\"id\": {\"timestamp\": 12345}}";
+        Optional<JsonNode> patchMetadataJson = JsonUtil.getPayloadJson(patchMetadataString.getBytes());
+        assertTrue(patchMetadataJson.isPresent());
+        Optional<JsonNode> deltaJson = JsonUtil.getPayloadJson(deltaString.getBytes());
+        assertTrue(deltaJson.isPresent());
+        ShadowStateMetadata shadowStateMetadata = new ShadowStateMetadata(patchMetadataJson.get(), null, mockClock);
+
+        JsonNode deltaMetadata = assertDoesNotThrow(() -> shadowStateMetadata.getDeltaMetadata(deltaJson.get()));
+
+        assertFalse(JsonUtil.isNullOrMissing(deltaMetadata));
+        // The field that had corresponding metadata is still present.
+        assertTrue(deltaMetadata.has("id"));
+        assertThat(deltaMetadata.get("id").get(SHADOW_DOCUMENT_TIMESTAMP).asLong(), is(12345L));
+        // The field with no corresponding metadata is handled gracefully instead of throwing.
+        assertTrue(JsonUtil.isNullOrMissing(deltaMetadata.get("SomeArray")));
+    }
 
     @Test
     void GIVEN_metadata_WHEN_deepCopy_THEN_gets_new_instance_of_metadata() throws IOException {
