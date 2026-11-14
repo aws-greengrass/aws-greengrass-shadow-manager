@@ -184,8 +184,8 @@ public class NucleusLaunchUtils extends GGServiceTestUtil {
                 getClass().getResource(configFile).toString());
         listener = (GreengrassService service, State was, State newState) -> {
             if (service.getName().equals(ShadowManager.SERVICE_NAME) && service.getState().equals(expectedState)) {
-                shadowManagerRunning.countDown();
                 shadowManager = (ShadowManager) service;
+                shadowManagerRunning.countDown();
             }
         };
         kernel.getContext().addGlobalStateChangeListener(listener);
